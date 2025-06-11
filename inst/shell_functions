@@ -1,0 +1,284 @@
+#!/bin/bash
+
+#Helper function that converts a set of environment variables into a comma-separated key-value list of
+#variables and values. This is used to pass environment variables to qsub -v without having to type out a lot of details
+#  Example: envpass qsub_allocation heudiconv_walltime
+#  Result:  This will lookup the values of these variables in the environment
+#           and result in something like fsl_module=mnh5174_c_g_sc_default,heudiconv_walltime=2:00:00
+#  Consider whether we should be quoting the values in case they have weird characters
+function envpass() {
+  npar=$#
+  [ $npar -eq 0 ] && return #nothing to do
+  env_names=$@
+  local vpass_string=
+  for inputName in $env_names; do
+    #check whether value contains an equals sign, in which case treat it as a verbatim key-value pair
+    if [[ "$inputName" == *"="* ]]; then
+      vpass_string="$vpass_string'$inputName',"
+    else
+      inputVal=${!inputName}
+      [ -z "${inputVal}" ] && echo "$inputName is empty" # && exit 1
+      vpass_string="$vpass_string$inputName='$inputVal',"
+    fi
+  done
+  vpass_string=$(echo $vpass_string | sed 's/.$//') #trim trailing comma
+  echo $vpass_string
+}
+
+#looks for qsub_email and qsub_allocation in environment
+#accepts positional parameters thereafter that all get converted to -l arguments
+function build_qsub_string() {
+  local qsub_string=
+  if [ -n "$qsub_allocation" ]; then
+    qsub_string="${qsub_string} -A $qsub_allocation"
+  else
+    qsub_string="${qsub_string} -A open" #default to open queue if not specified
+  fi
+
+  if [ -n "$qsub_email" ]; then qsub_string="${qsub_string} -M $qsub_email"; fi
+
+  local nargs=$#
+  if [ $nargs -gt 0 ]; then
+    local env_names=$@
+    for inputName in $env_names; do
+      #check whether value contains an equals sign, in which case treat it as a verbatim key-value pair
+      if [[ "$inputName" == *"="* ]]; then
+        qsub_string="$qsub_string -l $inputName"
+      else
+        inputVal=${!inputName} #use the value of the environment variable
+        if [ -n "${inputVal}" ]; then
+          qsub_string="$qsub_string -l $inputName='$inputVal'"
+        fi
+      fi
+    done
+  fi
+  echo $qsub_string
+}
+
+# rel is shorthand for "run, echo, log". It looks for the environment $log_file and will write outputs there if specified.
+# Initial arguments specify what to do, including
+# c: "comment"  -- print the command to the screen and log, but do not execute it
+# t: "timeit"   -- print the command to screen and log, execute it, and include execution timing in output
+# o: "output"   -- print the command to the log, but not screen, execute it, and print the command result to screen (can be captured by caller)
+# -l <log>      -- specify the location of a log file used for logging. If not specified, rel will look at $log_file
+#
+# After parsing these arguments, all remaining arguments are assumed to be part of the command to be run
+# 
+# Examples:
+#   # Just write a comment to the log
+#   rel c Hello this is my comment
+#
+#   # Time the execution of the sleep 10 command
+#   rel t sleep 10
+#
+#   # Write to a particular log file
+#   rel -l ~/my_log.txt sleep 10
+function rel() {
+  #function that runs, echos to terminal, and logs to file an arbitrary command
+  local comment=0
+  local timeit=0
+  local tic=0
+  local toc=0
+  local capture_stdout=0
+  local cmdExit=0       # return value of this command
+  local cmdOutput=""    # stdout output of the command
+  local log=""          # log file where results should be written
+
+  [ -n "$log_file" ] && log="$log_file"
+  [[ $# -eq 0 ]] && echo "No arguments to rel provided" && return 1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      c) comment=1; shift ;;
+      t) timeit=1; shift ;;
+      o) capture_stdout=1; shift ;;
+      -l) log="$2"; shift 2 ;;
+      *) break ;;
+    esac
+  done
+
+  local cmd="$*"
+
+  # Handle comment-only output
+  if [ $comment -eq 1 ]; then
+    # echo command to screen and log with dashes to offset text visually
+    # if a blank string is passed as the command, include this without dashes (pure whitespace)
+    [[ -n "$cmd" ]] && cmd="--- $cmd"
+
+    echo -e "$cmd" # echo to screen
+
+    # if we are writing comment to log, prepend with ## to separate comments from output
+    [ -n "$log" ] && echo -e "## $cmd" >> "$log" # log
+    
+    return 0 # return immediately if we are just commenting
+  fi
+
+  # log the command
+  [ -n "$log" ] && echo -e "$cmd" >> "$log"
+  
+  #echo command to screen verbatim if we are not capturing stdout
+  [ $capture_stdout -eq 0 ] && echo "$cmd"
+
+  #run command
+  [ $timeit -eq 1 ] && tic=$(date +%s)
+  if [ $capture_stdout -eq 1 ]; then
+    # if we are capturing stdout, we need to save the output of the command and not echo it to the screen
+    cmdOutput=$(eval "$cmd")
+    cmdExit=$?
+    [ -n "$log" ] && echo -e "## stdout: $cmdOutput" >> "$log"
+  else
+    # otherwise, run the command and let it print to the screen
+    eval "$cmd"
+    cmdExit=$?
+  fi
+  [ $timeit -eq 1 ] && toc=$(date +%s)
+
+  # handle timing output
+  if [[ $timeit -eq 1 && $capture_stdout -eq 0 ]]; then
+    local msg="##  Command took $((toc - tic)) seconds"
+    [ -n "$log" ] && echo -e "$msg" >> "$log" || echo -e "$msg"
+  fi
+
+  # Return captured output if requested
+  [ $capture_stdout -eq 1 ] && echo "$cmdOutput"
+  return $cmdExit  #exit status of command
+}
+
+# this function extracts the jobID number from a qsub job listing and intelligently constructs the desired dependency string
+# expects input like: afterok <qsub job listing> afterany <qsub job listing> ...
+function build_depend_string() {
+  local base="-W depend="
+  local args=""
+  while [[ $# -gt 0 ]]; do
+    if [[ ! -z $2 && $2 != "\"\"" ]]; then
+      args=${args}$(link_job_listings ${1}:${2})
+    fi
+
+    shift
+    shift
+  done
+
+  args=$(echo $args | sed 's/,$//')
+
+  if [[ -z args ]]; then
+    echo ""
+  else
+    echo ${base}${args}
+  fi
+}
+
+# parses out the pure qsub job number
+# links a list of these together
+# NOTE: leaves a trailing comma
+function link_job_listings() {
+
+  base=""
+  for arg in $@; do
+    arg=$(echo $arg | sed -e 's/\.torque01\.[a-z0-9\.]*edu//g') # get just the number
+    base=${base}${arg},
+  done
+
+  #base=$(echo $base | sed -e 's/,$//')
+
+  echo $base
+}
+
+
+function trap_job_failure() {
+  local step="$1"
+  local signal="$2"
+  local now
+  now=$(date +"%Y-%m-%d %H:%M:%S")
+  local fail_file=".${step}_fail"
+
+  # "unknown" if SLURM variables are unset
+  local job_id="${SLURM_JOB_ID:-unknown}"
+  local job_name="${SLURM_JOB_NAME:-unknown}"
+
+  {
+    echo "[$now] $step job failed."
+    echo "  Signal     : $signal"
+    echo "  Job ID     : $job_id"
+    echo "  Job Name   : $job_name"
+    echo "  Working Dir: $(pwd)"
+    echo
+  } >> "$fail_file"
+
+  exit 1
+}
+
+function on_error() {
+  local step="$1"
+  local exit_code=$?
+  local now
+  now=$(date +"%Y-%m-%d %H:%M:%S")
+  local fail_file=".${step}_fail"
+  local job_id="${SLURM_JOB_ID:-unknown}"
+  local job_name="${SLURM_JOB_NAME:-unknown}"
+
+  {
+    echo "[$now] $step job failed."
+    echo "  Exit Code  : $exit_code"
+    echo "  Job ID     : $job_id"
+    echo "  Job Name   : $job_name"
+    echo "  Working Dir: $(pwd)"
+    echo "  Error occurred on line $LINENO in command: '$BASH_COMMAND'"
+    echo
+  } >> "$fail_file"
+
+  # Add any cleanup or logging logic here
+}
+
+
+function archive_file() {
+    fname="$1"
+    if [ -f "$fname" ]; then
+    	#stat and date are not portable across Linux and BSD...
+      [ $( uname ) = Darwin ] && mtime=$( stat -f "%Sm" -t "%Y%m%d_%H%M" "${fname}" ) || mtime=$( date -r "${fname}" +%Y%m%d_%H%M )
+      mv "$fname" "${fname}_${mtime}"
+    fi
+    return 0
+}
+
+
+#adapted from here: https://gist.github.com/aguy/2359833
+# usage: trap 'traperror "<name>" $? $LINENO "${BASH_LINENO[0]}" "$BASH_COMMAND" "${FUNCNAME[*]:-::}"' ERR
+function traperror () {
+    local step="${1:-unknown_step}"
+    local err=${2:-1} # error code -- default 1
+    local line="${3:-N/A}" # LINENO -- default N/A
+    local linecallfunc="${4:-N/A}"
+    local command="${5:-unknown_command}"
+    local funcstack="${6:-::}"
+    local dotfile=".${step}_fail"
+
+    archive_file "$dotfile" #move any existing crash file out of the way
+    {
+      echo "$(date) $(hostname) $0: ERROR '$command' failed at line $line; exited with status: $err"
+
+      if [[ "$funcstack" != "::" ]]; then
+        echo -n "$0: DEBUG Error in ${funcstack} "
+        [[ "$linecallfunc" != "N/A" ]] && echo "called at line $linecallfunc"
+      fi
+      
+      echo -en "\nCurrent working directory:\n  $PWD\n" | tee -a "$dotfile"
+      [ -n "$pkg_dir" ] && echo "Location of BrainGnomes installation: $pkg_dir"
+
+      if [ -r "$cmd_log" ]; then
+        echo -en "\n\nLast 10 lines of command log file:\n---------\n\n"
+        tail -n 10 "$cmd_log"
+      fi
+
+      if [ -r "$stdout_log" ]; then
+        echo -en "\n\nLast 10 lines of stdout file:\n---------\n\n"
+        tail -n 10 "$stdout_log"
+      fi
+
+      if [ -r "$stderr_log" ]; then
+        echo -en "\n\nLast 10 lines of stderr file:\n---------\n\n"
+        tail -n 10 "$stderr_log"
+      fi
+    } | tee -a "$dotfile"
+
+    exit "$err"  
+}
