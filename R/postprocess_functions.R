@@ -1,19 +1,21 @@
 #' Resample TemplateFlow Mask to fMRIPrep Image Using Python
 #'
-#' @param in_file Path to the fMRIPrep-derived NIfTI file.
+#' @param in_file Path to the BIDS-compliant NIfTI file.
 #' @param output Path to output resampled image.
-#' @param transform Optional path to inverse transform (for native-space images).
 #' @param template_resolution Resolution index (e.g., 1 = 1mm).
-#' @param template_space TemplateFlow space (e.g., "MNI152NLin2009cAsym").
 #' @param suffix TemplateFlow suffix (e.g., "mask", "T1w").
 #' @param desc TemplateFlow descriptor (e.g., "brain").
 #' @param extension File extension (default: ".nii.gz").
 #' @param interpolation Interpolation method ("nearest", "linear", "continuous").
 #'
+#' @details
+#'   The relevant template will be identified using the space- entity for the BIDS-compliant input image.
+#'   For example, sub-221256_task-trust_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz
+#'   will use the MNI152NLin2009cAsym template image from TemplateFlow.
 #' @return Invisible `TRUE` on success. Writes output to `output`.
-#' @importFrom reticulate source_python
-#' @keywords internal
-resample_template <- function(
+#' @importFrom reticulate source_python py_module_available py_install
+#' @export
+resample_template_to_img <- function(
   in_file,
   output = NULL,
   template_resolution = 1,
@@ -25,7 +27,6 @@ resample_template <- function(
 ) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(output, null.ok = TRUE)
-  checkmate::assert_string(template_space)
   checkmate::assert_flag(install_dependencies)
 
   # default to same name as input file, but change suffix to templatemask
@@ -59,7 +60,6 @@ resample_template <- function(
   img <- resample_template_to_bold(
     in_file = in_file,
     output = output,
-    transform = transform,
     template_resolution = template_resolution,
     suffix = suffix,
     desc = desc,
@@ -694,8 +694,8 @@ compute_brain_mask <- function(in_file, log_file = NULL, fsl_img = NULL) {
   run_fsl_command(glue("fslmaths {in_file} -mas {temp_bet}_mask {temp_stripped}"), log_file = log_file, fsl_img, bind_paths=dirname(c(in_file, temp_bet, temp_stripped)))
 
   # now compute 2nd and 98th percentiles on skull-stripped image
-  p2 <- get_image_quantile(temp_stripped, quantile=2, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(temp_stripped))
-  p98 <- get_image_quantile(temp_stripped, quantile=98, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(temp_stripped))
+  p2 <- get_image_quantile(temp_stripped, quantile=2, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img)
+  p98 <- get_image_quantile(temp_stripped, quantile=98, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img)
   
   thresh <- p2 + (p98 - p2)/10
 

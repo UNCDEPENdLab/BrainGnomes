@@ -34,7 +34,7 @@ def resample_template_to_bold(in_file, output, template_resolution=1, template_s
     
     bold_img = nib.load(in_file)
     resolution = get_voxel_resolution(bold_img)
-    print(f"Detected space: {space}, resolution: {resolution}")
+    print(f"Detected space: {template_space}, resolution: {resolution}")
 
     # grab the template image from templateflow
     image_path = fetch_template_image(
@@ -46,6 +46,8 @@ def resample_template_to_bold(in_file, output, template_resolution=1, template_s
     )
 
     template_img = nib.load(image_path)
-    resampled_mask = resample_to_img(template_img, bold_img, interpolation=interpolation)
+    resampled_mask = resample_to_img(
+        source_img = template_img, target_img = bold_img, interpolation = interpolation, 
+        force_resample = True, copy_header = True)
     nib.save(resampled_mask, output)
     return output
