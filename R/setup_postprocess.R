@@ -79,7 +79,11 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
       stereotaxic space as the data, but has a different resolution, I recommend using AFNI's 3dresample like so:
         3dresample -input <current_mask> -master <a_preproc_nifti_file_from_study> -prefix <resampled_mask> -rmode NN
 
-      If you do not provide a brain mask, the pipeline will look for the mask calculated by fmriprep ('_desc-brain_mask')
+      If you do not provide a brain mask, the pipeline will first try to obtain a mask in the template space of the image.
+      For example, if the file has 'space-MNI152NLin2009cAsym' in its name, the pipeline will download the brain mask
+      from TemplateFlow for this space and resample it to the the data.
+
+      If this is not possible (e.g., if the data is in native space), the pipeilne will look for the mask calculated by fmriprep ('_desc-brain_mask')
       and if this is not available, the pipeline will calculate a mask using FSL's 98/2 method used in its preprocessing stream.\n"),
       type = "file", len = 1L, required = FALSE
     )

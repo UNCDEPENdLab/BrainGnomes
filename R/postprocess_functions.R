@@ -143,7 +143,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   brain_mask <- NULL
   if (checkmate::test_string(cfg$brain_mask)) {
     if (cfg$brain_mask == "template") {
-      brain_mask <- get_template_mask(in_file, log_file)
+      brain_mask <- resample_template_to_img(in_file) # call Python helper for TemplateFlow
     } else if (checkmate::test_file_exists(cfg$brain_mask)) {
       brain_mask <- cfg$brain_mask
     } else {
