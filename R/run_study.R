@@ -1,15 +1,18 @@
 
 #' Run the processing pipeline
 #' @param scfg A list containing the study configuration.
+#' @param steps Character vector of pipeline steps to execute (or `NULL` to run all steps).
+#'   Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
 #' @param prompt A logical value indicating whether to prompt the user for input on which steps to run.
+#' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
 #' @examples
-#' \dontrun{
-#' # Assuming you have a valid study configuration list named `study_config`
-#' run_study(study_config, prompt = TRUE, force = FALSE)
-#' }
+#'   \dontrun{
+#'     # Assuming you have a valid study configuration list named `study_config`
+#'     run_study(study_config, prompt = TRUE, force = FALSE)
+#'   }
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue

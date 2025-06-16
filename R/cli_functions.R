@@ -4,7 +4,7 @@
 #'   a single string with the keys separated by a separator (default is "/"). For example, "parent/child/grandchild"
 #'   would correspond to my_list$parent$child$grandchild
 #' @param sep a character string to separate the keys in the key strings. Default is "/"
-#' @param simplify a boolean indicating whether to simplify the output. Default is TRUE
+#' @param simplify Logical; whether to simplify the output to a vector (if possible). Default is `TRUE`.
 #' @return a named list of values corresponding to the keys in the key strings
 #' @keywords internal
 get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
@@ -32,15 +32,14 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
   return(ret)
 }
 
-
 #' Assign values to a nested list using key-value strings
 #'
 #' Parses assignments like \code{"a/b/c=10"} and returns \code{list(a = list(b = list(c = 10)))}.
 #'
-#' @param assignments A character vector of assignment strings (e.g., \code{"a/b=1"}, \code{"x/y/z=TRUE"}).
+#' @param assignments A character vector of assignment strings (e.g., `"a/b=1"`, `"x/y/z=TRUE"`).
 #' @param sep A character used to separate keys. Default is \code{"/"}.
-#' @param lst Optional list to update. If \code{NULL}, starts from an empty list.
-#' @param type_values Logical; whether to attempt to conver right-hand side strings to relevant data
+#' @param lst Optional list to update. If `NULL`, a new list is created from scratch.
+#' @param type_values Logical; whether to attempt to convert right-hand side strings to relevant data
 #'   types using `type.convert`.
 #'
 #' @return A nested list with the specified keys and values.

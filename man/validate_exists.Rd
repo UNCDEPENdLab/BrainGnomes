@@ -5,7 +5,7 @@
 \title{Helper function to check whether a given file or directory exists and, optionally, is readable}
 \usage{
 validate_exists(
-  f,
+  input,
   description = "",
   directory = FALSE,
   prompt_change = FALSE,
@@ -13,7 +13,7 @@ validate_exists(
 )
 }
 \arguments{
-\item{f}{a file or directory to check for existence}
+\item{input}{a file or directory to check for existence}
 
 \item{description}{a character string describing what this file is if we are prompted to change it}
 

@@ -2,6 +2,7 @@
 
 S3method(summary,bg_study_cfg)
 export(construct_bids_filename)
+export(edit_study_config)
 export(extract_bids_info)
 export(get_fmriprep_outputs)
 export(load_study)

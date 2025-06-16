@@ -2,17 +2,19 @@
 % Please edit documentation in R/setup_study.R
 \name{setup_fmriprep}
 \alias{setup_fmriprep}
-\title{Specify the fmriprep settings}
+\title{Specify the fMRIPrep settings}
 \usage{
 setup_fmriprep(scfg = NULL, fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object, as produced by \code{load_study} or \code{setup_study}}
+\item{scfg}{A study configuration object, as produced by \code{load_study()} or \code{setup_study()}.}
+
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fMRIPrep fields will be prompted for.}
 }
 \value{
-a modified version of \code{scfg} with \verb{$fmriprep} populated
+A modified version of \code{scfg} with the \verb{$fmriprep} entry populated.
 }
 \description{
-Specify the fmriprep settings
+Specify the fMRIPrep settings
 }
 \keyword{internal}

@@ -7,10 +7,13 @@
 setup_study(input = NULL, fields = NULL)
 }
 \arguments{
-\item{input}{an existing \code{bg_study_cfg} object to be modified or a string
-specifying the location of an existing configuration YAML file to be loaded}
+\item{input}{An existing \code{bg_study_cfg} object to be modified, or a string specifying the location of an existing configuration YAML file to load.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+}
+\value{
+A \code{bg_study_cfg} list containing the study configuration. New fields are added based on user input,
+and missing entries are filled with defaults.
 }
 \description{
 Setup the processing pipeline for a new fMRI study

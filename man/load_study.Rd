@@ -7,7 +7,13 @@
 load_study(file = NULL, validate = TRUE)
 }
 \arguments{
-\item{file}{a YAML file containing a valid study configuration}
+\item{file}{A YAML file containing a valid study configuration.}
+
+\item{validate}{Logical indicating whether to validate the configuration after loading. Default: TRUE}
+}
+\value{
+A list representing the study configuration (class \code{"bg_study_cfg"}). If \code{validate} is TRUE,
+the returned object is validated (missing fields may be set to NULL and noted).
 }
 \description{
 Load a study configuration from a file

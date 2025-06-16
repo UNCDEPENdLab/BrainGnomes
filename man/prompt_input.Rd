@@ -22,42 +22,45 @@ prompt_input(
 )
 }
 \arguments{
-\item{prompt}{The character string to place on the line preceding the user input prompt. For example, "Enter location"}
+\item{prompt}{The character string to display before the user input prompt (e.g., \code{"Enter location"}).}
 
-\item{prompt_eol}{The character string to place at the end of the prompt line. For example, ">"}
+\item{prompt_eol}{The character string to place at the end of the prompt (e.g., \code{">"}).}
 
-\item{instruct}{The instructions to display above the prompt.}
+\item{instruct}{Instructions to display above the prompt (character string, or \code{NULL} for none).}
 
-\item{lower}{For numeric inputs, the lowest valid value}
+\item{type}{The expected type of the input. Must be one of \code{"numeric"}, \code{"integer"}, \code{"character"}, \code{"file"}, or \code{"flag"}.}
 
-\item{upper}{For numeric inputs, the highest valid value}
+\item{lower}{For numeric inputs, the lowest valid value.}
 
-\item{len}{The number of expected values to be returned. If NULL, the user can enter any number of values.}
+\item{upper}{For numeric inputs, the highest valid value.}
 
-\item{min.len}{The minimum number of values to be returned. If NULL, the user can enter any number of values.}
+\item{len}{The number of expected values to return. If \code{NULL}, any number of values is allowed.}
 
-\item{max.len}{The maximum number of values to be returned. If NULL, the user can enter any number of values.}
+\item{min.len}{The minimum number of values required (if applicable).}
 
-\item{split}{The character(s) to split the input string into multiple values. Only relevant if len > 1.}
+\item{max.len}{The maximum number of values allowed (if applicable).}
 
-\item{among}{A vector of valid values for the input. If NULL, any value is accepted.}
+\item{split}{Characters to split the input string into multiple values (used when multiple values are expected).}
 
-\item{required}{If TRUE, the user must provide a value. If FALSE, the user can skip the input by pressing Enter.}
+\item{among}{A vector of valid values that the input must match (or \code{NULL} for no restriction).}
 
-\item{uniq}{If TRUE, all entries must be unique.}
+\item{required}{If \code{TRUE}, the user must provide a value; if \code{FALSE}, pressing Enter yields an empty/default value.}
+
+\item{uniq}{If \code{TRUE}, all entries must be unique.}
+
+\item{default}{A default value to use if the user presses Enter without typing anything. If non-\code{NULL}, the prompt will show this default choice.}
 }
 \value{
-The user input, converted to the appropriate type (numeric, integer, or character).
+The user input, converted to the appropriate type (\code{numeric}, \code{integer}, \code{character}, etc.), or the \code{default} if provided and no input is given.
 }
 \description{
 Obtain user input from the console
 }
 \details{
-The function will keep prompting the user until valid input is provided. It will also display
-instructions and feedback about the expected input format.
+The function will keep prompting the user until a valid input is provided.
+It displays instructions and enforces constraints (e.g., value range, length, uniqueness).
 }
 \note{
-This function is intended for interactive use and may not work as expected in non-interactive
-environments (e.g., R scripts run in batch mode).
+This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
 }
 \keyword{internal}

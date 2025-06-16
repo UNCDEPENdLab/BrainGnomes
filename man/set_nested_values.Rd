@@ -11,9 +11,9 @@ set_nested_values(assignments, sep = "/", lst = NULL, type_values = TRUE)
 
 \item{sep}{A character used to separate keys. Default is \code{"/"}.}
 
-\item{lst}{Optional list to update. If \code{NULL}, starts from an empty list.}
+\item{lst}{Optional list to update. If \code{NULL}, a new list is created from scratch.}
 
-\item{type_values}{Logical; whether to attempt to conver right-hand side strings to relevant data
+\item{type_values}{Logical; whether to attempt to convert right-hand side strings to relevant data
 types using \code{type.convert}.}
 }
 \value{

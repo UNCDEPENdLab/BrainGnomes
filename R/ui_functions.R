@@ -137,25 +137,26 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 
 
 
-
 #' Obtain user input from the console
-#' @param prompt The character string to place on the line preceding the user input prompt. For example, "Enter location"
-#' @param prompt_eol The character string to place at the end of the prompt line. For example, ">"
-#' @param instruct The instructions to display above the prompt.
-#' @param lower For numeric inputs, the lowest valid value
-#' @param upper For numeric inputs, the highest valid value
-#' @param len The number of expected values to be returned. If NULL, the user can enter any number of values.
-#' @param min.len The minimum number of values to be returned. If NULL, the user can enter any number of values.
-#' @param max.len The maximum number of values to be returned. If NULL, the user can enter any number of values.
-#' @param split The character(s) to split the input string into multiple values. Only relevant if len > 1.
-#' @param among A vector of valid values for the input. If NULL, any value is accepted.
-#' @param required If TRUE, the user must provide a value. If FALSE, the user can skip the input by pressing Enter.
-#' @param uniq If TRUE, all entries must be unique.
-#' @return The user input, converted to the appropriate type (numeric, integer, or character).
-#' @details The function will keep prompting the user until valid input is provided. It will also display
-#'   instructions and feedback about the expected input format.
-#' @note This function is intended for interactive use and may not work as expected in non-interactive
-#'   environments (e.g., R scripts run in batch mode).
+#' @param prompt The character string to display before the user input prompt (e.g., `"Enter location"`).
+#' @param prompt_eol The character string to place at the end of the prompt (e.g., `">"`).
+#' @param instruct Instructions to display above the prompt (character string, or `NULL` for none).
+#' @param type The expected type of the input. Must be one of `"numeric"`, `"integer"`, `"character"`, `"file"`, or `"flag"`.
+#' @param lower For numeric inputs, the lowest valid value.
+#' @param upper For numeric inputs, the highest valid value.
+#' @param len The number of expected values to return. If `NULL`, any number of values is allowed.
+#' @param min.len The minimum number of values required (if applicable).
+#' @param max.len The maximum number of values allowed (if applicable).
+#' @param split Characters to split the input string into multiple values (used when multiple values are expected).
+#' @param among A vector of valid values that the input must match (or `NULL` for no restriction).
+#' @param required If `TRUE`, the user must provide a value; if `FALSE`, pressing Enter yields an empty/default value.
+#' @param uniq If `TRUE`, all entries must be unique.
+#' @param default A default value to use if the user presses Enter without typing anything. If non-`NULL`, the prompt will show this default choice.
+#' @return The user input, converted to the appropriate type (`numeric`, `integer`, `character`, etc.), or the `default` if provided and no input is given.
+#' @details The function will keep prompting the user until a valid input is provided. 
+#'   It displays instructions and enforces constraints (e.g., value range, length, uniqueness). 
+#' 
+#' @note This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
 #' @importFrom glue glue
 #' @importFrom checkmate test_string assert_string assert_subset assert_number
 #' @keywords internal
@@ -219,6 +220,22 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     inp_expect <- glue("Input must be {n_expect}string{plural} separated by '{split}'\n")
   }
 
+  # Validate default value
+  if (!is.null(default)) {
+    valid_default <- switch(type,
+      "integer" = checkmate::test_integerish(default, lower = lower, upper = upper, len = len, min.len = min.len, max.len = max.len),
+      "numeric" = checkmate::test_numeric(default, lower = lower, upper = upper, len = len, min.len = min.len, max.len = max.len),
+      "character" = checkmate::test_character(default, len = len, min.len = min.len, max.len = max.len),
+      "flag" = is.logical(default) && length(default) == 1,
+      "file" = all(sapply(default, checkmate::test_file_exists)),
+      FALSE
+    )
+    if (!valid_default) {
+      warning("Invalid default value. Ignoring default.")
+      default <- NULL
+    }
+  }
+
   # add options for flag prompt
   if (type == "flag") {
     # always ask user for yes/no input
@@ -234,19 +251,6 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   if (!grepl("\\s$", prompt_eol)) prompt_eol <- paste0(prompt_eol, " ") # also ensure that prompt_eol has trailing space
   prompt <- paste0(prompt, prompt_eol)
   
-  # Validate default value
-  if (!is.null(default)) {
-    valid_default <- switch(type,
-      "integer" = checkmate::test_integerish(default, lower = lower, upper = upper, len = len, min.len = min.len, max.len = max.len),
-      "numeric" = checkmate::test_numeric(default, lower = lower, upper = upper, len = len, min.len = min.len, max.len = max.len),
-      "character" = checkmate::test_character(default, len = len, min.len = min.len, max.len = max.len),
-      "flag" = is.logical(default) && length(default) == 1,
-      "file" = all(sapply(default, checkmate::test_file_exists)),
-      FALSE
-    )
-    if (!valid_default) stop("Default value does not meet the input requirements.")
-  }
-
   # print instructions
   if (checkmate::test_string(instruct)) cat(instruct, "\n")
 
@@ -325,3 +329,92 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
 # x <- prompt_input(prompt = "test me?", type = "character", split = " ", min.len = 2, max.len = 5)
 # x <- prompt_input(prompt = "test me?", type = "numeric", split = " ", min.len = 2, max.len = 5)
 # x <- prompt_input(prompt="test me?", type="integer", split=" ", min.len=2, max.len=5)
+
+
+#' helper function to setup output spaces for fMRIPrep
+#' @param output_spaces A string of existing output spaces to be modified.
+#' @return A string of output spaces to be used in fMRIPrep.
+#' @keywords internal
+#' @importFrom glue glue
+#' @importFrom utils menu select.list
+#' @noRd
+choose_fmriprep_spaces <- function(output_spaces = NULL) {
+  cat(glue("\nfmriprep uses --output-spaces to control the stereotaxic space and resolution
+           of preprocessed images. Its default space is MNI152NLin2009cAsym and the default
+           spatial resolution matches the raw/native data. Here, you can specify the output
+           spaces to be generated. This is not a comprehensive list of all templates available
+           in TemplateFlow (https://github.com/templateflow/templateflow), but it encompasses
+           the most useful ones. The default of MNI152NLin2009cAsym is pretty good, too!
+           For more detail, see: https://fmriprep.org/en/stable/spaces.html.
+
+           Of note, the 'res-' specifier controls the output resolution, but it is not the
+           voxel size! Rather, it refers to a resolution index in the files uploaded to
+           TemplateFlow. Usually, res-1 is 1mm and res-2 is 2mm, but you mileage may vary.
+
+           If you are using AROMA as part of your pipeline, we will automatically add
+           MNI152NLin6Asym:res-2 so that fmripost-aroma can run.\n\n
+           "))
+
+  templates_available <- c(
+    "MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152NLin6Sym",
+    "MNI152NLin2006Asym", "MNIPediatricAsym", "MNIInfant",
+    "MNIColin27", "MNI305", "OASIS30ANTs"
+  )
+  additional_spaces <- c("T1w", "T2w", "anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6")
+
+  # Parse input string into initial set
+  current_spaces <- character()
+  if (!is.null(output_spaces)) {
+    current_spaces <- unlist(strsplit(output_spaces, "\\s+"))
+  }
+
+  repeat {
+    cat("\nCurrent --output-spaces:\n")
+    if (length(current_spaces) == 0) {
+      cat("  (none selected yet)\n")
+    } else {
+      for (i in seq_along(current_spaces)) {
+        cat(sprintf("  [%d] %s\n", i, current_spaces[i]))
+      }
+    }
+
+    cat("\nWhat would you like to do?\n")
+    choice <- menu(c("Add a space", "Delete a space", "Finish and return"), title = "Modify output spaces:")
+
+    if (choice == 1) {
+      # Add a space
+      type_choice <- menu(c("Template space", "Other space (e.g., T1w, fsaverage)"), title = "Add space type:")
+      if (type_choice == 1) {
+        # Select a template
+        selected_template <- utils::select.list(templates_available, multiple = FALSE, title = "Choose a template")
+        if (selected_template != "") {
+          res_input <- readline(paste0("Enter resolution index for ", selected_template, " (or press ENTER to skip): "))
+          space_string <- if (res_input == "") {
+            selected_template
+          } else {
+            paste0(selected_template, ":res-", res_input)
+          }
+          current_spaces <- unique(c(current_spaces, space_string))
+        }
+      } else if (type_choice == 2) {
+        selected_additional <- utils::select.list(additional_spaces, multiple = TRUE, title = "Choose additional space(s)")
+        current_spaces <- unique(c(current_spaces, selected_additional))
+      }
+    } else if (choice == 2) {
+      # Delete a space
+      if (length(current_spaces) == 0) {
+        cat("No spaces to delete.\n")
+      } else {
+        del_choice <- utils::select.list(current_spaces, multiple = TRUE, title = "Select space(s) to remove:")
+        current_spaces <- setdiff(current_spaces, del_choice)
+      }
+    } else if (choice == 3) {
+      break
+    }
+  }
+
+  final_output_spaces <- paste(current_spaces, collapse = " ")
+  cat("\nFinal --output-spaces argument:\n")
+  cat("  ", final_output_spaces, "\n")
+  return(final_output_spaces)
+}

@@ -62,8 +62,6 @@ get_job_sched_args <- function(scfg=NULL, job_name) {
 }
 
 
-# pretty_print_list(defaults)
-
 
 setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
   if (is.null(scfg[[job_name]]$memgb) || glue("{job_name}/memgb") %in% fields) {
@@ -128,7 +126,7 @@ get_subject_logger <- function(scfg, sub_id) {
 
 
 #' Helper function to check whether a given file or directory exists and, optionally, is readable
-#' @param f a file or directory to check for existence
+#' @param input a file or directory to check for existence
 #' @param description a character string describing what this file is if we are prompted to change it
 #' @param directory if TRUE, check whether a directory exists. If FALSE (default), check that the file exists
 #' @param prompt_change if TRUE, if the file/directory exists, ask the user if they wish to change the value. If so, return FALSE
@@ -136,53 +134,35 @@ get_subject_logger <- function(scfg, sub_id) {
 #' @return a boolean (`TRUE/FALSE`) indicating whether the file or directory exists and is valid
 #' @importFrom checkmate assert_flag assert_string test_directory_exists test_file_exists
 #' @keywords internal
-validate_exists <- function(f, description="", directory=FALSE, prompt_change=FALSE, check_readable=TRUE) {  
+validate_exists <- function(input, description = "", directory = FALSE, prompt_change = FALSE, check_readable = TRUE) {
   checkmate::assert_string(description)
   checkmate::assert_flag(directory)
   checkmate::assert_flag(prompt_change)
   checkmate::assert_flag(check_readable)
 
-  if (directory) {
-    func <- checkmate::test_directory_exists
-    type <- "directory"
-  } else {
-    func <- checkmate::test_file_exists
-    type <- "file"
-  }
-
-  if (!checkmate::test_atomic(f) || is.null(f) || length(f) == 0L || is.na(f[1L])) {
-    return(FALSE)
-  } else if (checkmate::test_character(f)) {
-    if (length(f) > 1L) {
-      warning("validate_exists only works with a single string as input, but we received a character vector. Using first element.")
-      f <- f[1]
-    }
-
-    if (func(f)) {
-      if (check_readable && !func(f, access = "r")) {
-        warning(glue("Found existing {type}, but you do not have read permission: {f}"))
-        return(FALSE)
-      }
-
-      if (isTRUE(prompt_change)) {
-        cat(glue("Found existing {description}: {f}\n"))
-        change <- prompt_input("Change setting?", type = "flag")
-        if (isFALSE(change)) {
-          return(TRUE)
-        } else {
-          return(FALSE)
-        }
-      } else {
-        return(TRUE)
-      }
-
-    }
-  } else {
-    # some other non-character data type that somehow made it past check_atomic?
+  if (!checkmate::test_string(input)) {
+    warning("Input must be a non-missing character string.")
     return(FALSE)
   }
+
+  type <- if (directory) "directory" else "file"
+  exists_fn <- if (directory) checkmate::test_directory_exists else checkmate::test_file_exists
+
+  if (!exists_fn(input)) return(FALSE) # directory/file does not exist
+
+  if (check_readable && !exists_fn(input, access = "r")) {
+    warning(glue::glue("Found existing {type}, but you do not have read permission: {input}"))
+    return(FALSE)
+  }
+
+  if (prompt_change) {
+    cat(glue::glue("Found existing {description}: {input}\n"))
+    change <- prompt_input("Change setting?", type = "flag")
+    return(!isTRUE(change))
+  }
+
+  return(TRUE)
 }
-
 
 #' helper function to extract capturing groups from a string
 #' @param strings a character vector containing the strings to be processed
@@ -499,3 +479,7 @@ hours_to_dhms <- function(hours, frac = FALSE) {
   return(str)
 }
 
+
+get_pipeline_status <- function(scfg) {
+
+}

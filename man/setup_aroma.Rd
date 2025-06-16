@@ -2,17 +2,19 @@
 % Please edit documentation in R/setup_study.R
 \name{setup_aroma}
 \alias{setup_aroma}
-\title{Specify the aroma settings}
+\title{Specify the AROMA settings}
 \usage{
 setup_aroma(scfg, fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object, as produced by \code{load_study} or \code{setup_study}}
+\item{scfg}{A study configuration object, as produced by \code{load_study()} or \code{setup_study()}.}
+
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all AROMA fields will be prompted for.   # \link{Added}}
 }
 \value{
-a modified version of \code{scfg} with \verb{$aroma} populated
+A modified version of \code{scfg} with the \verb{$aroma} entry populated.
 }
 \description{
-Specify the aroma settings
+Specify the AROMA settings
 }
 \keyword{internal}

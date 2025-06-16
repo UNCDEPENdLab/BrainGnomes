@@ -15,7 +15,7 @@ would correspond to my_list$parent$child$grandchild}
 
 \item{sep}{a character string to separate the keys in the key strings. Default is "/"}
 
-\item{simplify}{a boolean indicating whether to simplify the output. Default is TRUE}
+\item{simplify}{Logical; whether to simplify the output to a vector (if possible). Default is \code{TRUE}.}
 }
 \value{
 a named list of values corresponding to the keys in the key strings

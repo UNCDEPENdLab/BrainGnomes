@@ -18,28 +18,21 @@ get_subject_dirs(
 
 \item{sub_regex}{A regex pattern to match the subject folders. Default: \code{"[0-9]+"}.}
 
-\item{sub_id_match}{A regex pattern to indicate how to extract the subject ID from the subject folder name.
-Default: \code{"([0-9]+)"}. The default will extract the first number-like sequence from the folder name.
-Note that this can include multiple capturing groups if the ID has multiple parts.}
+\item{sub_id_match}{A regex pattern for extracting the subject ID from the subject folder name. Default: \code{"([0-9]+)"}.}
 
-\item{ses_regex}{A regex pattern to match the session folders. Default: \code{NULL}.
-If \code{NULL}, only the subject folders are returned. If not \code{NULL}, the session folders
-are returned as well.}
+\item{ses_regex}{A regex pattern to match session folders. Default: \code{NULL}. If \code{NULL}, session folders are not expected.}
 
-\item{ses_id_match}{A regex pattern to indicate how to extract the session ID from the session folder name.
-Default: \code{"([0-9]+)"}. The default will extract the first number-like sequence from the folder name.}
+\item{ses_id_match}{A regex pattern for extracting the session ID from the session folder name. Default: \code{"([0-9]+)"}.}
 
-\item{full.names}{If \code{TRUE}, return the absolute paths to the subject folders. If
-\code{FALSE}, return paths relative to \code{root}. Default: \code{TRUE}.}
+\item{full.names}{If \code{TRUE}, return absolute paths to the folders; if \code{FALSE}, return paths relative to \code{root}. Default: \code{FALSE}.}
 }
 \value{
-A data frame with the following columns:
+A data frame with one row per subject (or per subject-session combination) and columns:
 \itemize{
-\item \code{sub_id}: The subject ID extracted from the subject folder name.
-\item \code{ses_id}: The session ID extracted from the session folder name. If no session folders are found,
-this column will be \code{NA}.
-\item \code{sub_dir}: The path to the subject folder.
-\item \code{ses_dir}: The path to the session folder. If no session folders are found, this column will be \code{NA}.
+\item \code{sub_id}: Subject ID extracted from each folder name.
+\item \code{ses_id}: Session ID (or \code{NA} if no session level).
+\item \code{sub_dir}: Path to the subject folder.
+\item \code{ses_dir}: Path to the session folder (\code{NA} if no session).
 }
 }
 \description{
@@ -59,7 +52,7 @@ from the folder names. The function returns a data frame with the subject and se
 and the corresponding folder paths.
 }
 \examples{
-  get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
-    ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
+                ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
 }
 \keyword{internal}

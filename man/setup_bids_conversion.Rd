@@ -4,12 +4,14 @@
 \alias{setup_bids_conversion}
 \title{Specify the heudiconv settings}
 \usage{
-setup_bids_conversion(scfg, fields = NULL)
+setup_bids_conversion(scfg, fields = NULL, print_instructions = TRUE)
 }
 \arguments{
 \item{scfg}{a study configuration object, as produced by \code{load_study} or \code{setup_study}}
 
 \item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+
+\item{print_instructions}{Logical. If TRUE, print the overall instructions for this step prior to prompting for input.}
 }
 \value{
 a modified version of \code{scfg} with \verb{$heudiconv} populated

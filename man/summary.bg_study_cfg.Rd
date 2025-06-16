@@ -6,6 +6,13 @@
 \usage{
 \method{summary}{bg_study_cfg}(x)
 }
+\arguments{
+\item{x}{The study configuration object (\code{bg_study_cfg}) to summarize.}
+}
+\value{
+Invisibly returns \code{x} after printing its contents. This function is called
+for its side effect of printing a formatted summary of the study configuration.
+}
 \description{
 summary method for study configuration object
 }

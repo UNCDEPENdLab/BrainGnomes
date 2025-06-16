@@ -2,30 +2,35 @@
 % Please edit documentation in R/bids_functions.R
 \name{extract_bids_info}
 \alias{extract_bids_info}
-\title{Function for extracting fields from BIDS filenames (mostly generated correctly by ChatGPT)}
+\title{Extract fields from BIDS filenames}
 \usage{
 extract_bids_info(filenames, drop_unused = FALSE)
 }
 \arguments{
-\item{filenames}{a character vector of BIDS filenames}
+\item{filenames}{A character vector of BIDS file names (or paths).}
+
+\item{drop_unused}{Logical; if \code{TRUE}, drop any BIDS entities that are not present in any of the filenames.}
 }
 \value{
-a \code{data.frame} containing the fields extraced from \code{filenames}
+A data.frame containing the BIDS key–value fields extracted from each filename (each row corresponds to an input filename).
 }
 \description{
-Function for extracting fields from BIDS filenames (mostly generated correctly by ChatGPT)
+Extract fields from BIDS filenames
 }
 \details{
-Based on this specification: https://bids-specification.readthedocs.io/en/stable/appendices/entities.html
+Based on the BIDS specification for file naming (see BIDS documentation appendix on entities).
+For more detail, see: https://bids-specification.readthedocs.io/en/stable/appendices/entities.html
+
+This function recognizes standard BIDS entities such as subject (\verb{sub-}), session (\verb{ses-}), task (\verb{task-}),
+acquisition (\verb{acq-}), run, modality (\verb{mod-}), echo (\verb{echo-}), direction (\verb{dir-}), reconstruction (\verb{rec-}),
+hemisphere (\verb{hemi-}), space (\verb{space-}), resolution (\verb{res-}), description (\verb{desc-}), and fieldmap (\verb{fmap-}),
+as well as the file suffix and extension.
 }
 \examples{
- filenames <- c(
-    "/proj/fmap-phase/task-memory_sub-01_ses-02_run-1_space-MNI2009c_acq-highres_desc-preproc_bold.nii.gz",
-    "acq-lowres_desc-smoothed_sub-02_task-attention_run-2_bold.nii.gz",
-   "sub-03_space-MNI152NLin6Asym_task-motor_desc-raw_echo-2_dir-PA_bold.nii.gz",
-   "hemi-L_desc-denoised_task-vision_rec-magnitude_fmap-phase_sub-04_bold.nii.gz"
- )
-
+filenames <- c(
+  "sub-01_ses-02_task-memory_space-MNI2009c_acq-highres_desc-preproc_bold.nii.gz",
+  "acq-lowres_desc-smoothed_sub-02_task-attention_run-2_bold.nii.gz",
+  "sub-03_space-MNI152NLin6Asym_task-motor_desc-raw_echo-2_dir-PA_bold.nii.gz"
+)
 extract_bids_info(filenames)
 }
-\keyword{internal}
