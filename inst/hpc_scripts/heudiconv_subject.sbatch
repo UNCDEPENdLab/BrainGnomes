@@ -32,6 +32,8 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ ! -f "$heudiconv_heuristic" ] && echo "Heuristic file $heudiconv_heuristic not found." && exit 1
 [ ! -r "$heudiconv_heuristic" ] && echo "Heuristic file $heudiconv_heuristic not readable." && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
+
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
 # [ -z "$cmd_log" ] && cmd_log="${loc_bids_root}/heudiconv_${sub_id}${ses_str}.log"
 
@@ -70,7 +72,7 @@ rel $rel_flag $cmd_log $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_
 wait
 
 # write complete file if the command was successful and debug_pipeline is not set
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "${out_dir}/.heudiconv_complete"
+[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 rel c $cmd_log Finished heudiconv for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the heudiconv command
 

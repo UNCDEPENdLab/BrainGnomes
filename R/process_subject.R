@@ -41,15 +41,17 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     sub_id <- sub_cfg$sub_id[row_idx]
     ses_id <- sub_cfg$ses_id[row_idx]
     has_ses <- !is.na(ses_id)
-    ses_str <- ifelse(has_ses && session_level, glue("_ses-{ses_id}"), "") # qualifier for .complete file
-    complete_file <- file.path(sub_cfg$bids_sub_dir[row_idx], glue(".{name}{ses_str}_complete"))
+    sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
+    if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")
+    sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
+    complete_file <- file.path(sub_dir, glue(".{name}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
 
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
     if (!steps[name] || (file_exists && !scfg$force)) {
       if (file_exists) {
-        lg$debug("Skipping {name} for {sub_id} because .{name}{ses_str}_complete file already exists.")
+        lg$debug("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists.")
       } else {
         lg$debug("Skipping {name} for {sub_id} because step is not requested.")
       }
@@ -58,7 +60,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
     # clear existing complete file if we are starting over on this step
     if (file_exists) {
-      lg$debug("Removing existing .{name}{ses_str}_complete file {complete_file}")
+      lg$debug("Removing existing .{name}{sub_str}_complete file: {complete_file}")
       unlink(complete_file)
     }
 
@@ -69,7 +71,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
       cmd_log = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}-%j-{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-      stderr_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}-%j-{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
+      stderr_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}-%j-{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+      complete_file = complete_file
     )
     sched_script <- get_job_script(scfg, name)
     sched_args <- get_job_sched_args(scfg, name)

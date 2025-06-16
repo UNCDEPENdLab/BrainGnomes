@@ -32,6 +32,7 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
 [ ! -r "$loc_mrproc_root" ] && echo "loc_mrproc_root $loc_mrproc_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [ -z "$postproc_cli" ] && echo "postproc_cli not set. Exiting." && exit 1
 [ -z "$postproc_rscript" ] && echo "postproc_rscript not set. Exiting." && exit 1
 [ ! -f "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not found. Exiting" && exit 1
@@ -61,6 +62,6 @@ rel $rel_flag $cmd_log Rscript --vanilla "$postproc_rscript" $postproc_cli &
     
 wait
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "${out_dir}/.postprocess_complete"
+[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 rel c $cmd_log Finished postprocessing for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the end of the postproc command

@@ -38,6 +38,7 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ ! -d "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not found. Exiting" && exit 1
 [ ! -r "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
 
 ###
@@ -64,6 +65,6 @@ rel $rel_flag $cmd_log $singularity_cmd \
 
 wait
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${out_dir}/.aroma_complete
+[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 rel c $cmd_log Finished aroma for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the end of the aroma command

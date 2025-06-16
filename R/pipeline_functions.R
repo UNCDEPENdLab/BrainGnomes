@@ -115,7 +115,7 @@ pretty_arg <- function(x, width = 80) {
 #' @keywords internal
 get_subject_logger <- function(scfg, sub_id) {
   checkmate::assert_directory_exists(scfg$project_directory)
-  sub_dir <- file.path(scfg$project_directory, "logs", glue("sub-{sub_id}"))
+  sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
   lg <- lgr::get_logger_glue(c("sub", sub_id))
   if (isTRUE(scfg$log_txt) && !"subject_logger" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(file.path(sub_dir, glue("sub-{sub_id}_log.txt"))), name = "subject_logger")
