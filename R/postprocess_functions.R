@@ -269,7 +269,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   for (step in processing_sequence) {
     if (step == "spatial_smooth") {
-      proc_prefix <- paste0(cfg$spatial_smooth$prefix, proc_prefix)
       to_log(glue("# Spatial smoothing with FHWM {cfg$spatial_smooth$fwhm_mm}mm kernel"), log_file = log_file)
       cur_file <- spatial_smooth(cur_file,
         brain_mask = brain_mask, prefix = cfg$spatial_smooth$prefix, fwhm_mm = cfg$spatial_smooth$fwhm_mm, 
@@ -277,7 +276,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "apply_aroma") {
-      proc_prefix <- paste0(cfg$apply_aroma$prefix, proc_prefix)
       to_log("# Removing AROMA noise components from fMRI data", log_file=log_file)
       cur_file <- apply_aroma(cur_file, prefix = cfg$apply_aroma$prefix,
         mixing_file = proc_files$melodic_mix,
@@ -286,7 +284,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "temporal_filter") {
-      proc_prefix <- paste0(cfg$temporal_filter$prefix, proc_prefix)
       to_log(glue("# Temporal filtering with lp: {cfg$temporal_filter$low_pass_hz} Hz, hp: {cfg$temporal_filter$high_pass_hz} Hz given TR: {cfg$tr}"), log_file = log_file)
       cur_file <- temporal_filter(cur_file, prefix = cfg$temporal_filter$prefix,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz,
@@ -295,7 +292,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "intensity_normalize") {
-      proc_prefix <- paste0(cfg$intensity_normalize$prefix, proc_prefix)
       to_log(glue("# Intensity normalizing fMRI data to global median: {cfg$intensity_normalize$global_median}"), log_file = log_file)
       cur_file <- intensity_normalize(cur_file, prefix = cfg$intensity_normalize$prefix,
         brain_mask = brain_mask,
@@ -304,7 +300,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "confound_regression") {
-      proc_prefix <- paste0(cfg$confound_regression$prefix, proc_prefix)
       to_log(glue("# Removing confound regressors from fMRI data using file: {to_regress}"), log_file = log_file)
       cur_file <- confound_regression(cur_file, prefix = cfg$confound_regression$prefix,
         to_regress = to_regress,
@@ -312,7 +307,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "apply_mask") {
-      proc_prefix <- paste0(cfg$apply_mask$prefix, proc_prefix)
       to_log(glue("# Masking fMRI data using file: {brain_mask}"), log_file = log_file)
       cur_file <- apply_mask(cur_file, prefix = cfg$apply_mask$prefix,
         mask_file = brain_mask,
@@ -333,9 +327,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # move the final file into a BIDS-friendly file name with a desc field
   if (!is.null(cfg$bids_desc) && is.character(cfg$bids_desc)) {
-    final_filename <- sub(proc_prefix, "", cur_file) # strip prefix
-    if (grepl("_desc-", final_filename)) final_filename <- sub("_desc-[^_\\.]+", paste0("_desc-", cfg$bids_desc), final_filename)
-    else final_filename <- sub("((_bold)?\\.nii(\\.gz)?)", paste0("_desc-", cfg$bids_desc, "\\1"), final_filename)
+    # Parse and update BIDS fields
+    bids_info <- extract_bids_info(cur_file)
+    bids_info$description <- cfg$bids_desc # set desc to new description
+
+    # Reconstruct filename
+    final_filename <- file.path(dirname(cur_file), construct_bids_filename(bids_info))
+
     file.rename(cur_file, final_filename)
   }
 

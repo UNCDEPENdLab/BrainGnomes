@@ -22,6 +22,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$postprocess$input_regex)) fields <- c(fields, "postprocess/input_regex")
+    if (is.null(scfg$postprocess$bids_desc)) fields <- c(fields, "postprocess/bids_desc")
     if (is.null(scfg$postprocess$keep_intermediates)) fields <- c(fields, "postprocess/keep_intermediates")
     if (is.null(scfg$postprocess$overwrite)) fields <- c(fields, "postprocess/overwrite")
     if (is.null(scfg$postprocess$tr)) fields <- c(fields, "postprocess/tr")
@@ -29,6 +30,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     if (is.null(scfg$postprocess$brain_mask)) fields <- c(fields, "postprocess/brain_mask")
   }
 
+  # global postprocessing settings
   if ("postprocess/input_regex" %in% fields) {
     scfg$postprocess$input_regex <- prompt_input(
       "What is the relevant file extension (or regular expression) for inputs?",
@@ -45,7 +47,17 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  # global postprocessing settings
+  if ("postprocess/bids_desc" %in% fields) {
+    scfg$postprocess$bids_desc <- prompt_input(
+      "Enter the BIDS description ('desc') for the fully postprocessed file: ",
+      type = "character", len = 1L, default="postproc",
+      instruct = glue("
+      \nWhat should be the description field for the final postprocessed file?
+      This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.
+      ")
+    )
+  }
+  
   if ("postprocess/keep_intermediates" %in% fields) {
     scfg$postprocess$keep_intermediates <- prompt_input("Do you want to keep postprocess intermediate files? This is typically only for debugging.", type = "flag")
   }
