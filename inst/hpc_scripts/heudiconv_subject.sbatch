@@ -17,10 +17,6 @@ trap 'trap_job_failure heudiconv SIGINT' SIGINT
 trap 'trap_job_failure heudiconv SIGHUP' SIGHUP
 trap 'trap_job_failure heudiconv SIGQUIT' SIGQUIT
 
-# add the job id to the log file variables in case of crash
-stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
-stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
-
 ####
 #verify necessary arguments
 [ -z "$heudiconv_container" ] && echo "heudiconv_container not set. Exiting" && exit 1
@@ -35,9 +31,14 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
-# [ -z "$cmd_log" ] && cmd_log="${loc_bids_root}/heudiconv_${sub_id}${ses_str}.log"
 
 heuristic_dir=$(dirname "$heudiconv_heuristic")
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
+stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
 ###
 # handle multi-session setup
@@ -56,16 +57,18 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 ####
 #run heudiconv
 [ $debug_pipeline -eq 1 ] && rel_flag=c # if debug_pipeline is 1, only echo command to log, don't run it
-[[ -n "$cmd_log" ]] && cmd_log="-l $cmd_log" # if cmd_log is set, pass it to rel
 
-rel c $cmd_log Starting heudiconv for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the heudiconv command
+local log=""
+[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+
+log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir
 
 singularity_cmd="singularity run --cleanenv -B $loc_bids_root -B $loc_sub_dicoms -B $heuristic_dir $heudiconv_container"
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 # we now use --files to specify the dicoms to convert rather than -d since we don't want to assume
 # the dicoms are in a specific directory structure (esp. in terms of level of nesting).
-rel $rel_flag $cmd_log $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_flag \
+rel $rel_flag $log $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_flag \
   -f $heudiconv_heuristic -c dcm2niix \
   -o $loc_bids_root --bids &
 
@@ -74,7 +77,7 @@ wait
 # write complete file if the command was successful and debug_pipeline is not set
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-rel c $cmd_log Finished heudiconv for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the heudiconv command
+log_message INFO Finished heudiconv for subject $sub_id $ses_str
 
 #######
 # example call

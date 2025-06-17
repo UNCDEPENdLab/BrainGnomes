@@ -204,31 +204,14 @@ function trap_job_failure() {
     echo
   } >> "$fail_file"
 
+  log_message ERROR $step job failed.
+  log_message ERROR "  Signal     : $signal"
+  log_message ERROR "  Job ID     : $job_id"
+  log_message ERROR "  Job Name   : $job_name"
+  log_message ERROR "  Working Dir: $(pwd)"
+
   exit 1
 }
-
-function on_error() {
-  local step="$1"
-  local exit_code=$?
-  local now
-  now=$(date +"%Y-%m-%d %H:%M:%S")
-  local fail_file=".${step}_fail"
-  local job_id="${SLURM_JOB_ID:-unknown}"
-  local job_name="${SLURM_JOB_NAME:-unknown}"
-
-  {
-    echo "[$now] $step job failed."
-    echo "  Exit Code  : $exit_code"
-    echo "  Job ID     : $job_id"
-    echo "  Job Name   : $job_name"
-    echo "  Working Dir: $(pwd)"
-    echo "  Error occurred on line $LINENO in command: '$BASH_COMMAND'"
-    echo
-  } >> "$fail_file"
-
-  # Add any cleanup or logging logic here
-}
-
 
 function archive_file() {
     fname="$1"
@@ -264,9 +247,9 @@ function traperror () {
       echo -en "\nCurrent working directory:\n  $PWD\n" | tee -a "$dotfile"
       [ -n "$pkg_dir" ] && echo "Location of BrainGnomes installation: $pkg_dir"
 
-      if [ -r "$cmd_log" ]; then
+      if [ -r "$log_file" ]; then
         echo -en "\n\nLast 10 lines of command log file:\n---------\n\n"
-        tail -n 10 "$cmd_log"
+        tail -n 10 "$log_file"
       fi
 
       if [ -r "$stdout_log" ]; then
@@ -281,4 +264,25 @@ function traperror () {
     } | tee -a "$dotfile"
 
     exit "$err"  
+}
+
+
+function log_message() {
+  [[ $# -eq 0 ]] && echo "No arguments to log_message provided" && return 1
+  local level="$1"
+  shift
+  local message="$*"
+  
+  # Timestamp
+  local timestamp
+  timestamp=$(date +"%Y-%m-%d %H:%M:%S.%3N")
+
+  # Final log line
+  local log_line="$level  [$timestamp] $message"
+
+  # Output to screen and/or log file
+  echo "$log_line"
+  if [[ -n "$log_file" ]]; then
+    echo "$log_line" >> "$log_file"
+  fi
 }

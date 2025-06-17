@@ -23,10 +23,6 @@ trap 'traperror postprocess $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(print
 
 ncores=$SLURM_NTASKS
 
-# add the job id to the log file variables in case of crash
-stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
-stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
-
 ####
 #verify required arguments
 [ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
@@ -38,6 +34,11 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ ! -f "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not found. Exiting" && exit 1
 [ ! -r "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not readable. Exiting" && exit 1
 
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
+stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
 ###
 # handle multi-session setup
@@ -51,17 +52,18 @@ fi
 mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
-
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-[[ -n "$cmd_log" ]] && cmd_log="-l $cmd_log" # if cmd_log is set, pass it to rel
 
-rel c $cmd_log Starting postprocessing for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the postproc command
+local log=""
+[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
 
-rel $rel_flag $cmd_log Rscript --vanilla "$postproc_rscript" $postproc_cli &
+log_message INFO Starting postprocessing for subject $sub_id $ses_str in $out_dir
+
+rel $rel_flag $log Rscript --vanilla "$postproc_rscript" $postproc_cli &
     
 wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-rel c $cmd_log Finished postprocessing for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the end of the postproc command
+log_message INFO Finished postprocessing for subject $sub_id $ses_str

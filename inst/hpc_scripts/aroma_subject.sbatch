@@ -23,10 +23,6 @@ trap 'traperror aroma $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%
 
 ncores=$SLURM_NTASKS
 
-# add the job id to the log file variables in case of crash
-stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
-stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
-
 ####
 #verify required arguments
 [ -z "$aroma_container" ] && echo "aroma_container not set. Exiting" && exit 1
@@ -41,6 +37,12 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
 
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
+stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
+
 ###
 out_dir="${loc_mrproc_root}/sub-${sub_id}"
 mkdir -p "$out_dir"
@@ -48,12 +50,12 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-[[ -n "$cmd_log" ]] && cmd_log="-l $cmd_log" # if cmd_log is set, pass it to rel
+[[ -n "$log_file" ]] && log_file="-l $log_file" # if cmd_log is set, pass it to rel
 
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' '$aroma_container'"
 
-rel c $cmd_log Starting aroma for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the aroma command
+log_message INFO Starting aroma for subject $sub_id
 
 #singularity exec --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
 #    -B "$loc_mrproc_root" -B "$templateflow_home" "$aroma_container" aroma \
@@ -67,4 +69,4 @@ wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-rel c $cmd_log Finished aroma for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the end of the aroma command
+log_message INFO Finished aroma for subject $sub_id

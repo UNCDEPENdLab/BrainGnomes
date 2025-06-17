@@ -23,11 +23,6 @@ trap 'traperror fmriprep $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "
 
 ncores=$SLURM_NTASKS
 
-# add the job id to the log file variables in case of crash
-stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
-stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
-
-
 ####
 #verify required arguments
 [ -z "$fmriprep_container" ] && echo "fmriprep_container not set. Exiting" && exit 1
@@ -51,6 +46,12 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
 fs_dir=$(dirname "$fs_license_file")
 
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
+stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
+
 ###
 # handle multi-session setup
 if [ -n "$ses_id" ]; then
@@ -65,21 +66,24 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-[[ -n "$cmd_log" ]] && cmd_log="-l $cmd_log" # if cmd_log is set, pass it to rel
+
+local log=""
+[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+
 
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' -B '$templateflow_home' -B '$fs_dir' '$fmriprep_container'"
 
-rel c $cmd_log Starting fmriprep for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the start of the fmriprep command
+log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir
 
-rel $rel_flag $cmd_log export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
-rel $rel_flag $cmd_log export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
+rel $rel_flag $log export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
+rel $rel_flag $log export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
 #singularity exec --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
 #    -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" fmriprep \
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $cmd_log $singularity_cmd \
+rel $rel_flag $log $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_fmriprep()
 
@@ -87,4 +91,4 @@ wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-rel c $cmd_log Finished fmriprep for subject $sub_id $ses_str at $(date +"%Y-%m-%d %H:%M:%S") # log the end of the fmriprep command
+log_message INFO Finished fmriprep for subject $sub_id $ses_str

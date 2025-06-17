@@ -481,5 +481,21 @@ hours_to_dhms <- function(hours, frac = FALSE) {
 
 
 get_pipeline_status <- function(scfg) {
-
+  # adapted from get_feat_status.
+  # use to read timing files
+  # if (!is.null(timing_file)) {
+  #     timing <- readLines(timing_file)
+  #      if (length(timing) > 0L) {
+  #        # convert to POSIXct object to allow for any date calculations
+  #        timing <- anytime::anytime(timing)
+  #        feat_checks$feat_execution_start <- timing[1L]
+  #        if (length(timing) == 2L) {
+  #          feat_checks$feat_execution_end <- timing[2L]
+  #          feat_checks$feat_execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
+  #        } else {
+  #          lg$warn("Did not find two timing entries in %s.", timing_file)
+  #          lg$warn("File contents: %s", timing)
+  #        }
+  #      }
+  #   }
 }

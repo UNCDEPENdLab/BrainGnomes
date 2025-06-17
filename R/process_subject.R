@@ -65,13 +65,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     }
 
     # shared components across specific jobs
-    jobid_str <- ifelse(has_ses, glue("{name}-sub-{sub_id}_ses-{ses_id}"), glue("{name}-sub-{sub_id}"))
+    jobid_str <- ifelse(has_ses, glue("{name}_sub-{sub_id}_ses-{ses_id}"), glue("{name}_sub-{sub_id}"))
     env_variables <- c(
       debug_pipeline = scfg$debug,
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
-      cmd_log = lg$appenders$subject_logger$destination, # write to same file as subject lgr
-      stdout_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}-%j-{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-      stderr_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}-%j-{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+      log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
+      stdout_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+      stderr_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
       complete_file = complete_file
     )
     sched_script <- get_job_script(scfg, name)
