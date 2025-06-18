@@ -236,14 +236,23 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     }
   }
 
-  # add options for flag prompt
   if (type == "flag") {
-    # always ask user for yes/no input
-    prompt <- paste(prompt, ifelse(required, "(yes/no)", "(yes/no; press Enter to skip)"))
-  } else if (!is.null(default)) {
-    prompt <- glue::glue("{prompt} (Press enter to accept default: {default})") # let user know how to skip optional input
-  } else if (!required) {
-    prompt <- paste(prompt, "(Press enter to skip)") # let user know how to skip optional input
+    # Handle yes/no prompts
+    if (!is.null(default)) {
+      # Add helpful hint that pressing enter accepts default
+      prompt <- glue::glue("{prompt} (yes/no; Press enter to accept default: {ifelse(isTRUE(default), 'yes', 'no')})")
+    } else if (required) {
+      prompt <- glue::glue("{prompt} (yes/no)")
+    } else {
+      prompt <- glue::glue("{prompt} (yes/no; Press enter to skip)")
+    }
+  } else {
+    # Non-flag input types
+    if (!is.null(default)) {
+      prompt <- glue::glue("{prompt} (Press enter to accept default: {default})")
+    } else if (!required) {
+      prompt <- glue::glue("{prompt} (Press enter to skip)")
+    }
   }
 
   # always add trailing space to make prompt clear

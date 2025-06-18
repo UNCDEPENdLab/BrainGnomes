@@ -9,12 +9,26 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
   }
 
   defaults <- list(
-    memgb = 50,
-    nhours = 2,
+    memgb = 48,
+    nhours = 8,
     ncores = 1L,
     cli_options = "",
     sched_args = ""
   )
+ 
+  scfg <- setup_job(scfg, "postprocess", defaults, fields) 
+  scfg <- setup_postprocess_globals(scfg, fields)
+  scfg <- setup_spatial_smooth(scfg, fields)
+  scfg <- setup_apply_aroma(scfg, fields)
+  scfg <- setup_temporal_filter(scfg, fields)
+  scfg <- setup_intensity_normalization(scfg, fields)
+  scfg <- setup_confound_calculate(scfg, fields)
+  scfg <- setup_confound_regression(scfg, fields)
+  scfg <- setup_postproc_steps(scfg, fields)
+
+}
+
+setup_postprocess_globals <- function(scfg, fields = NULL) {
 
   if (is.null(fields)) {
     fields <- c()
@@ -25,11 +39,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     if (is.null(scfg$postprocess$tr)) fields <- c(fields, "postprocess/tr")
     if (is.null(scfg$postprocess$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
     if (is.null(scfg$postprocess$brain_mask)) fields <- c(fields, "postprocess/brain_mask")
-
-    cat("This step sets up postprocessing.\n")
   }
-  
-  scfg <- setup_job(scfg, "postprocess", defaults = defaults)
 
   # global postprocessing settings
   if ("postprocess/input_regex" %in% fields) {
@@ -43,7 +53,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
 
       What is the file extension for functional data to be postprocessed? If, for example, you only want
       files for a task called 'ridl', use a regular expression like, '_task-ridl.*_desc-preproc_bold.nii.gz$'. Note
-      that having the $ add the end of the regular expression ensures that the file ends with the specified suffix.
+      that having the $ add the end of the regular expression ensures that the file ends with the specified suffix.\n
       ")
     )
   }
@@ -54,21 +64,21 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
       type = "character", len = 1L, default="postproc",
       instruct = glue("
       \nWhat should be the description field for the final postprocessed file?
-      This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.
+      This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.\n
       ")
     )
   }
   
   if ("postprocess/keep_intermediates" %in% fields) {
-    scfg$postprocess$keep_intermediates <- prompt_input("Do you want to keep postprocess intermediate files? This is typically only for debugging.", type = "flag")
+    scfg$postprocess$keep_intermediates <- prompt_input("Do you want to keep postprocess intermediate files? This is typically only for debugging.", type = "flag", default = FALSE)
   }
   if ("postprocess/overwrite" %in% fields) {
-    scfg$postprocess$overwrite <- prompt_input("Overwrite existing postprocess files?", type = "flag")
+    scfg$postprocess$overwrite <- prompt_input("Overwrite existing postprocess files?", type = "flag", default = FALSE)
   }
   if ("postprocess/tr" %in% fields) {
     scfg$postprocess$tr <- prompt_input("Repetition time (in seconds) of the scan sequence:", type = "numeric", lower = 0.01, upper = 100, len = 1)
   }
-  
+
   if ("postprocess/apply_mask" %in% fields) {
     scfg$postprocess$apply_mask <- prompt_input(
       "Apply brain mask to postprocessed data?",
@@ -112,13 +122,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  scfg <- setup_spatial_smooth(scfg, fields)
-  scfg <- setup_apply_aroma(scfg, fields)
-  scfg <- setup_temporal_filter(scfg, fields)
-  scfg <- setup_intensity_normalization(scfg, fields)
-  scfg <- setup_confound_calculate(scfg, fields)
-  scfg <- setup_confound_regression(scfg, fields)
-  scfg <- setup_postproc_steps(scfg, fields)
+  return(scfg)
 
 }
 
@@ -465,7 +469,8 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
     scfg$postprocess$temporal_filter$high_pass_hz <- prompt_input("High-pass cutoff (Hz): ", type = "numeric", lower = 0)
   }
 
-  if (scfg$postprocess$temporal_filter$low_pass_hz > scfg$postprocess$temporal_filter$high_pass_hz) stop("Low-pass cutoff cannot be larger than high-pass cutoff")
+  if (!is.null(scfg$postprocess$temporal_filter$low_pass_hz) && !is.null(scfg$postprocess$temporal_filter$high_pass_hz) &&
+    scfg$postprocess$temporal_filter$low_pass_hz > scfg$postprocess$temporal_filter$high_pass_hz) stop("Low-pass cutoff cannot be larger than high-pass cutoff")
 
   if ("postprocess/temporal_filter/prefix" %in% fields) {
     scfg$postprocess$temporal_filter$prefix <- prompt_input("File prefix: ", type = "character", default = "f")

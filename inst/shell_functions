@@ -194,6 +194,7 @@ function trap_job_failure() {
   # "unknown" if SLURM variables are unset
   local job_id="${SLURM_JOB_ID:-unknown}"
   local job_name="${SLURM_JOB_NAME:-unknown}"
+  local err="${stderr_log:-unknown}"
 
   {
     echo "[$now] $step job failed."
@@ -204,7 +205,7 @@ function trap_job_failure() {
     echo
   } >> "$fail_file"
 
-  log_message ERROR $step job failed.
+  log_message ERROR $step job failed. Check $err.
   log_message ERROR "  Signal     : $signal"
   log_message ERROR "  Job ID     : $job_id"
   log_message ERROR "  Job Name   : $job_name"

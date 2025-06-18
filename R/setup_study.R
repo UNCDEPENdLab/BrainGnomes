@@ -49,17 +49,6 @@ setup_study <- function(input = NULL, fields = NULL) {
     class(scfg) <- c(class(scfg), "bg_study_cfg")
   }
 
-  # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$project_name)) fields <- c(fields, "project_name")
-    if (is.null(scfg$project_directory)) fields <- c(fields, "project_directory")
-    if (is.null(scfg$dicom_directory)) fields <- c(fields, "dicom_directory")
-    if (is.null(scfg$templateflow_home)) fields <- c(fields, "templateflow_home")
-    if (is.null(scfg$scratch_directory)) fields <- c(fields, "scratch_directory")
-    if (is.null(scfg$log_txt)) fields <- c(fields, "log_txt")
-  }
-
   if (is.null(scfg$run_aroma) || "run_aroma" %in% fields) {
     scfg$run_aroma <- prompt_input("Run AROMA?",
       instruct = glue("
@@ -86,6 +75,16 @@ setup_study <- function(input = NULL, fields = NULL) {
 }
 
 setup_study_globals <- function(scfg = NULL, fields = NULL) {
+  # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$project_name)) fields <- c(fields, "project_name")
+    if (is.null(scfg$project_directory)) fields <- c(fields, "project_directory")
+    if (is.null(scfg$dicom_directory)) fields <- c(fields, "dicom_directory")
+    if (is.null(scfg$templateflow_home)) fields <- c(fields, "templateflow_home")
+    if (is.null(scfg$scratch_directory)) fields <- c(fields, "scratch_directory")
+  }
+
   if ("project_name" %in% fields) {
     scfg$project_name <- prompt_input("What is the name of your project?", type = "character")
   }
@@ -164,17 +163,6 @@ setup_study_globals <- function(scfg = NULL, fields = NULL) {
   if (!checkmate::test_directory_exists(scfg$templateflow_home)) {
     create <- prompt_input(instruct = glue("The directory {scfg$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
     if (create) dir.create(scfg$templateflow_home, recursive = TRUE)
-  }
-
-  # logging
-  if ("log_txt" %in% fields) {
-    scfg$log_txt <- prompt_input("Create subject-level logs?",
-      instruct = glue("
-      The package can write plain-text logs to each subject's sub-<id> directory.
-      These contain messages related to job submission and job status.
-      We strongly recommend these for tracking and debugging purposes.
-      ", .trim = FALSE), type = "flag"
-    )
   }
 
   scfg$log_directory <- file.path(scfg$project_directory, "logs")
@@ -369,7 +357,7 @@ edit_study <- function(scfg) {
   # Define editable fields per setup function
   config_map <- list(
     "General" = list(setup_fn = setup_study_globals, prefix = "", fields = c(
-      "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home", "log_txt"
+      "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container"
@@ -863,10 +851,10 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if ("compute_environment/heudiconv_container" %in% fields) {
     scfg$compute_environment$heudiconv_container <- prompt_input(
       instruct = glue("
-      The pipeline depends on having a working heudiconv container (docker or singularity).
+      \nThe pipeline depends on having a working heudiconv container (docker or singularity).
       If you don't have this yet, follow these instructions first:
-        https://heudiconv.readthedocs.io/en/latest/installation.html#install-container
-    ", .trim = FALSE),
+        https://heudiconv.readthedocs.io/en/latest/installation.html#install-container\n
+    "),
       prompt = "Location of heudiconv container: ",
       type = "file",
       default = scfg$compute_environment$heudiconv_container
@@ -877,14 +865,14 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if ("compute_environment/bids_validator" %in% fields) {
     scfg$compute_environment$bids_validator <- prompt_input(
       instruct = glue("
-      After BIDS conversion, the pipeline can pass resulting BIDS folders to bids-validator to verify that 
+      \nAfter BIDS conversion, the pipeline can pass resulting BIDS folders to bids-validator to verify that 
       the folder conforms to the BIDS specification. You can read more about validtion here: 
       https://bids-validator.readthedocs.io/en/stable/index.html.
       
       If you'd like to include BIDS validation in the processing pipeline, specify the location of the 
       bids-validator program here. If you need help building this program, follow these instructions: 
-      https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html.
-    ", .trim = FALSE),
+      https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html.\n
+    "),
       prompt = "Location of bids-validator program: ",
       type = "file", required = ,
       default = scfg$compute_environment$bids_validator

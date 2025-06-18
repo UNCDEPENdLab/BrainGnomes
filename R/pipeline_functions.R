@@ -61,35 +61,42 @@ get_job_sched_args <- function(scfg=NULL, job_name) {
 
 }
 
-
-
 setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
-  if (is.null(scfg[[job_name]]$memgb) || glue("{job_name}/memgb") %in% fields) {
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg[[job_name]]$memgb)) fields <- c(fields, glue("{job_name}/memgb"))
+    if (is.null(scfg[[job_name]]$nhours)) fields <- c(fields, glue("{job_name}/nhours"))
+    if (is.null(scfg[[job_name]]$ncores)) fields <- c(fields, glue("{job_name}/ncores"))
+    if (is.null(scfg[[job_name]]$cli_options)) fields <- c(fields, glue("{job_name}/cli_options"))
+    if (is.null(scfg[[job_name]]$sched_args)) fields <- c(fields, glue("{job_name}/sched_args"))
+  }
+
+  if (glue("{job_name}/memgb") %in% fields) {
     scfg[[job_name]]$memgb <- prompt_input(
       instruct = glue("How many GB of memory should be used for running {job_name}?"),
       type = "numeric", lower = 1, upper = 1024, len = 1L, default = defaults$memgb
     )
   }
 
-  if (is.null(scfg[[job_name]]$nhours) || glue("{job_name}/nhours") %in% fields) {
+  if (glue("{job_name}/nhours") %in% fields) {
     scfg[[job_name]]$nhours <- prompt_input(
       instruct = glue("How many hours should each run of {job_name} request?"),
       type = "numeric", lower = 0.1, upper = 1000, len = 1L, default = defaults$nhours
     )
   }
 
-  if (is.null(scfg[[job_name]]$ncores) || glue("{job_name}/ncores") %in% fields) {
+  if (glue("{job_name}/ncores") %in% fields) {
     scfg[[job_name]]$ncores <- prompt_input(
       instruct = glue("How many cores/CPUs should each job request?"),
       type = "integer", lower = 1, upper = 1000, len = 1L, default = defaults$ncores
     )
   }
 
-  if (is.null(scfg[[job_name]]$cli_options) || glue("{job_name}/cli_options") %in% fields) {
+  if (glue("{job_name}/cli_options") %in% fields) {
     scfg[[job_name]]$cli_options <- build_cli_args(args = scfg[[job_name]]$cli_options, instruct = glue("Specify any other {job_name} command line arguments. Press Enter when done."))
   }
 
-  if (is.null(scfg[[job_name]]$sched_args) || glue("{job_name}/sched_args") %in% fields) {
+  if (glue("{job_name}/sched_args") %in% fields) {
     sched_queue <- ifelse(!is.null(scfg$compute_environment$scheduler) && scfg$compute_environment$scheduler == "torque", "#PBS", "#SBATCH")
     scfg[[job_name]]$sched_args <- build_cli_args(args = scfg[[job_name]]$sched_args, instruct = glue("Specify any other arguments to pass to the job scheduler These usually begin {sched_queue}. Press Enter when done."))
   }
@@ -118,7 +125,7 @@ get_subject_logger <- function(scfg, sub_id) {
   sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
   if (!checkmate::test_directory_exists(sub_dir)) dir.create(sub_dir, showWarnings = FALSE, recursive = TRUE)
   lg <- lgr::get_logger_glue(c("sub", sub_id))
-  if (isTRUE(scfg$log_txt) && !"subject_logger" %in% names(lg$appenders)) {
+  if (!"subject_logger" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(file.path(sub_dir, glue("sub-{sub_id}_log.txt"))), name = "subject_logger")
   }
 
@@ -141,10 +148,8 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
   checkmate::assert_flag(prompt_change)
   checkmate::assert_flag(check_readable)
 
-  if (!checkmate::test_string(input)) {
-    warning("Input must be a non-missing character string.")
-    return(FALSE)
-  }
+  # return FALSE for NULL or other invalid input
+  if (!checkmate::test_string(input)) return(FALSE)
 
   type <- if (directory) "directory" else "file"
   exists_fn <- if (directory) checkmate::test_directory_exists else checkmate::test_file_exists

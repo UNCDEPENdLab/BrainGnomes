@@ -11,7 +11,6 @@ compute_environment:
   bids_validator: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/bids-validator
   mriqc_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/mriqc-latest.simg
   aroma_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/aroma-latest.simg
-log_txt: yes
 bids_validation:
   memgb: 32
   nhours: 2
