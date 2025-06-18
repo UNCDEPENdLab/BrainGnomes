@@ -3,7 +3,7 @@
 
 #' Get the HPC job script for a given job name
 #' @param scfg A list of configuration settings
-#' @param job_name The name of the job (e.g., "fmriprep", "heudiconv")
+#' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
 #' @return The path to the job script
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string test_file_exists
@@ -23,7 +23,7 @@ get_job_script <- function(scfg = NULL, job_name) {
 
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg A list of configuration settings
-#' @param job_name The name of the job (e.g., "fmriprep", "heudiconv")
+#' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
 #' @return A character string of scheduler arguments
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string
@@ -116,6 +116,7 @@ pretty_arg <- function(x, width = 80) {
 get_subject_logger <- function(scfg, sub_id) {
   checkmate::assert_directory_exists(scfg$project_directory)
   sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
+  if (!checkmate::test_directory_exists(sub_dir)) dir.create(sub_dir, showWarnings = FALSE, recursive = TRUE)
   lg <- lgr::get_logger_glue(c("sub", sub_id))
   if (isTRUE(scfg$log_txt) && !"subject_logger" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(file.path(sub_dir, glue("sub-{sub_id}_log.txt"))), name = "subject_logger")

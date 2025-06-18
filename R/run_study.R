@@ -35,8 +35,8 @@ run_study <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FA
   
   if (isFALSE(prompt)) {
     if ("bids_conversion" %in% steps) {
-      if (is.null(scfg$heudiconv$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
-      if (is.null(scfg$heudiconv$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
+      if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
+      if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
       if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
 
@@ -102,7 +102,7 @@ run_study <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FA
   )
 
   if (isTRUE(steps["bids_conversion"])) {
-    subject_dicom_dirs <- get_subject_dirs(scfg$dicom_directory, sub_regex = scfg$heudiconv$sub_regex, ses_regex = scfg$heudiconv$ses_regex, full.names = TRUE)
+    subject_dicom_dirs <- get_subject_dirs(scfg$dicom_directory, sub_regex = scfg$bids_conversion$sub_regex, ses_regex = scfg$bids_conversion$ses_regex, full.names = TRUE)
 
     # add DICOM prefix
     names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))

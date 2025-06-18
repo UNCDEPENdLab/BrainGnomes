@@ -1,6 +1,4 @@
 
-
-
 #' Extract fields from BIDS filenames
 #' @param filenames A character vector of BIDS file names (or paths). 
 #' @param drop_unused Logical; if `TRUE`, drop any BIDS entities that are not present in any of the filenames.
@@ -308,3 +306,88 @@ get_fmriprep_outputs <- function(in_file) {
 
   return(output)
 }
+
+
+#' Helper function to obtain all subject and session directories from a root folder
+#' @param root The path to a root folder containing subject folders. 
+#' @param sub_regex A regex pattern to match the subject folders. Default: `"[0-9]+"`.
+#' @param sub_id_match A regex pattern for extracting the subject ID from the subject folder name. Default: `"([0-9]+)"`.
+#' @param ses_regex A regex pattern to match session folders. Default: `NULL`. If `NULL`, session folders are not expected.
+#' @param ses_id_match A regex pattern for extracting the session ID from the session folder name. Default: `"([0-9]+)"`.
+#' @param full.names If `TRUE`, return absolute paths to the folders; if `FALSE`, return paths relative to `root`. Default: `FALSE`.
+#' @return A data frame with one row per subject (or per subject-session combination) and columns:
+#'   - `sub_id`: Subject ID extracted from each folder name.
+#'   - `ses_id`: Session ID (or `NA` if no session level).
+#'   - `sub_dir`: Path to the subject folder.
+#'   - `ses_dir`: Path to the session folder (`NA` if no session).
+#' @details This function is used to find all subject folders within a root folder.
+#'   It is used internally by the package to find the subject DICOM and BIDS folders for processing.
+#'   The function uses the `list.dirs` function to list all directories within the
+#'   folder and then filters the directories based on the regex patterns provided.
+#'   The function returns a character vector of the subject folders found.
+#'
+#'   The function also extracts the subject and session IDs from the folder names
+#'   using the regex patterns provided. The IDs are extracted using the `extract_capturing_groups`
+#'   function, which uses the `regexec` and `regmatches` functions to extract the capturing groups
+#'   from the folder names. The function returns a data frame with the subject and session IDs
+#'   and the corresponding folder paths.
+#' @examples
+#' get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
+#'                 ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+#' @keywords internal
+#' @importFrom checkmate assert_directory_exists assert_flag
+get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "([0-9]+)", 
+  ses_regex = NULL, ses_id_match = "([0-9]+)", full.names = FALSE) {
+  
+  checkmate::assert_directory_exists(root)
+  checkmate::assert_string(sub_regex)
+  if (is.null(sub_id_match)) sub_id_match <- "(.*)" # all characters
+  checkmate::assert_string(sub_id_match)
+  checkmate::assert_string(ses_regex, null.ok = TRUE, na.ok = TRUE)
+  if (is.null(ses_id_match) || is.na(ses_id_match[1L])) ses_id_match <- "(.*)" # all characters
+  checkmate::assert_string(ses_id_match)
+  checkmate::assert_flag(full.names)
+
+  # List directories in the root folder
+  entries <- list.dirs(root, recursive = FALSE, full.names = FALSE)
+  subject_entries <- entries[grepl(sub_regex, entries)]
+  subject_ids <- extract_capturing_groups(subject_entries, sub_id_match)
+  
+  if (length(subject_entries) == 0) {
+    warning("No subject directories found in the root folder matching the regex pattern.")
+    return(data.frame(sub_id = character(0), ses_id = character(0), sub_dir = character(0), ses_dir = character(0), stringsAsFactors = FALSE))
+  }
+
+  result <- list()
+
+  for (ss in seq_along(subject_entries)) {
+
+    sub_dir <- if (full.names) file.path(root, subject_entries[ss]) else subject_entries[ss]
+
+    # Create subject-level row
+    subject_row <- list(sub_id = subject_ids[ss], ses_id = NA_character_, sub_dir = sub_dir, ses_dir = NA_character_)
+
+    if (is.null(ses_regex) || is.na(ses_regex[1L])) {
+      # not a multisession study
+      result[[length(result) + 1]] <- subject_row
+    } else {
+      ses_dirs <- list.dirs(file.path(root, subject_entries[ss]), recursive = TRUE, full.names = FALSE)
+      ses_matches <- ses_dirs[grepl(ses_regex, basename(ses_dirs))]
+
+      if (length(ses_matches) > 0) {
+        for (ses_dir in ses_matches) {
+          ses_id <- extract_capturing_groups(basename(ses_dir), ses_id_match)
+          ses_dir <- file.path(sub_dir, ses_dir) # add the subject directory to the session directory
+          result[[length(result) + 1]] <- list(sub_id = subject_ids[ss], ses_id = ses_id, sub_dir = sub_dir,ses_dir = ses_dir)
+        }
+      } else {
+        # warning is too noisy -- just noting that a ses-regex was provided but only a subject directory was found
+        # warning(sprintf("No session directories found in '%s' matching '%s'", sub_dir, ses_regex))
+        result[[length(result) + 1]] <- subject_row
+      }
+    }
+  }
+
+  return(do.call(rbind.data.frame, result))
+}
+

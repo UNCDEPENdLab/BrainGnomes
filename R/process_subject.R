@@ -101,8 +101,6 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     return(job_id)
   }
 
-  ## Ensure that log directory exists
-  dir.create(file.path(scfg$log_directory, paste("sub", sub_id, sep = "-")), showWarnings = FALSE, recursive = TRUE)
   lg$info(glue("Processing subject {sub_id} with {nrow(sub_cfg)} sessions."))
   # lg$info(glue("Processing steps: {glue_collapse(names(steps), sep = ', ')}"))
   lg$info(glue("BIDS directory: {bids_sub_dir}"))
@@ -168,8 +166,8 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     heudiconv_container = scfg$compute_environment$heudiconv_container,
     loc_sub_dicoms = sub_dir,
     loc_bids_root = scfg$bids_directory,
-    heudiconv_heuristic = scfg$heudiconv$heuristic_file,
-    validate_bids = scfg$heudiconv$validate_bids,
+    heudiconv_heuristic = scfg$bids_conversion$heuristic_file,
+    validate_bids = scfg$bids_conversion$validate_bids,
     sub_id = sub_id,
     ses_id = ses_id
   )
@@ -181,7 +179,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   )
 
   # log submission command
-  
+  lg$debug("Scheduled bids_conversion job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 
@@ -200,8 +198,10 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids
+    wait_jobs = parent_ids, echo = FALSE
   )
+
+  lg$debug("Scheduled bids_validaiton job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -231,6 +231,11 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("--mem {scfg$fmriprep$memgb*1000}") # convert to MB
   ), collapse=TRUE)
 
+  if (!checkmate::test_directory_exists(scfg$templateflow_home)) {
+    lg$debug("Creating missing templateflow_home directory: {scfg$templateflow_home}")
+    dir.create(scfg$templateflow_home, showWarnings = FALSE, recursive = TRUE)
+  }
+
   env_variables <- c(
     env_variables,
     fmriprep_container = scfg$compute_environment$fmriprep_container,
@@ -239,7 +244,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     loc_bids_root = scfg$bids_directory,
     loc_mrproc_root = scfg$fmriprep_directory,
     loc_scratch = scfg$scratch_directory,
-    templateflow_home = scfg$templateflow_home,
+    templateflow_home = normalizePath(scfg$templateflow_home),
     fs_license_file = scfg$fmriprep$fs_license_file,
     cli_options = cli_options
   )
@@ -247,8 +252,10 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids
+    wait_jobs = parent_ids, echo = FALSE
   )
+
+  lg$debug("Scheduled fmriprep job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -282,8 +289,10 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids
+    wait_jobs = parent_ids, echo = FALSE
   )
+
+  lg$debug("Scheduled mriqc job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -326,8 +335,10 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids
+    wait_jobs = parent_ids, echo = FALSE
   )
+
+  lg$debug("Scheduled aroma job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -359,7 +370,11 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids
+    wait_jobs = parent_ids, echo = FALSE
   )
+
+  lg$debug("Scheduled postprocess job: {attr(job_id, 'cmd')}")
+
+  return(job_id)
 
 }

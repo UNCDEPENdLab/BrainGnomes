@@ -41,12 +41,12 @@ cd $bids_dir || { echo "Failed to change directory to $bids_dir"; exit 1; }
 #run bids-validator
 [ $debug_pipeline -eq 1 ] && rel_flag=c # if debug_pipeline is 1, only echo command to log, don't run it
 
-local log=""
-[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
 log_message INFO Starting bids validation for subject $sub_id in $bids_dir
 
-rel $rel_flag $log ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile}
+rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile}
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${bids_dir}/.bids_validation_complete
 

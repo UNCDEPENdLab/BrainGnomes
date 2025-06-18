@@ -50,7 +50,9 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-[[ -n "$log_file" ]] && log_file="-l $log_file" # if cmd_log is set, pass it to rel
+
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' '$aroma_container'"
@@ -61,7 +63,7 @@ log_message INFO Starting aroma for subject $sub_id
 #    -B "$loc_mrproc_root" -B "$templateflow_home" "$aroma_container" aroma \
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $cmd_log $singularity_cmd \
+rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_aroma()
 

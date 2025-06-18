@@ -45,11 +45,6 @@ setup_study <- function(input = NULL, fields = NULL) {
     scfg <- list()
   }
 
-  if (checkmate::test_class(scfg, "bg_study_cfg")) {
-    scfg <- validate_study(scfg)
-    fields <- unique(c(fields, attr(scfg, "gaps")))
-  }
-
   if (!checkmate::test_class(scfg, "bg_study_cfg")) {
     class(scfg) <- c(class(scfg), "bg_study_cfg")
   }
@@ -202,17 +197,17 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     ncores = 12,
     cli_options = "",
     sched_args = ""
-  )
+  )  
 
-  cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
-
-  scfg <- setup_job(scfg, "fmriprep", defaults = defaults)
+  scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$fmriprep$output_spaces)) fields <- c(fields, "fmriprep/output_spaces")
     if (!validate_exists(scfg$fmriprep$fs_license_file)) fields <- c(fields, "fmriprep/fs_license_file")
+
+    cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
   }
 
   if ("fmriprep/output_spaces" %in% fields) {
@@ -379,7 +374,7 @@ edit_study_config <- function(scfg) {
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container"
     )),
-    "HeuDiConv" = list(setup_fn = setup_bids_conversion, prefix = "heudiconv/", fields = c(
+    "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
       "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
       "heuristic_file", "overwrite", "clear_cache", "validate_bids"
     )),
@@ -402,7 +397,7 @@ edit_study_config <- function(scfg) {
     ))
   )
 
-  job_targets <- c("heudiconv", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess")
+  job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess")
   job_fields <- c("memgb", "nhours", "ncores", "cli_options", "sched_args")
 
   show_val <- function(val) {
@@ -484,7 +479,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
     sched_args = ""
   )
 
-  scfg <- setup_job(scfg, "bids_validation", defaults = defaults)
+  scfg <- setup_job(scfg, "bids_validation", defaults, fields)
 
   if (is.null(scfg$bids_validation$outfile) || "bids_validation/outfile" %in% fields) {
     scfg$bids_validation$outfile <- prompt_input(
@@ -519,16 +514,16 @@ setup_mriqc <- function(scfg, fields = NULL) {
   )
 
   # scfg$mriqc <- populate_defaults(scfg$fmriprep, defaults)
-  scfg <- setup_job(scfg, "mriqc", defaults = defaults)
+  scfg <- setup_job(scfg, "mriqc", defaults, fields)
 
   return(scfg)
 }
 
-#' Specify the heudiconv settings
+#' Specify the BIDS conversion settings
 #' @param scfg a study configuration object, as produced by `load_study` or `setup_study`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @param print_instructions Logical. If TRUE, print the overall instructions for this step prior to prompting for input.
-#' @return a modified version of `scfg` with `$heudiconv` populated
+#' @return a modified version of `scfg` with `$bids_conversion` populated
 #' @keywords internal
 setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE) {
   defaults <- list(
@@ -580,8 +575,8 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     "))
   }
 
-  if (is.null(scfg$heudiconv$sub_regex) || "heudiconv/sub_regex" %in% fields) {
-    scfg$heudiconv$sub_regex <- prompt_input(
+  if (is.null(scfg$bids_conversion$sub_regex) || "bids_conversion/sub_regex" %in% fields) {
+    scfg$bids_conversion$sub_regex <- prompt_input(
       instruct = glue("
       \nWhat is the regex pattern for the subject IDs? This is used to identify the subject folders
       within the DICOM directory. The default is sub-[0-9]+, which matches sub-001, sub-002, etc.
@@ -592,8 +587,8 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     )
   }
 
-  if (is.null(scfg$heudiconv$sub_id_match) || "heudiconv/sub_id_match" %in% fields) {
-    scfg$heudiconv$sub_id_match <- prompt_input(
+  if (is.null(scfg$bids_conversion$sub_id_match) || "bids_conversion/sub_id_match" %in% fields) {
+    scfg$bids_conversion$sub_id_match <- prompt_input(
       instruct = glue("
       \nWhat is the regex pattern for extracting the ID from the subject folder name? You
       can use multiple capturing groups if the ID has multiple parts. The default is ([0-9]+),
@@ -607,8 +602,8 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     )
   }
 
-  if (is.null(scfg$heudiconv$ses_regex) || "heudiconv/ses_regex" %in% fields) {
-    scfg$heudiconv$ses_regex <- prompt_input(
+  if (is.null(scfg$bids_conversion$ses_regex) || "bids_conversion/ses_regex" %in% fields) {
+    scfg$bids_conversion$ses_regex <- prompt_input(
       instruct = glue("
       If you have multisession data, specify the the regex pattern for session IDs within the subject folders.
       If you don't have multisession data, just press Enter to skip this step.
@@ -618,8 +613,8 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     )
   }
 
-  if (!is.na(scfg$heudiconv$ses_regex) && (is.null(scfg$heudiconv$ses_id_match) || "heudiconv/ses_id_match" %in% fields)) {
-    scfg$heudiconv$ses_id_match <- prompt_input(
+  if (!is.na(scfg$bids_conversion$ses_regex) && (is.null(scfg$bids_conversion$ses_id_match) || "bids_conversion/ses_id_match" %in% fields)) {
+    scfg$bids_conversion$ses_id_match <- prompt_input(
       instruct = glue("
       \nWhat is the regex pattern for extracting the ID from the subject folder name? You
       can use multiple capturing groups if the ID has multiple parts. The default is ([0-9]+),
@@ -632,20 +627,20 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
       type = "character", default = "(.+)"
     )
   } else {
-    scfg$heudiconv$ses_id_match <- NA_character_
+    scfg$bids_conversion$ses_id_match <- NA_character_
   }
 
 
-  if (is.null(scfg$heudiconv$heuristic_file) || "heudiconv/heuristic_file" %in% fields) {
-    scfg$heudiconv$heuristic_file <- prompt_input(instruct = glue("What is the location of the heudiconv heuristic file?"), type = "file")
+  if (is.null(scfg$bids_conversion$heuristic_file) || "bids_conversion/heuristic_file" %in% fields) {
+    scfg$bids_conversion$heuristic_file <- prompt_input(instruct = glue("What is the location of the heudiconv heuristic file?"), type = "file")
   }
 
-  if (is.null(scfg$heudiconv$overwrite) || "heudiconv/overwrite" %in% fields) {
-    scfg$heudiconv$overwrite <- prompt_input(instruct = glue("Should existing BIDS files be overwritten by heudiconv?"), type = "flag", default = TRUE)
+  if (is.null(scfg$bids_conversion$overwrite) || "bids_conversion/overwrite" %in% fields) {
+    scfg$bids_conversion$overwrite <- prompt_input(instruct = glue("Should existing BIDS files be overwritten by heudiconv?"), type = "flag", default = TRUE)
   }
 
-  if (is.null(scfg$heudiconv$clear_cache) || "heudiconv/clear_cache" %in% fields) {
-    scfg$heudiconv$clear_cache <- prompt_input(
+  if (is.null(scfg$bids_conversion$clear_cache) || "bids_conversion/clear_cache" %in% fields) {
+    scfg$bids_conversion$clear_cache <- prompt_input(
       instruct = glue("Heudiconv caches its matching results inside the root of the BIDS folder in a hidden
       directory called .heudiconv. This provides a record of what heudiconv did for each subject conversion.
       It also speeds up conversions in future if you reprocess data. That said, if you modify the heuristic file,
@@ -657,8 +652,8 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     )
   }
 
-  if (is.null(scfg$heudiconv$validate_bids) || "heudiconv/validate_bids" %in% fields) {
-    scfg$heudiconv$validate_bids <- prompt_input(
+  if (is.null(scfg$bids_conversion$validate_bids) || "bids_conversion/validate_bids" %in% fields) {
+    scfg$bids_conversion$validate_bids <- prompt_input(
       instruct = glue("
       Should the BIDS folder be validated after conversion? This requires the bids-validator program to be installed.
       This is generally a good idea to ensure that the BIDS folder is valid and conforms to the BIDS specification.
@@ -667,15 +662,35 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     )
   }
 
-  scfg <- setup_job(scfg, "heudiconv", defaults = defaults)
+  scfg <- setup_job(scfg, "bids_conversion", defaults, fields)
 
   return(scfg)
 }
 
-#' Specify the AROMA settings
+#' Configure ICA-AROMA denoising
+#'
+#' This function configures the ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts)
+#' step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
+#' AROMA-based denoising to BOLD fMRI data using FSL's `fsl_regfilt` or an equivalent wrapper.
+#'
 #' @param scfg A study configuration object, as produced by `load_study()` or `setup_study()`.
-#' @param fields A character vector of fields to be prompted for. If `NULL`, all AROMA fields will be prompted for.   # [Added]
-#' @return A modified version of `scfg` with the `$aroma` entry populated.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all fields related to AROMA will be prompted.
+#'
+#' @return A modified version of the `scfg` list with the `$aroma` entry added or updated.
+#'
+#' @details
+#' ICA-AROMA is a data-driven denoising method that identifies motion-related independent components and removes them
+#' from BOLD time series using non-aggressive regression. This step should be run **after fMRIPrep** has completed.
+#' The settings configured here specify compute resource usage (e.g., memory, cores, time),
+#' command-line options, and scheduler-specific arguments for running AROMA on each subject/session.
+#'
+#' By default, this function sets:
+#' - `memgb`: 32 (memory in GB)
+#' - `nhours`: 24 (max runtime in hours)
+#' - `ncores`: 1 (number of CPU cores)
+#' - `cli_options`: "" (any extra command-line flags for the wrapper)
+#' - `sched_args`: "" (additional job scheduler directives)
+#'
 #' @keywords internal
 setup_aroma <- function(scfg, fields = NULL) {
   defaults <- list(
@@ -686,102 +701,14 @@ setup_aroma <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  cat("This step sets up ICA-AROMA.\n")
+  # cat("Configuring ICA-AROMA denoising step...\n")
+  # cat("This step applies non-aggressive regression of motion-related ICA components from fMRIPrep outputs.\n")
+  # cat("You will be asked to provide job parameters (memory, time, cores) and any optional command-line settings.\n\n")
 
-  scfg <- setup_job(scfg, "aroma", defaults = defaults)
+  scfg <- setup_job(scfg, "aroma", defaults, fields)
   return(scfg)
 }
 
-#' Helper function to obtain all subject and session directories from a root folder
-#' @param root The path to a root folder containing subject folders. 
-#' @param sub_regex A regex pattern to match the subject folders. Default: `"[0-9]+"`.
-#' @param sub_id_match A regex pattern for extracting the subject ID from the subject folder name. Default: `"([0-9]+)"`.
-#' @param ses_regex A regex pattern to match session folders. Default: `NULL`. If `NULL`, session folders are not expected.
-#' @param ses_id_match A regex pattern for extracting the session ID from the session folder name. Default: `"([0-9]+)"`.
-#' @param full.names If `TRUE`, return absolute paths to the folders; if `FALSE`, return paths relative to `root`. Default: `FALSE`.
-#' @return A data frame with one row per subject (or per subject-session combination) and columns:
-#'   - `sub_id`: Subject ID extracted from each folder name.
-#'   - `ses_id`: Session ID (or `NA` if no session level).
-#'   - `sub_dir`: Path to the subject folder.
-#'   - `ses_dir`: Path to the session folder (`NA` if no session).
-#' @details This function is used to find all subject folders within a root folder.
-#'   It is used internally by the package to find the subject DICOM and BIDS folders for processing.
-#'   The function uses the `list.dirs` function to list all directories within the
-#'   folder and then filters the directories based on the regex patterns provided.
-#'   The function returns a character vector of the subject folders found.
-#'
-#'   The function also extracts the subject and session IDs from the folder names
-#'   using the regex patterns provided. The IDs are extracted using the `extract_capturing_groups`
-#'   function, which uses the `regexec` and `regmatches` functions to extract the capturing groups
-#'   from the folder names. The function returns a data frame with the subject and session IDs
-#'   and the corresponding folder paths.
-#' @examples
-#' get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
-#'                 ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
-#' @keywords internal
-#' @importFrom checkmate assert_directory_exists assert_flag
-get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "([0-9]+)", 
-  ses_regex = NULL, ses_id_match = "([0-9]+)", full.names = FALSE) {
-  
-  checkmate::assert_directory_exists(root)
-  checkmate::assert_string(sub_regex)
-  if (is.null(sub_id_match)) sub_id_match <- "(.*)" # all characters
-  checkmate::assert_string(sub_id_match)
-  checkmate::assert_string(ses_regex, null.ok = TRUE, na.ok = TRUE)
-  if (is.null(ses_id_match) || is.na(ses_id_match[1L])) ses_id_match <- "(.*)" # all characters
-  checkmate::assert_string(ses_id_match)
-  checkmate::assert_flag(full.names)
-
-  # List directories in the root folder
-  entries <- list.dirs(root, recursive = FALSE, full.names = FALSE)
-  subject_entries <- entries[grepl(sub_regex, entries)]
-  subject_ids <- extract_capturing_groups(subject_entries, sub_id_match)
-  
-  if (length(subject_entries) == 0) {
-    warning("No subject directories found in the root folder matching the regex pattern.")
-    return(data.frame(sub_id = character(0), ses_id = character(0), sub_dir = character(0), ses_dir = character(0), stringsAsFactors = FALSE))
-  }
-
-  result <- list()
-
-  for (ss in seq_along(subject_entries)) {
-
-    sub_dir <- if (full.names) file.path(root, subject_entries[ss]) else subject_entries[ss]
-
-    # Create subject-level row
-    subject_row <- list(sub_id = subject_ids[ss], ses_id = NA_character_, sub_dir = sub_dir, ses_dir = NA_character_)
-
-    if (is.null(ses_regex) || is.na(ses_regex[1L])) {
-      # not a multisession study
-      result[[length(result) + 1]] <- subject_row
-    } else {
-      ses_dirs <- list.dirs(file.path(root, subject_entries[ss]), recursive = TRUE, full.names = FALSE)
-      ses_matches <- ses_dirs[grepl(ses_regex, basename(ses_dirs))]
-
-      if (length(ses_matches) > 0) {
-        for (ses_dir in ses_matches) {
-          ses_id <- extract_capturing_groups(basename(ses_dir), ses_id_match)
-          ses_dir <- file.path(sub_dir, ses_dir) # add the subject directory to the session directory
-          result[[length(result) + 1]] <- list(sub_id = subject_ids[ss], ses_id = ses_id, sub_dir = sub_dir,ses_dir = ses_dir)
-        }
-      } else {
-        # warning is too noisy -- just noting that a ses-regex was provided but only a subject directory was found
-        # warning(sprintf("No session directories found in '%s' matching '%s'", sub_dir, ses_regex))
-        result[[length(result) + 1]] <- subject_row
-      }
-    }
-  }
-
-  return(do.call(rbind.data.frame, result))
-}
-
-
-# helper function to grab the subject id from a subject's bids directory
-get_sub_id <- function(bids_dir, regex="sub-[0-9]+") {
-  checkmate::assert_directory_exists(bids_dir)
-  
-  sub("sub-", "", basename(bids_dir))
-}
 
 #' Find preprocessed BOLD NIfTI files in a fmriprep derivatives directory
 #'

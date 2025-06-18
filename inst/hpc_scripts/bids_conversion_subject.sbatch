@@ -12,10 +12,10 @@ set -e
 source "${pkg_dir}/shell_functions"
 
 # Set trap for common termination signals
-trap 'trap_job_failure heudiconv SIGTERM' SIGTERM
-trap 'trap_job_failure heudiconv SIGINT' SIGINT
-trap 'trap_job_failure heudiconv SIGHUP' SIGHUP
-trap 'trap_job_failure heudiconv SIGQUIT' SIGQUIT
+trap 'trap_job_failure bids_conversion SIGTERM' SIGTERM
+trap 'trap_job_failure bids_conversion SIGINT' SIGINT
+trap 'trap_job_failure bids_conversion SIGHUP' SIGHUP
+trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
 
 ####
 #verify necessary arguments
@@ -58,8 +58,8 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 #run heudiconv
 [ $debug_pipeline -eq 1 ] && rel_flag=c # if debug_pipeline is 1, only echo command to log, don't run it
 
-local log=""
-[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
 log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir
 
@@ -68,7 +68,7 @@ singularity_cmd="singularity run --cleanenv -B $loc_bids_root -B $loc_sub_dicoms
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 # we now use --files to specify the dicoms to convert rather than -d since we don't want to assume
 # the dicoms are in a specific directory structure (esp. in terms of level of nesting).
-rel $rel_flag $log $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_flag \
+rel $rel_flag $log_flag $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_flag \
   -f $heudiconv_heuristic -c dcm2niix \
   -o $loc_bids_root --bids &
 

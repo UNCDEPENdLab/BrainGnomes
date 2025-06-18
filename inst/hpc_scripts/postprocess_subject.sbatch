@@ -55,12 +55,12 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
 
-local log=""
-[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
 log_message INFO Starting postprocessing for subject $sub_id $ses_str in $out_dir
 
-rel $rel_flag $log Rscript --vanilla "$postproc_rscript" $postproc_cli &
+rel $rel_flag $log_flag Rscript --vanilla "$postproc_rscript" $postproc_cli &
     
 wait
 

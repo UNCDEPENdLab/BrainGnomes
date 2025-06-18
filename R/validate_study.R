@@ -28,7 +28,7 @@ validate_study <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
-  required_files <- c("compute_environment/fmriprep_container", "compute_environment/heudiconv_container", "heudiconv/heuristic_file", "fmriprep/fs_license_file")
+  required_files <- c("compute_environment/fmriprep_container", "compute_environment/heudiconv_container", "bids_conversion/heuristic_file", "fmriprep/fs_license_file")
   for (rr in required_files) {
     if (!checkmate::test_file_exists(get_nested_values(scfg, rr))) {
       message("Config file is missing valid ", rr, ". You will be asked for this.")
@@ -90,24 +90,24 @@ validate_study <- function(scfg = list(), quiet = FALSE) {
   }
 
   # validate job settings
-  for (job in c("heudiconv", "fmriprep", "mriqc", "aroma", "postprocess")) {
+  for (job in c("bids_conversion", "fmriprep", "mriqc", "aroma", "postprocess")) {
     validate_job_settings(job)
   }
 
-  # validate heudiconv sub_regex
-  if (!checkmate::test_string(scfg$heudiconv$sub_regex)) {
-    message("Missing sub_regex in $heudiconv. You will be asked for this.")
-    gaps <- c(gaps, "heudiconv/sub_regex")
-    scfg$heudiconv$sub_regex <- NULL
+  # validate BIDS conversion sub_regex
+  if (!checkmate::test_string(scfg$bids_conversion$sub_regex)) {
+    message("Missing sub_regex in $bids_conversion You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/sub_regex")
+    scfg$bids_conversion$sub_regex <- NULL
   }
 
-  # validate heudiconv sub_id_match
-  if (!checkmate::test_string(scfg$heudiconv$sub_id_match)) {
-    message("Missing sub_id_match in $heudiconv. You will be asked for this.")
-    gaps <- c(gaps, "heudiconv/sub_id_match")
-    scfg$heudiconv$sub_id_match <- NULL
+  # validate bids_conversion sub_id_match
+  if (!checkmate::test_string(scfg$bids_conversion$sub_id_match)) {
+    message("Missing sub_id_match in $bids_conversion You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/sub_id_match")
+    scfg$bids_conversion$sub_id_match <- NULL
   }
-  
+
   # Postprocessing settings validation (function in setup_postproc.R)
   postprocess_result <- validate_postprocess_config(scfg$postprocess, quiet)
   scfg$postprocess <- postprocess_result$postprocess
@@ -126,29 +126,49 @@ validate_study <- function(scfg = list(), quiet = FALSE) {
 validate_postprocess_config <- function(ppcfg, quiet = FALSE) {
   gaps <- c()
 
+  # postprocess/input_regex
+  if (!"input_regex" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/input_regex")
+  } else if (!checkmate::test_string(ppcfg$input_regex)) {
+    if (!quiet) message("Invalid input_regex in $postprocess. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/input_regex")
+    ppcfg$input_regex <- NULL
+  }
+
+  # postprocess/bids_desc
+  if (!"bids_desc" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/bids_desc")
+  } else if (!checkmate::test_string(ppcfg$bids_desc)) {
+    if (!quiet) message("Invalid bids_desc in $postprocess. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/bids_desc")
+    ppcfg$bids_desc <- NULL
+  }
+
   # postprocess/keep_intermediates
-  if ("keep_intermediates" %in% names(ppcfg)) {
-    if (!checkmate::test_flag(ppcfg$keep_intermediates)) {
-      if (!quiet) message("Invalid keep_intermediates in $postprocess. You will be asked for this.")
-      gaps <- c(gaps, "postprocess/keep_intermediates")
-      ppcfg$keep_intermediates <- NULL
-    }
+  if (!"keep_intermediates" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/keep_intermediates")
+  } else if (!checkmate::test_flag(ppcfg$keep_intermediates)) {
+    if (!quiet) message("Invalid keep_intermediates in $postprocess. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/keep_intermediates")
+    ppcfg$keep_intermediates <- NULL
   }
+
   # postprocess/overwrite
-  if ("overwrite" %in% names(ppcfg)) {
-      if (!checkmate::test_flag(ppcfg$overwrite)) {
-          if (!quiet) message("Invalid overwrite in $postprocess. You will be asked for this.")
-          gaps <- c(gaps, "postprocess/overwrite")
-          ppcfg$overwrite <- NULL
-      }
+  if (!"overwrite" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/overwrite")
+  } else if (!checkmate::test_flag(ppcfg$overwrite)) {
+    if (!quiet) message("Invalid overwrite in $postprocess. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/overwrite")
+    ppcfg$overwrite <- NULL
   }
+
   # postprocess/tr
-  if ("tr" %in% names(ppcfg)) {
-    if (!checkmate::test_number(ppcfg$tr, lower = 0.01, upper = 100)) {
-      if (!quiet) message("Invalid tr in $postprocess. You will be asked for this.")
-      gaps <- c(gaps, "postprocess/tr")
-      ppcfg$tr <- NULL
-    }
+  if (!"tr" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/tr")
+  } else if (!checkmate::test_number(ppcfg$tr, lower = 0.01, upper = 100)) {
+    if (!quiet) message("Invalid tr in $postprocess. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/tr")
+    ppcfg$tr <- NULL
   }
 
   # validate temporal filtering

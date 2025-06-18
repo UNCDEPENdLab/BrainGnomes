@@ -34,6 +34,11 @@ ncores=$SLURM_NTASKS
 [ ! -d "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not found. Exiting" && exit 1
 [ ! -r "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not readable. Exiting" && exit 1
 [ -z "$templateflow_home" ] && echo "templateflow_home not set. Exiting." && exit 1
+if [ ! -d "$templateflow_home" ]; then
+  log_message WARN templateflow_home directory $templateflow_home does not exist. Creating it inside fmriprep_subject.sbatch script.
+  mkdir -p "$templateflow_home"
+fi
+
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
@@ -67,23 +72,32 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
 
-local log=""
-[[ -n "$log_file" ]] && log="-l $log_file" # if log_file is set, pass it to rel
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
+# ensure that all paths to singularity are absolute paths
+vars=(loc_bids_root loc_scratch loc_mrproc_root templateflow_home fs_dir)
+
+# Convert each to absolute path using abspath
+for var in "${vars[@]}"; do
+  abs=$(abspath "${!var}")
+  eval "$var=\"\$abs\""
+done
 
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' -B '$templateflow_home' -B '$fs_dir' '$fmriprep_container'"
 
 log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir
+start_time=$(date +%s)
 
-rel $rel_flag $log export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
-rel $rel_flag $log export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
+rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
+rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
 #singularity exec --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
 #    -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" fmriprep \
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log $singularity_cmd \
+rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_fmriprep()
 
@@ -91,4 +105,10 @@ wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-log_message INFO Finished fmriprep for subject $sub_id $ses_str
+end_time=$(date +%s)
+elapsed=$((end_time - start_time))
+hours=$((elapsed / 3600))
+minutes=$(((elapsed % 3600) / 60))
+seconds=$((elapsed % 60))
+
+log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: ${hours}h ${minutes}m ${seconds}s)"

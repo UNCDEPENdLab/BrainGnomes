@@ -286,3 +286,21 @@ function log_message() {
     echo "$log_line" >> "$log_file"
   fi
 }
+
+function warn() {
+  echo -e "$@" >&2
+}
+
+function abspath() {
+  [ -z "$1" ] && return 1
+  local dir
+  dir="$(dirname "$1")"
+
+  if [ ! -d "$dir" ]; then
+    warn "WARNING: $FUNCNAME: cannot find dir for '$1' (while in '$(pwd)')"
+    echo "$1"
+    return 1
+  fi
+
+  echo "$(cd "$dir" && pwd)/$(basename "$1")"
+}
