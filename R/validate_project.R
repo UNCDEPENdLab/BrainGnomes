@@ -1,13 +1,13 @@
 #' Validate the structure of a study configuration object
-#' @param scfg a study configuration file as produced by `load_study` or `setup_study`
+#' @param scfg a study configuration file as produced by `load_project` or `setup_project`
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
-validate_study <- function(scfg = list(), quiet = FALSE) {
-  if (!checkmate::test_class(scfg, "bg_study_cfg")) {
+validate_project <- function(scfg = list(), quiet = FALSE) {
+  if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     if (inherits(scfg, "list")) {
-      class(scfg) <- c(class(scfg), "bg_study_cfg")
+      class(scfg) <- c(class(scfg), "bg_project_cfg")
     } else {
-      stop("scfg must be a list of bg_study_cfg object")
+      stop("scfg must be a list of bg_project_cfg object")
     }
   }
 

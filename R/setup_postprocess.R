@@ -1,11 +1,11 @@
 #' Specify postprocessing setting for a study
-#' @param scfg a study configuration object produced by `setup_study`
+#' @param scfg a study configuration object produced by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess` field populated
 #' @keywords internal
 setup_postprocess <- function(scfg = list(), fields = NULL) {
-  if (!checkmate::test_class(scfg, "bg_study_cfg")) {
-    stop("scfg input must be a bg_study_cfg object produced by setup_study")
+  if (!checkmate::test_class(scfg, "bg_project_cfg")) {
+    stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
   defaults <- list(
@@ -127,7 +127,7 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
 }
 
 #' Specify the postprocessing steps for a study
-#' @param scfg a study configuration object produced by `setup_study`
+#' @param scfg a study configuration object produced by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$processing_steps` field populated
 #' @keywords internal
@@ -201,7 +201,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the confound regression settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$confound_regression` field populated
 #' @keywords internal
@@ -261,7 +261,7 @@ setup_confound_regression <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the confound calculation settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$confound_calculate` field populated
 #' @keywords internal
@@ -339,7 +339,7 @@ setup_confound_calculate <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the intensity normalization settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$intensity_normalize` field populated
 #' @keywords internal
@@ -384,7 +384,7 @@ setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the spatial smoothing settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$spatial_smooth` field populated
 #' @keywords internal
@@ -429,7 +429,7 @@ setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the temporal filtering settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$temporal_filter` field populated
 #' @keywords internal
@@ -480,7 +480,7 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
 }
 
 #' Specify the intensity normalization settings for postprocessing
-#' @param scfg a study configuration object created by `setup_study`
+#' @param scfg a study configuration object created by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$apply_aroma` field populated
 #' @keywords internal

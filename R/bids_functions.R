@@ -17,6 +17,7 @@
 #'   "sub-03_space-MNI152NLin6Asym_task-motor_desc-raw_echo-2_dir-PA_bold.nii.gz"
 #' )
 #' extract_bids_info(filenames)
+#' @importFrom utils tail
 #' @export
 extract_bids_info <- function(filenames, drop_unused=FALSE) {
   checkmate::assert_character(filenames)
@@ -144,11 +145,14 @@ construct_bids_filename <- function(bids_df) {
     resolution = "res", description = "desc", fieldmap = "fmap"
   )
 
+  # only attempt to reconstruct entities present in the input data
+  reconstruct_entities <- intersect(entity_order, names(bids_df))
+
   # Build filenames
   filenames <- apply(bids_df, 1, function(row) {
     parts <- character(0)
-    for (entity in entity_order) {
-      value <- row[[entity]]
+    for (entity in reconstruct_entities) {
+      value <- row[entity]
       if (!is.na(value) && nzchar(value)) {
         parts <- c(parts, paste0(prefixes[entity], "-", value))
       }
@@ -250,6 +254,7 @@ out_file_exists <- function(in_file, description, overwrite = TRUE, prepend = TR
 #' outputs$brain_mask
 #' }
 #'
+#' @importFrom utils modifyList read.table
 #' @export
 get_fmriprep_outputs <- function(in_file) {
   checkmate::assert_file_exists(in_file)

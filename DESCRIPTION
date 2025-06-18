@@ -1,6 +1,6 @@
 Package: BrainGnomes
 Title: An R package for preprocessing and analyzing fMRI data
-Version: 0.2
+Version: 0.2-1
 Authors@R: 
     person("Michael", "Hallquist", , "michael.hallquist@gmail.c", role = c("aut", "cre"))
 Description: This R package handles preprocessing and analysis of fMRI data on HPC clusters.
@@ -20,7 +20,9 @@ Imports:
     dplyr,
     glue,
     lubridate,
+    lgr,
     magrittr,
+    oro.nifti,
     reticulate,
     yaml
 Suggests: 

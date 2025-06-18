@@ -159,6 +159,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #' @note This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
 #' @importFrom glue glue
 #' @importFrom checkmate test_string assert_string assert_subset assert_number
+#' @importFrom utils type.convert
 #' @keywords internal
 prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
   len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL) {

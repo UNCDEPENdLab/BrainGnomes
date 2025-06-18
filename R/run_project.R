@@ -11,20 +11,20 @@
 #' @examples
 #'   \dontrun{
 #'     # Assuming you have a valid study configuration list named `study_config`
-#'     run_study(study_config, prompt = TRUE, force = FALSE)
+#'     run_project(study_config, prompt = TRUE, force = FALSE)
 #'   }
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue
-run_study <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE) {
+run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE) {
   checkmate::assert_list(scfg)
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert_flag(prompt)
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
 
-  if (is.null(scfg$project_name)) stop("Cannot run a nameless project. Have you run setup_study() yet?")
-  if (is.null(scfg$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_study() yet?")
+  if (is.null(scfg$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
+  if (is.null(scfg$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
   cat(glue("
     \nRunning processing pipeline for: {scfg$project_name}
       Project directory:   {pretty_arg(scfg$project_directory)}

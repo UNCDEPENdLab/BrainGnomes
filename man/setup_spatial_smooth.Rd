@@ -7,7 +7,7 @@
 setup_spatial_smooth(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object created by \code{setup_study}}
+\item{scfg}{a study configuration object created by \code{setup_project}}
 
 \item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
 }

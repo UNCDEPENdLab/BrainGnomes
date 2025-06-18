@@ -43,7 +43,7 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
 #'   types using `type.convert`.
 #'
 #' @return A nested list with the specified keys and values.
-#'
+#' @importFrom utils modifyList
 #' @keywords internal
 set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
   checkmate::assert_character(assignments)

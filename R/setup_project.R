@@ -1,52 +1,52 @@
 #' Load a study configuration from a file
 #' @param file A YAML file containing a valid study configuration.
 #' @param validate Logical indicating whether to validate the configuration after loading. Default: TRUE
-#' @return A list representing the study configuration (class `"bg_study_cfg"`). If `validate` is TRUE, 
+#' @return A list representing the study configuration (class `"bg_project_cfg"`). If `validate` is TRUE, 
 #'   the returned object is validated (missing fields may be set to NULL and noted).
 #' @importFrom yaml read_yaml
 #' @export
-load_study <- function(file = NULL, validate=TRUE) {
+load_project <- function(file = NULL, validate=TRUE) {
   if (!checkmate::test_file_exists(file)) stop("Cannot find file: ", file)
   checkmate::test_flag(validate)
   scfg <- read_yaml(file)
-  class(scfg) <- c(class(scfg), "bg_study_cfg") # add class to the object
-  if (validate) scfg <- validate_study(scfg)
+  class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
+  if (validate) scfg <- validate_project(scfg)
 
   # fill in any gaps in the config
-  if (!is.null(attr(scfg, "gaps"))) scfg <- setup_study(scfg, fields = attr(scfg, "gaps"))
+  if (!is.null(attr(scfg, "gaps"))) scfg <- setup_project(scfg, fields = attr(scfg, "gaps"))
   return(scfg)
 }
 
 #' summary method for study configuration object
-#' @param x The study configuration object (`bg_study_cfg`) to summarize.
+#' @param x The study configuration object (`bg_project_cfg`) to summarize.
 #' @return Invisibly returns `x` after printing its contents. This function is called 
 #'   for its side effect of printing a formatted summary of the study configuration.
 #' @export
-summary.bg_study_cfg <- function(x) {
+summary.bg_project_cfg <- function(x) {
   pretty_print_list(x, indent=2)
 }
 
 #' Setup the processing pipeline for a new fMRI study
-#' @param input An existing `bg_study_cfg` object to be modified, or a string specifying the location of an existing configuration YAML file to load.
+#' @param input An existing `bg_project_cfg` object to be modified, or a string specifying the location of an existing configuration YAML file to load.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_study_cfg` list containing the study configuration. New fields are added based on user input, 
+#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input, 
 #'   and missing entries are filled with defaults.
 #' @importFrom yaml read_yaml
 #' @importFrom checkmate test_file_exists
 #' @export
-setup_study <- function(input = NULL, fields = NULL) {
+setup_project <- function(input = NULL, fields = NULL) {
   if (checkmate::test_string(input) && checkmate::test_file_exists(input)) {
-    scfg <- load_study(input, validate=FALSE)
-  } else if (inherits(input, "bg_study_cfg")) {
+    scfg <- load_project(input, validate=FALSE)
+  } else if (inherits(input, "bg_project_cfg")) {
     scfg <- input
   } else if (!is.null(input)) {
-    stop("input must be a bg_study_cfg object or a string specifying the location of a YAML file")
+    stop("input must be a bg_project_cfg object or a string specifying the location of a YAML file")
   } else {
     scfg <- list()
   }
 
-  if (!checkmate::test_class(scfg, "bg_study_cfg")) {
-    class(scfg) <- c(class(scfg), "bg_study_cfg")
+  if (!checkmate::test_class(scfg, "bg_project_cfg")) {
+    class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
 
   if (is.null(scfg$run_aroma) || "run_aroma" %in% fields) {
@@ -62,7 +62,7 @@ setup_study <- function(input = NULL, fields = NULL) {
   }
 
   # run through configuration of each step
-  scfg <- setup_study_globals(scfg, fields)
+  scfg <- setup_project_globals(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_bids_validation(scfg, fields)
@@ -74,7 +74,7 @@ setup_study <- function(input = NULL, fields = NULL) {
   return(scfg)
 }
 
-setup_study_globals <- function(scfg = NULL, fields = NULL) {
+setup_project_globals <- function(scfg = NULL, fields = NULL) {
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
@@ -172,7 +172,7 @@ setup_study_globals <- function(scfg = NULL, fields = NULL) {
 }
 
 #' Specify the fMRIPrep settings                             
-#' @param scfg A study configuration object, as produced by `load_study()` or `setup_study()`.
+#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fMRIPrep fields will be prompted for.
 #' @return A modified version of `scfg` with the `$fmriprep` entry populated.
 #' @keywords internal
@@ -219,13 +219,13 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
 }
 
-# edit_study <- function(scfg) {
-#   assert_class(scfg, "bg_study_cfg")
+# edit_project <- function(scfg) {
+#   assert_class(scfg, "bg_project_cfg")
 
 #   config_areas <- list(
 #     # top-level
 #     General = list(
-#       setup_fn = setup_study, # DONE
+#       setup_fn = setup_project, # DONE
 #       path = "",
 #       fields = c(
 #         "project_name", "project_directory", "dicom_directory", "bids_directory", 
@@ -348,15 +348,15 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 #' configuration object, grouped by domain. Field paths are defined within the function
 #' to avoid relying on a complete `scfg` structure.
 #'
-#' @param scfg A `bg_study_cfg` object representing the study configuration.
-#' @return An updated `bg_study_cfg` object.
+#' @param scfg A `bg_project_cfg` object representing the study configuration.
+#' @return An updated `bg_project_cfg` object.
 #' @export
-edit_study <- function(scfg) {
-  checkmate::assert_class(scfg, "bg_study_cfg")
+edit_project <- function(scfg) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
 
   # Define editable fields per setup function
   config_map <- list(
-    "General" = list(setup_fn = setup_study_globals, prefix = "", fields = c(
+    "General" = list(setup_fn = setup_project_globals, prefix = "", fields = c(
       "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
@@ -454,7 +454,7 @@ edit_study <- function(scfg) {
 }
 
 #' Specify the BIDS validation settings
-#' @param scfg A study configuration object, as produced by `load_study()` or `setup_study()`.
+#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all BIDS validation fields will be prompted for.
 #' @return A modified version of `scfg` with the `$bids_validation` entry populated.
 #' @keywords internal
@@ -488,7 +488,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 }
 
 #' Specify the MRIQC settings
-#' @param scfg A study configuration object, as produced by `load_study()` or `setup_study()`.
+#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all MRIQC fields will be prompted for.   # [Added]
 #' @return A modified version of `scfg` with the `$mriqc` entry populated.
 #' @keywords internal
@@ -508,7 +508,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
 }
 
 #' Specify the BIDS conversion settings
-#' @param scfg a study configuration object, as produced by `load_study` or `setup_study`
+#' @param scfg a study configuration object, as produced by `load_project` or `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @param print_instructions Logical. If TRUE, print the overall instructions for this step prior to prompting for input.
 #' @return a modified version of `scfg` with `$bids_conversion` populated
@@ -661,7 +661,7 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
 #' step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
 #' AROMA-based denoising to BOLD fMRI data using FSL's `fsl_regfilt` or an equivalent wrapper.
 #'
-#' @param scfg A study configuration object, as produced by `load_study()` or `setup_study()`.
+#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of field names to prompt for. If `NULL`, all fields related to AROMA will be prompted.
 #'
 #' @return A modified version of the `scfg` list with the `$aroma` entry added or updated.
@@ -805,7 +805,7 @@ get_compute_environment_from_file <- function(scfg) {
 }
 
 #' Setup the compute environment for a study
-#' @param scfg a study configuration object, as produced by `load_study` or `setup_study`
+#' @param scfg a study configuration object, as produced by `load_project` or `setup_project`
 #' @return a modified version of `scfg` with `$compute_environment` populated
 #' @keywords internal
 #' @importFrom checkmate assert_list

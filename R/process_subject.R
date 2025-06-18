@@ -8,7 +8,7 @@
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
 process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
-  checkmate::assert_class(scfg, "bg_study_cfg")
+  checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
   checkmate::assert_names(names(sub_cfg), must.include = expected_fields, type = "unique")
