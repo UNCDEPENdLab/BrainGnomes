@@ -231,7 +231,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
 }
 
-# edit_study_config <- function(scfg) {
+# edit_study <- function(scfg) {
 #   assert_class(scfg, "bg_study_cfg")
 
 #   config_areas <- list(
@@ -363,7 +363,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 #' @param scfg A `bg_study_cfg` object representing the study configuration.
 #' @return An updated `bg_study_cfg` object.
 #' @export
-edit_study_config <- function(scfg) {
+edit_study <- function(scfg) {
   checkmate::assert_class(scfg, "bg_study_cfg")
 
   # Define editable fields per setup function

@@ -2,7 +2,7 @@
 % Please edit documentation in R/setup_study.R
 \name{setup_bids_conversion}
 \alias{setup_bids_conversion}
-\title{Specify the heudiconv settings}
+\title{Specify the BIDS conversion settings}
 \usage{
 setup_bids_conversion(scfg, fields = NULL, print_instructions = TRUE)
 }
@@ -14,9 +14,9 @@ setup_bids_conversion(scfg, fields = NULL, print_instructions = TRUE)
 \item{print_instructions}{Logical. If TRUE, print the overall instructions for this step prior to prompting for input.}
 }
 \value{
-a modified version of \code{scfg} with \verb{$heudiconv} populated
+a modified version of \code{scfg} with \verb{$bids_conversion} populated
 }
 \description{
-Specify the heudiconv settings
+Specify the BIDS conversion settings
 }
 \keyword{internal}

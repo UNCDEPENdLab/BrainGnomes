@@ -2,19 +2,36 @@
 % Please edit documentation in R/setup_study.R
 \name{setup_aroma}
 \alias{setup_aroma}
-\title{Specify the AROMA settings}
+\title{Configure ICA-AROMA denoising}
 \usage{
 setup_aroma(scfg, fields = NULL)
 }
 \arguments{
 \item{scfg}{A study configuration object, as produced by \code{load_study()} or \code{setup_study()}.}
 
-\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all AROMA fields will be prompted for.   # \link{Added}}
+\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all fields related to AROMA will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$aroma} entry populated.
+A modified version of the \code{scfg} list with the \verb{$aroma} entry added or updated.
 }
 \description{
-Specify the AROMA settings
+This function configures the ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts)
+step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
+AROMA-based denoising to BOLD fMRI data using FSL's \code{fsl_regfilt} or an equivalent wrapper.
+}
+\details{
+ICA-AROMA is a data-driven denoising method that identifies motion-related independent components and removes them
+from BOLD time series using non-aggressive regression. This step should be run \strong{after fMRIPrep} has completed.
+The settings configured here specify compute resource usage (e.g., memory, cores, time),
+command-line options, and scheduler-specific arguments for running AROMA on each subject/session.
+
+By default, this function sets:
+\itemize{
+\item \code{memgb}: 32 (memory in GB)
+\item \code{nhours}: 24 (max runtime in hours)
+\item \code{ncores}: 1 (number of CPU cores)
+\item \code{cli_options}: "" (any extra command-line flags for the wrapper)
+\item \code{sched_args}: "" (additional job scheduler directives)
+}
 }
 \keyword{internal}
