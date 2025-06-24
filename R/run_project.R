@@ -35,33 +35,45 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   
   if (isFALSE(prompt)) {
     if ("bids_conversion" %in% steps) {
+      if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
       if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
       if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
 
-    if ("bids_validation" %in% steps && !validate_exists(scfg$compute_environment$bids_validator)) {
-      stop("Cannot run BIDS conversion without a bids_validator location.")
-    }
-
-    if ("mriqc" %in% steps && !validate_exists(scfg$compute_environment$mriqc_container)) {
-      stop("Cannot run MRIQC without a valid MRIQC container.")
-    }
-
-    if ("fmriprep" %in% steps && !validate_exists(scfg$compute_environment$fmriprep_container)) {
-      stop("Cannot run fmriprep without a valid fmriprep container.")
-    }
-
-    if ("aroma" %in% steps) {
-      if (!validate_exists(scfg$compute_environment$aroma_container)) {
-        stop("Cannot run AROMA without a valid AROMA container.")
-      } else if (!checkmate::test_true(scfg$aroma$enable)) {
-        stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
+    if ("bids_validation" %in% steps) {
+      if (!isTRUE(scfg$bids_validation$enable)) stop("bids_validation was requested, but it is disabled in the configuration.")
+      if (!validate_exists(scfg$compute_environment$bids_validator)) {
+        stop("Cannot run BIDS validation without a bids_validator location.")
       }
     }
 
-    if ("postprocess" %in% steps && (is.null(scfg$postprocess$processing_steps))) {
-      stop("Cannot run postprocessing without a valid postprocess configuration.")
+    if ("mriqc" %in% steps) {
+      if (!isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
+      if (!validate_exists(scfg$compute_environment$mriqc_container)) {
+        stop("Cannot run MRIQC without a valid MRIQC container.")
+      }
+    }
+
+    if ("fmriprep" %in% steps) {
+      if (!isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
+      if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
+        stop("Cannot run fmriprep without a valid fmriprep container.")
+      }
+    }
+
+    if ("aroma" %in% steps) {
+      if (!isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
+      if (!validate_exists(scfg$compute_environment$aroma_container)) {
+        stop("Cannot run AROMA without a valid AROMA container.")
+      }
+    }
+
+    if ("postprocess" %in% steps) {
+      if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
+      if (is.null(scfg$postprocess$processing_steps)) {
+        stop("Cannot run postprocessing without a valid postprocess configuration.")
+      }
     }
 
     nm <- steps
@@ -74,12 +86,12 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   } else {
     steps <- c()
     cat("\nPlease select which steps to run:\n")
-    steps["bids_conversion"] <- ifelse(is.null(scfg$compute_environment$heudiconv_container), FALSE, prompt_input(instruct = "Run BIDS conversion?", type = "flag"))
-    steps["bids_validation"] <- ifelse(is.null(scfg$compute_environment$bids_validator), FALSE, prompt_input(instruct = "Run BIDS validation?", type = "flag"))
-    steps["mriqc"] <- ifelse(is.null(scfg$compute_environment$mriqc_container), FALSE, prompt_input(instruct = "Run MRIQC?", type = "flag"))
-    steps["fmriprep"] <- ifelse(is.null(scfg$compute_environment$fmriprep_container), FALSE, prompt_input(instruct = "Run fmriprep?", type = "flag"))
-    steps["aroma"] <- ifelse(is.null(scfg$compute_environment$aroma_container) && isTRUE(scfg$aroma$enable), FALSE, prompt_input(instruct = "Run ICA-AROMA?", type = "flag"))
-    steps["postprocess"] <- ifelse(is.null(scfg$postprocess$processing_steps), FALSE, prompt_input(instruct = "Run postprocessing?", type = "flag"))
+    steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
+    steps["bids_validation"] <- ifelse(isTRUE(scfg$bids_validation$enable) && !is.null(scfg$compute_environment$bids_validator), prompt_input(instruct = "Run BIDS validation?", type = "flag"), FALSE)
+    steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
+    steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
+    steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
+    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && !is.null(scfg$postprocess$processing_steps), prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE)
     if (isFALSE(steps["aroma"]) && "apply_aroma" %in% scfg$postprocess$processing_steps) {
       warning(
         "Postprocessing includes the removal of motion-related AROMA components from the fMRI data, but you declined ",
