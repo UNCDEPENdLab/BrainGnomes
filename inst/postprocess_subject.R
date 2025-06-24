@@ -13,8 +13,7 @@ if (length(argpos) > 0L) {
 }
 
 if (is.null(args) || length(args) < 2L) {
-  message("Minimal usage: post_fmriprep.R --input=<input_file> --<config_yaml.yaml> [<fsl_singularity_image>]")
-  #printHelp()
+  message("Minimal usage: postprocess_subject.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--fsl_img=<fsl_singularity_image>]")
   quit(save="no", 1, FALSE)
 }
 
@@ -31,7 +30,7 @@ for (pkg in c("glue", "oro.nifti", "checkmate", "data.table", "yaml")) {
   }
 }
 
-# for debugging
+# for debugging and testing
 # args <- paste(c(
 #   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask='TRUE' --brain_mask='NA'",
 #   "--processing_steps='spatial_smooth' 'apply_aroma' 'temporal_filter' 'intensity_normalize' --spatial_smooth/fwhm_mm='5'",
@@ -44,7 +43,7 @@ for (pkg in c("glue", "oro.nifti", "checkmate", "data.table", "yaml")) {
 # ), collapse = " ")
 
 # parse CLI inputs into a nested list, if relevant
-cli_args <- BrainGnomes:::parse_cli_args(args)
+cli_args <- BrainGnomes::parse_cli_args(args)
 
 if (!is.null(cli_args$config_yaml)) {
   checkmate::assert_file_exists(cli_args$config_yaml)
@@ -59,10 +58,11 @@ cfg <- modifyList(cfg, cli_args)
 
 if (!checkmate::test_string(cfg$input)) stop("A valid --input must be provided pointing either to a folder with data to postprocess or to a single 4D NIfTI file")
 
+# accept an input directory and input regex, or a single input file
 input_regex <- cfg$input_regex
 if (checkmate::test_directory(cfg$input)) {
   # input is a directory -- find all relevant nifti files to postprocess
-  if (is.null(input_regex)) input_regex <- "_desc-preproc_bold.nii.gz$"
+  if (is.null(input_regex)) input_regex <- ".*_desc-preproc_bold.nii.gz$"
   input_files <- list.files(path=cfg$input, pattern=input_regex, recursive=TRUE, full.names = TRUE)
 } else if (!checkmate::test_file_exists(cfg$input)) {
   stop("A valid 4D NIfTI file to process must be passed in as --input=<4d file>")
@@ -74,24 +74,9 @@ if (length(input_files) == 0L) {
   stop("Cannot find files to postprocess with --input: ", cfg$input)
 }
 
-cat("About to postprocess the following files: ")
-print(input_files)
+# cat("About to postprocess the following files: ")
+# print(input_files)
 
 out_files <- sapply(input_files, function(ii) BrainGnomes:::postprocess_subject(ii, cfg))
 cat("Processing completed. Output files: \n")
 print(out_files)
-
-# for testing
-# sdir <- "/proj/mnhallqlab/studies/bsocial/clpipe/data_fmriprep/fmriprep/sub-221256/func"
-# setwd(sdir)
-# postprocess_subject("sub-221256_task-clock_run-2_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz",
-#   cfg = "/proj/mnhallqlab/users/michael/fmri.pipeline/R/post_fmriprep.yaml"
-# )
-
-# for testing
-# sdir <- "~/Downloads/func"
-# setwd(sdir)
-# postprocess_subject("sub-221256_task-clock_run-2_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz",
-#  cfg = "~/fmri_processing_scripts/post_fmriprep.yaml"
-# )
-

@@ -57,10 +57,10 @@ log_flag=""
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' '$aroma_container'"
 
-log_message INFO Starting aroma for subject $sub_id
+mem=$((SLURM_MEM_PER_NODE / 1024))GB
+start_time=$(date +%s)
 
-#singularity exec --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
-#    -B "$loc_mrproc_root" -B "$templateflow_home" "$aroma_container" aroma \
+log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag $singularity_cmd \
@@ -71,4 +71,4 @@ wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-log_message INFO Finished aroma for subject $sub_id
+log_message INFO Finished aroma for subject $sub_id "(time elapsed: $(time_elapsed))"

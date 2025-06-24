@@ -2,17 +2,17 @@
 # Default SLURM requests if not overridden on command line
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH --time=4:00:00
-#SBATCH --mem=48g
+#SBATCH --time=8:00:00
+#SBATCH --mem=8g
+
+# This script postprocesses all files in a subject input directory that match a given regular expression (input_regex).
+# For each file it finds, it launches a separate child job, then waits for these child jobs to complete.
 
 set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 
 # source bash functions used in pipeline shell scripts
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
 source "${pkg_dir}/shell_functions"
-
-module use /proj/mnhallqlab/sw/modules
-module load r/4.2.1
 
 # Set trap for common termination signals
 trap 'trap_job_failure postprocess SIGTERM' SIGTERM
@@ -33,6 +33,13 @@ ncores=$SLURM_NTASKS
 [ -z "$postproc_rscript" ] && echo "postproc_rscript not set. Exiting." && exit 1
 [ ! -f "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not found. Exiting" && exit 1
 [ ! -r "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not readable. Exiting" && exit 1
+[ -z "$input_dir" ] && echo "input_dir is not set. Exiting" && exit 1
+[ ! -d "$input_dir" ] && echo "input_dir $input_dir cannot be found. Exiting" && exit 1
+[ -z "$input_regex" ] && echo "input_regex is not set. Exiting" && exit 1
+[  -z "$postproc_image_sched_script" ] && echo "postproc_image_sched_script is not set. Exiting" && exit 1
+[ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
+[ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
+[ -z "$debug_pipeline" ] && debug_pipeline=0
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -58,11 +65,69 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-log_message INFO Starting postprocessing for subject $sub_id $ses_str in $out_dir
+### Pass forward only sched_args and CLI options that don't conflict with the child arguments
+sched_args="$(rm_cli_fields "$sched_args" job-name output error)"
+postproc_cli="$(rm_cli_fields "$postproc_cli" input input_regex)"
 
-rel $rel_flag $log_flag Rscript --vanilla "$postproc_rscript" $postproc_cli &
-    
-wait
+### Look for all relevant input files in the input directory
+full_regex="${input_dir%/}/$input_regex"  # Ensure slash between dir and file
+
+cmd="find \"$input_dir\" -regextype posix-extended -regex \"$full_regex\""
+log_message DEBUG Looking for files to postprocess using "$cmd"
+files=($(find "$input_dir" -regextype posix-extended -regex "$full_regex"))
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  log_message DEBUG No files to postprocess found in $out_dir.
+  exit 0
+fi
+
+job_ids=()
+
+for f in "${files[@]}"; do
+  log_message INFO Submitting postprocessing job for $(basename $f) in $out_dir
+  fname=$(remove_ext "$f")
+  jobname="postproc_${fname}"
+  
+  jid=$(sbatch \
+    --parsable \
+    $sched_args \
+    --job-name="$jobname" \
+    --output="postproc_${fname}_%j.out" \
+    --error="postproc_${fname}_%j.err" \
+    --export=ALL,input_file="$f",stdout_log="postproc_${fname}_%j.out",stderr_log="postproc_${fname}_%j.err" \
+    "$postproc_image_sched_script")
+  
+  log_message INFO "Submitted postprocessing job $jid for file $f"
+  job_ids+=("$jid")
+done
+
+
+### NOW WAIT ON KIDS
+
+# # Submit child jobs and collect their job IDs
+# job_ids=()
+# for file in input_files/*.nii.gz; do
+#   jid=$(sbatch --parsable child_job.sbatch "$file")
+#   echo "Submitted child job $jid for file $file"
+#   job_ids+=("$jid")
+# done
+
+# Wait for all child jobs to finish
+# Option 1: Poll using squeue
+echo "Waiting for child jobs to complete..."
+
+while true; do
+  active_jobs=0
+  for jid in "${job_ids[@]}"; do
+    squeue -j "$jid" &> /dev/null && ((active_jobs += 1))
+  done
+
+  if [[ $active_jobs -eq 0 ]]; then
+    echo "All child jobs completed."
+    break
+  fi
+  sleep 300 # poll every 5 minutes
+done
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 

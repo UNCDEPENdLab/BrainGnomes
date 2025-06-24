@@ -49,17 +49,6 @@ setup_project <- function(input = NULL, fields = NULL) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
 
-  if (is.null(scfg$run_aroma) || "run_aroma" %in% fields) {
-    scfg$run_aroma <- prompt_input("Run AROMA?",
-      instruct = glue("
-      \nAs of v24, fmriprep has now removed ICA-AROMA from its codebase, splitting this off to
-      a separate BIDS app called fmripost-aroma. Do you want to run the fMRI data through ICA-AROMA?
-      If so, you will subsequently be asked for the location of an ICA-AROMA container file. Note that
-      saying 'yes' to this, only runs AROMA, but does not remove motion-related components from the fMRI
-      timeseries. That is a postprocessing decision, which you will be asked about in that context.\n
-      "), type = "flag"
-    )
-  }
 
   # run through configuration of each step
   scfg <- setup_project_globals(scfg, fields)
@@ -68,7 +57,7 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
-  if (isTRUE(scfg$run_aroma)) scfg <- setup_aroma(scfg, fields)
+  scfg <- setup_aroma(scfg, fields)
   scfg <- setup_postprocess(scfg, fields)
 
   return(scfg)
@@ -674,7 +663,7 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
 #'
 #' By default, this function sets:
 #' - `memgb`: 32 (memory in GB)
-#' - `nhours`: 24 (max runtime in hours)
+#' - `nhours`: 36 (max runtime in hours)
 #' - `ncores`: 1 (number of CPU cores)
 #' - `cli_options`: "" (any extra command-line flags for the wrapper)
 #' - `sched_args`: "" (additional job scheduler directives)
@@ -683,7 +672,7 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
 setup_aroma <- function(scfg, fields = NULL) {
   defaults <- list(
     memgb = 32,
-    nhours = 24,
+    nhours = 36,
     ncores = 1,
     cli_options = "",
     sched_args = ""
@@ -692,8 +681,24 @@ setup_aroma <- function(scfg, fields = NULL) {
   # cat("Configuring ICA-AROMA denoising step...\n")
   # cat("This step applies non-aggressive regression of motion-related ICA components from fMRIPrep outputs.\n")
   # cat("You will be asked to provide job parameters (memory, time, cores) and any optional command-line settings.\n\n")
-
   scfg <- setup_job(scfg, "aroma", defaults, fields)
+
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$aroma$enable)) fields <- c(fields, "aroma/enable")
+  }
+
+  if ("aroma/enable" %in% fields) {
+    scfg$aroma$enable <- prompt_input("Run AROMA?",
+      instruct = glue("
+      \nAs of v24, fmriprep has now removed ICA-AROMA from its codebase, splitting this off to
+      a separate BIDS app called fmripost-aroma. Do you want to run the fMRI data through ICA-AROMA?
+      Note that saying 'yes' to this only runs AROMA, but does not remove motion-related components from the fMRI
+      timeseries. That is a postprocessing decision, which you will be asked about in that context.\n
+      "), type = "flag"
+    )
+  }
+
   return(scfg)
 }
 

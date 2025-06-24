@@ -46,6 +46,7 @@ def resample_template_to_bold(in_file, output, template_resolution=1, template_s
     )
 
     template_img = nib.load(image_path)
+    # https://nilearn.github.io/stable/auto_examples/06_manipulating_images/plot_resample_to_template.html
     resampled_mask = resample_to_img(
         source_img = template_img, target_img = bold_img, interpolation = interpolation, 
         force_resample = True, copy_header = True)

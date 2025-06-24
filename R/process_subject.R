@@ -51,7 +51,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     # skip out if this step is not requested or it is already complete
     if (!steps[name] || (file_exists && !scfg$force)) {
       if (file_exists) {
-        lg$debug("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists.")
+        lg$info("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists.")
       } else {
         lg$debug("Skipping {name} for {sub_id} because step is not requested.")
       }
@@ -60,7 +60,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
     # clear existing complete file if we are starting over on this step
     if (file_exists) {
-      lg$debug("Removing existing .{name}{sub_str}_complete file: {complete_file}")
+      lg$info("Removing existing .{name}{sub_str}_complete file: {complete_file}")
       unlink(complete_file)
     }
 
@@ -179,7 +179,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   )
 
   # log submission command
-  lg$debug("Scheduled bids_conversion job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled bids_conversion job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 
@@ -201,7 +201,7 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$debug("Scheduled bids_validaiton job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled bids_validation job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -216,7 +216,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     return(NULL)
   }
 
-  if (isTRUE(scfg$run_aroma) && (is.null(scfg$fmriprep$output_spaces) || !grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE))) {
+  if (isTRUE(scfg$aroma$enable) && (is.null(scfg$fmriprep$output_spaces) || !grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE))) {
     message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
     scfg$fmriprep$output_spaces <- paste(scfg$fmriprep$output_spaces, "MNI152NLin6Asym:res-2")
   }
@@ -255,7 +255,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$debug("Scheduled fmriprep job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled fmriprep job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -292,7 +292,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$debug("Scheduled mriqc job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled mriqc job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -303,9 +303,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     return(NULL)
   }
 
-  # TODO: unclear whether we need run_aroma and "aroma" in steps...
-  if (!isTRUE(scfg$run_aroma)) {
-    message(glue("Skipping AROMA in {sub_dir} because run_aroma is FALSE"))
+  if (!isTRUE(scfg$aroma$enable)) {
+    message(glue("Skipping AROMA in {sub_dir} because AROMA is disabled"))
     return(NULL)
   }
 
@@ -338,22 +337,19 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$debug("Scheduled aroma job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled aroma job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
 
-# TODO: make a simple worker that looks at the target directory, then spawns one job per file, not per folder (since postproc is by file)
-# we can't do that here because the required files may not have been run yet (fmriprep etc.)
-
 submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
 
   postproc_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
-  if (!checkmate::test_file_exists(postproc_rscript)) stop("Cannot find postprocess_subject.R")
+  postproc_image_sched_script <- get_job_script(scfg, "postprocess_image")
 
   # postprocessing
-  scfg$postprocess$input <- file.path(scfg$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
-  if (!is.null(ses_id) && !is.na(ses_id)) scfg$postprocess$input <- file.path(scfg$postprocess$input, glue("ses-{ses_id}")) # add session subdir if relevant
+  input_dir <- file.path(scfg$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
+  if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
   #scfg$postprocess$fsl_img <- scfg$compute_environment$fmriprep_container # always pass fmriprep container for running FSL commands in postprocessing
   scfg$postprocess$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
   postproc_cli <- nested_list_to_args(scfg$postprocess, collapse=TRUE) # convert postprocess config into CLI args
@@ -364,7 +360,11 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
     sub_id = sub_id,
     ses_id = ses_id,
     postproc_cli = postproc_cli,
-    postproc_rscript = postproc_rscript
+    postproc_rscript = postproc_rscript,
+    input_dir = input_dir, # postprocess_subject.sbatch will figure out files to postprocess using input and input_regex
+    input_regex = scfg$postprocess$input_regex,
+    postproc_image_sched_script = postproc_image_sched_script,
+    sched_args = sched_args # pass through to child processes
   )
 
   job_id <- fmri.pipeline::cluster_job_submit(sched_script,
@@ -373,7 +373,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$debug("Scheduled postprocess job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled postprocess job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 

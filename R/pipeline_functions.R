@@ -246,8 +246,50 @@ rm_niftis <- function(files=NULL) {
   }
 }
 
-run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, log_file=NULL, intern=FALSE, stop_on_fail=TRUE, fsl_img=NULL, bind_paths=NULL) {
-  
+run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE, stop_on_fail=TRUE, log_file=NULL, use_lgr=TRUE, fsl_img=NULL, bind_paths=NULL) {
+  checkmate::assert_character(args)
+  checkmate::assert_string(fsldir, null.ok = TRUE)
+  if (!is.null(fsldir)) checkmate::assert_directory_exists(fsldir)
+
+  checkmate::assert_flag(echo)
+  checkmate::assert_flag(run)
+  checkmate::assert_flag(intern)
+  checkmate::assert_flag(stop_on_fail)
+  checkmate::assert_string(log_file, null.ok = TRUE)
+  checkmate::assert_flag(use_lgr)
+  checkmate::assert_string(fsl_img, null.ok=TRUE)
+  if (!is.null(fsl_img)) checkmate::assert_directory_exists(fsl_img)
+  checkmate::assert_character(bind_paths)
+
+  if (use_lgr) {
+    lg <- lgr::get_logger("run_fsl_command", reset = TRUE) # always get clean config
+    lg$set_propagate(FALSE) # avoid inherited console output
+    if (echo) lg$add_appender(AppenderConsole$new(), name = "console")
+    if (!is.null(log_file)) lg$add_appender(AppenderFile$new(log_file), name = "file")
+  }
+
+  # if (checkmate::test_class(log, "Logger")) {
+  #   use_lgr <- TRUE
+  #   if (!echo) {
+  #     # disable lgr output temporarily
+  #     suppressed_appenders <- list()
+  #     for (nm in names(log$appenders)) {
+  #       if (inherits(log$appenders[[nm]], "AppenderConsole")) suppressed_appenders[[nm]] <- log$appenders[[nm]]
+  #     }
+  #     for (nm in names(suppressed_appenders)) log$remove_appender(nm)
+  #     on.exit({
+  #         for (nm in names(suppressed_appenders)) {
+  #           log$add_appender(suppressed_appenders[[nm]], name = nm)
+  #         }
+  #     }, add = TRUE)
+  #   }
+  # } else {
+  #   use_lgr <- FALSE
+  # }
+
+  # paste into single string if multiple character arguments are passed
+  if (length(args) > 1L) args <- paste(args, collapse=" ")
+
   if (!is.null(fsl_img)) {
     # if we are using a singularity container, always look inside the container for FSLDIR
     checkmate::assert_file_exists(fsl_img, access = "r")
@@ -308,22 +350,27 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, log_file=NUL
   efile <- tempfile(pattern = "stderr")
   full_cmd <- paste(full_cmd, ">", shQuote(ofile), "2>", shQuote(efile))
 
-  #cat("FSL command: ", full_cmd, "\n")
-  if (!is.null(log_file)) cat(args, file=log_file, append=TRUE, sep="\n")
-  # if (!is.null(log_file)) cat("# FULL CMD: ", full_cmd, file=log_file, append=TRUE, sep="\n")
-  if (isTRUE(echo)) cat(args, "\n")
+  if (use_lgr) {
+    lg$info("FSL command: %s", args)
+    lg$debug("Shell command: %s", full_cmd)
+  } else if (checkmate::test_string(log_file)) {
+    cat(args, file=log_file, append=TRUE, sep="\n")
+    # cat("FSL command: ", full_cmd, "\n")
+  }
+
+  if (isTRUE(echo) && !use_lgr) cat(args, "\n")
 
   retcode <- if (isTRUE(run)) system(full_cmd) else 0 # return 0 if not run
 
   if (file.exists(efile)) {
-    stderr <- readLines(efile)
+    stderr <- readLines(efile, warn = FALSE)
     if (identical(character(0), stderr)) stderr <- ""
   } else {
     stderr <- ""
   }
 
   if (file.exists(ofile)) {
-    stdout <- readLines(ofile)
+    stdout <- readLines(ofile, warn = FALSE)
     if (identical(character(0), stdout)) stdout <- ""
   } else {
     stdout <- ""
@@ -341,7 +388,11 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, log_file=NUL
 
   if (retcode != 0) {    
     errmsg <- glue("run_fsl_command failed with exit code: {retcode}, stdout: {paste(stdout, collapse='\n')}, stderr: {paste(stderr, collapse='\n')}")
-    cat(errmsg, "\n", file = log_file, append = TRUE)
+    if (use_lgr) {
+      log_file$error(errmsg)
+    } else {
+      cat(errmsg, "\n", file = log_file, append = TRUE)
+    }    
     if (isTRUE(stop_on_fail)) stop(errmsg)
   }
 
@@ -452,14 +503,14 @@ get_image_quantile <- function(in_file, brain_mask=NULL, quantile=50, exclude_ze
 # Given that it is used only for these quantiles, the fmriprep mask should be fine for this purpose
 # apply_mask is now considered an additional step that is optional and uses the brain_mask in the cfg
 
-to_log <- function(str=NULL, log_file=NULL, stdout=TRUE) {
-  checkmate::assert_string(str)
-  checkmate::assert_string(log_file, null.ok = TRUE)
-  if (is.null(str)) return(invisible(NULL))
-  if (isTRUE(stdout)) cat(str, sep = "\n")
-  if (!is.null(log_file)) cat(str, file = log_file, sep = "\n", append = TRUE)
-  return(invisible(NULL))
-}
+# to_log <- function(str=NULL, log_file=NULL, stdout=TRUE) {
+#   checkmate::assert_string(str)
+#   checkmate::assert_string(log_file, null.ok = TRUE)
+#   if (is.null(str)) return(invisible(NULL))
+#   if (isTRUE(stdout)) cat(str, sep = "\n")
+#   if (!is.null(log_file)) cat(str, file = log_file, sep = "\n", append = TRUE)
+#   return(invisible(NULL))
+# }
 
 
 #' convert a number of hours to a days, hours, minutes, seconds format
@@ -484,6 +535,17 @@ hours_to_dhms <- function(hours, frac = FALSE) {
 
   return(str)
 }
+
+#' internal function for returning a neuroimaging file (and path) without its extension
+#' at present, it returns NA if no recognized extension is there
+#' @keywords internal
+file_sans_ext <- function(file) {
+  matches <- grepl("^.*\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)?$", file, ignore.case = TRUE)
+  fout <- rep(NA, length=length(file)) # return NA for inputs that can't be parsed
+  fout[matches] <- sub("^(.*)\\.(csv|dat|hdr|img|brik|head|nii|txt|tsv|yaml|json|1d)(\\.gz|\\.bz2|\\.zip|\\.xz)?$", "\\1", file[matches], ignore.case = TRUE)
+  return(fout)
+}
+
 
 
 get_pipeline_status <- function(scfg) {

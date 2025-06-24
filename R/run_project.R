@@ -52,20 +52,23 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       stop("Cannot run fmriprep without a valid fmriprep container.")
     }
 
-    if ("aroma" %in% steps && !validate_exists(scfg$compute_environment$aroma_container)) {
-      stop("Cannot run AROMA without a valid AROMA container.")
+    if ("aroma" %in% steps) {
+      if (!validate_exists(scfg$compute_environment$aroma_container)) {
+        stop("Cannot run AROMA without a valid AROMA container.")
+      } else if (!checkmate::test_true(scfg$aroma$enable)) {
+        stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
+      }
     }
 
     if ("postprocess" %in% steps && (is.null(scfg$postprocess$processing_steps))) {
       stop("Cannot run postprocessing without a valid postprocess configuration.")
     }
 
-    # if (isTRUE(scfg$run_aroma)) steps <- c(steps, "aroma")
     nm <- steps
     steps <- rep(TRUE, length(steps))
     names(steps) <- nm
 
-    scfg$log_level <- "INFO" # how much detail to park in logs
+    # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
   } else {
@@ -75,7 +78,7 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps["bids_validation"] <- ifelse(is.null(scfg$compute_environment$bids_validator), FALSE, prompt_input(instruct = "Run BIDS validation?", type = "flag"))
     steps["mriqc"] <- ifelse(is.null(scfg$compute_environment$mriqc_container), FALSE, prompt_input(instruct = "Run MRIQC?", type = "flag"))
     steps["fmriprep"] <- ifelse(is.null(scfg$compute_environment$fmriprep_container), FALSE, prompt_input(instruct = "Run fmriprep?", type = "flag"))
-    steps["aroma"] <- ifelse(is.null(scfg$compute_environment$aroma_container) && isTRUE(scfg$run_aroma), FALSE, prompt_input(instruct = "Run ICA-AROMA?", type = "flag"))
+    steps["aroma"] <- ifelse(is.null(scfg$compute_environment$aroma_container) && isTRUE(scfg$aroma$enable), FALSE, prompt_input(instruct = "Run ICA-AROMA?", type = "flag"))
     steps["postprocess"] <- ifelse(is.null(scfg$postprocess$processing_steps), FALSE, prompt_input(instruct = "Run postprocessing?", type = "flag"))
     if (isFALSE(steps["aroma"]) && "apply_aroma" %in% scfg$postprocess$processing_steps) {
       warning(
@@ -88,10 +91,11 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
 
     scfg$force <- prompt_input(instruct = "Force each processing step, even if it appears to be complete?", type = "flag")
 
-    scfg$log_level <- prompt_input(
-      instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
-      type = "character", among=c("INFO", "ERROR", "DEBUG")
-    )
+    # not currently used and would need to propagate the choice down to sbatch scripts through and environment variable (log_message)
+    # scfg$log_level <- prompt_input(
+    #   instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
+    #   type = "character", among=c("INFO", "ERROR", "DEBUG")
+    # )
   }
 
   # look for subject directories in the DICOM directory
@@ -119,7 +123,7 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   subject_dirs <- merge(subject_dicom_dirs, subject_bids_dirs, by = c("sub_id", "ses_id"), all = TRUE)
 
   if (nrow(subject_dirs) == 0L) {
-    stop(glue("Cannot find any valida subject folders in bids directory: {scfg$bids_directory}"))
+    stop(glue("Cannot find any valid subject folders in bids directory: {scfg$bids_directory}"))
   } else {
     # split data.frame by subject (some steps are subject-level, some are session-level)
     subject_dirs <- split(subject_dirs, subject_dirs$sub_id)

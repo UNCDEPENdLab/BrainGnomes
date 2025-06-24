@@ -28,7 +28,7 @@ command-line options, and scheduler-specific arguments for running AROMA on each
 By default, this function sets:
 \itemize{
 \item \code{memgb}: 32 (memory in GB)
-\item \code{nhours}: 24 (max runtime in hours)
+\item \code{nhours}: 36 (max runtime in hours)
 \item \code{ncores}: 1 (number of CPU cores)
 \item \code{cli_options}: "" (any extra command-line flags for the wrapper)
 \item \code{sched_args}: "" (additional job scheduler directives)

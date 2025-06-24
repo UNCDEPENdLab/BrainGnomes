@@ -305,3 +305,139 @@ function abspath() {
 
   echo "$(cd "$dir" && pwd)/$(basename "$1")"
 }
+
+get_slurm_cpus() {
+  if [[ -n "$SLURM_JOB_CPUS_PER_NODE" ]]; then
+    echo "$SLURM_JOB_CPUS_PER_NODE"
+    return 0
+  fi
+
+  if [[ -n "$SLURM_JOB_ID" ]]; then
+    scontrol show job "$SLURM_JOB_ID" | awk ' { for (i = 1; i <= NF; i++) { split($i, kv, "="); if (kv[1] == "NumCPUs") { print kv[2]; exit } } }'
+    return 0
+  fi
+
+  echo "0"
+  return 1
+}
+
+get_slurm_memory_gb() {
+  local mem_mb=""
+
+  if [[ -n "$SLURM_MEM_PER_NODE" ]]; then
+    mem_mb="$SLURM_MEM_PER_NODE"
+  elif [[ -n "$SLURM_MEM_PER_CPU" && -n "$SLURM_JOB_CPUS_PER_NODE" ]]; then
+    mem_mb=$(( SLURM_MEM_PER_CPU * SLURM_JOB_CPUS_PER_NODE ))
+  elif [[ -n "$SLURM_JOB_ID" ]]; then
+    mem_raw=$(scontrol show job "$SLURM_JOB_ID" | awk -F= '/ReqMem/ {print $2}' | awk '{print $1}')
+    mem_val="${mem_raw%?}"
+    mem_unit="${mem_raw: -1}"
+    case "$mem_unit" in
+      M|m) mem_mb="$mem_val" ;;
+      G|g) mem_mb=$(( mem_val * 1024 )) ;;
+      T|t) mem_mb=$(( mem_val * 1024 * 1024 )) ;;
+      *) mem_mb="" ;;
+    esac
+  fi
+
+  if [[ -n "$mem_mb" ]]; then
+    awk "BEGIN {printf \"%.2f\", $mem_mb/1024}"
+    return 0
+  else
+    echo "0.00"
+    return 1
+  fi
+}
+
+function time_elapsed() {
+  # requires $start_time to be present
+  if [ -z "$start_time" ]; then
+    echo "unknown"
+    return 1
+  fi
+
+  local end_time=$(date +%s)
+  local elapsed=$((end_time - start_time))
+  local hours=$((elapsed / 3600))
+  local minutes=$(((elapsed % 3600) / 60))
+  local seconds=$((elapsed % 60))
+  
+  echo "${hours}h ${minutes}m ${seconds}s"
+  return 0
+}
+
+# remove extension from any given file, including possible compression extensions
+remove_ext() {
+  local filename="$1"
+  local base="${filename##*/}"  # remove directory path
+  base="${base%.gz}"
+  base="${base%.bz2}"
+  base="${base%.xz}"
+  base="${base%.zip}"
+  base="${base%.*}"             # remove primary extension (e.g., .nii, .txt, .csv)
+  echo "$base"
+}
+
+# rm_cli_fields - Remove specific CLI arguments from a command-line string
+#
+# This function strips out command-line arguments matching a given list of option names.
+# It handles flags in the form:
+#   --flag=value
+#   --flag value
+#   --flag            (boolean-style)
+#
+# It ensures partial matches (e.g., removing "input" doesn't strip "input_regex") are avoided.
+#
+# Parameters:
+#   $1 - The original CLI string
+#   $@ - A list of argument names (without the "--" prefix) to remove
+#
+# Returns:
+#   Prints the modified CLI string to stdout with specified arguments removed
+#
+# Example:
+#   cli="--input=2 --test --aroma /path --input_regex=_desc"
+#   clean_cli=$(rm_cli_fields "$cli" input aroma)
+#   echo "$clean_cli"
+#   # Output: --test --input_regex=_desc
+rm_cli_fields() {
+  local input_str="$1"
+  shift
+  local -a remove_fields=("$@")
+
+  echo "$input_str" | awk -v fields="${remove_fields[*]}" '
+    BEGIN {
+      # Build a map of field names to remove
+      n = split(fields, f, " ")
+      for (i = 1; i <= n; i++) {
+        rm["--" f[i]] = 1
+      }
+    }
+    {
+      i = 1
+      while (i <= NF) {
+        key = $i
+        val = $(i+1)
+
+        # Check if --flag=value form
+        split(key, kv, "=")
+        k = kv[1]
+
+        if (rm[key] || rm[k]) {
+          # skip --flag or --flag=value or --flag value
+          if (key ~ /=/) {
+            i += 1
+          } else if (val !~ /^--/) {
+            i += 2
+          } else {
+            i += 1
+          }
+        } else {
+          printf "%s ", key
+          i += 1
+        }
+      }
+      print ""
+    }
+  '
+}

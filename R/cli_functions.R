@@ -137,7 +137,7 @@ nested_list_to_args <- function(lst, sep = "/", collapse = FALSE) {
 #'
 #' @return A nested list of parsed CLI arguments.
 #'
-#' @keywords internal
+#' @export
 parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
   checkmate::assert_character(args)
 

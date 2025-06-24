@@ -45,14 +45,14 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
   if ("postprocess/input_regex" %in% fields) {
     scfg$postprocess$input_regex <- prompt_input(
       "What is the relevant file extension (or regular expression) for inputs?",
-      type = "character", len = 1L, default = "_desc-preproc_bold.nii.gz$",
+      type = "character", len = 1L, default = ".*_desc-preproc_bold.nii.gz$",
       instruct = glue("
       \nPostprocessing is typically only applied to BOLD data that have completed preprocessing in fmriprep.
       These files usually have a suffix like _desc-preproc_bold.nii.gz. However, you may have postprocessing settings
       that only apply to certain outputs, such as for a particular experimental task or for resting state.
 
       What is the file extension for functional data to be postprocessed? If, for example, you only want
-      files for a task called 'ridl', use a regular expression like, '_task-ridl.*_desc-preproc_bold.nii.gz$'. Note
+      files for a task called 'ridl', use a regular expression like, '.*_task-ridl.*_desc-preproc_bold.nii.gz$'. Note
       that having the $ add the end of the regular expression ensures that the file ends with the specified suffix.\n
       ")
     )

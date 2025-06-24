@@ -21,4 +21,3 @@ A nested list of parsed CLI arguments.
 This function tokenizes command-line arguments using \code{args_to_df()} and builds a nested list
 by interpreting forward slashes in keys (e.g., \code{--a/b=10 11}) as nested structure.
 }
-\keyword{internal}

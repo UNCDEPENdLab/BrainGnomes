@@ -87,14 +87,14 @@ done
 singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
   -B '$loc_mrproc_root' -B '$templateflow_home' -B '$fs_dir' '$fmriprep_container'"
 
-log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir
+mem=$((SLURM_MEM_PER_NODE / 1024))GB
 start_time=$(date +%s)
 
+log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
+
+# export necessary environment variables for fmriprep in singularity
 rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
-
-#singularity exec --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
-#    -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" fmriprep \
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag $singularity_cmd \
@@ -105,10 +105,4 @@ wait
 
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-end_time=$(date +%s)
-elapsed=$((end_time - start_time))
-hours=$((elapsed / 3600))
-minutes=$(((elapsed % 3600) / 60))
-seconds=$((elapsed % 60))
-
-log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: ${hours}h ${minutes}m ${seconds}s)"
+log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"

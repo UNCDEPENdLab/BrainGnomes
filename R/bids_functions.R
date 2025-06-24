@@ -21,7 +21,8 @@
 #' @export
 extract_bids_info <- function(filenames, drop_unused=FALSE) {
   checkmate::assert_character(filenames)
-  filenames <- basename(filenames) # avoid matching on path components
+  directories <- dirname(filenames) # include directory in returned data.frame for reconstructing absolute paths
+  filenames <- basename(filenames) # work with filenames only to avoid matching on path components
 
   # Define regex patterns for each BIDS entity
   patterns <- list(
@@ -89,6 +90,8 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
     all_na <- sapply(df, function(i) all(is.na(i)))
     df <- df[!all_na]
   }
+
+  df$directory <- directories
   
   return(df)
 }
@@ -108,6 +111,8 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #'   `subject`, `session`, `task`, `acquisition`, `run`, `modality`, `echo`,
 #'   `direction`, `reconstruction`, `hemisphere`, `space`, `resolution`,
 #'   `description`, and `fieldmap`.
+#' @param full.names If TRUE, return the full path to the file using the `$directory`
+#'   field of `bids_df`.
 #'
 #' @return A character vector of reconstructed BIDS filenames, one per row of `bids_df`.
 #'
@@ -124,7 +129,7 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #'
 #' @importFrom checkmate assert_data_frame test_list
 #' @export
-construct_bids_filename <- function(bids_df) {
+construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
   checkmate::assert_data_frame(bids_df)
   if (!"suffix" %in% names(bids_df)) stop("The input must include a 'suffix' column.")
@@ -165,6 +170,11 @@ construct_bids_filename <- function(bids_df) {
 
     paste0(paste(parts, collapse = "_"), "_", suffix, ext)
   })
+
+  # append directory 
+  if (!is.null(bids_df$directory) && isTRUE(full.names)) {
+    filenames <- file.path(bids_df$directory, filenames)
+  }
 
   return(filenames)
 }

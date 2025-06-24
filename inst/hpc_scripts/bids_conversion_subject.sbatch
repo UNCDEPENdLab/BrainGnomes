@@ -61,7 +61,10 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir
+mem=$((SLURM_MEM_PER_NODE / 1024))GB
+start_time=$(date +%s)
+
+log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
 singularity_cmd="singularity run --cleanenv -B $loc_bids_root -B $loc_sub_dicoms -B $heuristic_dir $heudiconv_container"
 
@@ -77,7 +80,7 @@ wait
 # write complete file if the command was successful and debug_pipeline is not set
 [[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
-log_message INFO Finished heudiconv for subject $sub_id $ses_str
+log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
 
 #######
 # example call
