@@ -258,7 +258,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   checkmate::assert_string(log_file, null.ok = TRUE)
   checkmate::assert_flag(use_lgr)
   checkmate::assert_string(fsl_img, null.ok=TRUE)
-  if (!is.null(fsl_img)) checkmate::assert_directory_exists(fsl_img)
+  if (!is.null(fsl_img)) checkmate::assert_file_exists(fsl_img)
   checkmate::assert_character(bind_paths)
 
   if (use_lgr) {

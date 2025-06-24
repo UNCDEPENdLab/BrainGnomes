@@ -3,7 +3,6 @@ project_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data
 dicom_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms
 bids_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_bids
 scratch_directory: /work/users/m/n/mnhallq
-run_aroma: yes
 compute_environment:
   scheduler: slurm
   fmriprep_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg
@@ -38,18 +37,22 @@ aroma:
   ncores: 1
   cli_options: []
   sched_args: []
+  enable: true
 postprocess:
   memgb: 40
-  nhours: 2
+  nhours: 4
   ncores: 1
   cli_options: []
   sched_args: []
   keep_intermediates: no
   overwrite: yes
   tr: 0.6
-  apply_mask: yes
+  apply_mask:
+    enable: true
+    prefix: m
   brain_mask: .na.character
   processing_steps:
+  - apply_mask
   - spatial_smooth
   - apply_aroma
   - temporal_filter
@@ -73,7 +76,7 @@ postprocess:
     demean: yes
     output_file: confound.txt
   force_processing_order: no
-  input_regex: _desc-preproc_bold.nii.gz
+  input_regex: ".*_desc-preproc_bold.nii.gz$"
   bids_desc: postproc
 fmriprep_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep
 templateflow_home: ~/.cache/templateflow

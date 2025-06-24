@@ -28,6 +28,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
   
   bids_conversion_ids <- bids_validation_id <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
 
+
   # N.B. fmriprep processes a subject, not a session... Thus, we need to submit a top-level job for the subject
 
   # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
@@ -49,12 +50,11 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
-    if (!steps[name] || (file_exists && !scfg$force)) {
-      if (file_exists) {
-        lg$info("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists.")
-      } else {
-        lg$debug("Skipping {name} for {sub_id} because step is not requested.")
-      }
+    if (!isTRUE(steps[[name]])) {
+      lg$debug("Skipping {name} for {sub_id} because step is not requested.")
+      return(job_id)
+    } else if (file_exists && !isTRUE(scfg$force)) {
+      lg$info("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists and force = FALSE.")
       return(job_id)
     }
 

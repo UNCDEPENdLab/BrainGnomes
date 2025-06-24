@@ -179,7 +179,6 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   return(filenames)
 }
 
-
 #' Check for Existence of a BIDS-Formatted Output File with a given description
 #'
 #' This function constructs a BIDS-compliant filename based on an input file, replacing
@@ -199,30 +198,30 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 #' @importFrom glue glue
 #' @keywords internal
 out_file_exists <- function(in_file, description, overwrite = TRUE, prepend = TRUE) {
-    checkmate::assert_file_exists(in_file)
-    checkmate::assert_string(description)
-    checkmate::assert_flag(overwrite)
-    checkmate::assert_flag(prepend)
+  checkmate::assert_file_exists(in_file)
+  checkmate::assert_string(description)
+  checkmate::assert_flag(overwrite)
+  checkmate::assert_flag(prepend)
 
-    # Parse and update BIDS fields
-    bids_info <- extract_bids_info(in_file)
-    bids_info$description <- if (prepend) paste0(bids_info$description, description) else description # set desc to new description
+  # Parse and update BIDS fields
+  bids_info <- extract_bids_info(in_file)
+  bids_info$description <- if (prepend) paste0(bids_info$description, description) else description # set desc to new description
 
-    # Reconstruct filename
-    out_file <- file.path(dirname(in_file), construct_bids_filename(bids_info))
+  # Reconstruct filename
+  out_file <- file.path(dirname(in_file), construct_bids_filename(bids_info))
 
-    # Check if file exists and whether to skip
-    skip <- FALSE
-    if (checkmate::test_file_exists(out_file)) {
-        if (isFALSE(overwrite)) {
-            message(glue::glue("Processed file already exists: {out_file}. Skipping this step."))
-            skip <- TRUE
-        } else {
-            message(glue::glue("Overwriting existing file: {out_file}."))
-        }
+  # Check if file exists and whether to skip
+  skip <- FALSE
+  if (checkmate::test_file_exists(out_file)) {
+    if (isFALSE(overwrite)) {
+      message(glue::glue("Processed file already exists: {out_file}. Skipping this step."))
+      skip <- TRUE
+    } else {
+      message(glue::glue("Overwriting existing file: {out_file}."))
     }
+  }
 
-    return(list(out_file = out_file, skip = skip))
+  return(list(out_file = out_file, skip = skip))
 }
 
 

@@ -40,6 +40,7 @@ ncores=$SLURM_NTASKS
 [ -z "$input_file" ] && echo "input_file not set. Exiting." && exit 1
 [ ! -f "$input_file" ] && echo "input_file $input_file not found. Exiting" && exit 1
 [ ! -r "$input_file" ] && echo "input_file $input_file not readable. Exiting" && exit 1
+[ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1

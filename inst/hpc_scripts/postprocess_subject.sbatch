@@ -40,6 +40,7 @@ ncores=$SLURM_NTASKS
 [ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
 [ -z "$debug_pipeline" ] && debug_pipeline=0
+[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -84,20 +85,24 @@ fi
 job_ids=()
 
 for f in "${files[@]}"; do
-  log_message INFO Submitting postprocessing job for $(basename $f) in $out_dir
+  
   fname=$(remove_ext "$f")
   jobname="postproc_${fname}"
+
+  # create separate logs for each image -- place in the same location as the subject-level job
+  postproc_stdout_log="$(dirname $stdout_log)/postproc_${fname}_jobid-%j.out"
+  postproc_stderr_log="$(dirname $stdout_log)/postproc_${fname}_jobid-%j.err"
   
   jid=$(sbatch \
     --parsable \
     $sched_args \
     --job-name="$jobname" \
-    --output="postproc_${fname}_%j.out" \
-    --error="postproc_${fname}_%j.err" \
-    --export=ALL,input_file="$f",stdout_log="postproc_${fname}_%j.out",stderr_log="postproc_${fname}_%j.err" \
+    --output="$postproc_stdout_log" \
+    --error="$postproc_stderr_log" \
+    --export=ALL,input_file="$f",stdout_log="$postproc_stdout_log",stderr_log="$postproc_stderr_log" \
     "$postproc_image_sched_script")
   
-  log_message INFO "Submitted postprocessing job $jid for file $f"
+  log_message INFO Submitted postprocessing job $jid for $(basename $f) in $out_dir
   job_ids+=("$jid")
 done
 

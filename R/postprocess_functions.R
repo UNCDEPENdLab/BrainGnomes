@@ -35,7 +35,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   log_file <- file.path(log_dir, basename(cfg$log_file))
 
   lg <- lgr::get_logger_glue(c("postprocess", bids_info$sub))
-  lg$add_appender(lgr::AppenderFile$new(log_file, name = "postprocess_log"))
+  lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # Reconstruct expected output file
   output_bids_info <- modifyList(bids_info, list(description = cfg$bids_desc)) # set desc to new description
