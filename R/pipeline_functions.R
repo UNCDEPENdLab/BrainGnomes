@@ -49,7 +49,7 @@ get_job_sched_args <- function(scfg=NULL, job_name) {
      )
    } else {
      sched_args <- glue(
-       "-l nodes1:ppn={scfg[[job_name]]$ncores}",
+       "-l nodes=1:ppn={scfg[[job_name]]$ncores}",
        "-l walltime={hours_to_dhms(scfg[[job_name]]$nhours)}",
        "-l mem={scfg[[job_name]]$memgb}",
        "{sched_args}",
