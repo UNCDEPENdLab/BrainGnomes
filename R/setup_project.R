@@ -174,18 +174,25 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     ncores = 12,
     cli_options = "",
     sched_args = ""
-  )  
+  )
 
   scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
+    if (is.null(scfg$fmriprep$enable)) fields <- c(fields, "fmriprep/enable")
     if (is.null(scfg$fmriprep$output_spaces)) fields <- c(fields, "fmriprep/output_spaces")
     if (!validate_exists(scfg$fmriprep$fs_license_file)) fields <- c(fields, "fmriprep/fs_license_file")
 
     cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
   }
+
+  if ("fmriprep/enable" %in% fields) {
+    scfg$fmriprep$enable <- prompt_input("Run fmriprep?", type = "flag", default = TRUE)
+  }
+
+  if (isFALSE(scfg$fmriprep$enable) && is.null(fields)) return(scfg)
 
   if ("fmriprep/output_spaces" %in% fields) {
     scfg$fmriprep$output_spaces <- choose_fmriprep_spaces(scfg$fmriprep$output_spaces)
@@ -458,6 +465,17 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
   scfg <- setup_job(scfg, "bids_validation", defaults, fields)
 
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$bids_validation$enable)) fields <- c(fields, "bids_validation/enable")
+  }
+
+  if ("bids_validation/enable" %in% fields) {
+    scfg$bids_validation$enable <- prompt_input("Run BIDS validation?", type = "flag", default = TRUE)
+  }
+
+  if (isFALSE(scfg$bids_validation$enable) && is.null(fields)) return(scfg)
+
   if (is.null(scfg$bids_validation$outfile) || "bids_validation/outfile" %in% fields) {
     scfg$bids_validation$outfile <- prompt_input(
       instruct = glue("
@@ -490,8 +508,18 @@ setup_mriqc <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  # scfg$mriqc <- populate_defaults(scfg$fmriprep, defaults)
   scfg <- setup_job(scfg, "mriqc", defaults, fields)
+
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$mriqc$enable)) fields <- c(fields, "mriqc/enable")
+  }
+
+  if ("mriqc/enable" %in% fields) {
+    scfg$mriqc$enable <- prompt_input("Run MRIQC?", type = "flag", default = TRUE)
+  }
+
+  if (isFALSE(scfg$mriqc$enable) && is.null(fields)) return(scfg)
 
   return(scfg)
 }
@@ -510,6 +538,19 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     cli_options = "",
     sched_args = ""
   )
+
+  scfg <- setup_job(scfg, "bids_conversion", defaults, fields)
+
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$bids_conversion$enable)) fields <- c(fields, "bids_conversion/enable")
+  }
+
+  if ("bids_conversion/enable" %in% fields) {
+    scfg$bids_conversion$enable <- prompt_input("Run BIDS conversion?", type = "flag", default = TRUE)
+  }
+
+  if (isFALSE(scfg$bids_conversion$enable) && is.null(fields)) return(scfg)
 
   if (print_instructions) {
     cat(glue("
@@ -638,8 +679,6 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
       "), type = "flag", default = TRUE
     )
   }
-
-  scfg <- setup_job(scfg, "bids_conversion", defaults, fields)
 
   return(scfg)
 }
@@ -824,11 +863,11 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if (is.null(fields)) {
     fields <- c()
     if (!checkmate::test_subset(scfg$compute_environment$scheduler, c("slurm", "torque"), empty.ok=FALSE)) fields <- c(fields, "compute_environment/scheduler")
-    if (!validate_exists(scfg$compute_environment$fmriprep_container)) fields <- c(fields, "compute_environment/fmriprep_container")
-    if (!validate_exists(scfg$compute_environment$heudiconv_container)) fields <- c(fields, "compute_environment/heudiconv_container")
-    if (!validate_exists(scfg$compute_environment$bids_validator)) fields <- c(fields, "compute_environment/bids_validator")
-    if (!validate_exists(scfg$compute_environment$mriqc_container)) fields <- c(fields, "compute_environment/mriqc_container")
-    if (!validate_exists(scfg$compute_environment$aroma_container)) fields <- c(fields, "compute_environment/aroma_container")
+    if (isTRUE(scfg$fmriprep$enable) && !validate_exists(scfg$compute_environment$fmriprep_container)) fields <- c(fields, "compute_environment/fmriprep_container")
+    if (isTRUE(scfg$bids_conversion$enable) && !validate_exists(scfg$compute_environment$heudiconv_container)) fields <- c(fields, "compute_environment/heudiconv_container")
+    if (isTRUE(scfg$bids_validation$enable) && !validate_exists(scfg$compute_environment$bids_validator)) fields <- c(fields, "compute_environment/bids_validator")
+    if (isTRUE(scfg$mriqc$enable) && !validate_exists(scfg$compute_environment$mriqc_container)) fields <- c(fields, "compute_environment/mriqc_container")
+    if (isTRUE(scfg$aroma$enable) && !validate_exists(scfg$compute_environment$aroma_container)) fields <- c(fields, "compute_environment/aroma_container")
   }
 
   if ("compute_environment/scheduler" %in% fields) {

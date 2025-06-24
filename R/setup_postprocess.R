@@ -15,8 +15,19 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     cli_options = "",
     sched_args = ""
   )
- 
-  scfg <- setup_job(scfg, "postprocess", defaults, fields) 
+
+  scfg <- setup_job(scfg, "postprocess", defaults, fields)
+
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$postprocess$enable)) fields <- c(fields, "postprocess/enable")
+  }
+
+  if ("postprocess/enable" %in% fields) {
+    scfg$postprocess$enable <- prompt_input("Run postprocessing?", type = "flag", default = TRUE)
+  }
+
+  if (isFALSE(scfg$postprocess$enable) && is.null(fields)) return(scfg)
   scfg <- setup_postprocess_globals(scfg, fields)
   scfg <- setup_spatial_smooth(scfg, fields)
   scfg <- setup_apply_aroma(scfg, fields)
