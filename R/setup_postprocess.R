@@ -43,7 +43,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
 
   if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
     scfg$postprocess$enable <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n\n
       Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
       These steps may include:
         - Applying a brain mask
@@ -56,7 +56,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
       Postprocessing is highly configurable and optimal choices may depend on the intended downstream analyses.
       You will be prompted to configure each of these steps in detail.
 
-      Do you want to enable postprocessing for your BOLD data?
+      Do you want to enable postprocessing for your BOLD data?\n
       "),
       prompt = "Enable postprocessing?",
       type = "flag",

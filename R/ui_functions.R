@@ -268,7 +268,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   res <- ""
   while (is.na(res[1L]) || res[1L] == "") {
     r <- readline(prompt)
-    if (!is.null(split)) r <- strsplit(r, split, perl = TRUE)[[1]]
+    if (!is.null(split) && nzchar(r)) r <- strsplit(r, split, perl = TRUE)[[1]]
 
     if (!is.null(default) && r[1L] == "") {
       return(default)

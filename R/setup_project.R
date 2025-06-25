@@ -195,17 +195,19 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields)))) {
     scfg$fmriprep$enable <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
       fMRIPrep is a standardized and robust tool for preprocessing BIDS-organized functional and anatomical MRI data.
       It performs essential steps such as motion correction, susceptibility distortion correction, tissue segmentation,
       coregistration, normalization to standard space, and estimation of nuisance regressors.
 
       Running fMRIPrep is typically a required step before any model-based analysis of fMRI data.
 
-      You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide a FreeSurfer license
-      file, which is necessary for anatomical processing. You can also pass custom CLI options and schedule settings.
+      You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide 
+      a FreeSurfer license file, which is necessary for anatomical processing. You can also pass custom CLI
+      options and schedule settings.
 
-      Do you want to include fMRIPrep as part of your preprocessing pipeline?
+      Do you want to include fMRIPrep as part of your preprocessing pipeline?\n\n
       "),
       prompt = "Run fmriprep?",
       type = "flag",
@@ -215,7 +217,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
 
-  # prompt for aroma container at this step
+  # prompt for fmriprep container at this step
   if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
   }
@@ -268,8 +270,9 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
   if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields)))) {
     scfg$bids_validation$enable <- prompt_input(
-      instruct = glue("
-      \nBIDS validation checks whether your dataset adheres to the Brain Imaging Data Structure (BIDS) standard.
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
+      BIDS validation checks whether your dataset adheres to the Brain Imaging Data Structure (BIDS) standard.
       This is a recommended step to ensure that all filenames, metadata, and required files follow expected conventions.
       It helps identify missing fields, naming issues, or formatting problems that could cause downstream tools to fail.
       \n
@@ -290,8 +293,8 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
   if (is.null(scfg$bids_validation$outfile) || "bids_validation/outfile" %in% fields) {
     scfg$bids_validation$outfile <- prompt_input(
-      instruct = glue("
-      \nWhat should be the name of the output file created by bids_validator? The default is bids_validator_output.html
+      instruct = glue("\n
+      What should be the name of the output file created by bids_validator? The default is bids_validator_output.html
       You can also include the subject and session IDs in the filename by using the following
       placeholders: {{sub_id}} and {{ses_id}}. For example, bids_validation_sub-{{sub_id}}_ses-{{ses_id}}.html will substitute
       the subject and session IDs into the filename. This is useful if you want to place the output files in a common
@@ -322,7 +325,8 @@ setup_mriqc <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields)))) {
     scfg$mriqc$enable <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
       MRIQC is a tool for automated quality assessment of structural and functional MRI data. 
       It calculates a wide array of image quality metrics (IQMs) for each scan, such as signal-to-noise ratio, 
       motion estimates, and image sharpness. It also produces visual reports to help you identify 
@@ -332,7 +336,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
       and guide decisions about inclusion, exclusion, or further inspection.
 
       MRIQC supports both group-level and individual-level analyses and produces HTML reports and TSV files.
-      Saying 'Yes' here only runs the individual-level QC checks on each dataset.
+      Saying 'Yes' here only runs the individual-level QC checks on each dataset.\n\n
       "),
       prompt = "Run MRIQC?",
       type = "flag",
@@ -341,6 +345,11 @@ setup_mriqc <- function(scfg, fields = NULL) {
   }
 
   if (isFALSE(scfg$mriqc$enable)) return(scfg)
+
+  # prompt for mriqc container at this step
+  if (!validate_exists(scfg$compute_environment$mriqc_container)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/mriqc_container")
+  }
 
   scfg <- setup_job(scfg, "mriqc", defaults, fields)
 
@@ -363,8 +372,9 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields)))) {
     scfg$bids_conversion$enable <- prompt_input(
-      instruct = glue("
-      \nThis step sets up DICOM to BIDS conversion using heudiconv. Heudiconv uses a heuristic
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
+      This step sets up DICOM to BIDS conversion using heudiconv. Heudiconv uses a heuristic
       file to match DICOM files to expected scans, allowing the tool to convert DICOMs to NIfTI images
       and reorganize them into BIDS format.
 
@@ -430,8 +440,8 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$bids_conversion$sub_id_match) || "bids_conversion/sub_id_match" %in% fields) {
     scfg$bids_conversion$sub_id_match <- prompt_input(
-      instruct = glue("
-      \nWhat is the regex pattern for extracting the ID from the subject folder name? You
+      instruct = glue("\n
+      What is the regex pattern for extracting the ID from the subject folder name? You
       can use multiple capturing groups if the ID has multiple parts. The default is ([0-9]+),
       which extracts the first number-like sequence from the folder name. For example, if your
       subject folder is named 'sub-001', the ID will be '001'. If your subject folder is named
@@ -456,8 +466,8 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (!is.na(scfg$bids_conversion$ses_regex) && (is.null(scfg$bids_conversion$ses_id_match) || "bids_conversion/ses_id_match" %in% fields)) {
     scfg$bids_conversion$ses_id_match <- prompt_input(
-      instruct = glue("
-      \nWhat is the regex pattern for extracting the ID from the subject folder name? You
+      instruct = glue("\n
+      What is the regex pattern for extracting the ID from the subject folder name? You
       can use multiple capturing groups if the ID has multiple parts. The default is ([0-9]+),
       which extracts the first number-like sequence from the folder name. For example, if your
       subject folder is named 'sub-001', the ID will be '001'. If your subject folder is named
@@ -542,7 +552,8 @@ setup_aroma <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields)))) {
     scfg$aroma$enable <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
       ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts) is a data-driven 
       method for identifying and removing motion-related independent components from BOLD fMRI data using 
       non-aggressive regression. It is designed to reduce motion artifacts without relying on motion estimates 
@@ -555,7 +566,7 @@ setup_aroma <- function(scfg, fields = NULL) {
       Note: Enabling this step **does not** remove motion-related components from the data. Instead, it extracts 
       the AROMA noise components and prepares them for optional regression in a later postprocessing step.
 
-      If you wish to run ICA-AROMA denoising on your BOLD data, answer 'Yes' here.
+      If you wish to run ICA-AROMA denoising on your BOLD data, answer 'Yes' here.\n
       "),
       prompt = "Run ICA-AROMA?",
       type = "flag",
