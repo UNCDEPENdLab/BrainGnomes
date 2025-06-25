@@ -510,7 +510,7 @@ apply_aroma <- function(in_file, prefix = "a", mixing_file, noise_ics, overwrite
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string assert_number assert_file_exists
-spatial_smooth <- function(in_file, prefix = "s", fwhm_mm = 6, brain_mask = NULL, overwrite = FALSE, log_file = NULL, fsl_img=NULL) {
+spatial_smooth <- function(in_file, prefix = "s", fwhm_mm = 6, brain_mask = NULL, overwrite = FALSE, lg = NULL, fsl_img=NULL) {
   # checkmate::assert_file_exists(in_file)
   checkmate::assert_string(prefix)
   checkmate::assert_number(fwhm_mm, lower = 0.1)

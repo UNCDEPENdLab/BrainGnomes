@@ -9,7 +9,7 @@ apply_mask(
   mask_file,
   prefix = "m",
   overwrite = FALSE,
-  log_file = NULL,
+  lg = NULL,
   fsl_img = NULL
 )
 }
@@ -22,7 +22,7 @@ apply_mask(
 
 \item{overwrite}{Logical; whether to overwrite the output file if it already exists.}
 
-\item{log_file}{Optional path to a file for logging FSL command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{fsl_img}{Optional path to a Singularity image to execute the command in a container.}
 }

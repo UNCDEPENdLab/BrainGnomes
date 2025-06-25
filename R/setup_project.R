@@ -52,13 +52,13 @@ setup_project <- function(input = NULL, fields = NULL) {
 
   # run through configuration of each step
   scfg <- setup_project_globals(scfg, fields)
-  scfg <- setup_compute_environment(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
   scfg <- setup_aroma(scfg, fields)
   scfg <- setup_postprocess(scfg, fields)
+  scfg <- setup_compute_environment(scfg, fields)
 
   return(scfg)
 }
@@ -67,64 +67,64 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$project_name)) fields <- c(fields, "project_name")
-    if (is.null(scfg$project_directory)) fields <- c(fields, "project_directory")
-    if (is.null(scfg$dicom_directory)) fields <- c(fields, "dicom_directory")
-    if (is.null(scfg$templateflow_home)) fields <- c(fields, "templateflow_home")
-    if (is.null(scfg$scratch_directory)) fields <- c(fields, "scratch_directory")
+    if (is.null(scfg$metadata$project_name)) fields <- c(fields, "metadata/project_name")
+    if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
+    if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory")
+    if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
+    if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
 
-  if ("project_name" %in% fields) {
-    scfg$project_name <- prompt_input("What is the name of your project?", type = "character")
+  if ("metadata/project_name" %in% fields) {
+    scfg$metadata$project_name <- prompt_input("What is the name of your project?", type = "character")
   }
 
-  if ("project_directory" %in% fields) {
-    scfg$project_directory <- prompt_input("What is the root directory where project files will be stored?", type = "character")
+  if ("metadata/project_directory" %in% fields) {
+    scfg$metadata$project_directory <- prompt_input("What is the root directory where project files will be stored?", type = "character")
   }
 
-  if (!checkmate::test_directory_exists(scfg$project_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$project_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$project_directory, recursive = TRUE)
+  if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
   }
 
-  if (!checkmate::test_directory_exists(scfg$project_directory, "r")) {
-    warning(glue("You seem not to have read permission to: {scfg$project_directory}. This could cause problems in trying to run anything!"))
+  if (!checkmate::test_directory_exists(scfg$metadata$project_directory, "r")) {
+    warning(glue("You seem not to have read permission to: {scfg$metadata$project_directory}. This could cause problems in trying to run anything!"))
   }
 
   # location of DICOMs
   # /nas/longleaf/home/willasc/repos/clpipe/tests/temp/clpipe_dir0/data_DICOMs
-  if ("dicom_directory" %in% fields) {
-    scfg$dicom_directory <- prompt_input("Where are DICOM files files stored?", type = "character")
+  if ("metadata/dicom_directory" %in% fields) {
+    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files files stored?", type = "character")
   }
 
-  if (!checkmate::test_directory_exists(scfg$dicom_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$dicom_directory, recursive = TRUE)
+  if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$dicom_directory, recursive = TRUE)
   }
 
   # location of BIDS data -- enforce that this must be within the project directory with a fixed name
-  scfg$bids_directory <- file.path(scfg$project_directory, "data_bids")
-  if (!checkmate::test_directory_exists(scfg$bids_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$bids_directory, recursive = TRUE) # should probably force this to happen
+  scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
+  if (!checkmate::test_directory_exists(scfg$metadata$bids_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE) # should probably force this to happen
   }
 
   # location of fmriprep outputs -- enforce that this must be within the project directory
-  scfg$fmriprep_directory <- file.path(scfg$project_directory, "data_fmriprep")
-  if (!checkmate::test_directory_exists(scfg$fmriprep_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$fmriprep_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$fmriprep_directory, recursive = TRUE) # should probably force this to happen
+  scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  if (!checkmate::test_directory_exists(scfg$metadata$fmriprep_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$fmriprep_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE) # should probably force this to happen
   }
 
   # location of mriqc reports -- enforce that this must be within the project directory
-  scfg$mriqc_directory <- file.path(scfg$project_directory, "mriqc_reports")
-  if (!checkmate::test_directory_exists(scfg$mriqc_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$mriqc_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$mriqc_directory, recursive = TRUE) # should probably force this to happen
+  scfg$metadata$mriqc_directory <- file.path(scfg$metadata$project_directory, "mriqc_reports")
+  if (!checkmate::test_directory_exists(scfg$metadata$mriqc_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$mriqc_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$mriqc_directory, recursive = TRUE) # should probably force this to happen
   }
 
-  if ("scratch_directory" %in% fields) {
-    scfg$scratch_directory <- prompt_input("Work directory: ",
+  if ("metadata/scratch_directory" %in% fields) {
+    scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
       instruct = glue("
       \nfmriprep uses a lot of disk space for processing intermediate files. It's best if these
       are written to a scratch/temporary directory that is cleared regularly so that you don't
@@ -134,13 +134,13 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
     )
   }
 
-  if (!checkmate::test_directory_exists(scfg$scratch_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$scratch_directory, recursive = TRUE)
+  if (!checkmate::test_directory_exists(scfg$metadata$scratch_directory)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
   }
 
-    if ("templateflow_home" %in% fields) {
-    scfg$templateflow_home <- prompt_input("Templateflow directory: ",
+    if ("metadata/templateflow_home" %in% fields) {
+    scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
       instruct = glue("
       \nThe pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
       Please specify the location of the TemplateFlow cache directory. The default is $HOME/.cache/templateflow.
@@ -149,21 +149,38 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
     )
   }
 
-  if (!checkmate::test_directory_exists(scfg$templateflow_home)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$templateflow_home, recursive = TRUE)
+  if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
+    create <- prompt_input(instruct = glue("The directory {scfg$metadata$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
+    if (create) dir.create(scfg$metadata$templateflow_home, recursive = TRUE)
   }
 
-  scfg$log_directory <- file.path(scfg$project_directory, "logs")
-  if (!checkmate::test_directory_exists(scfg$log_directory)) dir.create(scfg$log_directory, recursive = TRUE)
+  scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
+  if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
 
   return(scfg)
 }
 
-#' Specify the fMRIPrep settings                             
+#' Configure fMRIPrep preprocessing settings
+#'
+#' This function sets up fMRIPrep job configuration, including scheduling and resource parameters,
+#' output specifications, and the location of required files such as the FreeSurfer license.
+#' It prompts the user interactively (or selectively if `fields` is supplied) and modifies the
+#' study configuration list (`scfg`) to include settings for running fMRIPrep.
+#'
 #' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fMRIPrep fields will be prompted for.
+#'
 #' @return A modified version of `scfg` with the `$fmriprep` entry populated.
+#'
+#' @details
+#' fMRIPrep is a robust and standardized preprocessing pipeline for BOLD and structural MRI data
+#' organized according to the BIDS standard. It performs motion correction, susceptibility distortion
+#' correction, brain extraction, spatial normalization, confound estimation, and other key steps
+#' to prepare fMRI data for statistical analysis.
+#'
+#' This function allows you to specify memory, number of cores, and maximum runtime for fMRIPrep jobs,
+#' as well as fMRIPrep-specific options such as output spaces and the FreeSurfer license file location.
+#'
 #' @keywords internal
 setup_fmriprep <- function(scfg = NULL, fields = NULL) {
   # https://fmriprep.org/en/stable/usage.html
@@ -176,23 +193,43 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     sched_args = ""
   )
 
+  if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields)))) {
+    scfg$fmriprep$enable <- prompt_input(
+      instruct = glue("
+      fMRIPrep is a standardized and robust tool for preprocessing BIDS-organized functional and anatomical MRI data.
+      It performs essential steps such as motion correction, susceptibility distortion correction, tissue segmentation,
+      coregistration, normalization to standard space, and estimation of nuisance regressors.
+
+      Running fMRIPrep is typically a required step before any model-based analysis of fMRI data.
+
+      You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide a FreeSurfer license
+      file, which is necessary for anatomical processing. You can also pass custom CLI options and schedule settings.
+
+      Do you want to include fMRIPrep as part of your preprocessing pipeline?
+      "),
+      prompt = "Run fmriprep?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$fmriprep$enable)) return(scfg)
+
+  # prompt for aroma container at this step
+  if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
+  }
+
   scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$fmriprep$enable)) fields <- c(fields, "fmriprep/enable")
     if (is.null(scfg$fmriprep$output_spaces)) fields <- c(fields, "fmriprep/output_spaces")
     if (!validate_exists(scfg$fmriprep$fs_license_file)) fields <- c(fields, "fmriprep/fs_license_file")
 
     cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
   }
-
-  if ("fmriprep/enable" %in% fields) {
-    scfg$fmriprep$enable <- prompt_input("Run fmriprep?", type = "flag", default = TRUE)
-  }
-
-  if (isFALSE(scfg$fmriprep$enable) && is.null(fields)) return(scfg)
 
   if ("fmriprep/output_spaces" %in% fields) {
     scfg$fmriprep$output_spaces <- choose_fmriprep_spaces(scfg$fmriprep$output_spaces)
@@ -215,240 +252,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
 }
 
-# edit_project <- function(scfg) {
-#   assert_class(scfg, "bg_project_cfg")
-
-#   config_areas <- list(
-#     # top-level
-#     General = list(
-#       setup_fn = setup_project, # DONE
-#       path = "",
-#       fields = c(
-#         "project_name", "project_directory", "dicom_directory", "bids_directory", 
-#         "scratch_directory", "fmriprep_directory", "mriqc_directory", "log_directory", "templateflow_home"
-#       )
-#     ),
-#     Job_Settings = list(
-#       setup_fn = setup_job,
-#       # job_name -- additional argument to pass into setup_job
-#       path="depends",
-#       fields = c("memgb", "nhours", "ncores", "cli_options", "sched_args")
-#     ),
-#     BIDS_conversion = list( # DONE
-#       setup_fn = setup_bids_conversion,
-#       path = "heudiconv",
-#       fields = c(
-#         "heuristic_file", "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
-#         "overwrite", "clear_cache", "validate_bids"
-#       )
-#     ),
-#     BIDS_validation = list(
-#       setup_fn = setup_bids_validation,
-#       path = "bids_validation",
-#       fields = c("outfile")
-#     ),
-#     fMRIPrep = list(
-#       setup_fn = setup_fmriprep,
-#       path = "fmriprep",
-#       fields = c("output_spaces", "fs_license_file")
-#     ),
-#     MRIQC = list(
-#       setup_fn = setup_mriqc,
-#       path = "mriqc",
-#       fields = c("run_group_level")
-#     ),
-#     # AROMA = list(
-#     #   setup_fn = setup_aroma,
-#     #   path = "aroma",
-#     #   fields = c("use_aroma")
-#     # ),
-#     Postprocessing = list(
-#       setup_fn = setup_postprocess,
-#       path = "postprocess",
-#       fields = c("apply_mask", "brain_mask", "keep_intermediates", "force_processing_order",
-#       "input_regex", "spatial_smooth/fwhm_mm", "apply_aroma/nonaggressive",
-#       "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz", "intensity_normalize",
-#       "confound_calculate", "confound_regress")
-#     ),
-#     Compute = list( # DONE
-#       setup_fn = setup_compute_environment,
-#       path = "compute_environment",
-#       fields = c(
-#         "scheduler", "fmriprep_container", "heudiconv_container", 
-#         "bids_validator", "mriqc_container", "aroma_container"
-#       )
-#     )
-#   )
-
-#   top_options <- c(names(config_areas), "Quit")
-
-#   repeat {
-#     cat("\nWhich configuration area would you like to edit?\n")
-#     area_idx <- utils::menu(sub("_", " ", top_options), title = "Select a configuration domain:")
-
-#     if (area_idx == 0 || area_idx > length(config_areas)) {
-#       message("Exiting configuration editor.")
-#       break
-#     }
-
-#     area_name <- names(config_areas)[area_idx]
-#     area_info <- config_areas[[area_name]]
-#     full_path <- area_info$path
-#     field_names <- area_info$fields
-
-#     # Retrieve current values to show in the menu
-#     get_current_value <- function(field) {
-#       path_parts <- if (full_path != "") c(full_path, field) else field
-#       val <- tryCatch(
-#         purrr::pluck(scfg, !!!path_parts),
-#         error = function(e) NULL
-#       )
-#       if (is.null(val)) return("[NULL]")
-#       if (is.logical(val)) return(ifelse(val, "TRUE", "FALSE"))
-#       if (is.character(val) && length(val) > 1) return(paste0(val, collapse = ", "))
-#       as.character(val)
-#     }
-
-#     field_display <- purrr::map_chr(field_names, function(f) {
-#       val <- get_current_value(f)
-#       sprintf("%s [%s]", f, val)
-#     })
-
-#     selected <- utils::select.list(
-#       choices = field_display,
-#       multiple = TRUE,
-#       title = glue::glue("Select fields to modify in {area_name}:")
-#     )
-
-#     if (length(selected) == 0) {
-#       message("No fields selected. Returning to main menu.")
-#       next
-#     }
-
-#     # Strip brackets to recover true field names
-#     selected_fields <- sub(" \\[.*\\]$", "", selected)
-
-#     passthrough <- area_info[setdiff(c("setup_fn", "path", "fields"), names(area_info))]
-
-#     # Run setup function on those fields
-#     browser()
-#     scfg <- do.call(area_info$setup_fn, list(scfg = scfg, fields = selected_fields, passthrough))
-#   }
-
-#   return(scfg)
-# }
-
-#' Interactively edit a study configuration by field (field-guided)
-#'
-#' Allows the user to interactively browse and edit individual fields within the
-#' configuration object, grouped by domain. Field paths are defined within the function
-#' to avoid relying on a complete `scfg` structure.
-#'
-#' @param scfg A `bg_project_cfg` object representing the study configuration.
-#' @return An updated `bg_project_cfg` object.
-#' @export
-edit_project <- function(scfg) {
-  checkmate::assert_class(scfg, "bg_project_cfg")
-
-  # Define editable fields per setup function
-  config_map <- list(
-    "General" = list(setup_fn = setup_project_globals, prefix = "", fields = c(
-      "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home"
-    )),
-    "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
-      "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container"
-    )),
-    "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
-      "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
-      "heuristic_file", "overwrite", "clear_cache", "validate_bids"
-    )),
-    "BIDS Validation" = list(setup_fn = setup_bids_validation, prefix = "bids_validation/", fields = c(
-      "outfile"
-    )),
-    "fMRIPrep" = list(setup_fn = setup_fmriprep, prefix = "fmriprep/", fields = c(
-      "output_spaces", "fs_license_file"
-    )),
-    "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
-    "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0)),
-    "Postprocessing" = list(setup_fn = setup_postprocess, prefix = "postprocess/", fields = c(
-      "apply_mask", "brain_mask", "tr", "processing_steps", "input_regex",
-      "keep_intermediates", "force_processing_order",
-      "spatial_smooth/fwhm_mm", "apply_aroma/nonaggressive",
-      "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
-      "intensity_normalize/global_median",
-      "confound_calculate", "confound_regress"
-
-    ))
-  )
-
-  job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess")
-  job_fields <- c("memgb", "nhours", "ncores", "cli_options", "sched_args")
-
-  show_val <- function(val) {
-    if (is.null(val)) "[NULL]"
-    else if (is.logical(val)) toupper(as.character(val))
-    else if (is.character(val) && length(val) > 1) paste(val, collapse = ", ")
-    else as.character(val)
-  }
-
-  # Top-level menu loop
-  repeat {
-    choice <- utils::menu(c(names(config_map), "Job settings", "Quit"),
-                          title = "Select a configuration area to edit:")
-
-    if (choice == 0 || choice > length(config_map) + 1) {
-      message("Exiting configuration editor.")
-      break
-    }
-
-    if (choice <= length(config_map)) {
-      # Standard config section
-      area <- names(config_map)[choice]
-      info <- config_map[[area]]
-      prefix <- info$prefix
-      fields <- info$fields
-      setup_fn <- info$setup_fn
-
-      if (length(fields) == 0) {
-        message(glue::glue("No individual fields listed for {area}, opening full setup..."))
-        scfg <- setup_fn(scfg)
-        next
-      }
-
-      field_display <- sapply(fields, function(fld) {
-        val <- get_nested_values(scfg, paste0(prefix, fld))
-        sprintf("%s [ %s ]", fld, show_val(val))
-      })
-
-      selected <- utils::select.list(field_display, multiple = TRUE,
-                                     title = glue::glue("Select fields to edit in {area}:"))
-
-      if (length(selected) == 0) next
-
-      scfg <- setup_fn(scfg, fields = paste0(prefix, names(selected)))
-
-    } else {
-      # Job settings logic
-      job <- utils::select.list(job_targets, title = "Select which job to configure:")
-      if (length(job) == 0 || job == "") next
-
-      job_field_display <- sapply(job_fields, function(fld) {
-        val <- get_nested_values(scfg, paste0(job, "/", fld))
-        sprintf("%s [ %s ]", fld, show_val(val))
-      })
-
-      selected_job_fields <- utils::select.list(job_field_display, multiple = TRUE,
-                                                title = glue::glue("Select fields to edit for job '{job}':"))
-
-      if (length(selected_job_fields) == 0) next
-
-      scfg <- setup_job(scfg, job_name = job, fields = paste(job, names(selected_job_fields), sep = "/"))
-    }
-  }
-
-  return(scfg)
-}
-
 #' Specify the BIDS validation settings
 #' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all BIDS validation fields will be prompted for.
@@ -463,18 +266,27 @@ setup_bids_validation <- function(scfg, fields=NULL) {
     sched_args = ""
   )
 
+  if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields)))) {
+    scfg$bids_validation$enable <- prompt_input(
+      instruct = glue("
+      \nBIDS validation checks whether your dataset adheres to the Brain Imaging Data Structure (BIDS) standard.
+      This is a recommended step to ensure that all filenames, metadata, and required files follow expected conventions.
+      It helps identify missing fields, naming issues, or formatting problems that could cause downstream tools to fail.
+      \n
+      The validator can be run quickly, and produces an HTML report that summarizes any warnings or errors.
+      Even if you say 'no' here, fmriprep will run BIDS validation on each subject's dataset prior to execution.
+      Saying 'Yes' to this step runs BIDS validation on the entire *project* folder after BIDS conversion (if requested)
+      has completed for all subjects.\n
+      "),
+      prompt = "Run BIDS validation?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$bids_validation$enable)) return(scfg)
+
   scfg <- setup_job(scfg, "bids_validation", defaults, fields)
-
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$bids_validation$enable)) fields <- c(fields, "bids_validation/enable")
-  }
-
-  if ("bids_validation/enable" %in% fields) {
-    scfg$bids_validation$enable <- prompt_input("Run BIDS validation?", type = "flag", default = TRUE)
-  }
-
-  if (isFALSE(scfg$bids_validation$enable) && is.null(fields)) return(scfg)
 
   if (is.null(scfg$bids_validation$outfile) || "bids_validation/outfile" %in% fields) {
     scfg$bids_validation$outfile <- prompt_input(
@@ -508,18 +320,29 @@ setup_mriqc <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
+  if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields)))) {
+    scfg$mriqc$enable <- prompt_input(
+      instruct = glue("
+      MRIQC is a tool for automated quality assessment of structural and functional MRI data. 
+      It calculates a wide array of image quality metrics (IQMs) for each scan, such as signal-to-noise ratio, 
+      motion estimates, and image sharpness. It also produces visual reports to help you identify 
+      scans with artifacts, excessive motion, or other issues that might compromise analysis.
+
+      Running MRIQC is a recommended step, as it can help you detect problematic scans early 
+      and guide decisions about inclusion, exclusion, or further inspection.
+
+      MRIQC supports both group-level and individual-level analyses and produces HTML reports and TSV files.
+      Saying 'Yes' here only runs the individual-level QC checks on each dataset.
+      "),
+      prompt = "Run MRIQC?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$mriqc$enable)) return(scfg)
+
   scfg <- setup_job(scfg, "mriqc", defaults, fields)
-
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$mriqc$enable)) fields <- c(fields, "mriqc/enable")
-  }
-
-  if ("mriqc/enable" %in% fields) {
-    scfg$mriqc$enable <- prompt_input("Run MRIQC?", type = "flag", default = TRUE)
-  }
-
-  if (isFALSE(scfg$mriqc$enable) && is.null(fields)) return(scfg)
 
   return(scfg)
 }
@@ -527,10 +350,9 @@ setup_mriqc <- function(scfg, fields = NULL) {
 #' Specify the BIDS conversion settings
 #' @param scfg a study configuration object, as produced by `load_project` or `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @param print_instructions Logical. If TRUE, print the overall instructions for this step prior to prompting for input.
 #' @return a modified version of `scfg` with `$bids_conversion` populated
 #' @keywords internal
-setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE) {
+setup_bids_conversion <- function(scfg, fields = NULL) {
   defaults <- list(
     memgb = 16,
     nhours = 2,
@@ -539,59 +361,60 @@ setup_bids_conversion <- function(scfg, fields = NULL, print_instructions = TRUE
     sched_args = ""
   )
 
+  if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields)))) {
+    scfg$bids_conversion$enable <- prompt_input(
+      instruct = glue("
+      \nThis step sets up DICOM to BIDS conversion using heudiconv. Heudiconv uses a heuristic
+      file to match DICOM files to expected scans, allowing the tool to convert DICOMs to NIfTI images
+      and reorganize them into BIDS format.
+
+      The heuristic file is a python script that tells heudiconv how to convert the DICOM files
+      to BIDS format. For details, see https://heudiconv.readthedocs.io/en/latest/usage.html
+
+      If you say 'Yes' to this step, you will later be asked for the location of the folder containing
+      DICOM images for all subjects. This should be a folder that contains subfolders for each subject, with
+      the DICOM files inside those subfolders. For example, if you have a folder called 'data_DICOMs' that
+      contains subfolders 'sub-001', 'sub-002', etc., then you would specify the location of 'data_DICOMs' here.
+
+      The BIDS-compatible outputs will be written to a folder called 'data_bids' within the project directory.
+
+      You will also be asked for a regular expression that matches the subject IDs in the DICOM folder names.
+      The default is 'sub-[0-9]+', which matches sub-001, sub-002, etc. If you have a different naming scheme,
+      please specify it here. For example, if your subject folders are named '001', '002', etc., you would
+      specify '^[0-9]+$' here. Importantly, the pipeline will always extract only the numeric portion of the
+      subject ID, so if you have a folder called 'sub-001', the subject ID will be '001' regardless of the
+      regex you specify here.
+
+      Similarly, if you have multisession data, you will be asked for a regular expression that matches the
+      session IDs in the DICOM folder names. Crucially, sessions must always be subfolders within a given subject
+      folder. Here is an example where the subject regex is 'sub-[0-9]+' and the session regex is 'ses-[0-9]+':
+
+      /data/dicom/
+      ├── sub-01/
+      │   ├── ses-01/
+      │   │   ├── 1.dcm
+      │   │   ├── 2.dcm
+      │   └── ses-02/
+      │       ├── 1.dcm
+      │       ├── 2.dcm
+
+      You will also be asked for the location of the heuristic file. If you don't have a heuristic file,
+      please see some examples here: https://github.com/nipy/heudiconv/tree/master/heudiconv/heuristics.\n\n
+      "),
+      prompt = "Run BIDS conversion?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$bids_conversion$enable)) return(scfg)
+
+  # prompt for heudiconv container at this step
+  if (!validate_exists(scfg$compute_environment$heudiconv_container)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/heudiconv_container")
+  }
+
   scfg <- setup_job(scfg, "bids_conversion", defaults, fields)
-
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$bids_conversion$enable)) fields <- c(fields, "bids_conversion/enable")
-  }
-
-  if ("bids_conversion/enable" %in% fields) {
-    scfg$bids_conversion$enable <- prompt_input("Run BIDS conversion?", type = "flag", default = TRUE)
-  }
-
-  if (isFALSE(scfg$bids_conversion$enable) && is.null(fields)) return(scfg)
-
-  if (print_instructions) {
-    cat(glue("
-    \nThis step sets up DICOM to BIDS conversion using heudiconv. Heudiconv uses a heuristic
-    file to match DICOM files to expected scans, allowing the tool to convert DICOMs to NIfTI images
-    and reorganize them into BIDS format.
-
-    The heuristic file is a python script that tells heudiconv how to convert the DICOM files
-    to BIDS format. For details, see https://heudiconv.readthedocs.io/en/latest/usage.html
-
-    Here, you will be asked for the location of the folder containing DICOM images for all subjects.
-    This should be a folder that contains subfolders for each subject, with the DICOM files inside
-    those subfolders. For example, if you have a folder called 'data_DICOMs' that contains
-    subfolders 'sub-001', 'sub-002', etc., then you would specify the location of 'data_DICOMs' here.
-
-    The BIDS-compatible outputs will be written to a folder called 'data_bids' within the project directory.
-
-    You will also be asked for a regular expression that matches the subject IDs in the DICOM folder names.
-    The default is 'sub-[0-9]+', which matches sub-001, sub-002, etc. If you have a different naming scheme,
-    please specify it here. For example, if your subject folders are named '001', '002', etc., you would
-    specify '^[0-9]+$' here. Importantly, the pipeline will always extract only the numeric portion of the
-    subject ID, so if you have a folder called 'sub-001', the subject ID will be '001' regardless of the
-    regex you specify here.
-
-    Similarly, if you have multisession data, you will be asked for a regular expression that matches the
-    session IDs in the DICOM folder names. Crucially, sessions must always be subfolders within a given subject
-    folder. Here is an example where the subject regex is 'sub-[0-9]+' and the session regex is 'ses-[0-9]+':
-
-    /data/dicom/
-    ├── sub-01/
-    │   ├── ses-01/
-    │   │   ├── 1.dcm
-    │   │   ├── 2.dcm
-    │   └── ses-02/
-    │       ├── 1.dcm
-    │       ├── 2.dcm
-
-    You will also be asked for the location of the heuristic file. If you don't have a heuristic file,
-    please see some examples here: https://github.com/nipy/heudiconv/tree/master/heudiconv/heuristics.\n\n
-    "))
-  }
 
   if (is.null(scfg$bids_conversion$sub_regex) || "bids_conversion/sub_regex" %in% fields) {
     scfg$bids_conversion$sub_regex <- prompt_input(
@@ -717,102 +540,41 @@ setup_aroma <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  # cat("Configuring ICA-AROMA denoising step...\n")
-  # cat("This step applies non-aggressive regression of motion-related ICA components from fMRIPrep outputs.\n")
-  # cat("You will be asked to provide job parameters (memory, time, cores) and any optional command-line settings.\n\n")
-  scfg <- setup_job(scfg, "aroma", defaults, fields)
-
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$aroma$enable)) fields <- c(fields, "aroma/enable")
-  }
-
-  if ("aroma/enable" %in% fields) {
-    scfg$aroma$enable <- prompt_input("Run AROMA?",
+  if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields)))) {
+    scfg$aroma$enable <- prompt_input(
       instruct = glue("
-      \nAs of v24, fmriprep has now removed ICA-AROMA from its codebase, splitting this off to
-      a separate BIDS app called fmripost-aroma. Do you want to run the fMRI data through ICA-AROMA?
-      Note that saying 'yes' to this only runs AROMA, but does not remove motion-related components from the fMRI
-      timeseries. That is a postprocessing decision, which you will be asked about in that context.\n
-      "), type = "flag"
+      ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts) is a data-driven 
+      method for identifying and removing motion-related independent components from BOLD fMRI data using 
+      non-aggressive regression. It is designed to reduce motion artifacts without relying on motion estimates 
+      from realignment parameters.
+
+      As of fMRIPrep v24, ICA-AROMA has been removed from the core pipeline and is now available as part of a 
+      standalone BIDS app called `fmripost-aroma`. If you enable this step, your data will be passed through 
+      ICA-AROMA after fMRIPrep preprocessing is complete.
+
+      Note: Enabling this step **does not** remove motion-related components from the data. Instead, it extracts 
+      the AROMA noise components and prepares them for optional regression in a later postprocessing step.
+
+      If you wish to run ICA-AROMA denoising on your BOLD data, answer 'Yes' here.
+      "),
+      prompt = "Run ICA-AROMA?",
+      type = "flag",
+      default = TRUE
     )
   }
+
+  if (isFALSE(scfg$aroma$enable)) return(scfg)
+  
+  # prompt for aroma container at this step
+  if (!validate_exists(scfg$compute_environment$aroma_container)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/aroma_container")
+  }
+
+  scfg <- setup_job(scfg, "aroma", defaults, fields)
 
   return(scfg)
 }
 
-
-#' Find preprocessed BOLD NIfTI files in a fmriprep derivatives directory
-#'
-#' @param root Path to the derivatives/fmriprep directory
-#' @param subject_ids Optional character vector of subject IDs to include
-#' @param session_ids Optional character vector of session IDs to include
-#' @param task_filter Optional character vector of task names to include
-#' @param desc_filter Optional character vector of desc labels to include (e.g., "preproc")
-#' @return A data.frame of matching BOLD files and their metadata
-#' @importFrom checkmate assert_directory_exists assert_character
-# get_fmriprep_outputs <- function(root,
-#                                      subject_ids = NULL,
-#                                      session_ids = NULL,
-#                                      task_filter = NULL,
-#                                      desc_filter = NULL) {
-#   checkmate::assert_directory_exists(root)
-#   checkmate::assert_character(subject_ids, null.ok = TRUE)
-#   checkmate::assert_character(session_ids, null.ok = TRUE)
-#   checkmate::assert_character(task_filter, null.ok = TRUE)
-#   checkmate::assert_character(desc_filter, null.ok = TRUE)
-
-#   subject_info <- get_subject_dirs(root = root, full.names = FALSE)
-#   bold_files <- list()
-
-# browser()
-
-#   for (i in seq_len(nrow(subject_info))) {
-#     sub_id <- subject_info$sub_id[i]
-#     ses_id <- subject_info$ses_id[i]
-#     sub_dir <- subject_info$sub_dir[i]
-#     ses_dir <- subject_info$ses_dir[i]
-
-#     if (!is.null(subject_ids) && !(sub_id %in% subject_ids)) next
-#     if (!is.null(session_ids) && !is.na(ses_id) && !(ses_id %in% session_ids)) next
-
-#     func_path <- if (!is.na(ses_dir)) file.path(root, ses_dir, "func") else file.path(root, sub_dir, "func")
-#     if (!dir.exists(func_path)) next
-
-#     nifti_files <- list.files(func_path, pattern = ".*_bold.*\\.nii\\.gz$", full.names = TRUE)
-
-#     for (f in nifti_files) {
-#       fname <- basename(f)
-
-#       extract_tag <- function(pattern, name) {
-#         if (grepl(pattern, name)) sub(paste0(".*", pattern, "-([^_]+).*"), "\\1", name) else NA
-#       }
-
-#       task <- extract_tag("task", fname)
-#       desc <- extract_tag("desc", fname)
-#       run <- extract_tag("run", fname)
-#       echo <- extract_tag("echo", fname)
-#       space <- extract_tag("space", fname)
-
-#       if (!is.null(task_filter) && !(task %in% task_filter)) next
-#       if (!is.null(desc_filter) && !(desc %in% desc_filter)) next
-
-#       bold_files[[length(bold_files) + 1]] <- data.frame(
-#         sub_id = sub_id,
-#         ses_id = ses_id,
-#         task = task,
-#         desc = desc,
-#         run = run,
-#         echo = echo,
-#         space = space,
-#         file = f,
-#         stringsAsFactors = FALSE
-#       )
-#     }
-#   }
-
-#   do.call(rbind, bold_files)
-# }
 
 get_compute_environment_from_file <- function(scfg) {
   if (length(scfg) > 0L && !"compute_environment" %in% names(scfg)) {
@@ -857,7 +619,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   checkmate::assert_list(scfg)
 
   # if empty, allow population from external file
-  scfg <- get_compute_environment_from_file(scfg)
+  # scfg <- get_compute_environment_from_file(scfg) ## TODO: decide how to make this work
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
@@ -895,7 +657,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if ("compute_environment/heudiconv_container" %in% fields) {
     scfg$compute_environment$heudiconv_container <- prompt_input(
       instruct = glue("
-      \nThe pipeline depends on having a working heudiconv container (docker or singularity).
+      \nBIDS conversion depends on having a working heudiconv container (docker or singularity).
       If you don't have this yet, follow these instructions first:
         https://heudiconv.readthedocs.io/en/latest/installation.html#install-container\n
     "),
@@ -957,3 +719,4 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
 
   return(scfg)
 }
+

@@ -4,7 +4,7 @@
 \alias{construct_bids_filename}
 \title{Construct BIDS-Compatible Filenames from Extracted Entity Data}
 \usage{
-construct_bids_filename(bids_df)
+construct_bids_filename(bids_df, full.names = FALSE)
 }
 \arguments{
 \item{bids_df}{A \code{data.frame} containing one or more rows of BIDS entities.
@@ -12,6 +12,9 @@ Must include at least the columns \code{suffix} and \code{ext}, and optionally:
 \code{subject}, \code{session}, \code{task}, \code{acquisition}, \code{run}, \code{modality}, \code{echo},
 \code{direction}, \code{reconstruction}, \code{hemisphere}, \code{space}, \code{resolution},
 \code{description}, and \code{fieldmap}.}
+
+\item{full.names}{If TRUE, return the full path to the file using the \verb{$directory}
+field of \code{bids_df}.}
 }
 \value{
 A character vector of reconstructed BIDS filenames, one per row of \code{bids_df}.

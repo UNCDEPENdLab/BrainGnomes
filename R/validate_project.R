@@ -15,15 +15,18 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 
   gaps <- c()
 
-  if (is.null(scfg$project_name)) {
+  if (is.null(scfg$metadata$project_name)) {
     if (!quiet) message("Config file is missing project_name. You will be asked for this.")
-    gaps <- c(gaps, "project_name")
+    gaps <- c(gaps, "metadata/project_name")
   }
 
-  required_dirs <- c("project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home")
+  required_dirs <- c(
+    "metadata/project_directory", "metadata/dicom_directory", "metadata/bids_directory",
+    "metadata/fmriprep_directory", "metadata/scratch_directory", "metadata/templateflow_home"
+  )
   for (rr in required_dirs) {
-    if (!checkmate::test_directory_exists(scfg[[rr]])) {
-      message("Config file is missing valid ", rr, ".")
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
+      message("Config file is missing valid directory for ", rr, ".")
       gaps <- c(gaps, rr)
     }
   }

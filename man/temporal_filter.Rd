@@ -11,7 +11,7 @@ temporal_filter(
   high_pass_hz = 1/120,
   tr = NULL,
   overwrite = FALSE,
-  log_file = NULL,
+  lg = NULL,
   fsl_img = NULL
 )
 }
@@ -28,7 +28,7 @@ temporal_filter(
 
 \item{overwrite}{Logical; whether to overwrite the output file if it exists.}
 
-\item{log_file}{Optional path to a log file for command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
 }

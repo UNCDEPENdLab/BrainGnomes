@@ -1,8 +1,13 @@
-project_name: test
-project_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data
-dicom_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms
-bids_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_bids
-scratch_directory: /work/users/m/n/mnhallq
+metadata:
+  project_name: test
+  project_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data
+  dicom_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms
+  bids_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_bids
+  scratch_directory: /work/users/m/n/mnhallq
+  fmriprep_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep
+  templateflow_home: ~/.cache/templateflow
+  mriqc_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/mriqc_reports
+  log_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/logs
 compute_environment:
   scheduler: slurm
   fmriprep_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg
@@ -18,6 +23,7 @@ bids_validation:
   sched_args: []
   outfile: bids_validator_output.html
 fmriprep:
+  enable: yes
   memgb: 48
   nhours: 24
   ncores: 12
@@ -26,6 +32,7 @@ fmriprep:
   output_spaces: MNI152NLin2009cAsym
   fs_license_file: /proj/mnhallqlab/lab_resources/freesurfer_license.txt
 mriqc:
+  enable: yes
   memgb: 32
   nhours: 12
   ncores: 1
@@ -39,6 +46,7 @@ aroma:
   sched_args: []
   enable: true
 postprocess:
+  enable: yes
   memgb: 40
   nhours: 4
   ncores: 1
@@ -78,11 +86,8 @@ postprocess:
   force_processing_order: no
   input_regex: ".*_desc-preproc_bold.nii.gz$"
   bids_desc: postproc
-fmriprep_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep
-templateflow_home: ~/.cache/templateflow
-mriqc_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/mriqc_reports
-log_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/logs
 bids_conversion:
+  enable: yes
   sub_regex: '[0-9]+'
   sub_id_match: (.+)
   ses_regex: .na.character

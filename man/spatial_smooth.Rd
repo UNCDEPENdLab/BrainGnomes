@@ -10,7 +10,7 @@ spatial_smooth(
   fwhm_mm = 6,
   brain_mask = NULL,
   overwrite = FALSE,
-  log_file = NULL,
+  lg = NULL,
   fsl_img = NULL
 )
 }
@@ -25,7 +25,7 @@ spatial_smooth(
 
 \item{overwrite}{Logical; whether to overwrite the output file if it already exists.}
 
-\item{log_file}{Optional path to a file for logging the FSL command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
 }

@@ -44,7 +44,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     has_ses <- !is.na(ses_id)
     sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
     if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")
-    sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
+    sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
     complete_file <- file.path(sub_dir, glue(".{name}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
 
@@ -70,8 +70,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
       debug_pipeline = scfg$debug,
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
-      stdout_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-      stderr_log = glue("{scfg$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+      stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+      stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
       complete_file = complete_file
     )
     sched_script <- get_job_script(scfg, name)
@@ -114,8 +114,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
   if (isTRUE(steps["bids_conversion"])) {  
     # Use expected directory as input to subsequent steps, anticipating that conversion completes
     # and the expected directory is created. If conversion fails, the dependent jobs should automatically fail.
-    bids_sub_dir <- file.path(scfg$bids_directory, glue("sub-{sub_cfg$sub_id[1L]}"))
-    bids_ses_dir <- if (multi_session) file.path(scfg$bids_directory, glue("sub-{sub_cfg$sub_id}"), glue("ses-{sub_cfg$ses_id}")) else rep(NA_character_, nrow(sub_cfg))
+    bids_sub_dir <- file.path(scfg$metadata$bids_directory, glue("sub-{sub_cfg$sub_id[1L]}"))
+    bids_ses_dir <- if (multi_session) file.path(scfg$metadata$bids_directory, glue("sub-{sub_cfg$sub_id}"), glue("ses-{sub_cfg$ses_id}")) else rep(NA_character_, nrow(sub_cfg))
 
     # When bids_sub_dir and bids_ses_dir exist, do they match these expectations?
     extant_bids <- !is.na(sub_cfg$bids_sub_dir)
@@ -165,7 +165,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     env_variables,
     heudiconv_container = scfg$compute_environment$heudiconv_container,
     loc_sub_dicoms = sub_dir,
-    loc_bids_root = scfg$bids_directory,
+    loc_bids_root = scfg$metadata$bids_directory,
     heudiconv_heuristic = scfg$bids_conversion$heuristic_file,
     validate_bids = scfg$bids_conversion$validate_bids,
     sub_id = sub_id,
@@ -225,15 +225,15 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("--nthreads {scfg$fmriprep$ncores}"),
     glue("--omp-nthreads {scfg$fmriprep$ncores}"),
     glue("--participant_label {sub_id}"),
-    glue("-w {scfg$scratch_directory}"),
+    glue("-w {scfg$metadata$scratch_directory}"),
     glue("--fs-license-file {scfg$fmriprep$fs_license_file}"),
     glue("--output-spaces {scfg$fmriprep$output_spaces}"),
     glue("--mem {scfg$fmriprep$memgb*1000}") # convert to MB
   ), collapse=TRUE)
 
-  if (!checkmate::test_directory_exists(scfg$templateflow_home)) {
-    lg$debug("Creating missing templateflow_home directory: {scfg$templateflow_home}")
-    dir.create(scfg$templateflow_home, showWarnings = FALSE, recursive = TRUE)
+  if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
+    lg$debug("Creating missing templateflow_home directory: {scfg$metadata$templateflow_home}")
+    dir.create(scfg$metadata$templateflow_home, showWarnings = FALSE, recursive = TRUE)
   }
 
   env_variables <- c(
@@ -241,10 +241,10 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     fmriprep_container = scfg$compute_environment$fmriprep_container,
     sub_id = sub_id,
     ses_id = ses_id,
-    loc_bids_root = scfg$bids_directory,
-    loc_mrproc_root = scfg$fmriprep_directory,
-    loc_scratch = scfg$scratch_directory,
-    templateflow_home = normalizePath(scfg$templateflow_home),
+    loc_bids_root = scfg$metadata$bids_directory,
+    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_scratch = scfg$metadata$scratch_directory,
+    templateflow_home = normalizePath(scfg$metadata$templateflow_home),
     fs_license_file = scfg$fmriprep$fs_license_file,
     cli_options = cli_options
   )
@@ -271,7 +271,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     glue("--nprocs {scfg$mriqc$ncores}"),
     glue("--omp-nthreads {scfg$mriqc$ncores}"),
     glue("--participant_label {sub_id}"),
-    glue("-w {scfg$scratch_directory}"),
+    glue("-w {scfg$metadata$scratch_directory}"),
     glue("--mem-gb {scfg$mriqc$memgb}")
   ), collapse=TRUE)
 
@@ -280,9 +280,9 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     mriqc_container = scfg$compute_environment$mriqc_container,
     sub_id = sub_id,
     ses_id = ses_id,
-    loc_bids_root = scfg$bids_directory,
-    loc_mriqc_root = scfg$mriqc_directory,
-    loc_scratch = scfg$scratch_directory,
+    loc_bids_root = scfg$metadata$bids_directory,
+    loc_mriqc_root = scfg$metadata$mriqc_directory,
+    loc_scratch = scfg$metadata$scratch_directory,
     cli_options = cli_options
   )
 
@@ -315,9 +315,9 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     glue("--nthreads {scfg$aroma$ncores}"),
     glue("--omp-nthreads {scfg$aroma$ncores}"),
     glue("--participant_label {sub_id}"),
-    glue("-w {scfg$scratch_directory}"),
+    glue("-w {scfg$metadata$scratch_directory}"),
     glue("--mem {scfg$aroma$memgb*1000}"), # convert to MB
-    glue("--derivatives fmriprep={scfg$fmriprep_directory}")
+    glue("--derivatives fmriprep={scfg$metadata$fmriprep_directory}")
   ), collapse=TRUE)
 
   env_variables <- c(
@@ -325,9 +325,9 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     aroma_container = scfg$compute_environment$aroma_container,
     sub_id = sub_id,
     ses_id = ses_id,
-    loc_bids_root = scfg$bids_directory,
-    loc_mrproc_root = scfg$fmriprep_directory,
-    loc_scratch = scfg$scratch_directory,
+    loc_bids_root = scfg$metadata$bids_directory,
+    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_scratch = scfg$metadata$scratch_directory,
     cli_options = cli_options
   )
 
@@ -348,7 +348,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
   postproc_image_sched_script <- get_job_script(scfg, "postprocess_image")
 
   # postprocessing
-  input_dir <- file.path(scfg$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
+  input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
   #scfg$postprocess$fsl_img <- scfg$compute_environment$fmriprep_container # always pass fmriprep container for running FSL commands in postprocessing
   scfg$postprocess$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
@@ -356,7 +356,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
   
   env_variables <- c(
     env_variables,
-    loc_mrproc_root = scfg$fmriprep_directory,
+    loc_mrproc_root = scfg$metadata$fmriprep_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     postproc_cli = postproc_cli,

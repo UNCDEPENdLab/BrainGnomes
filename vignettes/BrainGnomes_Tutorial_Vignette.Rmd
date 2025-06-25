@@ -335,8 +335,8 @@ At this point, your jobs are queued/running on the cluster. You can monitor them
 # Monitoring Output and Logs
 
 All outputs from the pipeline will be stored in your project directory:
-	•	BIDS-converted data will appear under data_bids/ in your project directory (BrainGnomes automatically set scfg$bids_directory to <project_directory>/data_bids ￼). You should see sub-<ID> folders there after HeuDiConv runs, containing NIfTI images and JSON sidecars as per BIDS.
-	•	fMRIPrep outputs will be in data_fmriprep/ under your project directory (scfg$fmriprep_directory is set to <project_directory>/data_fmriprep ￼). This will mirror fMRIPrep’s usual output structure (subfolders per subject with anat/func files, logs, etc.).
+	•	BIDS-converted data will appear under data_bids/ in your project directory (BrainGnomes automatically set scfg$metadata$bids_directory to <project_directory>/data_bids ￼). You should see sub-<ID> folders there after HeuDiConv runs, containing NIfTI images and JSON sidecars as per BIDS.
+	•	fMRIPrep outputs will be in data_fmriprep/ under your project directory (scfg$metadata$fmriprep_directory is set to <project_directory>/data_fmriprep ￼). This will mirror fMRIPrep’s usual output structure (subfolders per subject with anat/func files, logs, etc.).
 	•	MRIQC outputs (if run) will likely be in a data_mriqc/ directory or inside data_bids/ under derivatives; BrainGnomes config typically might set an mriqc_directory (if not, check the MRIQC output path in logs).
 	•	Postprocessing outputs will typically produce a new set of files (e.g., filtered, smoothed, denoised BOLD images) stored in a subfolder or appended filename in the BIDS structure. For example, BrainGnomes may output files with suffixes indicating the postprocessing steps (like _smoothed or _AROMA in the filename). The exact location/pattern can be deduced from the processing_steps and the code, but generally they might be placed in the fMRIPrep derivatives folder or a new postproc folder. Check the log messages for details.
 
@@ -416,7 +416,7 @@ scfg <- setup_project(scfg)
 You may also specify a subset of fields to prompt for, e.g.:
 
 ```{r, eval = FALSE}
-scfg <- setup_project(scfg, fields = c("project_directory", "bids_directory"))
+scfg <- setup_project(scfg, fields = c("metadata/project_directory", "metadata/bids_directory"))
 ```
 
 # Step 3: Edit Configuration

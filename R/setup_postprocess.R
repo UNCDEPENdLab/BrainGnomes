@@ -1,7 +1,32 @@
-#' Specify postprocessing setting for a study
-#' @param scfg a study configuration object produced by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess` field populated
+#' Configure postprocessing settings for a study
+#'
+#' This function enables and configures the postprocessing steps to be applied after fMRIPrep.
+#' Postprocessing may include denoising, smoothing, filtering, intensity normalization,
+#' and confound regression applied to preprocessed BOLD data.
+#'
+#' The function interactively prompts the user (or selectively prompts based on `fields`)
+#' to specify whether postprocessing should be performed, and if so, how each step should be configured.
+#'
+#' @param scfg A study configuration object, as produced by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess` field populated.
+#'
+#' @details
+#' Postprocessing is applied to the outputs of fMRIPrep to prepare BOLD time series for statistical modeling.
+#' This may include:
+#' - Applying brain masks
+#' - Spatial smoothing
+#' - ICA-AROMA denoising
+#' - Temporal filtering
+#' - Intensity normalization
+#' - Confound calculation and regression
+#'
+#' Each step is optional and configurable. This function sets default values for memory, runtime,
+#' and cores, and invokes a series of sub-setup functions to collect postprocessing parameters.
+#'
+#' @importFrom checkmate test_class
+#' @importFrom glue glue
 #' @keywords internal
 setup_postprocess <- function(scfg = list(), fields = NULL) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
@@ -16,18 +41,32 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
     sched_args = ""
   )
 
+  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
+    scfg$postprocess$enable <- prompt_input(
+      instruct = glue("
+      Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
+      These steps may include:
+        - Applying a brain mask
+        - Spatial smoothing
+        - Denoising using ICA-AROMA
+        - Temporal filtering (e.g., high-pass filtering)
+        - Intensity normalization
+        - Confound calculation and regression
+
+      Postprocessing is highly configurable and optimal choices may depend on the intended downstream analyses.
+      You will be prompted to configure each of these steps in detail.
+
+      Do you want to enable postprocessing for your BOLD data?
+      "),
+      prompt = "Enable postprocessing?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$enable)) return(scfg)
+
   scfg <- setup_job(scfg, "postprocess", defaults, fields)
-
-  if (is.null(fields)) {
-    fields <- c()
-    if (is.null(scfg$postprocess$enable)) fields <- c(fields, "postprocess/enable")
-  }
-
-  if ("postprocess/enable" %in% fields) {
-    scfg$postprocess$enable <- prompt_input("Run postprocessing?", type = "flag", default = TRUE)
-  }
-
-  if (isFALSE(scfg$postprocess$enable) && is.null(fields)) return(scfg)
   scfg <- setup_postprocess_globals(scfg, fields)
   scfg <- setup_spatial_smooth(scfg, fields)
   scfg <- setup_apply_aroma(scfg, fields)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/setup_project.R
 \name{setup_fmriprep}
 \alias{setup_fmriprep}
-\title{Specify the fMRIPrep settings}
+\title{Configure fMRIPrep preprocessing settings}
 \usage{
 setup_fmriprep(scfg = NULL, fields = NULL)
 }
@@ -15,6 +15,18 @@ setup_fmriprep(scfg = NULL, fields = NULL)
 A modified version of \code{scfg} with the \verb{$fmriprep} entry populated.
 }
 \description{
-Specify the fMRIPrep settings
+This function sets up fMRIPrep job configuration, including scheduling and resource parameters,
+output specifications, and the location of required files such as the FreeSurfer license.
+It prompts the user interactively (or selectively if \code{fields} is supplied) and modifies the
+study configuration list (\code{scfg}) to include settings for running fMRIPrep.
+}
+\details{
+fMRIPrep is a robust and standardized preprocessing pipeline for BOLD and structural MRI data
+organized according to the BIDS standard. It performs motion correction, susceptibility distortion
+correction, brain extraction, spatial normalization, confound estimation, and other key steps
+to prepare fMRI data for statistical analysis.
+
+This function allows you to specify memory, number of cores, and maximum runtime for fMRIPrep jobs,
+as well as fMRIPrep-specific options such as output spaces and the FreeSurfer license file location.
 }
 \keyword{internal}

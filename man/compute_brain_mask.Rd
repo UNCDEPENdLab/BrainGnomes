@@ -4,12 +4,12 @@
 \alias{compute_brain_mask}
 \title{Compute a loose brain mask from functional MRI data using FSL}
 \usage{
-compute_brain_mask(in_file, log_file = NULL, fsl_img = NULL)
+compute_brain_mask(in_file, lg = NULL, fsl_img = NULL)
 }
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI functional image.}
 
-\item{log_file}{Optional path to a log file for command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
 }

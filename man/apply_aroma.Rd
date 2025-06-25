@@ -10,7 +10,7 @@ apply_aroma(
   mixing_file,
   noise_ics,
   overwrite = FALSE,
-  log_file = NULL,
+  lg = NULL,
   use_R = FALSE,
   fsl_img = NULL
 )
@@ -26,7 +26,7 @@ apply_aroma(
 
 \item{overwrite}{Logical; whether to overwrite the output file if it exists.}
 
-\item{log_file}{Optional path to a file for logging FSL command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{use_R}{Logical; if \code{TRUE}, use an R wrapper script (\code{fsl_regfilt.R}) instead of \code{fsl_regfilt}.}
 

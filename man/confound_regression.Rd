@@ -9,7 +9,7 @@ confound_regression(
   to_regress = NULL,
   prefix = "r",
   overwrite = FALSE,
-  log_file = NULL,
+  lg = NULL,
   fsl_img = NULL
 )
 }
@@ -22,7 +22,7 @@ confound_regression(
 
 \item{overwrite}{Logical; whether to overwrite the output file if it already exists.}
 
-\item{log_file}{Optional path to a log file for recording command output.}
+\item{lg}{Optional lgr object used for logging messages}
 
 \item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
 }

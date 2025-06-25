@@ -121,8 +121,8 @@ pretty_arg <- function(x, width = 80) {
 #' @importFrom lgr get_logger_glue
 #' @keywords internal
 get_subject_logger <- function(scfg, sub_id) {
-  checkmate::assert_directory_exists(scfg$project_directory)
-  sub_dir <- file.path(scfg$log_directory, glue("sub-{sub_id}"))
+  checkmate::assert_directory_exists(scfg$metadata$project_directory)
+  sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
   if (!checkmate::test_directory_exists(sub_dir)) dir.create(sub_dir, showWarnings = FALSE, recursive = TRUE)
   lg <- lgr::get_logger_glue(c("sub", sub_id))
   if (!"subject_logger" %in% names(lg$appenders)) {
@@ -246,6 +246,37 @@ rm_niftis <- function(files=NULL) {
   }
 }
 
+
+#' Run an FSL command with optional Singularity container support and structured logging
+#'
+#' Executes an FSL command in a clean shell environment, with support for Singularity containers, optional logging via the `lgr` package, and flexible control over execution and output.
+#'
+#' @param args A character vector specifying the FSL command and arguments to run (e.g., `"fslmaths input.nii.gz -add 1 output.nii.gz"`).
+#' @param fsldir Optional. Path to the FSL installation directory. If `NULL`, the function attempts to infer it from the environment or system configuration.
+#' @param echo Logical. Whether to print the command to standard output. Defaults to `TRUE`.
+#' @param run Logical. Whether to execute the command. If `FALSE`, returns as if the command succeeded. Defaults to `TRUE`.
+#' @param intern Logical. If `TRUE`, returns the standard output of the command as a character vector with `"retcode"` attribute. If `FALSE`, returns only the exit code. Defaults to `FALSE`.
+#' @param stop_on_fail Logical. If `TRUE`, stops execution if the FSL command returns a non-zero exit code. Defaults to `TRUE`.
+#' @param log_file Optional. Path to a log file for recording output. Ignored if `use_lgr = TRUE`.
+#' @param use_lgr Logical. Whether to use the `lgr` logging framework. If `TRUE`, configures and logs to console and/or file appenders. Defaults to `TRUE`.
+#' @param fsl_img Optional. Path to a Singularity image containing FSL. If provided, the command is executed within the container using `singularity exec`.
+#' @param bind_paths Optional. Character vector of additional directories to bind inside the Singularity container. The current working directory and temp directory are automatically added.
+#'
+#' @return If `intern = FALSE`, returns the exit code (integer) of the command. If `intern = TRUE`, returns the standard output as a character vector. In both cases, `"stdout"` and `"stderr"` are attached as attributes.
+#'
+#' @details
+#' This function sets up the FSL environment by sourcing `fsl.sh`, and can optionally run FSL commands inside a Singularity container. Logging can be directed to both console and file using `lgr`, or to a file using basic `cat()` logging if `use_lgr = FALSE`.
+#'
+#' If `intern = TRUE`, the command output is returned and tagged with attributes `stdout`, `stderr`, and `retcode`. The `bind_paths` argument ensures that relevant file paths are visible inside the container.
+#'
+#' @examples
+#' \dontrun{
+#' run_fsl_command("fslmaths input.nii.gz -add 1 output.nii.gz")
+#' run_fsl_command("fslhd input.nii.gz", intern = TRUE)
+#' }
+#'
+#' @importFrom lgr AppenderConsole AppenderFile get_logger
+#' @export
 run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE, stop_on_fail=TRUE, log_file=NULL, use_lgr=TRUE, fsl_img=NULL, bind_paths=NULL) {
   checkmate::assert_character(args)
   checkmate::assert_string(fsldir, null.ok = TRUE)
@@ -264,28 +295,9 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   if (use_lgr) {
     lg <- lgr::get_logger("run_fsl_command", reset = TRUE) # always get clean config
     lg$set_propagate(FALSE) # avoid inherited console output
-    if (echo) lg$add_appender(AppenderConsole$new(), name = "console")
-    if (!is.null(log_file)) lg$add_appender(AppenderFile$new(log_file), name = "file")
+    if (echo) lg$add_appender(lgr::AppenderConsole$new(), name = "console")
+    if (!is.null(log_file)) lg$add_appender(lgr::AppenderFile$new(log_file), name = "file")
   }
-
-  # if (checkmate::test_class(log, "Logger")) {
-  #   use_lgr <- TRUE
-  #   if (!echo) {
-  #     # disable lgr output temporarily
-  #     suppressed_appenders <- list()
-  #     for (nm in names(log$appenders)) {
-  #       if (inherits(log$appenders[[nm]], "AppenderConsole")) suppressed_appenders[[nm]] <- log$appenders[[nm]]
-  #     }
-  #     for (nm in names(suppressed_appenders)) log$remove_appender(nm)
-  #     on.exit({
-  #         for (nm in names(suppressed_appenders)) {
-  #           log$add_appender(suppressed_appenders[[nm]], name = nm)
-  #         }
-  #     }, add = TRUE)
-  #   }
-  # } else {
-  #   use_lgr <- FALSE
-  # }
 
   # paste into single string if multiple character arguments are passed
   if (length(args) > 1L) args <- paste(args, collapse=" ")
