@@ -682,7 +682,7 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
   run_fsl_command(glue("bet {tmean_file} {temp_bet} -R -f 0.3 -m -n"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(tmean_file, temp_bet)))
 
   temp_stripped <- tempfile(pattern="epi_bet")
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {temp_bet}_mask {temp_stripped}"), log_file = log_file, fsl_img, bind_paths=dirname(c(in_file, temp_bet, temp_stripped)))
+  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {temp_bet}_mask {temp_stripped}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_bet, temp_stripped)))
 
   # now compute 2nd and 98th percentiles on skull-stripped image
   p2 <- get_image_quantile(temp_stripped, quantile=2, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img)
