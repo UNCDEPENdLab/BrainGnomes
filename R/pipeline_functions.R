@@ -56,8 +56,8 @@ get_job_sched_args <- function(scfg=NULL, job_name) {
        .trim = TRUE, .sep = " ", .null = NULL
      )
    }
-   
-  return(sched_args)
+
+  return(trimws(sched_args))
 
 }
 

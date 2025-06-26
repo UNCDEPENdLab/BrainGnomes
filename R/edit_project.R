@@ -32,13 +32,19 @@ edit_project <- function(scfg) {
     "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
     "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0)),
     "Postprocessing" = list(setup_fn = setup_postprocess, prefix = "postprocess/", fields = c(
-      "apply_mask", "brain_mask", "tr", "processing_steps", "input_regex",
-      "keep_intermediates", "force_processing_order",
-      "spatial_smooth/fwhm_mm", "apply_aroma/nonaggressive",
+      "input_regex", "bids_desc", "keep_intermediates", "overwrite",
+      "tr", "brain_mask",
+      "apply_mask/mask_file", "apply_mask/prefix",
+      "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
+      "apply_aroma/nonaggressive", "apply_aroma/prefix",
       "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
-      "intensity_normalize/global_median",
-      "confound_calculate", "confound_regress"
-
+      "temporal_filter/prefix",
+      "intensity_normalize/global_median", "intensity_normalize/prefix",
+      "confound_calculate/columns", "confound_calculate/noproc_columns",
+      "confound_calculate/demean",
+      "confound_regression/columns", "confound_regression/noproc_columns",
+      "confound_regression/prefix",
+      "force_processing_order", "processing_steps"
     ))
   )
 
