@@ -368,7 +368,7 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
   subject_ids <- extract_capturing_groups(subject_entries, sub_id_match)
   
   if (length(subject_entries) == 0) {
-    warning("No subject directories found in the root folder matching the regex pattern.")
+    # warning("No subject directories found in: ", root, " the regex pattern: ", sub_regex, ".")
     return(data.frame(sub_id = character(0), ses_id = character(0), sub_dir = character(0), ses_dir = character(0), stringsAsFactors = FALSE))
   }
 

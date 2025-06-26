@@ -20,7 +20,6 @@ get_job_script <- function(scfg = NULL, job_name) {
   }
   return(script)
 }
-
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg A list of configuration settings
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
@@ -29,7 +28,7 @@ get_job_script <- function(scfg = NULL, job_name) {
 #' @importFrom checkmate assert_string
 #' @keywords internal
 #' @noRd
-get_job_sched_args <- function(scfg=NULL, job_name) {
+get_job_sched_args <- function(scfg = NULL, job_name) {
   checkmate::assert_string(job_name)
 
   # TODO: need to use cli_opts approach to remove conflicting/redundant fields in sched_args for -n, -N, etc.
@@ -38,27 +37,30 @@ get_job_sched_args <- function(scfg=NULL, job_name) {
   # convert empty strings to NULL for compatibility with glue
   if (length(sched_args) == 0L || is.na(sched_args[1L]) || sched_args[1L] == "") sched_args <- NULL
 
-   if (scfg$compute_environment$scheduler == "slurm") {
-     sched_args <- glue(
-       "-N 1",
-       "-n {scfg[[job_name]]$ncores}",
-       "--time={hours_to_dhms(scfg[[job_name]]$nhours)}",
-       "--mem={scfg[[job_name]]$memgb}g",
-       "{sched_args}",
-       .trim = TRUE, .sep = " ", .null = NULL
-     )
-   } else {
-     sched_args <- glue(
-       "-l nodes=1:ppn={scfg[[job_name]]$ncores}",
-       "-l walltime={hours_to_dhms(scfg[[job_name]]$nhours)}",
-       "-l mem={scfg[[job_name]]$memgb}",
-       "{sched_args}",
-       .trim = TRUE, .sep = " ", .null = NULL
-     )
-   }
+  if (scfg$compute_environment$scheduler == "slurm") {
+    # ensure that we strip off any #SBATCH prefix since we are passing arguments directly to sbatch or qsub
+    if (!is.null(sched_args)) sched_args <- sub("^\\s*#SBATCH\\s+", "", sched_args, ignore.case = TRUE)
+
+    sched_args <- glue(
+      "-N 1",
+      "-n {scfg[[job_name]]$ncores}",
+      "--time={hours_to_dhms(scfg[[job_name]]$nhours)}",
+      "--mem={scfg[[job_name]]$memgb}g",
+      "{paste(sched_args, collapse=' ')}",
+      .trim = TRUE, .sep = " ", .null = NULL
+    )
+  } else {
+    if (!is.null(sched_args)) sched_args <- sub("^\\s*#PBS\\s+", "", sched_args, ignore.case = TRUE)
+    sched_args <- glue(
+      "-l nodes=1:ppn={scfg[[job_name]]$ncores}",
+      "-l walltime={hours_to_dhms(scfg[[job_name]]$nhours)}",
+      "-l mem={scfg[[job_name]]$memgb}",
+      "{paste(sched_args, collapse=' ')}",
+      .trim = TRUE, .sep = " ", .null = NULL
+    )
+  }
 
   return(trimws(sched_args))
-
 }
 
 setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {

@@ -172,7 +172,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     ses_id = ses_id
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -195,7 +195,7 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     outfile = scfg$bids_validation$outfile
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -249,7 +249,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -286,7 +286,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -331,7 +331,7 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -367,7 +367,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
     sched_args = sched_args # pass through to child processes
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE

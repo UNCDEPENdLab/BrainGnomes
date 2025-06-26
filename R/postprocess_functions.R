@@ -1,4 +1,39 @@
-### primary function to process a given fmriprep subject dataset
+
+#' Postprocess a single fMRI BOLD image using a configured pipeline
+#'
+#' Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by
+#' the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
+#' temporal filtering, confound regression, and intensity normalization. The function also optionally computes and saves
+#' a filtered confounds file for downstream analyses.
+#'
+#' The processing sequence can be enforced by the user (`force_processing_order = TRUE`) or determined dynamically based
+#' on the `enable` flags in the configuration. Intermediate NIfTI and confound files may be deleted to save disk space,
+#' depending on the `keep_intermediates` setting. Logging is handled via the `lgr` package and is directed to subject-specific
+#' log files inferred from BIDS metadata.
+#'
+#' @param in_file Path to a subject-level BOLD NIfTI file output by fMRIPrep.
+#' @param cfg A list containing configuration options, including TR (`cfg$tr`), enabled processing steps (`cfg$<step>$enable`),
+#'   logging (`cfg$log_file`), and paths to resources such as brain masks or singularity images (`cfg$fsl_img`, `cfg$brain_mask`).
+#'
+#' @return The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
+#'   and logging to a subject-level log file.
+#'
+#' @details
+#' Required `cfg` entries:
+#' - `tr`: Repetition time in seconds.
+#' - `bids_desc`: A BIDS-compliant `desc` label for the output filename.
+#' - `processing_steps`: Optional character vector specifying processing order (if `force_processing_order = TRUE`).
+#'
+#' Optional steps controlled by `cfg$<step>$enable`:
+#' - `apply_mask`
+#' - `spatial_smooth`
+#' - `apply_aroma`
+#' - `temporal_filter`
+#' - `confound_regression`
+#' - `intensity_normalize`
+#'
+#' @importFrom checkmate assert_list assert_file_exists test_character test_number
+#' @export
 postprocess_subject <- function(in_file, cfg=NULL) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_list(cfg)
@@ -132,7 +167,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
     
     confounds_to_filt <- subset(confounds, select = confound_cols)
-    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tempfile(pattern = "confounds"))
+    tmp_out <- file.path(tempdir(), sub(".tsv$", "", basename(proc_files$confounds))) # no extension allowed for mat_to_nii
+    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
 
     # apply AROMA denoising to confounds if AROMA is applied to MRI data
     if ("apply_aroma" %in% processing_sequence) {
@@ -459,9 +495,11 @@ apply_aroma <- function(in_file, prefix = "a", mixing_file, noise_ics, overwrite
   # for some reason, fsl_regfilt blows up when we try to feed a regressors x 1 x 1 x timepoints NIfTI
   # fall back to R in this case
   if (isTRUE(use_R)) {
-    stop("Need to change R script to accept comma-separated list")
-    #cmd <- glue("fsl_regfilt.R {in_file} {mixing_file} {noise_file} 1 {out_file}")
-    lg$info(cmd)
+    regfilt_rscript <- system.file("fsl_regfilt.R", package = "BrainGnomes")
+    if (!file.exists(regfilt_rscript)) stop("Cannot find fsl_regfilt.R script in the BrainGnomes installation folder")
+
+    cmd <- glue("Rscript --vanilla {regfilt_rscript} --input={in_file} --melodic_mix={mixing_file} --filter={noise_ics} --njobs=1 --output={out_file}")
+    lg$info("Running fsl_regfilt.R: {cmd}")
     system(cmd)
   } else {
     cmd <- glue("fsl_regfilt -i {file_sans_ext(in_file)} -o {file_sans_ext(out_file)} -d {mixing_file} -f {noise_ics}")

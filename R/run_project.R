@@ -120,11 +120,11 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   if (isTRUE(steps["bids_conversion"])) {
     subject_dicom_dirs <- get_subject_dirs(scfg$metadata$dicom_directory, sub_regex = scfg$bids_conversion$sub_regex, ses_regex = scfg$bids_conversion$ses_regex, full.names = TRUE)
 
-    # add DICOM prefix
-    names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
-
-    if (length(subject_dicom_dirs) == 0L) {
+    if (nrow(subject_dicom_dirs) == 0L) {
       warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))
+    } else {
+      # add DICOM prefix
+      names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
     }
   }
   
