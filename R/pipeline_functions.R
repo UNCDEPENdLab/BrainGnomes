@@ -401,7 +401,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   if (retcode != 0) {    
     errmsg <- glue("run_fsl_command failed with exit code: {retcode}, stdout: {paste(stdout, collapse='\n')}, stderr: {paste(stderr, collapse='\n')}")
     if (use_lgr) {
-      log_file$error(errmsg)
+      lg$error(errmsg)
     } else {
       cat(errmsg, "\n", file = log_file, append = TRUE)
     }    

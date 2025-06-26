@@ -737,7 +737,7 @@ resample_template_to_img <- function(
   checkmate::assert_string(output, null.ok = TRUE)
   checkmate::assert_string(suffix)
   checkmate::assert_string(desc)
-  checkmate::assert_string(extensions)
+  checkmate::assert_string(extension)
   checkmate::assert_string(interpolation)
   checkmate::assert_flag(install_dependencies)
   checkmate::assert_flag(overwrite)
