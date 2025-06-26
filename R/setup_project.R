@@ -49,9 +49,8 @@ setup_project <- function(input = NULL, fields = NULL) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
 
-
   # run through configuration of each step
-  scfg <- setup_project_globals(scfg, fields)
+  scfg <- setup_project_metadata(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
@@ -63,7 +62,23 @@ setup_project <- function(input = NULL, fields = NULL) {
   return(scfg)
 }
 
-setup_project_globals <- function(scfg = NULL, fields = NULL) {
+#' Set up project metadata for an fMRI preprocessing study
+#'
+#' Prompts the user to configure essential metadata fields for a study-level configuration object.
+#' This includes directories for DICOM inputs, BIDS-formatted outputs, fMRIPrep outputs, MRIQC reports,
+#' TemplateFlow cache, and scratch space for intermediate files. It also ensures required directories
+#' exist or offers to create them interactively.
+#'
+#' The function is designed to be used during initial study setup, but can also be used later to fill in
+#' missing metadata or revise selected fields. If specific `fields` are provided, only those fields will be prompted.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of metadata fields to prompt for (e.g., `"metadata/project_name"`).
+#'   If `NULL`, all missing or unset fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$metadata` field populated with validated paths and project details.
+#' @keywords internal
+setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
@@ -92,7 +107,6 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
   }
 
   # location of DICOMs
-  # /nas/longleaf/home/willasc/repos/clpipe/tests/temp/clpipe_dir0/data_DICOMs
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files files stored?", type = "character")
   }
@@ -125,8 +139,8 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
 
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
-      instruct = glue("
-      \nfmriprep uses a lot of disk space for processing intermediate files. It's best if these
+      instruct = glue("\n\n
+      fmriprep uses a lot of disk space for processing intermediate files. It's best if these
       are written to a scratch/temporary directory that is cleared regularly so that you don't
       use up precious disk space for unnecessary files. Please indicate where these intermediate
       file should be written.\n
@@ -141,10 +155,10 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
 
     if ("metadata/templateflow_home" %in% fields) {
     scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
-      instruct = glue("
-      \nThe pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
+      instruct = glue("\n\n
+      The pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
       Please specify the location of the TemplateFlow cache directory. The default is $HOME/.cache/templateflow.
-      You can also point to a different location if you have a shared cache directory for multiple users.
+      You can also point to a different location if you have a shared cache directory for multiple users.\n
       "), type = "character", default = file.path(Sys.getenv("HOME"), ".cache", "templateflow")
     )
   }
@@ -205,11 +219,9 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
       You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide 
       a FreeSurfer license file, which is necessary for anatomical processing. You can also pass custom CLI
-      options and schedule settings.
-
-      Do you want to include fMRIPrep as part of your preprocessing pipeline?\n\n
+      options and schedule settings.\n\n
       "),
-      prompt = "Run fmriprep?",
+      prompt = "Do you want to include fMRIPrep as part of your preprocessing pipeline?",
       type = "flag",
       default = TRUE
     )
@@ -229,8 +241,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     fields <- c()
     if (is.null(scfg$fmriprep$output_spaces)) fields <- c(fields, "fmriprep/output_spaces")
     if (!validate_exists(scfg$fmriprep$fs_license_file)) fields <- c(fields, "fmriprep/fs_license_file")
-
-    cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
   }
 
   if ("fmriprep/output_spaces" %in% fields) {
@@ -554,7 +564,7 @@ setup_aroma <- function(scfg, fields = NULL) {
     scfg$aroma$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
-      ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts) is a data-driven 
+      ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts) is a data-driven
       method for identifying and removing motion-related independent components from BOLD fMRI data using 
       non-aggressive regression. It is designed to reduce motion artifacts without relying on motion estimates 
       from realignment parameters.

@@ -10,15 +10,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   proc_files <- get_fmriprep_outputs(in_file)
 
   # determine if input is in a stereotaxic space
-  bids_info <- as.list(extract_bids_info(in_file))
-  native_space <- is.na(bids_info$space) || bids_info$space %in% c("T1w", "T2w", "anat")
+  input_bids_info <- as.list(extract_bids_info(in_file))
+  native_space <- is.na(input_bids_info$space) || input_bids_info$space %in% c("T1w", "T2w", "anat")
 
   # log_file should come through as an environment variable, pointing to the subject-level log.
   # Use this to get the location of the subject log directory
   sub_log_file <- Sys.getenv("log_file")
   if (!nzchar(sub_log_file)) {
     warning("Cannot find log_file as an environment variable. Logs may not appear in the expected location!")
-    attempt_dir <- normalizePath(file.path(dirname(in_file), glue("../../../logs/sub-{bids_info$sub}")))
+    attempt_dir <- normalizePath(file.path(dirname(in_file), glue("../../../logs/sub-{input_bids_info$sub}")))
     log_dir <- if (dir.exists(attempt_dir)) attempt_dir else dirname(in_file)
   } else {
     log_dir <- dirname(sub_log_file)
@@ -26,7 +26,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   
   # Setup default log file -- need to make sure it always goes in the subject log folder
   if (is.null(cfg$log_file)) {
-    cfg$log_file <- construct_bids_filename(modifyList(bids_info, list(ext=".log", description=cfg$bids_desc)), full.names=FALSE)
+    cfg$log_file <- construct_bids_filename(modifyList(input_bids_info, list(ext=".log", description=cfg$bids_desc)), full.names=FALSE)
   } else {
     cfg$log_file <- glue(cfg$log_file) # evaluate location of log, allowing for glue expressions
   }
@@ -34,11 +34,11 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # force log file to be in the right directory
   log_file <- file.path(log_dir, basename(cfg$log_file))
 
-  lg <- lgr::get_logger_glue(c("postprocess", bids_info$sub))
+  lg <- lgr::get_logger_glue(c("postprocess", input_bids_info$sub))
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # Reconstruct expected output file
-  output_bids_info <- modifyList(bids_info, list(description = cfg$bids_desc)) # set desc to new description
+  output_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc)) # set desc to new description
   final_filename <- construct_bids_filename(output_bids_info, full.names = TRUE)
 
   # determine if final output file already exists
@@ -54,39 +54,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
   }
 
-  # default configuration settings -- not sure whether this should be allowed?
-  default_cfg <- list(
-    tr = NULL,
-    force_processing_order = FALSE,
-    brain_mask = "template",
-    overwrite = FALSE, keep_intermediates = FALSE,
-    processing_steps = c(
-      "apply_mask", "spatial_smooth", "apply_aroma",
-      "temporal_filter", "intensity_normalize", "confound_calculate"
-    ),
-    apply_mask = list(prefix = "m"),
-    spatial_smooth = list(prefix = "s", fwhm_mm = 6),
-    apply_aroma = list(prefix = "a", aggressive = FALSE),
-    temporal_filter = list(prefix = "f", low_pass_hz = 0, high_pass_hz = 0.008333333),
-    intensity_normalize = list(prefix = "n", global_median = 10000),
-    confound_regression = list(
-      prefix = "r", columns = c("csf", "csf_derivative1", "white_matter", "white_matter_derivative1"),
-      noproc_columns = list(),
-      output_file = "{proc_files$prefix}_confound_regressors.txt"
-    ),
-    confound_calculate = list(
-      columns = c("csf", "csf_derivative1", "white_matter", "white_matter_derivative1"),
-      noproc_columns = "framewise_displacement",
-      output_file = "{proc_files$prefix}_postprocessed_confounds.txt",
-      demean = FALSE
-    )
-  )
-
   # location of FSL singularity container
   fsl_img <- cfg$fsl_img
-
-  # add any defaults if user's config is incomplete
-  cfg <- populate_defaults(cfg, default_cfg)
 
   if (!checkmate::test_number(cfg$tr, lower = 0.01, upper = 30)) {
     stop("YAML config must contain a tr field specifying the repetition time in seconds")
@@ -115,7 +84,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   if (is.null(brain_mask)) {
     if (native_space) {
       if (!is.null(proc_files$brain_mask)) {
-        brain_mask <- proc_files$brain_mask # fixed typo here
+        brain_mask <- proc_files$brain_mask
       } else {
         brain_mask <- compute_brain_mask(in_file, log_file)
       }
@@ -128,33 +97,33 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   file_set <- cur_file # tracks all of the files used in the postprocessing stream
 
   ## setup order of processing steps
-  checkmate::assert_character(cfg$processing_steps) # ensure we have a character vector
-  cfg$processing_steps <- tolower(cfg$processing_steps) # avoid case issues
-
-  # handle small glitches in nomenclature
-  cfg$processing_steps <- sub("spatial_smoothing", "spatial_smooth", cfg$processing_steps, fixed=TRUE)
-  cfg$processing_steps <- sub("temporal_filtering", "temporal_filter", cfg$processing_steps, fixed=TRUE)
-  cfg$processing_steps <- sub("confound_regress", "confound_regression", cfg$processing_steps, fixed = TRUE)
-  cfg$processing_steps <- sub("intensity_normalization", "intensity_normalize", cfg$processing_steps, fixed = TRUE)
-
   if (isTRUE(cfg$force_processing_order)) {
+
+    checkmate::assert_character(cfg$processing_steps) # ensure we have a character vector
+    cfg$processing_steps <- tolower(cfg$processing_steps) # avoid case issues
+
+    # handle small glitches in nomenclature
+    cfg$processing_steps <- sub("spatial_smoothing", "spatial_smooth", cfg$processing_steps, fixed=TRUE)
+    cfg$processing_steps <- sub("temporal_filtering", "temporal_filter", cfg$processing_steps, fixed=TRUE)
+    cfg$processing_steps <- sub("confound_regress", "confound_regression", cfg$processing_steps, fixed = TRUE)
+    cfg$processing_steps <- sub("intensity_normalization", "intensity_normalize", cfg$processing_steps, fixed = TRUE)
+
     processing_sequence <- cfg$processing_steps
     lg$info("We will follow the user-specified processing order, with no guarantees on data validity.")
   } else {
     processing_sequence <- c()
-    # if (isTRUE(cfg$apply_mask$enable)) processing_sequence <- c(processing_sequence, "apply_mask")
-    if ("apply_mask" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "apply_mask")
-    if ("spatial_smooth" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "spatial_smooth")
-    if ("apply_aroma" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "apply_aroma")
-    if ("temporal_filter" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "temporal_filter")
-    if ("confound_regression" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "confound_regression")
-    if ("intensity_normalize" %in% cfg$processing_steps) processing_sequence <- c(processing_sequence, "intensity_normalize")
+    if (isTRUE(cfg$apply_mask$enable)) processing_sequence <- c(processing_sequence, "apply_mask")
+    if (isTRUE(cfg$spatial_smooth$enable)) processing_sequence <- c(processing_sequence, "spatial_smooth")
+    if (isTRUE(cfg$apply_aroma$enable)) processing_sequence <- c(processing_sequence, "apply_aroma")
+    if (isTRUE(cfg$temporal_filter$enable)) processing_sequence <- c(processing_sequence, "temporal_filter")
+    if (isTRUE(cfg$confound_regression$enable)) processing_sequence <- c(processing_sequence, "confound_regression")
+    if (isTRUE(cfg$intensity_normalize$enable)) processing_sequence <- c(processing_sequence, "intensity_normalize")
   }
 
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
   
   #### handle confounds, filtering to match MRI data
-  if ("confound_regression" %in% cfg$processing_steps || "confound_calculate" %in% cfg$processing_steps) {
+  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable)) {
     confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
     confound_cols <- as.character(union(cfg$confound_regression$columns, cfg$confound_calculate$columns))
     noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns, cfg$confound_calculate$noproc_columns)) # no AROMA or filter
@@ -166,7 +135,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tempfile(pattern = "confounds"))
 
     # apply AROMA denoising to confounds if AROMA is applied to MRI data
-    if ("apply_aroma" %in% cfg$processing_steps) {
+    if ("apply_aroma" %in% processing_sequence) {
       lg$info("Removing AROMA noise components from confounds")
       confound_nii <- apply_aroma(confound_nii,
         mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics, 
@@ -175,7 +144,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
 
     # apply temporal filter to confounds if temporal filter is applied to MRI data
-    if ("temporal_filter" %in% cfg$processing_steps) {
+    if ("temporal_filter" %in% processing_sequence) {
       lg$info("Temporally filtering confounds")
       confound_nii <- temporal_filter(confound_nii,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz, high_pass_hz = cfg$temporal_filter$high_pass_hz, 
@@ -187,7 +156,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     filtered_confounds <- data.frame(nii_to_mat(confound_nii))
     filtered_confounds <- setNames(filtered_confounds, confound_cols)
     
-    if ("confound_calculate" %in% cfg$processing_steps) {
+    # handle confound calculation
+    if (isTRUE(cfg$confound_calculate$enable)) {
+      confile <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "confounds", ext = ".tsv")),
+        full.names = TRUE
+      )
+
       df <- subset(filtered_confounds, select = cfg$confound_calculate$columns)
       if (!is.null(cfg$confound_calculate$noproc_columns) && length(cfg$confound_calculate$noproc_columns) > 0L) {
         noproc_df <- subset(confounds, select = cfg$confound_calculate$noproc_columns)
@@ -198,25 +173,29 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       if (isTRUE(cfg$confound_calculate$demean)) {
         df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns], function(x) x - mean(x, na.rm = TRUE))
       }
-      confile <- glue(cfg$confound_calculate$output_file)
-      lg$info("Writing filtered confounds to: {confile}")
+      
+      lg$info("Writing postprocessed confounds to: {confile}")
       lg$info("Columns are: {paste(names(df), collapse=', ')}")
       data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
     }
 
-    if ("confound_regression" %in% cfg$processing_steps) {
+    if (isTRUE(cfg$confound_regression$enable)) {
       df <- subset(filtered_confounds, select = cfg$confound_regression$columns)
 
       # mean center columns
-      df <- as.data.frame(lapply(df, function(cc) cc - mean(cc)))
+      df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
       
       if (!is.null(cfg$confound_regression$noproc_columns) && length(cfg$confound_regression$noproc_columns) > 0L) {
         noproc_df <- subset(confounds, select=cfg$confound_regression$noproc_columns)
         noproc_df[is.na(noproc_df)] <- 0 # force 0 value -- NAs don't work as regressors
         df <- cbind(df, noproc_df)
       }
-      to_regress <- glue(cfg$confound_regression$output_file)
-      
+
+      to_regress <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "regressors", ext = ".tsv")),
+        full.names = TRUE
+      )
+
       const_cols <- sapply(df, function(x) all(x == x[1L]))
       if (any(const_cols)) df <- df[, !const_cols] # remove any constant columns
       df <- cbind(1, df) # add intercept
@@ -277,27 +256,30 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
   }
 
+  # clean up intermediate NIfTIs
   if (isFALSE(cfg$keep_intermediates) && length(file_set) > 2L) {
     # initial file is the BOLD input from fmriprep, last file is the final processed image
     to_delete <- file_set[2:(length(file_set) - 1)]
     for (ff in to_delete) {
-      lg$debug("Removing intermediate file: {ff}")
-      if (file.exists(ff)) unlink(ff)
+      if (file.exists(ff)) {
+        lg$debug("Removing intermediate file: {ff}")
+        unlink(ff)
+      }
+    }
+  }
+
+  # clean up confound regressors file
+  if (isFALSE(cfg$keep_intermediates) && isTRUE(cfg$confound_regression$enable)) {
+    if (file.exists(to_regress)) {
+      lg$debug("Removing intermediate confound regression file: {to_regress}")
+      unlink(to_regress)
     }
   }
 
   # move the final file into a BIDS-friendly file name with a desc field
-  if (!is.null(cfg$bids_desc) && is.character(cfg$bids_desc)) {
-    # Parse and update BIDS fields
-    bids_info <- extract_bids_info(cur_file)
-    bids_info$description <- cfg$bids_desc # set desc to new description
-
-    # Reconstruct filename
-    final_filename <- file.path(dirname(cur_file), construct_bids_filename(bids_info))
-
-    file.rename(cur_file, final_filename)
-  }
-
+  lg$debug("Renaming last file in stream: {cur_file} to postprocessed file name: {final_filename}")
+  file.rename(cur_file, final_filename)
+  
   end_time <- Sys.time()
   lg$info("End postprocessing: {as.character(end_time)}")
   return(cur_file)
@@ -731,6 +713,7 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #' @param desc TemplateFlow descriptor (e.g., "brain").
 #' @param extension File extension (default: ".nii.gz").
 #' @param interpolation Interpolation method ("nearest", "linear", "continuous").
+#' @param overwrite Logical. If `TRUE`, overwrite existing `output`.
 #'
 #' @details
 #'   The relevant template will be identified using the space- entity for the BIDS-compliant input image.
@@ -747,16 +730,26 @@ resample_template_to_img <- function(
   desc = "brain",
   extension = ".nii.gz",
   interpolation = "nearest",
-  install_dependencies = TRUE
+  install_dependencies = TRUE,
+  overwrite = FALSE
 ) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(output, null.ok = TRUE)
+  checkmate::assert_string(suffix)
+  checkmate::assert_string(desc)
+  checkmate::assert_string(extensions)
+  checkmate::assert_string(interpolation)
   checkmate::assert_flag(install_dependencies)
+  checkmate::assert_flag(overwrite)
 
   # default to same name as input file, but change suffix to templatemask
   if (is.null(output)) {
     f_info <- as.list(extract_bids_info(in_file))
     output <- file.path(dirname(in_file), construct_bids_filename(modifyList(f_info, list(suffix = "templatemask"))))
+  }
+
+  if (file.exists(output) && !overwrite) {
+    return(invisible(output)) # don't recreate existing image
   }
 
   required_modules <- c("nibabel", "nilearn", "templateflow")

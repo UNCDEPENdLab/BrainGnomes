@@ -2,19 +2,29 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{setup_spatial_smooth}
 \alias{setup_spatial_smooth}
-\title{Specify the spatial smoothing settings for postprocessing}
+\title{Configure spatial smoothing settings for fMRI postprocessing}
 \usage{
 setup_spatial_smooth(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object created by \code{setup_project}}
+\item{scfg}{A study configuration object created by \code{setup_project()}.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all spatial smoothing fields will be prompted.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess$spatial_smooth} field populated
+A modified version of \code{scfg} with the \verb{$postprocess$spatial_smooth} field populated.
 }
 \description{
-Specify the spatial smoothing settings for postprocessing
+This function configures the spatial smoothing step for postprocessing of BOLD fMRI data.
+Spatial smoothing increases signal-to-noise ratio by averaging nearby voxels and can improve
+the statistical properties of the data, especially for group-level analyses.
+}
+\details{
+The user is asked whether they want to apply smoothing, and if so, to specify the full width at half maximum (FWHM)
+of the Gaussian smoothing kernel and a filename prefix.
+
+If enabled, spatial smoothing is applied to the preprocessed BOLD data using a Gaussian kernel
+with the user-specified FWHM in millimeters. This can help improve sensitivity and inter-subject alignment,
+especially in standard space. This is accomplished using FSL's contrast-sensitive susan smoothing command.
 }
 \keyword{internal}

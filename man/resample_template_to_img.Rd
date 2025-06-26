@@ -12,7 +12,8 @@ resample_template_to_img(
   desc = "brain",
   extension = ".nii.gz",
   interpolation = "nearest",
-  install_dependencies = TRUE
+  install_dependencies = TRUE,
+  overwrite = FALSE
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ resample_template_to_img(
 \item{extension}{File extension (default: ".nii.gz").}
 
 \item{interpolation}{Interpolation method ("nearest", "linear", "continuous").}
+
+\item{overwrite}{Logical. If \code{TRUE}, overwrite existing \code{output}.}
 }
 \value{
 Invisible \code{TRUE} on success. Writes output to \code{output}.

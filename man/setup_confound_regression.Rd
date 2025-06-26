@@ -2,19 +2,25 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{setup_confound_regression}
 \alias{setup_confound_regression}
-\title{Specify the confound regression settings for postprocessing}
+\title{Configure confound regression for postprocessing}
 \usage{
 setup_confound_regression(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object created by \code{setup_project}}
+\item{scfg}{A study configuration object created by \code{setup_project()}.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess$confound_regression} field populated
+A modified version of \code{scfg} with the \verb{$postprocess$confound_regression} entry populated.
 }
 \description{
-Specify the confound regression settings for postprocessing
+This function configures voxelwise regression of nuisance confounds from fMRI data. Confounds are typically drawn
+from the fMRIPrep confounds file. Users can select confounds to be temporally filtered to match the BOLD data
+(e.g., continuous-valued regressors) and those that should not be filtered (e.g., binary spike regressors).
+}
+\details{
+Regression is applied on a voxelwise basis. Filtered regressors typically include motion parameters, CompCor components,
+DVARS, or global signal. Unfiltered regressors usually include 0/1 indicators of outlier volumes.
 }
 \keyword{internal}

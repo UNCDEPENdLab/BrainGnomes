@@ -235,11 +235,11 @@ validate_postprocess_config <- function(ppcfg, quiet = FALSE) {
       gaps <- c(gaps, "postprocess/confound_calculate/demean")
       ppcfg$confound_calculate$demean <- NULL
     }
-    if (!checkmate::test_string(ppcfg$confound_calculate$output_file)) {
-      if (!quiet) message("Invalid output_file field in $postprocess$confound_calculate")
-      gaps <- c(gaps, "postprocess/confound_calculate/output_file")
-      ppcfg$confound_calculate$output_file <- NULL
-    }
+    # if (!checkmate::test_string(ppcfg$confound_calculate$output_file)) {
+    #   if (!quiet) message("Invalid output_file field in $postprocess$confound_calculate")
+    #   gaps <- c(gaps, "postprocess/confound_calculate/output_file")
+    #   ppcfg$confound_calculate$output_file <- NULL
+    # }
     if (!checkmate::test_character(ppcfg$confound_calculate$columns)) {
       if (!quiet) message("Invalid columns field in $postprocess$confound_calculate")
       gaps <- c(gaps, "postprocess/confound_calculate/columns")

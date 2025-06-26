@@ -13,7 +13,7 @@ edit_project <- function(scfg) {
 
   # Define editable fields per setup function
   config_map <- list(
-    "General" = list(setup_fn = setup_project_globals, prefix = "metadata/", fields = c(
+    "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
       "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(

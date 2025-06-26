@@ -15,7 +15,9 @@ setup_postproc_steps(scfg = list(), fields = NULL)
 a modified version of \code{scfg} with the \verb{$postprocess$processing_steps} field populated
 }
 \description{
-Specify the postprocessing steps for a study
+This function determines the sequence of postprocessing steps to be applied after fMRIPrep.
+Steps are included based on whether the corresponding \verb{$enable} field is \code{TRUE} in the study configuration.
+If the user opts to override the default order, they may manually specify a custom sequence.
 }
 \details{
 This function is used to set up the postprocessing steps for a study. It prompts the user for

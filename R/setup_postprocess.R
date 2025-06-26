@@ -68,6 +68,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
 
   scfg <- setup_job(scfg, "postprocess", defaults, fields)
   scfg <- setup_postprocess_globals(scfg, fields)
+  scfg <- setup_apply_mask(scfg, fields)
   scfg <- setup_spatial_smooth(scfg, fields)
   scfg <- setup_apply_aroma(scfg, fields)
   scfg <- setup_temporal_filter(scfg, fields)
@@ -129,27 +130,6 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
     scfg$postprocess$tr <- prompt_input("Repetition time (in seconds) of the scan sequence:", type = "numeric", lower = 0.01, upper = 100, len = 1)
   }
 
-  if ("postprocess/apply_mask" %in% fields) {
-    scfg$postprocess$apply_mask <- prompt_input(
-      "Apply brain mask to postprocessed data?",
-      type = "flag",
-      instruct = glue("
-      \nA brain mask is used in postprocessing to calculate quantiles (e.g., median) of the image to be used in smoothing and
-      intensity normalization. Optionally, you can also apply a mask to the data as part of postprocessing.
-      Many people analyze their data without a mask, applying one later (e.g., when reviewing group maps).
-
-      Do you want to apply a brain mask to the postprocessed data? This will mask out non-brain voxels, which can
-      make it faster for analysis (since empty voxels are omitted) and easier for familywise error correction
-      (since you don't want to correct over non-brain voxels). If you say yes, I would strongly recommend specifying
-      a single brain mask to be used for all subjects in the pipeline to avoid heterogeneity in masks from data-driven
-      brain-extraction algorithms, which can lead to inconsistencies in the group (intersection) mask. If you do not
-      apply the mask to the postprocessed data, I wouldn't worry too much about providing one here, though if you have
-      a good one handy, it's a good idea.
-
-      You'll be asked about providing a custom mask next.\n")
-    )
-  }
-
   if ("postprocess/brain_mask" %in% fields) {
     scfg$postprocess$brain_mask <- prompt_input("Brain mask to be used in postprocessing: ",
       instruct = glue("
@@ -177,6 +157,11 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
 }
 
 #' Specify the postprocessing steps for a study
+#'
+#' This function determines the sequence of postprocessing steps to be applied after fMRIPrep.
+#' Steps are included based on whether the corresponding `$enable` field is `TRUE` in the study configuration.
+#' If the user opts to override the default order, they may manually specify a custom sequence.
+#'
 #' @param scfg a study configuration object produced by `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with the `$postprocess$processing_steps` field populated
@@ -191,180 +176,302 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   #   stop("missing processing_steps. Run out of order?")
   # }
 
-  # arrange them in a desirable order
-  processing_sequence <- c()
-  if ("apply_mask" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "apply_mask")
-  if ("spatial_smooth" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "spatial_smooth")
-  if ("apply_aroma" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "apply_aroma")
-  if ("temporal_filter" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "temporal_filter")
-  if ("confound_regression" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "confound_regression")
-  if ("intensity_normalize" %in% scfg$postprocess$processing_steps) processing_sequence <- c(processing_sequence, "intensity_normalize")
+  # typical (usually correct) order
+  step_order <- c(
+    "apply_mask",
+    "spatial_smooth",
+    "apply_aroma",
+    "temporal_filter",
+    "confound_regression",
+    "intensity_normalize"
+  )
 
+  processing_sequence <- character(0)
+  for (step in step_order) {
+    enabled <- tryCatch(isTRUE(scfg$postprocess[[step]]$enable), error = function(e) FALSE)
+    if (enabled) processing_sequence <- c(processing_sequence, step)
+  }
+
+  # Prompt to override the default order
+  # if (is.null(scfg$postprocess$force_processing_order) || "postprocess/force_processing_order" %in% fields) {
+  #   scfg$postprocess$force_processing_order <- prompt_input("Do you want to specify the postprocessing sequence?",
+  #     instruct = glue("\n\n
+  #       The order of postprocessing steps is important. For instance, confound regressors must be filtered to match
+  #       filtered fMRI data before confound regression is applied to the data.
+
+  #       Here, we have ordered the processing steps in what we believe is the best sequence for ensuring a sensible pipeline that
+  #       avoids pitfalls, including the aforementioned matter of frequency alignment. Note that if temporal filtering is used,
+  #       confound regressors are filtered to match. Likewise, if AROMA is used, confound regressors will first have AROMA components removed.
+
+  #       See Hallquist et al. (2013) or Lindquist (2019) for more discussion.
+  #       \nYou can override the default order, but we recommend caution when doing so.\n
+  #     ", .trim = TRUE),
+  #     type = "flag", required = TRUE
+  #   )
+  # }
+
+  # Prompt to override the default order
   if (is.null(scfg$postprocess$force_processing_order) || "postprocess/force_processing_order" %in% fields) {
     scfg$postprocess$force_processing_order <- prompt_input("Do you want to specify the postprocessing sequence?",
-      instruct = glue("
-      \nThe order of postprocessing steps is important, particularly because if we filter certain frequencies from the fMRI data, we must filter
-      any regressors that we later apply to the data -- that is, confounds and fMRI data must match in frequency content prior to regression.
-      See Hallquist, Hwang, & Luna (2013) or Lindquist (2019) for details.
-
-      Here, we have ordered the processing steps in what we believe is the best sequence for ensuring a sensible pipeline that
-      avoids pitfalls, including the aforementioned matter of frequency alignment. Note that if temporal filtering is used,
-      confound regressors are filtered to match. And likewise, if AROMA is used, confound regressors will also have AROMA components removed.
-
-      You can specify a different postprocessing order than what is recommended, but with the cautionary note that we have not
-      tested all possible sequences and unfortunate sequences could occur.\n
+      instruct = glue("\n
+        The order of postprocessing steps is important. For instance, regressors must be filtered to match filtered fMRI data
+        before regression can occur. Our default order is intended to maximize denoising and avoid problems with filter mismatches.
+        See Hallquist et al. (2013) or Lindquist (2019) for more discussion.
+        \nYou can override the default order, but we recommend caution when doing so.\n
       ", .trim = TRUE),
       type = "flag", required = TRUE
     )
   }
-  
+
+  # If user wants to override, let them reorder the steps
   if (isTRUE(scfg$postprocess$force_processing_order)) {
     proceed <- FALSE
     while (!proceed) {
-      seq_glue <- glue("\nProcessing steps:\n\n{paste(seq_along(processing_sequence), processing_sequence, collapse = '\n', sep = '. ')}\n", .trim = FALSE)
+      seq_glue <- glue("\nEnabled processing steps:\n\n{paste(seq_along(processing_sequence), processing_sequence, collapse = '\n', sep = '. ')}\n")
       ss <- prompt_input(
         "Choose the order (separated by spaces): ",
         instruct = seq_glue,
-        type = "integer", lower = 1, upper = length(processing_sequence), len = length(processing_sequence), split = "\\s+", uniq = TRUE
+        type = "integer", lower = 1, upper = length(processing_sequence), len = length(processing_sequence),
+        split = "\\s+", uniq = TRUE
       )
-
-      proceed_glue <- glue("\nYou specified the following processing order:\n\n{paste(seq_along(ss), processing_sequence[ss], collapse = '\n', sep = '. ')}\n", .trim = FALSE)
+      proceed_glue <- glue("\nYou specified the following order:\n\n{paste(seq_along(ss), processing_sequence[ss], collapse = '\n', sep = '. ')}\n")
       proceed <- prompt_input("Is this correct?", instruct = proceed_glue, type = "flag")
     }
-
     scfg$postprocess$processing_steps <- processing_sequence[ss]
   } else {
     scfg$postprocess$processing_steps <- processing_sequence
   }
   
-  if ("confound_calculate" %in% scfg$postprocess$processing_steps) {
-    cat(glue("
-      Confound calculation is also included as a part of post-processing.
-      Whatever (relevant) processing steps are applied to the fMRI data will also be applied
-      to the calculated confounds file. If you look at the config file, you'll also see 
-      'confound_calculate' as a step in 'processing_steps'.
-    "), .trim=FALSE)
-    scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "confound_calculate")
+  # if (isTRUE(scfg$postprocess$force_processing_order)) {
+  #   proceed <- FALSE
+  #   while (!proceed) {
+  #     seq_glue <- glue("\nProcessing steps:\n\n{paste(seq_along(processing_sequence), processing_sequence, collapse = '\n', sep = '. ')}\n", .trim = FALSE)
+  #     ss <- prompt_input(
+  #       "Choose the order (separated by spaces): ",
+  #       instruct = seq_glue,
+  #       type = "integer", lower = 1, upper = length(processing_sequence), len = length(processing_sequence), split = "\\s+", uniq = TRUE
+  #     )
+
+  #     proceed_glue <- glue("\nYou specified the following processing order:\n\n{paste(seq_along(ss), processing_sequence[ss], collapse = '\n', sep = '. ')}\n", .trim = FALSE)
+  #     proceed <- prompt_input("Is this correct?", instruct = proceed_glue, type = "flag")
+  #   }
+
+  #   scfg$postprocess$processing_steps <- processing_sequence[ss]
+  # } else {
+  #   scfg$postprocess$processing_steps <- processing_sequence
+  # }
+
+  return(scfg)
+}
+
+#' Configure brain masking for postprocessing
+#'
+#' This function configures the optional step of applying a brain mask to the functional MRI data
+#' in postprocessing. This step removes signal outside the brain (e.g., in air or non-brain tissue)
+#' by zeroing out voxels outside the specified mask. Users can define a custom mask file or rely on
+#' a default mask derived from the preprocessing pipeline (e.g., fMRIPrep outputs).
+#'
+#' This step is especially useful when preparing data for statistical modeling, as it constrains the
+#' analysis to in-brain voxels and reduces computational burden.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all fields related to brain masking will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$apply_mask` entry populated.
+#' @keywords internal
+setup_apply_mask <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$apply_mask$enable) ||
+      (isFALSE(scfg$postprocess$apply_mask$enable) && any(grepl("postprocess/apply_mask/", fields)))) {
+
+    scfg$postprocess$apply_mask$enable <- prompt_input(
+      instruct = glue("\n\n
+      Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
+      This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
+      
+      The mask will be applied as a binary filter to the 4D functional data, zeroing out signal outside the brain.
+      You can specify a custom mask file (in the same space and resolution as your fMRI data), or use the default
+      mask produced by your preprocessing pipeline.
+
+      Do you want to apply a brain mask to your fMRI data?\n
+      "),
+      prompt = "Apply brain mask?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$apply_mask$enable)) return(scfg)
+
+  # Determine which fields to prompt for
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$postprocess$apply_mask$mask_file)) fields <- c(fields, "postprocess/apply_mask/mask_file")
+    if (is.null(scfg$postprocess$apply_mask$prefix))    fields <- c(fields, "postprocess/apply_mask/prefix")
+  }
+
+  if ("postprocess/apply_mask/mask_file" %in% fields) {
+    scfg$postprocess$apply_mask$mask_file <- prompt_input(
+      prompt = "Path to binary brain mask file (NIfTI):",
+      type = "file",
+      required = FALSE
+    )
+  }
+
+  if ("postprocess/apply_mask/prefix" %in% fields) {
+    scfg$postprocess$apply_mask$prefix <- prompt_input(
+      prompt = "File prefix for masked output:",
+      type = "character",
+      default = "m"
+    )
   }
 
   return(scfg)
 }
 
-#' Specify the confound regression settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$confound_regression` field populated
+
+  # if ("postprocess/apply_mask" %in% fields) {
+  #   scfg$postprocess$apply_mask <- prompt_input(
+  #     "Apply brain mask to postprocessed data?",
+  #     type = "flag",
+  #     instruct = glue("
+  #     \nA brain mask is used in postprocessing to calculate quantiles (e.g., median) of the image to be used in smoothing and
+  #     intensity normalization. Optionally, you can also apply a mask to the data as part of postprocessing.
+  #     Many people analyze their data without a mask, applying one later (e.g., when reviewing group maps).
+
+  #     Do you want to apply a brain mask to the postprocessed data? This will mask out non-brain voxels, which can
+  #     make it faster for analysis (since empty voxels are omitted) and easier for familywise error correction
+  #     (since you don't want to correct over non-brain voxels). If you say yes, I would strongly recommend specifying
+  #     a single brain mask to be used for all subjects in the pipeline to avoid heterogeneity in masks from data-driven
+  #     brain-extraction algorithms, which can lead to inconsistencies in the group (intersection) mask. If you do not
+  #     apply the mask to the postprocessed data, I wouldn't worry too much about providing one here, though if you have
+  #     a good one handy, it's a good idea.
+
+  #     You'll be asked about providing a custom mask next.\n")
+  #   )
+  # }
+
+
+#' Configure confound regression for postprocessing
+#'
+#' This function configures voxelwise regression of nuisance confounds from fMRI data. Confounds are typically drawn
+#' from the fMRIPrep confounds file. Users can select confounds to be temporally filtered to match the BOLD data
+#' (e.g., continuous-valued regressors) and those that should not be filtered (e.g., binary spike regressors).
+#'
+#' Regression is applied on a voxelwise basis. Filtered regressors typically include motion parameters, CompCor components,
+#' DVARS, or global signal. Unfiltered regressors usually include 0/1 indicators of outlier volumes.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$confound_regression` entry populated.
 #' @keywords internal
 setup_confound_regression <- function(scfg = list(), fields = NULL) {
+    if (is.null(scfg$postprocess$confound_regression$enable) ||
+      (isFALSE(scfg$postprocess$confound_regression$enable) && any(grepl("postprocess/confound_regression/", fields)))) {
+    
+    scfg$postprocess$confound_regression$enable <- prompt_input(
+      instruct = glue("\n\n
+      Confound regression applies voxelwise multiple regression to remove nuisance signals from the fMRI data.
+      These regressors are typically selected from the confounds file produced by fMRIPrep.
+
+      You can specify two types of confound regressors:
+        - Filtered regressors: continuous-valued (e.g., a_comp_cor_*, DVARS, global signal)
+        - Unfiltered regressors: discrete-valued (e.g., motion_outlier*) that should not be filtered
+
+      Use wildcards (*) or ranges (e.g., a_comp_cor_[1-6]) to specify multiple components.
+      The regressed data will be written to new files prefixed by your chosen output prefix.
+
+      Do you want to apply confound regression to the fMRI data during postprocessing?\n
+      "),
+      prompt = "Apply confound regression?",
+      type = "flag"
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$confound_regression$enable)) return(scfg)
 
   if (is.null(fields)) {
-    cur_val <- "confound_regression" %in% scfg$postprocess$processing_steps
-    if ("confound_regression" %in% names(scfg$postprocess)) {
-      cat(strwrap(glue("
-        Current confound regression settings:
-          Apply confound regression: {cur_val}
-          Columns that will be filtered to match fMRI data: {paste(scfg$postprocess$confound_regression$columns)}
-          Columns that will not be filtered: {paste(scfg$postprocess$confound_regression$noproc_columns)}
-          File prefix: {scfg$postprocess$confound_regression$prefix}
-      "), width = 80, exdent = 4), sep = "\n")
-
-      change <- prompt_input("Change settings?", type = "flag")
-      if (!change) return(scfg) # skip out
-    }
-
-    cat(glue("
-      If applied, confound regression removes one or more confounds from the fMRI data using voxelwise regession.
-      Two kinds of confounds can be removed: those that are first filtered to match the fMRI data and those that
-      are not filtered. Any continuous-valued regressor that was generated from the fMRI timeseries data or head motion
-      parameters -- for example, DVARS, components from CompCor, the global signal, or cerebrospinal fluid -- should
-      be filtered. Regressors that are discrete-valued -- usually 0/1 spike regressors -- should not be filtered
-      (e.g., motion_outlier* regressors in the confounds.tsv file produced by fmriprep).
-
-      Here, you can specify '*' to include all components matching that wildcard, such as 'a_comp_cor_*'. You can also
-      specify a range of values using the syntax '[low-high]', such as 'a_comp_cor_[1-10]', which would include the
-      first 10 of these regressors as confounds.
-    ", .trim = FALSE))
-
-    apply_step <- prompt_input("Apply confound regression?", type = "flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "confound_regression")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "confound_regression"]
-    }
-
     fields <- c()
     if (is.null(scfg$postprocess$confound_regression$columns)) fields <- c(fields, "postprocess/confound_regression/columns")
     if (is.null(scfg$postprocess$confound_regression$noproc_columns)) fields <- c(fields, "postprocess/confound_regression/noproc_columns")
-    if (is.null(scfg$postprocess$confound_regression$prefix)) fields <- c(fields, "postprocess/confound_regression/output_file")
+    if (is.null(scfg$postprocess$confound_regression$prefix)) fields <- c(fields, "postprocess/confound_regression/prefix")
+  } 
+    
+  if ("postprocess/confound_regression/columns" %in% fields) {
+    scfg$postprocess$confound_regression$columns <- prompt_input(
+      prompt = "Confounds that will be filtered:",
+      type = "character", split = "\\s+", required = FALSE
+    )
+  }
 
-  } else {
-    apply_step <- "confound_regression" %in% scfg$postprocess$processing_steps
+  if ("postprocess/confound_regression/noproc_columns" %in% fields) {
+    scfg$postprocess$confound_regression$noproc_columns <- prompt_input(
+      prompt = "Confounds that will not be filtered:",
+      type = "character", split = "\\s+", required = FALSE
+    )
   }
-  
-  # only ask for details if they want the step
-  if (apply_step) {
-    scfg$postprocess$confound_regression$columns <- prompt_input("Confounds that will be filtered: ", type = "character", split = "\\s+")
-    scfg$postprocess$confound_regression$noproc_columns <- prompt_input("Confounds that will not be filtered: ", type = "character", split = "\\s+", required=FALSE)
-    scfg$postprocess$confound_regression$prefix <- prompt_input("File prefix: ", type = "character")
+
+  if ("postprocess/confound_regression/prefix" %in% fields) {
+    scfg$postprocess$confound_regression$prefix <- prompt_input(
+      prompt = "File prefix:",
+      type = "character", default = "r"
+    )
   }
+
   return(scfg)
 }
 
-#' Specify the confound calculation settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$confound_calculate` field populated
+#' Configure confound calculation for postprocessing
+#'
+#' This function configures the generation of a confound file during postprocessing. The resulting file includes
+#' nuisance regressors (e.g., motion parameters, CompCor components, DVARS, global signal) that may be used during
+#' task-based modeling to account for noise without directly altering the fMRI data.
+#'
+#' Confounds can be filtered (e.g., with the same temporal filter as applied to fMRI data) or left unfiltered.
+#' Filtered regressors should typically include continuous-valued signals (e.g., a_comp_cor_*, global signal), while
+#' spike regressors or discrete values (e.g., motion_outlier*) should not be filtered.
+#'
+#' This function only generates the confound regressors file. Actual regression is handled separately.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of fields to prompt for. If `NULL`, all relevant fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$confound_calculate` entry updated.
 #' @keywords internal
 setup_confound_calculate <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$confound_calculate$enable) ||
+      (isFALSE(scfg$postprocess$confound_calculate$enable) && any(grepl("postprocess/confound_calculate/", fields)))) {
+    
+    scfg$postprocess$confound_calculate$enable <- prompt_input(
+      instruct = glue("\n\n
+      Confound calculation creates a nuisance regressor file that includes relevant noise signals (e.g., motion, 
+      CompCor, global signal). This step does not apply denoising but prepares a file that can be used in later 
+      statistical analyses (e.g., voxelwise GLMs).
+
+      You can specify two types of confound regressors:
+        - Filtered regressors: typically continuous-valued signals derived from fMRI (e.g., DVARS, a_comp_cor_*, global signal)
+        - Unfiltered regressors: typically discrete-valued indicators (e.g., motion_outlier*) that should not be filtered
+
+      Wildcards (*) and ranges ([1-6]) can be used to match multiple column names.
+
+      Do you want to create a confound file in postprocessing?\n
+      "),
+      prompt = "Generate confound file?",
+      type = "flag"
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$confound_calculate$enable)) return(scfg)
+
   if (is.null(fields)) {
-    cur_val <- "confound_calculate" %in% scfg$postprocess$processing_steps
-    if ("confound_calculate" %in% names(scfg$postprocess)) {
-      cat(strwrap(glue("
-        Current confound calculation settings:
-          Calculate confounds file: {cur_val}
-          Columns that will be filtered to match fMRI data: {paste(scfg$postprocess$confound_calculate$columns)}
-          Columns that will not be filtered: {paste(scfg$postprocess$confound_calculate$noproc_columns)}
-          Demean confounds: {paste(scfg$postprocess$confound_calculate$demean)}
-          Confound file name: {scfg$postprocess$confound_calculate$output_file}
-      "), width = 80, exdent = 4), sep = "\n")
-
-      change <- prompt_input("Change settings?", type = "flag")
-      if (!change) return(scfg) # skip out
-    }
-    
-    cat(glue("
-      Confound calculation creates a file containing a set of confound regressors, but it does *not* apply these
-      to the fMRI data in any way. This file could be used subsequently -- often in the context of a task-based fMRI
-      GLM analysis -- to remove nuisance regressors while also computing the effects for regressors of interest
-      (usually, task-related modulation).
-
-      Two kinds of confounds can be added to the confounds file: those that are first filtered to match the fMRI data 
-      and those that are not filtered. Any continuous-valued regressor that was generated from the fMRI timeseries data
-      or head motion parameters -- for example, DVARS, components from CompCor, the global signal, or cerebrospinal 
-      fluid -- should be filtered. Regressors that are discrete-valued -- usually 0/1 spike regressors -- should not 
-      be filtered (e.g., motion_outlier* regressors in the confounds.tsv file produced by fmriprep).
-
-      Here, you can specify '*' to include all components matching that wildcard, such as 'a_comp_cor_*'. You can also
-      specify a range of values using the syntax '[low-high]', such as 'a_comp_cor_[1-10]', which would include the
-      first 10 of these regressors as confounds.
-    ", .trim=FALSE))
-
-    apply_step <- prompt_input("Calculate confounds?", type="flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "confound_calculate")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "confound_calculate"]
-    }
-    
     fields <- c()
     if (is.null(scfg$postprocess$confound_calculate$columns)) fields <- c(fields, "postprocess/confound_calculate/columns")
     if (is.null(scfg$postprocess$confound_calculate$noproc_columns)) fields <- c(fields, "postprocess/confound_calculate/noproc_columns")
     if (is.null(scfg$postprocess$confound_calculate$demean)) fields <- c(fields, "postprocess/confound_calculate/demean")
-    if (is.null(scfg$postprocess$confound_calculate$output_file)) fields <- c(fields, "postprocess/confound_calculate/output_file")
   }
 
   if ("postprocess/confound_calculate/columns" %in% fields) {
-    scfg$postprocess$confound_calculate$columns <- prompt_input("Confounds that will be filtered: ", type = "character", split = "\\s+")
+    scfg$postprocess$confound_calculate$columns <- prompt_input("Confounds that will be filtered: ", type = "character", split = "\\s+", required = FALSE)
   }
 
   if ("postprocess/confound_calculate/noproc_columns" %in% fields) {
@@ -372,58 +479,64 @@ setup_confound_calculate <- function(scfg = list(), fields = NULL) {
   }
   
   if ("postprocess/confound_calculate/demean" %in% fields) {
-    scfg$postprocess$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag")
+    scfg$postprocess$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
   }
 
-  if ("postprocess/confound_calculate/output_file" %in% fields) {
-    scfg$postprocess$confound_calculate$output_file <- prompt_input(
-      instruct = "Confound files will always be placed in the same directory as fMRI data.",
-      prompt = "Confound file name: ", type = "character"
-    )
-
-    # ignore any path included in the output_file
-    scfg$postprocess$confound_calculate$output_file <- basename(scfg$postprocess$confound_calculate$output_file)
-  }
+  ## Deprecated. We now always name the file to align with the corresponding postprocessed NIfTI
+  # if ("postprocess/confound_calculate/output_file" %in% fields) {
+  #   scfg$postprocess$confound_calculate$output_file <- prompt_input(
+  #     instruct = "The confound file will be placed in the same directory as the fMRI data.",
+  #     prompt = "Confound file name: ", type = "character"
+  #   )
+  #
+  #   # ignore any path included in the output_file
+  #   scfg$postprocess$confound_calculate$output_file <- basename(scfg$postprocess$confound_calculate$output_file)
+  # }
 
   return(scfg)
 }
 
-#' Specify the intensity normalization settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$intensity_normalize` field populated
+#' Configure intensity normalization settings for postprocessing
+#'
+#' This function configures the intensity normalization step in the postprocessing pipeline.
+#' Intensity normalization rescales the fMRI time series so that the median signal across the entire 4D image
+#' reaches a specified global value (e.g., 10,000). This step can help ensure comparability across runs and subjects.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all intensity normalization fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$intensity_normalize` entry updated.
 #' @keywords internal
 setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$intensity_normalize$enable) ||
+    (isFALSE(scfg$postprocess$intensity_normalize$enable) && any(grepl("postprocess/intensity_normalize/", fields)))) {
+    scfg$postprocess$intensity_normalize$enable <- prompt_input(
+      instruct = glue("\n\n
+      Intensity normalization rescales the BOLD signal so that the global median intensity of the 4D image
+      is equal across subjects and runs. This step can reduce variance due to scanner-related intensity differences
+      and can help ensure consistent scaling of BOLD signal before statistical modeling.
+
+      Do you want to apply intensity normalization to each fMRI run?\n
+      "),
+      prompt = "Apply intensity normalization?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+  
+  # Exit early if user disabled the step
+  if (isFALSE(scfg$postprocess$intensity_normalize$enable)) return(scfg)
+
 
   # if fields passed in, only bother use about the requested fields
   if (is.null(fields)) {
-    cur_val <- "intensity_normalize" %in% scfg$postprocess$processing_steps
-    if ("intensity_normalize" %in% names(scfg$postprocess)) {
-      cat(glue("
-        Current intensity normalization settings:
-          Apply intensity normalization: {cur_val}
-          Global (4D) median intensity: {scfg$postprocess$intensity_normalize$global_median}
-          File prefix: {scfg$postprocess$intensity_normalize$prefix}
-      "))
-
-      change <- prompt_input("Change settings?", type="flag")
-      if (!change) return(scfg) # skip out
-    }
-
-    apply_step <- prompt_input("Apply intensity normalization?", type="flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "intensity_normalize")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "intensity_normalize"]
-    }
-
     fields <- c()
     if (is.null(scfg$postprocess$intensity_normalize$global_median)) fields <- c(fields, "postprocess/intensity_normalize/global_median")
     if (is.null(scfg$postprocess$intensity_normalize$prefix)) fields <- c(fields, "postprocess/intensity_normalize/prefix")
   }
 
   if ("postprocess/intensity_normalize/global_median" %in% fields) {
-    scfg$postprocess$intensity_normalize$global_median <- prompt_input("Global (4D) median intensity: ", type="numeric", lower=-1e8, upper=1e8)
+    scfg$postprocess$intensity_normalize$global_median <- prompt_input("Global (4D) median intensity: ", type="numeric", lower=-1e8, upper=1e8, default=10000)
   }
 
   if ("postprocess/intensity_normalize/prefix" %in% fields) {
@@ -433,35 +546,48 @@ setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
   return(scfg)
 }
 
-#' Specify the spatial smoothing settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$spatial_smooth` field populated
+#' Configure spatial smoothing settings for fMRI postprocessing
+#'
+#' This function configures the spatial smoothing step for postprocessing of BOLD fMRI data.
+#' Spatial smoothing increases signal-to-noise ratio by averaging nearby voxels and can improve
+#' the statistical properties of the data, especially for group-level analyses.
+#'
+#' The user is asked whether they want to apply smoothing, and if so, to specify the full width at half maximum (FWHM)
+#' of the Gaussian smoothing kernel and a filename prefix.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all spatial smoothing fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$spatial_smooth` field populated.
+#'
+#' @details
+#' If enabled, spatial smoothing is applied to the preprocessed BOLD data using a Gaussian kernel
+#' with the user-specified FWHM in millimeters. This can help improve sensitivity and inter-subject alignment,
+#' especially in standard space. This is accomplished using FSL's contrast-sensitive susan smoothing command.
+#'
 #' @keywords internal
 setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$spatial_smooth$enable) || (isFALSE(scfg$postprocess$spatial_smooth$enable) && any(grepl("postprocess/spatial_smooth/", fields)))) {
+    scfg$postprocess$spatial_smooth$enable <- prompt_input(
+      instruct = glue("\n\n
+      Spatial smoothing involves applying a Gaussian kernel to the BOLD fMRI data,
+      which increases the signal-to-noise ratio and improves overlap across subjects
+      by reducing high-frequency spatial noise.
 
+      You will be asked to specify the size of the smoothing kernel in millimeters
+      (full width at half maximum, or FWHM). Common choices range from 4mm to 8mm.
+
+      Do you want to apply spatial smoothing to the BOLD data as part of postprocessing?\n
+      "),
+      prompt = "Apply spatial smoothing?",
+      type = "flag"
+    )
+  }
+  
+  # skip out if spatial smoothing is not requested
+  if (isFALSE(scfg$postprocess$spatial_smooth$enable)) return(scfg)
+  
   if (is.null(fields)) {
-    # only prompt a change when certain fields aren't already requested
-    cur_val <- "spatial_smooth" %in% scfg$postprocess$processing_steps
-    if ("spatial_smooth" %in% names(scfg$postprocess)) {
-      cat(glue("
-        Current spatial smoothing settings:
-          Apply spatial smoothing: {cur_val}
-          Smoothing FWHM (mm): {scfg$postprocess$spatial_smooth$fwhm_mm}
-          File prefix: {scfg$postprocess$spatial_smooth$prefix}
-      "))
-
-      change <- prompt_input("Change settings?", type = "flag")
-      if (!change) return(scfg) # skip out
-    }
-
-    apply_step <- prompt_input("Apply spatial smoothing?", type="flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "spatial_smooth")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "spatial_smooth"]
-    }
-
     fields <- c()
     if (is.null(scfg$postprocess$spatial_smooth$fwhm_mm)) fields <- c(fields, "postprocess/spatial_smooth/fwhm_mm")
     if (is.null(scfg$postprocess$spatial_smooth$prefix)) fields <- c(fields, "postprocess/spatial_smooth/prefix")
@@ -478,34 +604,42 @@ setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
   return(scfg)
 }
 
-#' Specify the temporal filtering settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$temporal_filter` field populated
+#' Configure temporal filtering settings for postprocessing
+#'
+#' This function configures the temporal filtering step in the postprocessing pipeline.
+#' Temporal filtering removes unwanted frequency components from the BOLD signal, such as
+#' slow drifts (via high-pass filtering) or physiological noise (via low-pass filtering).
+#' This step is often used to improve signal quality for subsequent statistical analysis.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all temporal filtering fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$temporal_filter` entry updated.
 #' @keywords internal
 setup_temporal_filter <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$temporal_filter$enable) ||
+      (isFALSE(scfg$postprocess$temporal_filter$enable) && any(grepl("postprocess/temporal_filter/", fields)))) {
+    
+    scfg$postprocess$temporal_filter$enable <- prompt_input(
+      instruct = glue("\n\n
+      Temporal filtering removes low- and/or high-frequency components from the fMRI time series.
+      A high-pass filter (e.g., 0.008 Hz) is commonly used to remove slow scanner drift, while a low-pass
+      filter can remove physiological noise such as respiratory or cardiac fluctuations.
+
+      Do you want to apply temporal filtering to each fMRI run?\n
+      "),
+      prompt = "Apply temporal filtering?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  # Exit early if user disabled the step
+  if (isFALSE(scfg$postprocess$temporal_filter$enable)) return(scfg)
+
+  # Determine which fields to prompt for
   if (is.null(fields)) {
-    cur_val <- "temporal_filter" %in% scfg$postprocess$processing_steps
-    if ("temporal_filter" %in% names(scfg$postprocess)) {
-      cat(glue("
-        Current temporal filtering settings:
-          Apply temporal filter: pretty_arg({cur_val})
-          Low-pass cutoff (Hz): {pretty_arg(scfg$postprocess$temporal_filter$low_pass_hz)}
-          High-pass cutoff (Hz): {pretty_arg(scfg$postprocess$temporal_filter$high_pass_hz)}
-          File prefix: {pretty_arg(scfg$postprocess$temporal_filter$prefix)}
-      "))
-
-      change <- prompt_input("Change settings?", type="flag")
-      if (!change) return(scfg) # skip out
-    }
-
-    apply_step <- prompt_input("Apply temporal filter?", type="flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "temporal_filter")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "temporal_filter"]
-    }
-
+    fields <- c()
     if (is.null(scfg$postprocess$temporal_filter$low_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/low_pass_hz")
     if (is.null(scfg$postprocess$temporal_filter$high_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/high_pass_hz")
     if (is.null(scfg$postprocess$temporal_filter$prefix)) fields <- c(fields, "postprocess/temporal_filter/prefix")
@@ -529,61 +663,53 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
   return(scfg)
 }
 
-#' Specify the intensity normalization settings for postprocessing
-#' @param scfg a study configuration object created by `setup_project`
-#' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$apply_aroma` field populated
+#' Configure ICA-AROMA denoising application in postprocessing
+#'
+#' This function configures the application of ICA-AROMA denoising to fMRI data as part of postprocessing.
+#' ICA-AROMA (Pruim et al., 2015) identifies and labels motion-related independent components (ICs) using
+#' spatiotemporal features, and outputs regressors that can be used to remove these components.
+#'
+#' If enabled, this step applies the AROMA regressors to remove noise components from the BOLD time series
+#' using either 'aggressive' or 'nonaggressive' regression. Nonaggressive denoising is recommended as it
+#' preserves shared variance with signal components.
+#'
+#' This step assumes that ICA-AROMA has already been run using a tool like `fmripost-aroma`.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of fields to prompt for. If `NULL`, all fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess$apply_aroma` entry updated.
 #' @keywords internal
 setup_apply_aroma <- function(scfg = list(), fields = NULL) {
-  if (is.null(fields)) {
-    cur_val <- "apply_aroma" %in% scfg$postprocess$processing_steps
-    if ("apply_aroma" %in% names(scfg$postprocess)) {
-      cat(glue("
-        Current AROMA removal settings:
-          Apply AROMA denoising: {cur_val}
-          Use nonaggressive denoising: {scfg$postprocess$apply_aroma$nonaggressive}
-          File prefix: {scfg$postprocess$apply_aroma$prefix}
-      "))
-
-      change <- prompt_input("Change settings?", type="flag")
-      if (!change) return(scfg) # skip out
-    }
-
-    cat(glue("
-      As part of the fMRI processing pipeline, ICA-AROMA can be run for your data. This will compute a spatiotemporal
-      decomposition of the data for each run, then figure out which spatiotemporal components likely correspond to
-      motion-related artifacts. This is accomplished by the fmripost-aroma workflow (https://github.com/nipreps/fmripost-aroma).
-      The result is that you will have a derivatives containing the ICA components x time matrix and a tsv file of
-      potential regressors that can be used in denoising. This may look something like:
-
-      sub-<label>/
-        func/
-          sub-<label>_space-MNI152NLin6Asym_res-2_desc-melodic_mixing.tsv
-          sub-<label>_[specifiers]_desc-aroma_timeseries.tsv
-
-      Here, in postprocessing, you can choose to now *apply* these noise regressors to the fMRI data in order to remove
-      these sources of noise from the BOLD data. If you choose to apply AROMA denoising, the motion-related components
-      will be removed using 'aggressive' or 'nonaggressive' regression. Pruim et al. 2015 recommend 'nonaggressive', which
-      in simple terms only removes the unique variance in (bad) noise components not shared with (good) signal components.
-      'Aggressive' denoising, on the other hand, simply uses voxelwise multiple regression with all noise components
-      as regressors, such that any variance in noise components is removed from the data. We agree that 'nonaggressive' is
-      the best default for this procedure.
-    ", .trim=FALSE))
-
-    apply_step <- prompt_input("Apply AROMA denoising?", type="flag")
-    if (apply_step && !cur_val) {
-      scfg$postprocess$processing_steps <- c(scfg$postprocess$processing_steps, "apply_aroma")
-    } else if (!apply_step && cur_val) {
-      scfg$postprocess$processing_steps <- scfg$postprocess$processing_steps[scfg$postprocess$processing_steps != "apply_aroma"]
-    }
+  if (is.null(scfg$postprocess$apply_aroma$enable) ||
+      (isFALSE(scfg$postprocess$apply_aroma$enable) && any(grepl("postprocess/apply_aroma/", fields)))) {
     
+    scfg$postprocess$apply_aroma$enable <- prompt_input(
+      instruct = glue("\n\n
+      ICA-AROMA identifies motion-related independent components from the fMRI data and outputs
+      noise regressors (e.g., *_desc-aroma_timeseries.tsv) that can be used to denoise the BOLD signal.
+
+      This step applies those regressors to the data using voxelwise regression, either:
+        - nonaggressively (recommended), which removes unique variance from noise components only, or
+        - aggressively, which removes all variance associated with the noise components.
+
+      Do you want to apply ICA-AROMA denoising during postprocessing?\n
+      "),
+      prompt = "Apply AROMA denoising?",
+      type = "flag"
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$apply_aroma$enable)) return(scfg)
+
+  if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$postprocess$apply_aroma$nonaggressive)) fields <- c(fields, "postprocess/apply_aroma/nonaggressive")
     if (is.null(scfg$postprocess$apply_aroma$prefix)) fields <- c(fields, "postprocess/apply_aroma/prefix")
   }
 
   if ("postprocess/apply_aroma/nonaggressive" %in% fields) {
-    scfg$postprocess$apply_aroma$nonaggressive <- prompt_input("Use nonaggressive denoising? (Recommended: yes) ", type = "flag")
+    scfg$postprocess$apply_aroma$nonaggressive <- prompt_input("Use nonaggressive denoising?", type = "flag", default = TRUE)
   }
   
   if ("postprocess/apply_aroma/prefix" %in% fields) {

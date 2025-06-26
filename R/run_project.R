@@ -142,7 +142,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
 
     for (ss in seq_along(subject_dirs)) {
       process_subject(scfg, subject_dirs[[ss]], steps)
-      break
     }
   }
 }
