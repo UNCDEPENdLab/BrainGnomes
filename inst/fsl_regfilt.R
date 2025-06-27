@@ -18,17 +18,17 @@ parse_args <- function(args) {
   return(arg_list)
 }
 
+# for debugging
+# args <- c(
+#   "--input=/proj/mnhallqlab/projects/preproc_pipeline_test_data/logs/sub-540294/sub-540294_task-ridl_run-04_desc-confounds_timeseries.nii.gz",
+#   "--melodic_mix=/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294/func/sub-540294_task-ridl_run-04_res-2_desc-melodic_mixing.tsv",
+#   "--filter=14,15,26",
+#   "--njobs=1",
+#   "--output=/proj/mnhallqlab/projects/preproc_pipeline_test_data/logs/sub-540294/sub-540294_task-ridl_run-04_desc-confoundsa_timeseries.nii.gz"
+# )
+
 # Parse input args
 params <- parse_args(args)
-
-# for debugging
-# params <- list(
-#   input = "/work/appscr/r/mnhallq/RtmpNZ6E6y/confounds32f617346ef470.nii.gz",
-#   melodic_mix = "/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294/func/sub-540294_task-rest_res-2_desc-melodic_mixing.tsv",
-#   filter = "1,2,3,4,5,6",
-#   njobs=1,
-#   output="temp_out.nii.gz"
-# )
 
 # Validate required parameters
 required <- c("input", "melodic_mix", "filter")
@@ -45,7 +45,7 @@ params$output <- if (!is.null(params$output)) params$output else "denoised_func_
 params$output <- sub("\\.nii(\\.gz)*$", "", params$output, perl = TRUE)
 
 # Install and load required packages
-for (pkg in c("speedglm", "oro.nifti", "doParallel", "tictoc", "pracma")) {
+for (pkg in c("speedglm", "oro.nifti", "doParallel", "pracma")) {
   if (!suppressMessages(require(pkg, character.only = TRUE))) {
     message("Installing missing package dependency: ", pkg)
     install.packages(pkg)
@@ -69,8 +69,7 @@ if (file.exists(params$filter)) {
 
 if (any(is.na(badics))) stop("Invalid values in --filter argument. Must be a file path or comma-separated integers.")
 
-cat("The following components will be removed from the data using partial regression:\n")
-cat(paste(badics, collapse = ", "), "\n\n")
+cat(length(badics), "components will be removed from the data using partial regression.\n")
 
 # Load inputs
 message("Reading input dataset: ", params$input)
@@ -80,8 +79,11 @@ melmix <- data.matrix(read.table(params$melodic_mix, header = FALSE, colClasses 
 # Identify non-constant voxels
 nonconst <- apply(fmri_ts_data, c(1,2,3), function(ts) !all(ts == ts[1]))
 mi <- which(nonconst, arr.ind = TRUE)
+if (nrow(mi) == 0L) stop("Unable to find non-constant voxels in fMRI input: ", params$input, ". fsl_regfilt.R cannot proceed")
 toprocess <- apply(fmri_ts_data, 4, function(x) x[nonconst])
-if (nrow(toprocess) == 0L) stop("Unable to find non-constant voxels in fMRI input: ", params$input)
+
+# in case of singleton result, apply will drop the 2nd dimension
+if (is.vector(toprocess)) toprocess <- matrix(toprocess, nrow=1)
 rownames(toprocess) <- 1:nrow(toprocess)
 message("fMRI data has ", nrow(toprocess), " voxels and ", ncol(toprocess), " timepoints")
 
@@ -101,11 +103,16 @@ if (params$njobs > 1) {
 }
 
 message("Starting voxelwise partial regression")
-tic("partialLm fitting")
-res <- foreach::foreach(v = iter(toprocess, by = "row"), .noexport="fmri_ts_data", .packages = "speedglm", .inorder = TRUE, .multicombine = TRUE, .combine = rbind) %dopar% {
+start_time <- Sys.time()
+res <- foreach::foreach(v = iter(toprocess, by = "row"), .noexport = "fmri_ts_data", .packages = "speedglm", .inorder = TRUE, .multicombine = TRUE, .combine = rbind) %dopar% {
   partialLm(matrix(v, ncol = 1), melmix, badics)
 }
-toc()
+# handle singleton returned as vector, not matrix
+if (is.vector(res)) res <- matrix(res, nrow = 1)
+
+end_time <- Sys.time()
+duration <- difftime(end_time, start_time, units = "mins")
+message("partialLm fitting completed in ", round(duration, 3), " minutes.")
 
 if (params$njobs > 1) stopCluster(cl)
 
@@ -117,7 +124,7 @@ fmri_ts_data@.Data[miassign] <- res
 fmri_ts_data@cal_min <- min(fmri_ts_data)
 fmri_ts_data@cal_max <- max(fmri_ts_data)
 
-# Save output
-writeNIfTI(fmri_ts_data, filename = params$output)
+# Save output to file
+res <- writeNIfTI(fmri_ts_data, filename = params$output)
 
 message("Finished. Output saved to: ", params$output, ".nii.gz")

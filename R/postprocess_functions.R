@@ -200,14 +200,25 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
 
       df <- subset(filtered_confounds, select = cfg$confound_calculate$columns)
-      if (!is.null(cfg$confound_calculate$noproc_columns) && length(cfg$confound_calculate$noproc_columns) > 0L) {
-        noproc_df <- subset(confounds, select = cfg$confound_calculate$noproc_columns)
-        noproc_df[is.na(noproc_df)] <- 0 # force 0 value -- NAs don't work as regressors
-        df <- cbind(df, noproc_df)
+
+      if (!is.null(cfg$confound_calculate$noproc_columns) && !is.na(cfg$confound_calculate$noproc_columns)) {
+        present_cols <- intersect(cfg$confound_calculate$noproc_columns, names(confounds))
+        missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
+
+        if (length(missing_cols) > 0L) {
+          lg$warn("The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
+                  paste(missing_cols, collapse = ", "))
+        }
+
+        if (length(present_cols) > 0L) {
+          noproc_df <- confounds[, present_cols, drop = FALSE]
+          noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
+          df <- cbind(df, noproc_df)
+        }
       }
 
       if (isTRUE(cfg$confound_calculate$demean)) {
-        df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns], function(x) x - mean(x, na.rm = TRUE))
+        df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns, drop=FALSE], function(x) x - mean(x, na.rm = TRUE))
       }
       
       lg$info("Writing postprocessed confounds to: {confile}")
@@ -221,10 +232,20 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       # mean center columns
       df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
       
-      if (!is.null(cfg$confound_regression$noproc_columns) && length(cfg$confound_regression$noproc_columns) > 0L) {
-        noproc_df <- subset(confounds, select=cfg$confound_regression$noproc_columns)
-        noproc_df[is.na(noproc_df)] <- 0 # force 0 value -- NAs don't work as regressors
-        df <- cbind(df, noproc_df)
+      if (!is.null(cfg$confound_regression$noproc_columns) && !is.na(cfg$confound_regression$noproc_columns)) {
+        present_cols <- intersect(cfg$confound_regression$noproc_columns, names(confounds))
+        missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
+
+        if (length(missing_cols) > 0L) {
+          lg$warn("The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
+                  paste(missing_cols, collapse = ", "))
+        }
+
+        if (length(present_cols) > 0L) {
+          noproc_df <- confounds[, present_cols, drop = FALSE]
+          noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
+          df <- cbind(df, noproc_df)
+        }
       }
 
       to_regress <- construct_bids_filename(
@@ -233,7 +254,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
 
       const_cols <- sapply(df, function(x) all(x == x[1L]))
-      if (any(const_cols)) df <- df[, !const_cols] # remove any constant columns
+      if (any(const_cols)) df <- df[, !const_cols, drop = FALSE] # remove any constant columns
       df <- cbind(1, df) # add intercept
 
       data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)

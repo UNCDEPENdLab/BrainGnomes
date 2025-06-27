@@ -473,7 +473,9 @@ nii_to_mat <- function(ni_in) {
   checkmate::assert_file_exists(ni_in)
 
   nii <- readNIfTI(ni_in, reorient = FALSE, rescale_data = FALSE)
-  mat <- t(nii[, 1, 1, ]) # x and z -- make back into time x variables
+  mat <- nii[, 1, 1, , drop = FALSE] # keep x and t
+  dim(mat) <- dim(mat)[c(1, 4)] # selectively drop y and z dimensions (handles singleton cases correctly)
+  mat <- t(mat) # make into time x variables
   return(mat)
 }
 

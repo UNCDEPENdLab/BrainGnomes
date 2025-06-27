@@ -103,7 +103,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
   lg$info(glue("Processing subject {sub_id} with {nrow(sub_cfg)} sessions."))
   # lg$info(glue("Processing steps: {glue_collapse(names(steps), sep = ', ')}"))
-  lg$info(glue("BIDS directory: {bids_sub_dir}"))
+  if (!is.na(bids_sub_dir))  lg$info(glue("BIDS directory: {bids_sub_dir}"))
 
   ## Handle BIDS conversion -- session-level
   n_inputs <- nrow(sub_cfg)
