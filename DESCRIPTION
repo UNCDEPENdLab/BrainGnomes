@@ -1,6 +1,6 @@
 Package: BrainGnomes
 Title: An R package for preprocessing and analyzing fMRI data
-Version: 0.2-2
+Version: 0.2-3
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
 Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
@@ -8,7 +8,7 @@ Description: This R package handles preprocessing and analysis of fMRI data on H
 License: GPL-3
 BugReports: https://github.com/UNCDEPENdLab/BrainGnomes/issues
 Depends:
-    R (>= 3.5.0),
+    R (>= 4.1.0),
     methods
 LazyData: yes
 LazyLoad: yes
@@ -18,11 +18,9 @@ RoxygenNote: 7.3.2
 Imports:
     checkmate,
     data.table,
-    dplyr,
     glue,
     lubridate,
     lgr,
-    magrittr,
     oro.nifti,
     reticulate,
     yaml

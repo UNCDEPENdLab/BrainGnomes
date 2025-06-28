@@ -108,7 +108,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   # location of DICOMs
   if ("metadata/dicom_directory" %in% fields) {
-    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files files stored?", type = "character")
+    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
   }
 
   if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
@@ -153,7 +153,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
   }
 
-    if ("metadata/templateflow_home" %in% fields) {
+  if ("metadata/templateflow_home" %in% fields) {
     scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
       instruct = glue("\n\n
       The pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
@@ -167,6 +167,9 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     create <- prompt_input(instruct = glue("The directory {scfg$metadata$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
     if (create) dir.create(scfg$metadata$templateflow_home, recursive = TRUE)
   }
+
+  # singularity bind paths are unhappy with symbolic links and ~/ notation
+  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home)
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
   if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
@@ -249,15 +252,14 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if ("fmriprep/fs_license_file" %in% fields) {
     scfg$fmriprep$fs_license_file <- prompt_input(
-      instruct = glue("
-      \nWhat is the location of your FreeSurfer license file? This is required for fmriprep to run.
+      instruct = glue("\n
+      What is the location of your FreeSurfer license file? This is required for fmriprep to run.
       The license file is might be called FreeSurferLicense.txt and is available from the FreeSurfer website.
-      https://surfer.nmr.mgh.harvard.edu/fswiki/License
-      \n
-    "),
+      https://surfer.nmr.mgh.harvard.edu/fswiki/License\n
+      "),
       prompt = "What is the location of your FreeSurfer license file?",
-      type = "file"
-    )
+      type = "file", default = scfg$fmriprep$fs_license_file
+    ) |> normalizePath(mustWork=TRUE)
   }
 
   return(scfg)
@@ -660,7 +662,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  # location of fmriprep container
+  # location of fmriprep container -- use normalizePath() to follow any symbolic links or home directory shortcuts
   if ("compute_environment/fmriprep_container" %in% fields) {
     scfg$compute_environment$fmriprep_container <- prompt_input(
       instruct = glue("
@@ -671,7 +673,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       prompt = "Location of fmriprep container: ",
       type = "file",
       default = scfg$compute_environment$fmriprep_container
-    )
+    ) |> normalizePath()
   }
 
   # location of heudiconv container
@@ -685,7 +687,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       prompt = "Location of heudiconv container: ",
       type = "file",
       default = scfg$compute_environment$heudiconv_container
-    )
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of bids-validator binary
@@ -701,41 +703,38 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html.\n
     "),
       prompt = "Location of bids-validator program: ",
-      type = "file", required = ,
-      default = scfg$compute_environment$bids_validator
-    )
+      type = "file", default = scfg$compute_environment$bids_validator
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of mriqc container
   if ("compute_environment/mriqc_container" %in% fields) {
     scfg$compute_environment$mriqc_container <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n
       The pipeline can use MRIQC to produce automated QC reports. This is suggested, but not required.
       If you'd like to use MRIQC, you need a working mriqc container (docker or singularity).
       If you don't have this yet, this should work to build the latest version:
-        singularity build /location/to/mriqc-latest.simg docker://nipreps/mriqc:latest
-    ", .trim = FALSE),
+          singularity build /location/to/mriqc-latest.simg docker://nipreps/mriqc:latest\n
+      ", .trim = FALSE),
       prompt = "Location of mriqc container: ",
-      type = "file", required = FALSE,
-      default = scfg$compute_environment$mriqc_container
-    )
+      type = "file", default = scfg$compute_environment$mriqc_container
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of ICA-AROMA fMRIprep container
   if ("compute_environment/aroma_container" %in% fields) {
     scfg$compute_environment$aroma_container <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n
       The pipeline can use ICA-AROMA to denoise fMRI timeseries. As descried in Pruim et al. (2015), this
       is a data-driven step that produces a set of temporal regressors that are thought to be motion-related.
       If you would like to use ICA-AROMA in the pipeline, you need to build a singularity container of this
       workflow. Follow the instructions here: https://fmripost-aroma.readthedocs.io/latest/
 
-      This is required if you say 'yes' to running AROMA during study setup.
-    ", .trim = FALSE),
+      This is required if you say 'yes' to running AROMA during study setup.\n
+      ", .trim = FALSE),
       prompt = "Location of ICA-AROMA container: ",
-      type = "file", required = FALSE,
-      default = scfg$compute_environment$aroma_container
-    )
+      type = "file", default = scfg$compute_environment$aroma_container
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   return(scfg)
