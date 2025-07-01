@@ -42,6 +42,8 @@ ncores=$SLURM_NTASKS
 [ ! -r "$input_file" ] && echo "input_file $input_file not readable. Exiting" && exit 1
 [ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
 
+[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
 [ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1

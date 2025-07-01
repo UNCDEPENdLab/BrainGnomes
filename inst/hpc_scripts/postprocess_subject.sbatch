@@ -40,6 +40,7 @@ ncores=$SLURM_NTASKS
 [ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
 [ -z "$debug_pipeline" ] && debug_pipeline=0
+[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 
 # add the job id to the log file variables in case of crash
