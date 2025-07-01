@@ -62,6 +62,9 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
 [[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
+if [[ "$debug_pipeline" -eq 1 ]]; then
+  log_message INFO "Running in debug mode; commands will not be executed"
+fi
 
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel

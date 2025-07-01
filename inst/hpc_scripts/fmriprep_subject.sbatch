@@ -42,6 +42,9 @@ fi
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+if [[ "$debug_pipeline" -eq 1 ]]; then
+  log_message INFO "Running in debug mode; commands will not be executed"
+fi
 
 [ -z "$fs_license_file" ] && fs_license_file="$FS_LICENSE" # fall back to global freesurfer license file if not set
 [ -z "$fs_license_file" ] && fs_license_file="$FREESURFER_HOME/license.txt" # fall back to freesurfer license file in $FREESURFER_HOME if not set

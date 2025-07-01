@@ -31,6 +31,9 @@ trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 
 [[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+if [[ "$debug_pipeline" -eq 1 ]]; then
+  log_message INFO "Running in debug mode; commands will not be executed"
+fi
 
 heuristic_dir=$(dirname "$heudiconv_heuristic")
 
