@@ -33,6 +33,9 @@ source "$env_file" #setup relevant variables for this processing environment
 [ -z "${loc_bids_root}" ] && echo "No loc_bids_root variable set." && exit 1
 
 ####
+# convert debug flag to numeric
+[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0
+
 #run heudiconv
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1

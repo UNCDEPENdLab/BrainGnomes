@@ -60,4 +60,5 @@ if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_suffix=c
 fi
+
 rel "${mriqc_location} ${loc_root}/bids/ ${loc_root}/mriqc_IQMs/ participant --participant-label $sub -w ${loc_root}/mriqc_tempfiles && date \"+%m%d%y@%H:%M\" > $loc_bids_root/sub-$sub/.mriqc_complete" $rel_suffix

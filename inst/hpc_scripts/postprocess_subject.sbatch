@@ -40,6 +40,7 @@ ncores=$SLURM_NTASKS
 [ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
 [ -z "$debug_pipeline" ] && debug_pipeline=0
+
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
 else
@@ -49,6 +50,7 @@ if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_flag=c
 fi
+
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 
 # add the job id to the log file variables in case of crash
