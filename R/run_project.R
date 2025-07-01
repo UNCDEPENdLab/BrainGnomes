@@ -50,12 +50,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
 
-    if ("bids_validation" %in% steps) {
-      if (!isTRUE(scfg$bids_validation$enable)) stop("bids_validation was requested, but it is disabled in the configuration.")
-      if (!validate_exists(scfg$compute_environment$bids_validator)) {
-        stop("Cannot run BIDS validation without a bids_validator location.")
-      }
-    }
 
     if ("mriqc" %in% steps) {
       if (!isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
@@ -96,7 +90,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps <- c()
     cat("\nPlease select which steps to run:\n")
     steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
-    steps["bids_validation"] <- ifelse(isTRUE(scfg$bids_validation$enable) && !is.null(scfg$compute_environment$bids_validator), prompt_input(instruct = "Run BIDS validation?", type = "flag"), FALSE)
     steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
     steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
