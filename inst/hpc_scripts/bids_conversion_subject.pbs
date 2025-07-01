@@ -34,6 +34,11 @@ source "$env_file" #setup relevant variables for this processing environment
 
 ####
 #run heudiconv
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+else
+  debug_pipeline=0
+fi
 if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_suffix=c
