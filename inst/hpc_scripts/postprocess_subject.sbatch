@@ -115,19 +115,7 @@ for f in "${files[@]}"; do
   job_ids+=("$jid")
 done
 
-
-### NOW WAIT ON KIDS
-
-# # Submit child jobs and collect their job IDs
-# job_ids=()
-# for file in input_files/*.nii.gz; do
-#   jid=$(sbatch --parsable child_job.sbatch "$file")
-#   echo "Submitted child job $jid for file $file"
-#   job_ids+=("$jid")
-# done
-
 # Wait for all child jobs to finish
-# Option 1: Poll using squeue
 echo "Waiting for child jobs to complete..."
 
 while true; do

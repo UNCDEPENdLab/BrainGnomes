@@ -18,11 +18,13 @@ RoxygenNote: 7.3.2
 Imports:
     checkmate,
     data.table,
+    DBI,
     glue,
     lubridate,
     lgr,
     oro.nifti,
     reticulate,
+    RSQLite
     yaml
 Suggests: 
     testthat (>= 3.0.0)

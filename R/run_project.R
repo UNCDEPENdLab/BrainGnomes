@@ -140,8 +140,7 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     if (is.data.frame(subject_filter)) {
       checkmate::assert_names(names(subject_filter), must.include = "sub_id")
       by_cols <- intersect(c("sub_id", "ses_id"), names(subject_filter))
-      subject_dirs <- merge(subject_dirs, subject_filter[, by_cols, drop = FALSE],
-                            by = by_cols)
+      subject_dirs <- merge(subject_dirs, subject_filter[, by_cols, drop = FALSE], by = by_cols)
     } else {
       subject_dirs <- subject_dirs[subject_dirs$sub_id %in% subject_filter, , drop = FALSE]
     }
