@@ -62,9 +62,14 @@ log_message INFO Starting mriqc for subject $sub_id in $out_dir
 rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mriqc_root/" participant \
     $cli_options & # all options setup by submit_mriqc()
+cmd_pid=$!
 
-wait
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO Finished mriqc for subject $sub_id
+exit $cmd_status

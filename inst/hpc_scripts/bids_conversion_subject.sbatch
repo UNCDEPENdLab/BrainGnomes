@@ -74,13 +74,18 @@ singularity_cmd="singularity run --cleanenv -B $loc_bids_root -B $loc_sub_dicoms
 rel $rel_flag $log_flag $singularity_cmd --files $loc_sub_dicoms -s $sub_id $ses_flag \
   -f $heudiconv_heuristic -c dcm2niix \
   -o $loc_bids_root --bids &
+cmd_pid=$!
 
-wait
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
 # write complete file if the command was successful and debug_pipeline is not set
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
+exit $cmd_status
 
 #######
 # example call

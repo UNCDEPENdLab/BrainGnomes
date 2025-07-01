@@ -100,9 +100,14 @@ rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set 
 rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_fmriprep()
+cmd_pid=$!
 
-wait
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
+exit $cmd_status
