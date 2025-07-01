@@ -40,7 +40,17 @@ ncores=$SLURM_NTASKS
 [ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
 [ -z "$debug_pipeline" ] && debug_pipeline=0
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+else
+  debug_pipeline=0
+fi
+if [[ "$debug_pipeline" -eq 1 ]]; then
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+fi
+
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 
 # add the job id to the log file variables in case of crash
@@ -62,8 +72,6 @@ mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-[[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 

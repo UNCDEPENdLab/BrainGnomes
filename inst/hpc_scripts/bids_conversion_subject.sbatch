@@ -30,7 +30,15 @@ trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+else
+  debug_pipeline=0
+fi
+if [[ "$debug_pipeline" -eq 1 ]]; then
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+fi
 
 heuristic_dir=$(dirname "$heudiconv_heuristic")
 
@@ -56,8 +64,6 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
 #run heudiconv
-[ $debug_pipeline -eq 1 ] && rel_flag=c # if debug_pipeline is 1, only echo command to log, don't run it
-
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
