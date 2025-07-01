@@ -19,20 +19,20 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     if (any(duplicated(sub_cfg$ses_id))) stop("Duplicate session IDs found in sub_cfg. process_subject requires unique session IDs.")
   }
   checkmate::assert_logical(steps, names = "unique")
-  expected <- c("bids_conversion", "bids_validation", "mriqc", "fmriprep", "aroma", "postprocess")
+  expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
 
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
   lg <- get_subject_logger(scfg, sub_id)
   
-  bids_conversion_ids <- bids_validation_id <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
+  bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
 
 
   # N.B. fmriprep processes a subject, not a session... Thus, we need to submit a top-level job for the subject
 
   # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
-  # BIDS validation, fmriprep, mriqc, and aroma are subject-specific (sessions nested within subjects)
+  # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
 
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
@@ -137,10 +137,6 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
   # Everything after BIDS conversion depends on the BIDS directory existing
 
-  ## Handle BIDS validation
-  # on further investigation, bids-validator only works on the root of the BIDS directory.
-  # so, maybe we should just let fmriprep handle this directly
-  # bids_validation_id <- submit_step("bids_validation", parent_ids = bids_conversion_ids)
 
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = bids_conversion_ids)
@@ -185,14 +181,14 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
 
 }
 
-submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
   
   env_variables <- c(
     env_variables,
     bids_validator = scfg$compute_environment$bids_validator,
     bids_dir = sub_dir,
     sub_id = sub_id,
-    outfile = scfg$bids_validation$outfile
+    outfile = if (is.null(outfile)) scfg$bids_validation$outfile else outfile
   )
 
   job_id <- cluster_job_submit(sched_script,
