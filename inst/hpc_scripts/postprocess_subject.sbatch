@@ -134,6 +134,22 @@ while true; do
   sleep 300 # poll every 5 minutes
 done
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+# Check exit status of child jobs using sacct
+failed=0
+for jid in "${job_ids[@]}"; do
+  # Get job state and exit code. sacct may return multiple lines; take the first
+  state=$(sacct -n -j "$jid" -o State | head -n 1 | awk '{print $1}')
+  exit_code=$(sacct -n -j "$jid" -o ExitCode | head -n 1 | awk '{print $1}')
+  exit_main=${exit_code%%:*}
+
+  if [[ "$state" != "COMPLETED" || "$exit_main" != "0" ]]; then
+    log_message ERROR "Child job $jid failed with state $state exit code $exit_code"
+    failed=1
+  fi
+done
+
+[[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO Finished postprocessing for subject $sub_id $ses_str
+exit $failed
