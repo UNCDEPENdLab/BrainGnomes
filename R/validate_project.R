@@ -304,6 +304,14 @@ validate_postprocess_config <- function(ppcfg, quiet = FALSE) {
     }
   }
 
+  if ("scrubbing" %in% names(ppcfg)) {
+    if (!checkmate::test_character(ppcfg$scrubbing$expression)) {
+      if (!quiet) message("Invalid expression field in $postprocess$scrubbing")
+      gaps <- c(gaps, "postprocess/scrubbing/expression")
+      ppcfg$scrubbing$expression <- NULL
+    }
+  }
+
   if ("confound_regression" %in% names(ppcfg)) {
     if (!checkmate::test_character(ppcfg$confound_regression$columns)) {
       if (!quiet) message("Invalid columns field in $postprocess$confound_regression")

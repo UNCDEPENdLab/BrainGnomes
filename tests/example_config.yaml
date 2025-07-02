@@ -89,6 +89,9 @@ postprocess:
     columns: csf
     noproc_columns: .na.character
     demean: yes
+  scrubbing:
+    enable: no
+    expression: fd > 0.9
   confound_regression:
     enable: no
   force_processing_order: no

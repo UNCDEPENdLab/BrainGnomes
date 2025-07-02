@@ -74,6 +74,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
   scfg <- setup_temporal_filter(scfg, fields)
   scfg <- setup_intensity_normalization(scfg, fields)
   scfg <- setup_confound_calculate(scfg, fields)
+  scfg <- setup_scrubbing(scfg, fields)
   scfg <- setup_confound_regression(scfg, fields)
   scfg <- setup_postproc_steps(scfg, fields)
 
@@ -260,6 +261,45 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   # } else {
   #   scfg$postprocess$processing_steps <- processing_sequence
   # }
+
+  return(scfg)
+}
+
+#' Configure scrubbing of high-motion volumes
+#'
+#' Generates spike regressors based on expressions evaluated on the confounds
+#' file (e.g., "fd > 0.9" or "dvars > 1.5; -1:1"). These regressors can later be
+#' used to censor volumes during modeling.
+#'
+#' @param scfg A study configuration object.
+#' @param fields Optional vector of fields to prompt for.
+#' @return Modified `scfg` with `$postprocess$scrubbing` populated.
+#' @keywords internal
+setup_scrubbing <- function(scfg = list(), fields = NULL) {
+  if (is.null(scfg$postprocess$scrubbing$enable) ||
+      (isFALSE(scfg$postprocess$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
+    scfg$postprocess$scrubbing$enable <- prompt_input(
+      instruct = glue("\n\nScrubbing identifies high-motion volumes and creates spike regressors.\n",
+        "Provide expressions evaluated against the confounds file, such as 'fd > 0.9'",
+        " or 'dvars > 1.5; -1:1'.\nDo you want to generate scrubbing regressors?\n"),
+      prompt = "Enable scrubbing?",
+      type = "flag",
+      default = FALSE
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$scrubbing$enable)) return(scfg)
+
+  if (is.null(fields)) {
+    fields <- c()
+    if (is.null(scfg$postprocess$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
+  }
+
+  if ("postprocess/scrubbing/expression" %in% fields) {
+    scfg$postprocess$scrubbing$expression <- prompt_input(
+      "Spike expression(s): ", type = "character", split = "\\s+", required = TRUE
+    )
+  }
 
   return(scfg)
 }
