@@ -572,6 +572,16 @@ file_sans_ext <- function(file) {
 }
 
 
+# avoiding dplyr dependency
+lead <- function(x, n = 1L, default = NA) {
+  if (n < 0L) return(lag(x, -n, default))
+  c(tail(x, -n), rep(default, n))
+}
+
+lag <- function(x, n = 1L, default = NA) {
+  if (n < 0L) return(lead(x, -n, default))
+  c(rep(default, n), head(x, -n))
+}
 
 get_pipeline_status <- function(scfg) {
   # adapted from get_feat_status.

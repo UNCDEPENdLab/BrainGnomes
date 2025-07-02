@@ -184,6 +184,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
     "apply_aroma",
     "temporal_filter",
     "confound_regression",
+    "scrub_timepoints",
     "intensity_normalize"
   )
 
@@ -268,7 +269,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
 #' Configure scrubbing of high-motion volumes
 #'
 #' Generates spike regressors based on expressions evaluated on the confounds
-#' file (e.g., "fd > 0.9" or "dvars > 1.5; -1:1"). These regressors can later be
+#' file (e.g., "framewise_displacement > 0.9" or "-1:1; dvars > 1.5"). These regressors can later be
 #' used to censor volumes during modeling.
 #'
 #' @param scfg A study configuration object.
@@ -279,9 +280,22 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   if (is.null(scfg$postprocess$scrubbing$enable) ||
       (isFALSE(scfg$postprocess$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
     scfg$postprocess$scrubbing$enable <- prompt_input(
-      instruct = glue("\n\nScrubbing identifies high-motion volumes and creates spike regressors.\n",
-        "Provide expressions evaluated against the confounds file, such as 'fd > 0.9'",
-        " or 'dvars > 1.5; -1:1'.\nDo you want to generate scrubbing regressors?\n"),
+      instruct = glue("\n\n
+      Scrubbing identifies high-motion/high-artifact volumes and creates a spike regressors file and an AFNI-compatible 'censor' file.
+      If you enable scrubbing here, you will be asked for an expression that is evaluated against the confounds file, such as 
+      'framewise_displacement > 0.9' or '-1:1; dvars > 1.5;'. The part before the semicolon denotes volumes around the spike to scrub.
+      For example, -1:0 scrubs the spike and one volume before, and if you omit this, it just scrubs the spike (0).
+
+      If you say 'yes' here, you will be asked whether you want to use the scrubbing calculation to censor the fMRI data, removing
+      the volumes identified from the postprocessed fMRI NIfTI image. Please note that scrubbing volumes in this way requires the use of
+      AFNI 3dTproject, which combines temporal filtering, confound regression, and scrubbing.
+
+      Finally, if you ask to 'scrub' the fMRI data, you will also be asked whether you wish to interpolate the scrubbed timepoints prior
+      to applying temporal filtering and confound regression. For temporal filtering, this can mitigate ringing artifacts surrounding
+      motion-related signal spikes (Carp, 2012, NeuroImage). For confound regression, interpolation of scrubbed timepoints can
+      to ensure that the regression fits (and thus, success of the operation) are driven more by uncensored volumes than by spiky censored ones.
+
+      Do you want to generate scrubbing regressors?\n"),
       prompt = "Enable scrubbing?",
       type = "flag",
       default = FALSE
@@ -293,11 +307,35 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$postprocess$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
+    if (is.null(scfg$postprocess$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
   }
 
   if ("postprocess/scrubbing/expression" %in% fields) {
     scfg$postprocess$scrubbing$expression <- prompt_input(
       "Spike expression(s): ", type = "character", split = "\\s+", required = TRUE
+    )
+  }
+
+  if ("postprocess/scrubbing/interpolate" %in% fields) {
+    scfg$postprocess$scrubbing$interpolate <- prompt_input(
+      instruct = glue("\n\
+      Do you want to interpolate over scrubbed timepoints before applying temporal filtering,
+      confound regression, and/or intensity normalization? This is achieved using 3dTproject -cenmode NTRP.
+      \n"),
+      prompt = "Interpolate scrubbed values?",
+      type = "flag",
+      default = FALSE
+    )
+  }
+
+  if ("postprocess/scrubbing/apply" %in% fields) {
+    scfg$postprocess$scrubbing$apply <- prompt_input(
+      instruct = glue("\n\
+      Do you want to remove the scrubbed timepoints from the fMRI time series?
+      \n"),
+      prompt = "Remove scrubbed timepoints?",
+      type = "flag",
+      default = FALSE
     )
   }
 

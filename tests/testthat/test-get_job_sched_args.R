@@ -1,6 +1,3 @@
-library(testthat)
-library(BrainGnomes)
-
 test_that("get_job_sched_args formats torque arguments", {
   scfg <- list(
     compute_environment = list(scheduler = "torque"),

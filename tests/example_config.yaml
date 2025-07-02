@@ -91,7 +91,7 @@ postprocess:
     demean: yes
   scrubbing:
     enable: no
-    expression: fd > 0.9
+    expression: framewise_displacement > 0.9
   confound_regression:
     enable: no
   force_processing_order: no

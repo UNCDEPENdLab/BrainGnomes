@@ -158,8 +158,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
   
   #### handle confounds, filtering to match MRI data
-  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable) ||
-      isTRUE(cfg$scrubbing$enable)) {
+  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable) || isTRUE(cfg$scrubbing$enable)) {
     confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
     confound_cols <- as.character(union(cfg$confound_regression$columns, cfg$confound_calculate$columns))
     noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns, cfg$confound_calculate$noproc_columns)) # no AROMA or filter
@@ -169,13 +168,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
     if (isTRUE(cfg$scrubbing$enable)) {
       lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
-      spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg=lg)
+      spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
       scrub_file <- construct_bids_filename(
         modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
         full.names = TRUE
       )
       if (!is.null(spike_mat)) {
-        data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep="\t", col.names=FALSE)
+        data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep = "\t", col.names = FALSE)
         censor_file <- construct_bids_filename(
           modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
           full.names = TRUE
@@ -200,8 +199,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if ("apply_aroma" %in% processing_sequence) {
       lg$info("Removing AROMA noise components from confounds")
       confound_nii <- apply_aroma(confound_nii,
-        mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics, 
-        overwrite=cfg$overwrite, lg=lg, use_R=TRUE, fsl_img = fsl_img
+        mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
+        overwrite = cfg$overwrite, lg = lg, use_R = TRUE, fsl_img = fsl_img
       )
     }
 
@@ -209,15 +208,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if ("temporal_filter" %in% processing_sequence) {
       lg$info("Temporally filtering confounds")
       confound_nii <- temporal_filter(confound_nii,
-        tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz, high_pass_hz = cfg$temporal_filter$high_pass_hz, 
-        overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
+        tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz, high_pass_hz = cfg$temporal_filter$high_pass_hz,
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
     }
 
     # read in processed confounds and convert back to time x signals data.frame
     filtered_confounds <- data.frame(nii_to_mat(confound_nii))
     filtered_confounds <- setNames(filtered_confounds, confound_cols)
-    
+
     # handle confound calculation
     if (isTRUE(cfg$confound_calculate$enable)) {
       confile <- construct_bids_filename(
@@ -232,25 +231,27 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
 
         if (length(missing_cols) > 0L) {
-          lg$warn("The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
-                  paste(missing_cols, collapse = ", "))
+          lg$warn(
+            "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
+            paste(missing_cols, collapse = ", ")
+          )
         }
 
-      if (length(present_cols) > 0L) {
-        noproc_df <- confounds[, present_cols, drop = FALSE]
-        noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
-        df <- cbind(df, noproc_df)
+        if (length(present_cols) > 0L) {
+          noproc_df <- confounds[, present_cols, drop = FALSE]
+          noproc_df[is.na(noproc_df)] <- 0 # force NAs to 0 for regression
+          df <- cbind(df, noproc_df)
+        }
       }
-    }
 
       if (isTRUE(cfg$scrubbing$enable) && exists("spike_mat") && !is.null(spike_mat)) {
         df <- cbind(df, spike_mat)
       }
 
       if (isTRUE(cfg$confound_calculate$demean)) {
-        df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns, drop=FALSE], function(x) x - mean(x, na.rm = TRUE))
+        df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns, drop = FALSE], function(x) x - mean(x, na.rm = TRUE))
       }
-      
+
       lg$info("Writing postprocessed confounds to: {confile}")
       lg$info("Columns are: {paste(names(df), collapse=', ')}")
       data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
@@ -261,19 +262,21 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
       # mean center columns
       df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
-      
+
       if (!is.null(cfg$confound_regression$noproc_columns) && !is.na(cfg$confound_regression$noproc_columns)) {
         present_cols <- intersect(cfg$confound_regression$noproc_columns, names(confounds))
         missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
 
         if (length(missing_cols) > 0L) {
-          lg$warn("The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
-                  paste(missing_cols, collapse = ", "))
+          lg$warn(
+            "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
+            paste(missing_cols, collapse = ", ")
+          )
         }
 
         if (length(present_cols) > 0L) {
           noproc_df <- confounds[, present_cols, drop = FALSE]
-          noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
+          noproc_df[is.na(noproc_df)] <- 0 # force NAs to 0 for regression
           df <- cbind(df, noproc_df)
         }
       }
@@ -290,7 +293,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
     }
   }
-  
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
     if (step == "apply_mask") {
@@ -881,15 +883,15 @@ resample_template_to_img <- function(
 #'
 #' Evaluates user-supplied expressions against a confounds data.frame to
 #' generate spike (one-hot) regressors. Expressions may optionally include
-#' a semicolon-separated range of volumes to also flag (e.g. "fd > 0.5; -1:1").
+#' a semicolon-separated range of volumes to also flag (e.g. "-1:1; framewise_displacement > 0.5").
 #'
-#' @param mot Data frame of confounds with one row per volume.
+#' @param confounds_df Data frame of confounds with one row per volume.
 #' @param spike_volume Character vector of expressions to evaluate.
 #' @param lg Logger object for messages.
 #' @return Matrix of spike regressors or NULL if none detected.
 #' @keywords internal
-compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg = NULL) {
-  if (is.null(mot) || is.null(spike_volume)) return(NULL)
+compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, lg = NULL) {
+  if (is.null(confounds_df) || is.null(spike_volume)) return(NULL)
   if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger()
   checkmate::assert_character(spike_volume, null.ok = TRUE)
 
@@ -905,7 +907,7 @@ compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg = NULL)
       expr <- spike_volume[ii]
     }
 
-    spike_vec <- tryCatch(with(mot, eval(parse(text = expr))), error = function(e) {
+    spike_vec <- tryCatch(with(confounds_df, eval(parse(text = expr))), error = function(e) {
       lg$error("Problem evaluating spike expression: %s", expr)
       return(NULL)
     })
@@ -914,7 +916,7 @@ compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg = NULL)
     if (length(which_spike) == 0L) return(NULL)
 
     spike_df <- do.call(cbind, lapply(which_spike, function(xx) {
-      vec <- rep(0, nrow(mot))
+      vec <- rep(0, nrow(confounds_df))
       vec[xx] <- 1
       vec
     }))
@@ -925,9 +927,9 @@ compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg = NULL)
       res <- do.call(cbind, lapply(shifts, function(ss) {
         shift_mat <- apply(spike_df, 2, function(col) {
           if (ss < 0) {
-            dplyr::lead(col, abs(ss), default = 0)
+            lead(col, abs(ss), default = 0)
           } else {
-            dplyr::lag(col, ss, default = 0)
+            lag(col, ss, default = 0)
           }
         })
         colnames(shift_mat) <- paste0("spike_", ifelse(ss < 0, "m", "p"), abs(ss), "_", 1:ncol(shift_mat))
