@@ -158,14 +158,40 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
   
   #### handle confounds, filtering to match MRI data
-  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable)) {
+  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable) ||
+      isTRUE(cfg$scrubbing$enable)) {
     confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
     confound_cols <- as.character(union(cfg$confound_regression$columns, cfg$confound_calculate$columns))
     noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns, cfg$confound_calculate$noproc_columns)) # no AROMA or filter
     if (any(noproc_cols %in% confound_cols)) {
       stop("Cannot handle overlaps in noproc_columns and columns for confounds")
     }
-    
+
+    if (isTRUE(cfg$scrubbing$enable)) {
+      lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
+      spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg=lg)
+      scrub_file <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
+        full.names = TRUE
+      )
+      if (!is.null(spike_mat)) {
+        data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep="\t", col.names=FALSE)
+        censor_file <- construct_bids_filename(
+          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+          full.names = TRUE
+        )
+        censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
+        writeLines(as.character(censor_vec), con = censor_file)
+      } else {
+        lg$info("No spikes detected; censor file will contain all 1s")
+        censor_file <- construct_bids_filename(
+          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+          full.names = TRUE
+        )
+        writeLines(rep("1", nrow(confounds)), con = censor_file)
+      }
+    }
+
     confounds_to_filt <- subset(confounds, select = confound_cols)
     tmp_out <- file.path(tempdir(), sub(".tsv$", "", basename(proc_files$confounds))) # no extension allowed for mat_to_nii
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
@@ -210,11 +236,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
                   paste(missing_cols, collapse = ", "))
         }
 
-        if (length(present_cols) > 0L) {
-          noproc_df <- confounds[, present_cols, drop = FALSE]
-          noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
-          df <- cbind(df, noproc_df)
-        }
+      if (length(present_cols) > 0L) {
+        noproc_df <- confounds[, present_cols, drop = FALSE]
+        noproc_df[is.na(noproc_df)] <- 0  # force NAs to 0 for regression
+        df <- cbind(df, noproc_df)
+      }
+    }
+
+      if (isTRUE(cfg$scrubbing$enable) && exists("spike_mat") && !is.null(spike_mat)) {
+        df <- cbind(df, spike_mat)
       }
 
       if (isTRUE(cfg$confound_calculate$demean)) {
@@ -844,4 +874,77 @@ resample_template_to_img <- function(
   )
 
   return(invisible(img))
+}
+
+
+#' Compute spike regressors for volume censoring
+#'
+#' Evaluates user-supplied expressions against a confounds data.frame to
+#' generate spike (one-hot) regressors. Expressions may optionally include
+#' a semicolon-separated range of volumes to also flag (e.g. "fd > 0.5; -1:1").
+#'
+#' @param mot Data frame of confounds with one row per volume.
+#' @param spike_volume Character vector of expressions to evaluate.
+#' @param lg Logger object for messages.
+#' @return Matrix of spike regressors or NULL if none detected.
+#' @keywords internal
+compute_spike_regressors <- function(mot = NULL, spike_volume = NULL, lg = NULL) {
+  if (is.null(mot) || is.null(spike_volume)) return(NULL)
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger()
+  checkmate::assert_character(spike_volume, null.ok = TRUE)
+
+  spikes <- do.call(cbind, lapply(seq_along(spike_volume), function(ii) {
+    has_bounds <- grepl(";", spike_volume[ii], fixed = TRUE)
+    if (isTRUE(has_bounds)) {
+      esplit <- strsplit(spike_volume[ii], "\\s*;\\s*", perl = TRUE)[[1L]]
+      stopifnot(length(esplit) == 2L)
+      spike_bounds <- as.integer(eval(parse(text = paste0("c(", esplit[1], ")"))))
+      expr <- esplit[2L]
+    } else {
+      spike_bounds <- 0L
+      expr <- spike_volume[ii]
+    }
+
+    spike_vec <- tryCatch(with(mot, eval(parse(text = expr))), error = function(e) {
+      lg$error("Problem evaluating spike expression: %s", expr)
+      return(NULL)
+    })
+
+    which_spike <- which(spike_vec)
+    if (length(which_spike) == 0L) return(NULL)
+
+    spike_df <- do.call(cbind, lapply(which_spike, function(xx) {
+      vec <- rep(0, nrow(mot))
+      vec[xx] <- 1
+      vec
+    }))
+    colnames(spike_df) <- paste0("spike_", seq_len(ncol(spike_df)))
+
+    if (!identical(spike_bounds, 0L)) {
+      shifts <- spike_bounds[spike_bounds != 0L]
+      res <- do.call(cbind, lapply(shifts, function(ss) {
+        shift_mat <- apply(spike_df, 2, function(col) {
+          if (ss < 0) {
+            dplyr::lead(col, abs(ss), default = 0)
+          } else {
+            dplyr::lag(col, ss, default = 0)
+          }
+        })
+        colnames(shift_mat) <- paste0("spike_", ifelse(ss < 0, "m", "p"), abs(ss), "_", 1:ncol(shift_mat))
+        shift_mat
+      }))
+      spike_df <- cbind(spike_df, res)
+    }
+
+    if (is.null(names(spike_volume)[ii]) || names(spike_volume)[ii] == "") {
+      colnames(spike_df) <- paste0("expr", ii, "_", colnames(spike_df))
+    } else {
+      colnames(spike_df) <- paste0(names(spike_volume)[ii], "_", colnames(spike_df))
+    }
+    spike_df
+  }))
+
+  if (is.null(spikes)) return(NULL)
+  spikes <- spikes[, !duplicated(spikes, MARGIN = 2)]
+  spikes
 }

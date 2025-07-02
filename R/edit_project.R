@@ -66,6 +66,7 @@ edit_project <- function(input) {
       "intensity_normalize/global_median", "intensity_normalize/prefix",
       "confound_calculate/columns", "confound_calculate/noproc_columns",
       "confound_calculate/demean",
+      "scrubbing/expression",
       "confound_regression/columns", "confound_regression/noproc_columns",
       "confound_regression/prefix",
       "force_processing_order", "processing_steps"
