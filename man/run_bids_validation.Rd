@@ -2,18 +2,27 @@
 % Please edit documentation in R/run_bids_validation.R
 \name{run_bids_validation}
 \alias{run_bids_validation}
-\title{Run BIDS validation on the project directory}
+\title{Run BIDS validation on the project BIDS directory}
 \usage{
 run_bids_validation(scfg, outfile = NULL)
 }
 \arguments{
-\item{scfg}{A \code{bg_project_cfg} object containing the project configuration.}
+\item{scfg}{A \code{bg_project_cfg} object returned by \code{setup_project()} or
+\code{load_project()}.}
 
-\item{outfile}{Name of the HTML report to create in the BIDS directory. If \code{NULL}, the value from \code{scfg\$bids_validation\$outfile} is used.}}
-\value{The job id returned by the scheduler.}
-\description{Submit the BIDS validator as a standalone HPC job.}
+\item{outfile}{The name of the HTML report to create in the BIDS directory. If
+\code{NULL}, the value stored in \code{scfg$bids_validation$outfile} is used.}
+}
+\value{
+The job id returned by the scheduler.
+}
+\description{
+This helper submits the BIDS validator as a standalone job. It does not run as part
+of \code{run_project()} and can be invoked whenever validation of the project
+BIDS directory is desired.
+}
 \examples{
 \dontrun{
-run_bids_validation(study_config, outfile = "bids_validator_output.html")
+  run_bids_validation(study_config, outfile = "bids_validator_output.html")
 }
 }
