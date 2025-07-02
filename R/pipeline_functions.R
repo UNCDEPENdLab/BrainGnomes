@@ -34,6 +34,15 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
   # TODO: need to use cli_opts approach to remove conflicting/redundant fields in sched_args for -n, -N, etc.
 
   sched_args <- scfg[[job_name]]$sched_args
+
+  memgb <- scfg[[job_name]]$memgb
+  nhours <- scfg[[job_name]]$nhours
+  ncores <- scfg[[job_name]]$ncores
+  if (isTRUE(scfg$debug)) {
+    memgb <- 4
+    nhours <- 0.1
+    ncores <- 1
+  }
   # convert empty strings to NULL for compatibility with glue
   if (length(sched_args) == 0L || is.na(sched_args[1L]) || sched_args[1L] == "") sched_args <- NULL
 
@@ -43,18 +52,18 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
 
     sched_args <- glue(
       "-N 1",
-      "-n {scfg[[job_name]]$ncores}",
-      "--time={hours_to_dhms(scfg[[job_name]]$nhours)}",
-      "--mem={scfg[[job_name]]$memgb}g",
+      "-n {ncores}",
+      "--time={hours_to_dhms(nhours)}",
+      "--mem={memgb}g",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )
   } else {
     if (!is.null(sched_args)) sched_args <- sub("^\\s*#PBS\\s+", "", sched_args, ignore.case = TRUE)
     sched_args <- glue(
-      "-l nodes=1:ppn={scfg[[job_name]]$ncores}",
-      "-l walltime={hours_to_dhms(scfg[[job_name]]$nhours)}",
-      "-l mem={scfg[[job_name]]$memgb}",
+      "-l nodes=1:ppn={ncores}",
+      "-l walltime={hours_to_dhms(nhours)}",
+      "-l mem={memgb}",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )

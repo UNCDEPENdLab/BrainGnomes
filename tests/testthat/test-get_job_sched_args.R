@@ -16,6 +16,22 @@ test_that("get_job_sched_args formats torque arguments", {
   )
 })
 
+test_that("get_job_sched_args uses debug settings", {
+  scfg <- list(
+    compute_environment = list(scheduler = "slurm"),
+    debug = TRUE,
+    myjob = list(ncores = 4, nhours = 2, memgb = 8, sched_args = NULL)
+  )
+  result <- get_job_sched_args(scfg, "myjob")
+  expect_equal(
+    result,
+    glue::glue(
+      "-N 1 -n 1 --time=00:06:00 --mem=4g",
+      .trim = TRUE, .sep = " ", .null = NULL
+    )
+  )
+})
+
 test_that("get_job_sched_args formats slurm arguments", {
   scfg <- list(
     compute_environment = list(scheduler = "slurm"),
