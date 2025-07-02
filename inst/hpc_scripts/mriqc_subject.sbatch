@@ -36,12 +36,10 @@ trap 'traperror mriqc $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
-else
-  debug_pipeline=0
-fi
-if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_flag=c
+else
+  debug_pipeline=0
 fi
 
 # add the job id to the log file variables in case of crash

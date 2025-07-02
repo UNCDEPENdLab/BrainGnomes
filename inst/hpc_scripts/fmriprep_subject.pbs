@@ -32,13 +32,12 @@ source "$env_file" #setup relevant variables for this processing environment
 ####
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_suffix=c
 else
   debug_pipeline=0
 fi
-if [[ "$debug_pipeline" -eq 1 ]]; then
-  log_message INFO "Running in debug mode; commands will not be executed"
-  rel_suffix=c
-fi
+
 rel "${pipedir}/fmriprep_wrapper ${loc_bids_root} ${loc_mrproc_root}/ participant --participant_label $sub --nthreads $fmriprep_nthreads -w ${loc_root}/fmriprep_tempfiles && date \"+%m%d%y@%H:%M\" > $loc_bids_root/sub-$sub/.fmriprep_complete" $rel_suffix
 
 #add --low-mem?

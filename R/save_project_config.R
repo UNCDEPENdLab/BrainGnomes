@@ -10,11 +10,11 @@
 #'   `file.path(scfg$metadata$project_directory, "project_config.yaml")`.
 #' @return Invisibly returns `scfg`.
 #' @keywords internal
-#' @importFrom yaml write_yaml read_yaml as.yaml
+#' @importFrom yaml write_yaml read_yaml
 save_project_config <- function(scfg, file = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
-  if (is.null(file)) {
+  if (!checkmate::test_string(file)) {
     if (is.null(scfg$metadata$project_directory)) {
       stop("Cannot determine project directory from scfg")
     }
@@ -26,10 +26,16 @@ save_project_config <- function(scfg, file = NULL) {
     old_cfg <- yaml::read_yaml(file)
     tmp_old <- tempfile()
     tmp_new <- tempfile()
-    writeLines(yaml::as.yaml(old_cfg), tmp_old)
-    writeLines(yaml::as.yaml(scfg), tmp_new)
-    diff_out <- tools::Rdiff(tmp_old, tmp_new)
-    message("Current differences:\n", paste(diff_out, collapse = "\n"))
+    write_yaml(old_cfg, tmp_old)
+    write_yaml(scfg, tmp_new)
+    diff_out <- tools::Rdiff(tmp_old, tmp_new, Log = TRUE)
+    unlink(c(tmp_old, tmp_new))
+    if (diff_out$status == 0L) {
+      message("No configuration differences were found. File is unchanged.")
+      return(invisible(scfg))
+    }
+    cat("Old configuration settings begin with < and new settings begin with >\n")
+    cat("Configuration differences:\n", paste(diff_out$out, collapse = "\n"), "\n\n")
     overwrite <- if (interactive()) {
       prompt_input(instruct = "Overwrite existing project_config.yaml?", type = "flag")
     } else {
@@ -40,6 +46,8 @@ save_project_config <- function(scfg, file = NULL) {
   if (overwrite) {
     yaml::write_yaml(scfg, file)
     message("Configuration saved to ", file)
+  } else {
+    message("Leaving configuration file unchanged: ", file)
   }
   invisible(scfg)
 }

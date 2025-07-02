@@ -346,8 +346,11 @@ get_fmriprep_outputs <- function(in_file) {
 #'   from the folder names. The function returns a data frame with the subject and session IDs
 #'   and the corresponding folder paths.
 #' @examples
-#' get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
-#'                 ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+#' \dontrun{
+#'   get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
+#'                    ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+#' }
+#' 
 #' @keywords internal
 #' @importFrom checkmate assert_directory_exists assert_flag
 get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "([0-9]+)", 

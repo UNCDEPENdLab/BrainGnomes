@@ -38,8 +38,7 @@ ncores=$SLURM_NTASKS
 [ ! -f "$input_file" ] && echo "input_file $input_file not found. Exiting" && exit 1
 [ ! -r "$input_file" ] && echo "input_file $input_file not readable. Exiting" && exit 1
 [ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
-
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+[ -z "$R_HOME" ] && echo "R_HOME not set. Exiting" && exit 1
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -62,12 +61,10 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 ####
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
-else
-  debug_pipeline=0
-fi
-if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_flag=c
+else
+  debug_pipeline=0
 fi
 
 log_flag=""

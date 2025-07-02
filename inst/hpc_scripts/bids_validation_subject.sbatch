@@ -29,12 +29,10 @@ trap 'trap_job_failure bids_validation SIGQUIT' SIGQUIT
 [ -z "$outfile" ] && outfile="bids_validator_output.html" # default output file name
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
-else
-  debug_pipeline=0
-fi
-if [[ "$debug_pipeline" -eq 1 ]]; then
   log_message INFO "Running in debug mode; commands will not be executed"
   rel_flag=c
+else
+  debug_pipeline=0
 fi
 
 # add the job id to the log file variables in case of crash

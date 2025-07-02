@@ -39,12 +39,11 @@ source "$env_file" #setup relevant variables for this processing environment
 #run heudiconv
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_suffix=c
 else
   debug_pipeline=0
 fi
-if [[ "$debug_pipeline" -eq 1 ]]; then
-  log_message INFO "Running in debug mode; commands will not be executed"
-  rel_suffix=c
-fi
+
 rel "${heudiconv_location} -d ${loc_mrraw_root}/{subject}/*/*.dcm -s $sub -f ${heudiconv_heuristic} -c dcm2niix -o ${loc_bids_root} -b && date \"+%m%d%y@%H:%M\" > ${loc_bids_root}/sub-${sub}/.heudiconv_complete" $rel_suffix
 rel "${pipedir}/add_intendedfor_bold ${loc_bids_root}/sub-${sub}" $rel_suffix #add IntendedFor field to FMAP jsons, pointing to all BOLD
