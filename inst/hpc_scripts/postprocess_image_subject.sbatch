@@ -15,9 +15,6 @@ set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
 source "${pkg_dir}/shell_functions"
 
-# Load the right instance of R to make this go -- TODO: need to abstract this as a configuration step
-module use /proj/mnhallqlab/sw/modules
-module load r/4.2.1
 
 # Set trap for common termination signals
 trap 'trap_job_failure postprocess SIGTERM' SIGTERM
@@ -81,7 +78,7 @@ start_time=$(date +%s)
 
 log_message INFO Starting postprocessing for image $input_file in $out_dir with mem: $mem
 
-rel $rel_flag $log_flag Rscript --vanilla "$postproc_rscript" --input="$input_file" $postproc_cli &
+rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postproc_rscript" --input="$input_file" $postproc_cli &
 cmd_pid=$!
 
 set +e
