@@ -158,141 +158,14 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
   
   #### handle confounds, filtering to match MRI data
-  if (isTRUE(cfg$confound_regression$enable) || isTRUE(cfg$confound_calculate$enable) || isTRUE(cfg$scrubbing$enable)) {
-    confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
-    confound_cols <- as.character(union(cfg$confound_regression$columns, cfg$confound_calculate$columns))
-    noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns, cfg$confound_calculate$noproc_columns)) # no AROMA or filter
-    if (any(noproc_cols %in% confound_cols)) {
-      stop("Cannot handle overlaps in noproc_columns and columns for confounds")
-    }
-
-    if (isTRUE(cfg$scrubbing$enable)) {
-      lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
-      spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
-      scrub_file <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
-        full.names = TRUE
-      )
-      if (!is.null(spike_mat)) {
-        data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep = "\t", col.names = FALSE)
-        censor_file <- construct_bids_filename(
-          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
-          full.names = TRUE
-        )
-        censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
-        writeLines(as.character(censor_vec), con = censor_file)
-      } else {
-        lg$info("No spikes detected; censor file will contain all 1s")
-        censor_file <- construct_bids_filename(
-          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
-          full.names = TRUE
-        )
-        writeLines(rep("1", nrow(confounds)), con = censor_file)
-      }
-    }
-
-    confounds_to_filt <- subset(confounds, select = confound_cols)
-    tmp_out <- file.path(tempdir(), sub(".tsv$", "", basename(proc_files$confounds))) # no extension allowed for mat_to_nii
-    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
-
-    # apply AROMA denoising to confounds if AROMA is applied to MRI data
-    if ("apply_aroma" %in% processing_sequence) {
-      lg$info("Removing AROMA noise components from confounds")
-      confound_nii <- apply_aroma(confound_nii,
-        mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
-        overwrite = cfg$overwrite, lg = lg, use_R = TRUE, fsl_img = fsl_img
-      )
-    }
-
-    # apply temporal filter to confounds if temporal filter is applied to MRI data
-    if ("temporal_filter" %in% processing_sequence) {
-      lg$info("Temporally filtering confounds")
-      confound_nii <- temporal_filter(confound_nii,
-        tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz, high_pass_hz = cfg$temporal_filter$high_pass_hz,
-        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
-      )
-    }
-
-    # read in processed confounds and convert back to time x signals data.frame
-    filtered_confounds <- data.frame(nii_to_mat(confound_nii))
-    filtered_confounds <- setNames(filtered_confounds, confound_cols)
-
-    # handle confound calculation
-    if (isTRUE(cfg$confound_calculate$enable)) {
-      confile <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "confounds", ext = ".tsv")),
-        full.names = TRUE
-      )
-
-      df <- subset(filtered_confounds, select = cfg$confound_calculate$columns)
-
-      if (!is.null(cfg$confound_calculate$noproc_columns) && !is.na(cfg$confound_calculate$noproc_columns)) {
-        present_cols <- intersect(cfg$confound_calculate$noproc_columns, names(confounds))
-        missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
-
-        if (length(missing_cols) > 0L) {
-          lg$warn(
-            "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
-            paste(missing_cols, collapse = ", ")
-          )
-        }
-
-        if (length(present_cols) > 0L) {
-          noproc_df <- confounds[, present_cols, drop = FALSE]
-          noproc_df[is.na(noproc_df)] <- 0 # force NAs to 0 for regression
-          df <- cbind(df, noproc_df)
-        }
-      }
-
-      if (isTRUE(cfg$scrubbing$enable) && exists("spike_mat") && !is.null(spike_mat)) {
-        df <- cbind(df, spike_mat)
-      }
-
-      if (isTRUE(cfg$confound_calculate$demean)) {
-        df[, cfg$confound_calculate$columns] <- lapply(df[, cfg$confound_calculate$columns, drop = FALSE], function(x) x - mean(x, na.rm = TRUE))
-      }
-
-      lg$info("Writing postprocessed confounds to: {confile}")
-      lg$info("Columns are: {paste(names(df), collapse=', ')}")
-      data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
-    }
-
-    if (isTRUE(cfg$confound_regression$enable)) {
-      df <- subset(filtered_confounds, select = cfg$confound_regression$columns)
-
-      # mean center columns
-      df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
-
-      if (!is.null(cfg$confound_regression$noproc_columns) && !is.na(cfg$confound_regression$noproc_columns)) {
-        present_cols <- intersect(cfg$confound_regression$noproc_columns, names(confounds))
-        missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
-
-        if (length(missing_cols) > 0L) {
-          lg$warn(
-            "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
-            paste(missing_cols, collapse = ", ")
-          )
-        }
-
-        if (length(present_cols) > 0L) {
-          noproc_df <- confounds[, present_cols, drop = FALSE]
-          noproc_df[is.na(noproc_df)] <- 0 # force NAs to 0 for regression
-          df <- cbind(df, noproc_df)
-        }
-      }
-
-      to_regress <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "regressors", ext = ".tsv")),
-        full.names = TRUE
-      )
-
-      const_cols <- sapply(df, function(x) all(x == x[1L]))
-      if (any(const_cols)) df <- df[, !const_cols, drop = FALSE] # remove any constant columns
-      df <- cbind(1, df) # add intercept
-
-      data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
-    }
-  }
+  to_regress <- postprocess_confounds(
+    proc_files = proc_files,
+    cfg = cfg,
+    processing_sequence = processing_sequence,
+    input_bids_info = input_bids_info,
+    fsl_img = fsl_img,
+    lg = lg
+  )
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
     if (step == "apply_mask") {
@@ -949,4 +822,172 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
   if (is.null(spikes)) return(NULL)
   spikes <- spikes[, !duplicated(spikes, MARGIN = 2)]
   spikes
+}
+
+
+## -------------------------------------------------------------------------
+## Confound Handling Helper -------------------------------------------------
+## -------------------------------------------------------------------------
+
+#' Postprocess confounds to match fMRI operations
+#'
+#' Handles optional spike regression file creation, filtering of confound
+#' time series and writing of postprocessed confounds/regressor files.
+#' This is used internally by `postprocess_subject()`.
+#'
+#' @param proc_files List of files returned by `get_fmriprep_outputs()`.
+#' @param cfg Configuration list passed to `postprocess_subject`.
+#' @param processing_sequence Character vector of enabled processing steps.
+#' @param input_bids_info Named list of BIDS entities for the current file.
+#' @param fsl_img Optional path to a Singularity image with FSL installed.
+#' @param lg Logger object for messages.
+#' @return Path to the nuisance regressor file or `NULL` if not created.
+#' @keywords internal
+postprocess_confounds <- function(proc_files, cfg, processing_sequence,
+                                  input_bids_info, fsl_img = NULL, lg = NULL) {
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger()
+
+  to_regress <- NULL
+  if (isTRUE(cfg$confound_regression$enable) ||
+      isTRUE(cfg$confound_calculate$enable) ||
+      isTRUE(cfg$scrubbing$enable)) {
+
+    confounds <- data.table::fread(proc_files$confounds,
+                                   na.strings = c("n/a", "NA", "."))
+    confound_cols <- as.character(union(cfg$confound_regression$columns,
+                                         cfg$confound_calculate$columns))
+    noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns,
+                                       cfg$confound_calculate$noproc_columns))
+    if (any(noproc_cols %in% confound_cols)) {
+      stop("Cannot handle overlaps in noproc_columns and columns for confounds")
+    }
+
+    if (isTRUE(cfg$scrubbing$enable)) {
+      lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
+      spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
+      scrub_file <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
+        full.names = TRUE
+      )
+      if (!is.null(spike_mat)) {
+        data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep = "\t", col.names = FALSE)
+        censor_file <- construct_bids_filename(
+          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+          full.names = TRUE
+        )
+        censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
+        writeLines(as.character(censor_vec), con = censor_file)
+      } else {
+        lg$info("No spikes detected; censor file will contain all 1s")
+        censor_file <- construct_bids_filename(
+          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+          full.names = TRUE
+        )
+        writeLines(rep("1", nrow(confounds)), con = censor_file)
+      }
+    }
+
+    confounds_to_filt <- subset(confounds, select = confound_cols)
+    tmp_out <- file.path(tempdir(), sub(".tsv$", "", basename(proc_files$confounds)))
+    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
+
+    if ("apply_aroma" %in% processing_sequence) {
+      lg$info("Removing AROMA noise components from confounds")
+      confound_nii <- apply_aroma(confound_nii,
+        mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
+        overwrite = cfg$overwrite, lg = lg, use_R = TRUE, fsl_img = fsl_img
+      )
+    }
+
+    if ("temporal_filter" %in% processing_sequence) {
+      lg$info("Temporally filtering confounds")
+      confound_nii <- temporal_filter(confound_nii,
+        tr = cfg$tr,
+        low_pass_hz = cfg$temporal_filter$low_pass_hz,
+        high_pass_hz = cfg$temporal_filter$high_pass_hz,
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
+      )
+    }
+
+    filtered_confounds <- data.frame(nii_to_mat(confound_nii))
+    filtered_confounds <- setNames(filtered_confounds, confound_cols)
+
+    if (isTRUE(cfg$confound_calculate$enable)) {
+      confile <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "confounds", ext = ".tsv")),
+        full.names = TRUE
+      )
+
+      df <- subset(filtered_confounds, select = cfg$confound_calculate$columns)
+
+      if (!is.null(cfg$confound_calculate$noproc_columns) && !is.na(cfg$confound_calculate$noproc_columns)) {
+        present_cols <- intersect(cfg$confound_calculate$noproc_columns, names(confounds))
+        missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
+
+        if (length(missing_cols) > 0L) {
+          lg$warn(
+            "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
+            paste(missing_cols, collapse = ", ")
+          )
+        }
+
+        if (length(present_cols) > 0L) {
+          noproc_df <- confounds[, present_cols, drop = FALSE]
+          noproc_df[is.na(noproc_df)] <- 0
+          df <- cbind(df, noproc_df)
+        }
+      }
+
+      if (isTRUE(cfg$scrubbing$enable) && exists("spike_mat") && !is.null(spike_mat)) {
+        df <- cbind(df, spike_mat)
+      }
+
+      if (isTRUE(cfg$confound_calculate$demean)) {
+        df[, cfg$confound_calculate$columns] <- lapply(
+          df[, cfg$confound_calculate$columns, drop = FALSE],
+          function(x) x - mean(x, na.rm = TRUE)
+        )
+      }
+
+      lg$info("Writing postprocessed confounds to: {confile}")
+      lg$info("Columns are: {paste(names(df), collapse=', ')}")
+      data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
+    }
+
+    if (isTRUE(cfg$confound_regression$enable)) {
+      df <- subset(filtered_confounds, select = cfg$confound_regression$columns)
+      df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
+
+      if (!is.null(cfg$confound_regression$noproc_columns) && !is.na(cfg$confound_regression$noproc_columns)) {
+        present_cols <- intersect(cfg$confound_regression$noproc_columns, names(confounds))
+        missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
+
+        if (length(missing_cols) > 0L) {
+          lg$warn(
+            "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
+            paste(missing_cols, collapse = ", ")
+          )
+        }
+
+        if (length(present_cols) > 0L) {
+          noproc_df <- confounds[, present_cols, drop = FALSE]
+          noproc_df[is.na(noproc_df)] <- 0
+          df <- cbind(df, noproc_df)
+        }
+      }
+
+      to_regress <- construct_bids_filename(
+        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "regressors", ext = ".tsv")),
+        full.names = TRUE
+      )
+
+      const_cols <- sapply(df, function(x) all(x == x[1L]))
+      if (any(const_cols)) df <- df[, !const_cols, drop = FALSE]
+      df <- cbind(1, df)
+
+      data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
+    }
+  }
+
+  to_regress
 }
