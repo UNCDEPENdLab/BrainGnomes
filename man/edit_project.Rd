@@ -4,13 +4,18 @@
 \alias{edit_project}
 \title{Interactively edit a study configuration by field (field-guided)}
 \usage{
-edit_project(scfg)
+edit_project(input)
 }
 \arguments{
-\item{scfg}{A \code{bg_project_cfg} object representing the study configuration.}
+\item{input}{A \code{bg_project_cfg} object, a YAML file path, or a project
+directory containing \code{project_config.yaml}. If a directory is provided
+but the file is absent, \code{edit_project} will stop. This argument cannot
+be \code{NULL}.}
 }
 \value{
-An updated \code{bg_project_cfg} object.
+An updated \code{bg_project_cfg} object. The updated configuration is
+written to \code{project_config.yaml} in the project directory unless the user
+chooses not to overwrite an existing file.
 }
 \description{
 Allows the user to interactively browse and edit individual fields within the

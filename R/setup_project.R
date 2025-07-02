@@ -27,22 +27,43 @@ summary.bg_project_cfg <- function(x) {
 }
 
 #' Setup the processing pipeline for a new fMRI study
-#' @param input An existing `bg_project_cfg` object to be modified, or a string specifying the location of an existing configuration YAML file to load.
+#' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
+#'   directory containing \code{project_config.yaml}. If a directory is supplied
+#'   but the file is missing, \code{setup_project} starts from an empty list with
+#'   a warning. For \code{setup_project} only, this argument may also be
+#'   \code{NULL} to create a new configuration from scratch.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input, 
-#'   and missing entries are filled with defaults.
+#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input,
+#'   and missing entries are filled with defaults. The configuration is written
+#'   to `project_config.yaml` in the project directory unless the user declines
+#'   to overwrite an existing file.
 #' @importFrom yaml read_yaml
 #' @importFrom checkmate test_file_exists
 #' @export
 setup_project <- function(input = NULL, fields = NULL) {
-  if (checkmate::test_string(input) && checkmate::test_file_exists(input)) {
-    scfg <- load_project(input, validate=FALSE)
+  if (is.null(input)) {
+    scfg <- list()
   } else if (inherits(input, "bg_project_cfg")) {
     scfg <- input
-  } else if (!is.null(input)) {
-    stop("input must be a bg_project_cfg object or a string specifying the location of a YAML file")
+  } else if (checkmate::test_string(input)) {
+    if (grepl("\\.ya?ml$", input, ignore.case = TRUE)) {
+      if (!checkmate::test_file_exists(input)) {
+        stop("Cannot find file: ", input)
+      }
+      scfg <- load_project(input, validate = FALSE)
+    } else if (checkmate::test_directory_exists(input)) {
+      cfg_file <- file.path(input, "project_config.yaml")
+      if (file.exists(cfg_file)) {
+        scfg <- load_project(cfg_file, validate = FALSE)
+      } else {
+        warning("project_config.yaml not found in ", input, ". Starting with empty configuration.")
+        scfg <- list()
+      }
+    } else {
+      stop("input must be a bg_project_cfg object, YAML file, or project directory")
+    }
   } else {
-    scfg <- list()
+    stop("input must be a bg_project_cfg object, YAML file, or project directory")
   }
 
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
@@ -58,6 +79,8 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_aroma(scfg, fields)
   scfg <- setup_postprocess(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
+
+  scfg <- save_project_config(scfg)
 
   return(scfg)
 }
