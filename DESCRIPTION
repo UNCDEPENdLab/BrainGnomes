@@ -25,7 +25,10 @@ Imports:
     oro.nifti,
     reticulate,
     RSQLite,
-    yaml
+    yaml,
+    Rcpp,
+    RNifti
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+LinkingTo: Rcpp, RNifti
