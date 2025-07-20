@@ -150,14 +150,16 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if (isTRUE(cfg$apply_mask$enable)) processing_sequence <- c(processing_sequence, "apply_mask")
     if (isTRUE(cfg$spatial_smooth$enable)) processing_sequence <- c(processing_sequence, "spatial_smooth")
     if (isTRUE(cfg$apply_aroma$enable)) processing_sequence <- c(processing_sequence, "apply_aroma")
+    if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$interpolate)) processing_sequence <- c(processing_sequence, "scrub_interpolate")
     if (isTRUE(cfg$temporal_filter$enable)) processing_sequence <- c(processing_sequence, "temporal_filter")
     if (isTRUE(cfg$confound_regression$enable)) processing_sequence <- c(processing_sequence, "confound_regression")
+    if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$apply)) processing_sequence <- c(processing_sequence, "scrub_timepoints")
     if (isTRUE(cfg$intensity_normalize$enable)) processing_sequence <- c(processing_sequence, "intensity_normalize")
   }
 
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
   
-  #### handle confounds, filtering to match MRI data
+  #### handle confounds, filtering to match MRI data. This will also calculate scrubbing information, if requested
   to_regress <- postprocess_confounds(
     proc_files = proc_files,
     cfg = cfg,
@@ -166,6 +168,10 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     fsl_img = fsl_img,
     lg = lg
   )
+
+  # expected censor file for scrubbing
+  censor_file <- get_censor_file(input_bids_info)
+
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
     if (step == "apply_mask") {
@@ -183,11 +189,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "apply_aroma") {
-      lg$info("Removing AROMA noise components from fMRI data")
       cur_file <- apply_aroma(cur_file, prefix = cfg$apply_aroma$prefix,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
+      )
+      file_set <- c(file_set, cur_file)
+    } else if (step == "scrub_interpolate") {
+      lg$info("Applying spline interpolate to scrubbed timepoints")
+      cur_file <- scrub_interpolate(
+        cur_file, censor_file = censor_file, 
+        prefix = cfg$scrubbing$interpolate_prefix, overwrite=cfg$overwrite, lg=lg
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "temporal_filter") {
@@ -201,8 +213,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     } else if (step == "confound_regression") {
       lg$info("Removing confound regressors from fMRI data using file: {to_regress}")
       cur_file <- confound_regression(cur_file, prefix = cfg$confound_regression$prefix,
-        to_regress = to_regress,
+        to_regress = to_regress, censor_file = censor_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
+      )
+      file_set <- c(file_set, cur_file)
+    } else if (step == "scrub_timepoints") {
+      cur_file <- scrub_timepoints(cur_file,
+        censor_file = censor_file,
+        prefix = cfg$scrubbing$prefix,
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "intensity_normalize") {
@@ -273,7 +292,7 @@ apply_mask <- function(in_file, mask_file, prefix="m", overwrite=FALSE, lg=NULL,
   checkmate::assert_string(prefix)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -286,9 +305,122 @@ apply_mask <- function(in_file, mask_file, prefix="m", overwrite=FALSE, lg=NULL,
     out_file <- res$out_file
   }
 
+  lg$info("Apply mask {mask_file} to {in_file}")
+
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {mask_file} {file_sans_ext(out_file)} -odt float"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, mask_file, out_file)))
   return(out_file)
 }
+
+#' Interpolate Over Censored Timepoints in a 4D NIfTI Image
+#'
+#' Applies cubic spline interpolation to a 4D fMRI image to replace censored
+#' (scrubbed) timepoints, as defined in a censor file. Timepoints with a value
+#' of `0` in the censor file are interpolated across using voxelwise natural
+#' splines, with nearest-neighbor extrapolation at the edges.
+#'
+#' @param in_file Path to the input 4D NIfTI image file.
+#' @param censor_file Path to a 1D censor file (e.g., from fMRI preprocessing) 
+#'   containing a binary vector of `1`s (keep) and `0`s (scrub) for each timepoint.
+#' @param prefix Optional character prefix to prepend to the interpolated output
+#'   filename (default is `"i"`).
+#' @param overwrite Logical indicating whether to overwrite an existing interpolated
+#'   file (default is `FALSE`).
+#' @param lg Optional `Logger` object (from the `lgr` package) for logging output.
+#'   If not provided, the root logger is used.
+#'
+#' @return A character string giving the path to the interpolated output NIfTI file.
+#'   If the file already exists and `overwrite = FALSE`, the existing file path is returned.
+#'
+#' @details
+#' Timepoints to interpolate are identified as those with a `0` in the `censor_file`.
+#' These are replaced using voxelwise cubic spline interpolation across the remaining
+#' timepoints. Extrapolation at the beginning or end of the series uses the nearest
+#' valid value (i.e., `edge_nn = TRUE`).
+#'
+#' This function relies on a lower-level Rcpp function `natural_spline_4d()`
+#' that performs the actual interpolation.
+#'
+#' @keywords internal
+scrub_interpolate <- function(in_file, censor_file, prefix="i", overwrite=FALSE, lg=NULL) {
+  #checkmate::assert_file_exists(in_file)
+  checkmate::assert_file_exists(censor_file)
+  checkmate::assert_string(prefix)
+  checkmate::assert_flag(overwrite)
+  
+  if (!checkmate::test_class(lg, "Logger")) {
+    lg <- lgr::get_logger_glue() # use root logger
+    log_file <- NULL # no log file to write
+  } else {
+    log_file <- lg$appenders$postprocess_log$destination
+  }
+  
+  # handle extant file
+  res <- out_file_exists(in_file, prefix, overwrite)
+  if (isTRUE(res$skip)) {
+    return(res$out_file) # skip existing file
+  } else  {
+    out_file <- res$out_file
+  }
+  
+  censor <- as.integer(readLines(censor_file))
+  t_interpolate <- which(1L - censor) # bad timepoints are 0 in the censor file
+  
+  if (!any(t_interpolate)) {
+    lg$info("No timepoints to scrub found in {censor_file}. Interpolation will have no effect.")
+  } else {
+    lg$info("Applying voxelwise natural spline interpolation for {length(t_interpolate)} timepoints to {in_file}.")
+  }
+
+  # run 4D interpolation with Rcpp function
+  natural_spline_4d(in_file, t_interpolate = t_interpolate, edge_nn=TRUE, outfile = out_file, internal = TRUE)
+  
+  return(out_file)
+}
+
+
+scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=FALSE, lg=NULL) {
+  #checkmate::assert_file_exists(in_file)
+  checkmate::assert_string(prefix)
+  checkmate::assert_flag(overwrite)
+  
+  if (!checkmate::test_class(lg, "Logger")) {
+    lg <- lgr::get_logger_glue() # use root logger
+    log_file <- NULL # no log file to write
+  } else {
+    log_file <- lg$appenders$postprocess_log$destination
+  }
+
+  if (!checkmate::test_file_exists(censor_file)) {
+    msg <- glue("In scrub_timepoints, cannot locate censor file: {censor_file}")
+    lg$error(msg)
+    stop(msg)
+  }
+  
+  # handle extant output file
+  res <- out_file_exists(in_file, prefix, overwrite)
+  if (isTRUE(res$skip)) {
+    return(res$out_file) # skip existing file
+  } else  {
+    out_file <- res$out_file
+  }
+  
+  censor <- as.integer(readLines(censor_file))
+  t_scrub <- which(1L - censor) # bad timepoints are 0 in the censor file
+  
+  if (!any(t_scrub)) {
+    lg$info("No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")
+  } else {
+    lg$info("Applying timepoint scrubbing, removing {length(t_interpolate)} timepoints from {in_file}.")
+  }
+
+  # run 4D interpolation with Rcpp function
+  remove_nifti_volumes(in_file, t_scrub, out_file)
+
+  # TODO: scrub other outputs -- confounds etc.
+  
+  return(out_file)
+}
+
 
 
 #' Apply temporal filtering to a 4D NIfTI image
@@ -325,7 +457,7 @@ temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/1
   checkmate::assert_flag(overwrite)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -335,7 +467,7 @@ temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/1
   res <- out_file_exists(in_file, prefix, overwrite)
   if (isTRUE(res$skip)) {
     return(res$out_file) # skip existing file
-  } else  {
+  } else {
     out_file <- res$out_file
   }
 
@@ -390,11 +522,13 @@ apply_aroma <- function(in_file, prefix = "a", mixing_file, noise_ics, overwrite
   checkmate::assert_string(prefix)
   checkmate::assert_flag(overwrite)
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
   }
+
+  lg$info("Removing AROMA noise components from fMRI data")
 
   checkmate::assert_string(prefix)
   if (isFALSE(checkmate::test_file_exists(mixing_file))) {
@@ -462,7 +596,7 @@ spatial_smooth <- function(in_file, prefix = "s", fwhm_mm = 6, brain_mask = NULL
   checkmate::assert_number(fwhm_mm, lower = 0.1)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -528,7 +662,7 @@ intensity_normalize <- function(in_file, prefix="n", brain_mask=NULL, global_med
   checkmate::assert_number(global_median)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -557,6 +691,7 @@ intensity_normalize <- function(in_file, prefix="n", brain_mask=NULL, global_med
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param to_regress Path to a text file containing nuisance regressors (one column per regressor).
 #' @param prefix Prefix to prepend to the output file name.
+#' @param censor_file An optional censor file (1s indicate volumes to keep) that is used to 
 #' @param overwrite Logical; whether to overwrite the output file if it already exists.
 #' @param lg Optional lgr object used for logging messages
 #' @param fsl_img Optional Singularity image to execute FSL commands in a containerized environment.
@@ -570,13 +705,13 @@ intensity_normalize <- function(in_file, prefix="n", brain_mask=NULL, global_med
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_file_exists assert_string
-confound_regression <- function(in_file, to_regress=NULL, prefix="r", overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+confound_regression <- function(in_file, to_regress=NULL, censor_file = NULL, prefix="r", overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_file_exists(to_regress)
   checkmate::assert_string(prefix)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -590,20 +725,34 @@ confound_regression <- function(in_file, to_regress=NULL, prefix="r", overwrite=
     out_file <- res$out_file
   }
 
-  # convert text file to FSL vest file for fsl_glm to accept it
-  vest_file <- tempfile(pattern = "regressors", fileext = ".mat")
-  run_fsl_command(glue("Text2Vest {to_regress} {vest_file}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(to_regress, vest_file)))
+  method <- "lmfit" # for testing
+
+  if (method == "fsl") {
+    # convert text file to FSL vest file for fsl_glm to accept it
+    vest_file <- tempfile(pattern = "regressors", fileext = ".mat")
+    run_fsl_command(glue("Text2Vest {to_regress} {vest_file}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(to_regress, vest_file)))
+    
+    # because the residuals will be demeaned and intensity normalization should follow this step, add back in the temporal mean from the pre-regression image
+    temp_tmean <- tempfile(pattern="tmean")
+    run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
+    run_fsl_command(glue("fsl_glm -i {file_sans_ext(in_file)} -d {vest_file} --out_res={file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, vest_file, out_file)))
+    run_fsl_command(glue("fslmaths {file_sans_ext(out_file)} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(out_file, temp_tmean)))
+
+    # 3dTproject for regression (deprecated to keep all commands in FSL)
+    # regress_cmd <- glue("3dTproject -input {in_file} -prefix {out_file}_afni -ort {to_regress} -polort 0")
+
+    rm_niftis(temp_tmean)
+  } else if (method == "lmfit") {
+    lg$info("Using internal lmfit confound regression function")
+    Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
+    if (checkmate::test_file_exists(censor_file)) {
+      good_vols <- as.logical(readLines(censor_file)) # bad timepoints are 0 in the censor file
+      if (sum(good_vols) < length(good_vols)) lg$info("Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
+    }
+    
+    lmfit_residuals_4d(in_file, X = Xmat, include_rows = good_vols, outfile = out_file, preserve_mean = TRUE)
+  }
   
-  # because the residuals will be demeaned and intensity normalization should follow this step, add back in the temporal mean from the pre-regression image
-  temp_tmean <- tempfile(pattern="tmean")
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
-  run_fsl_command(glue("fsl_glm -i {file_sans_ext(in_file)} -d {vest_file} --out_res={file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, vest_file, out_file)))
-  run_fsl_command(glue("fslmaths {file_sans_ext(out_file)} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(out_file, temp_tmean)))
-
-  # 3dTproject for regression (deprecated to keep all commands in FSL)
-  # regress_cmd <- glue("3dTproject -input {in_file} -prefix {out_file}_afni -ort {to_regress} -polort 0")
-
-  rm_niftis(temp_tmean)
   return(out_file)
 }
 
@@ -630,7 +779,7 @@ confound_regression <- function(in_file, to_regress=NULL, prefix="r", overwrite=
 compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
   # use the 98 - 2 method from FSL (featlib.tcl ca. line 5345)
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger() # use root logger
+    lg <- lgr::get_logger_glue() # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -765,7 +914,7 @@ resample_template_to_img <- function(
 #' @keywords internal
 compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, lg = NULL) {
   if (is.null(confounds_df) || is.null(spike_volume)) return(NULL)
-  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger()
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue()
   checkmate::assert_character(spike_volume, null.ok = TRUE)
 
   spikes <- do.call(cbind, lapply(seq_along(spike_volume), function(ii) {
@@ -829,6 +978,15 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
 ## Confound Handling Helper -------------------------------------------------
 ## -------------------------------------------------------------------------
 
+# helper file to identify scrubbing censor file from input nifti
+get_censor_file <- function(input_bids_info) {
+  checkmate::assert_list(input_bids_info)
+  construct_bids_filename(
+    modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+    full.names = TRUE
+  )
+}
+
 #' Postprocess confounds to match fMRI operations
 #'
 #' Handles optional spike regression file creation, filtering of confound
@@ -845,7 +1003,7 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
 #' @keywords internal
 postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                   input_bids_info, fsl_img = NULL, lg = NULL) {
-  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger()
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue()
 
   to_regress <- NULL
   if (isTRUE(cfg$confound_regression$enable) ||
@@ -869,20 +1027,14 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
         full.names = TRUE
       )
+      
+      censor_file <- get_censor_file(input_bids_info)
       if (!is.null(spike_mat)) {
         data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep = "\t", col.names = FALSE)
-        censor_file <- construct_bids_filename(
-          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
-          full.names = TRUE
-        )
         censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
         writeLines(as.character(censor_vec), con = censor_file)
       } else {
         lg$info("No spikes detected; censor file will contain all 1s")
-        censor_file <- construct_bids_filename(
-          modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
-          full.names = TRUE
-        )
         writeLines(rep("1", nrow(confounds)), con = censor_file)
       }
     }

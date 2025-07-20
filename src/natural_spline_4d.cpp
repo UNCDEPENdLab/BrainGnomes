@@ -1,5 +1,9 @@
 #include "BrainGnomes.h"
-#include "RNiftiAPI.h" // need to include this only once here to avoid duplicate symbols in BrainGnomes.h
+
+// to support RNifti object returns via Rcpp, we need RNiftiAPI.h
+// this should only be included once for the entire package because it includes function implementations
+// see: https://cran.r-project.org/web/packages/RNifti/readme/README.html
+#include "RNiftiAPI.h"
 
 // helper function for writing out nifti
 void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, int datatype) {
@@ -193,7 +197,6 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
         // Write back any vector that has been interpolated
         for (size_t ti = 0; ti < n_pts; ++ti) {
           int t = xout[ti];
-          //fdata[flat_index(xi, yi, zi, t)] = static_cast<float>(y_interp[ti]); //y_interp[ti]; //
           data[flat_index(xi, yi, zi, t)] = static_cast<float>(y_interp[ti]); //y_interp[ti]; //
           //data[flat_index(xi, yi, zi, t)] = (y_interp[ti] - intercept) / slope;
         }
@@ -206,12 +209,6 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   // Rcpp::Rcout << "n_const_ts: " << n_const_ts << std::endl;
   
   // write interpolated image to file, if requested
-  // if (!outfile.empty()) {
-  //   // write interpolated image to file
-  //   image.toFile(outfile, datatype);
-  //   //image.toFile(outfile);
-  // }
-  
   writeToFile(image, outfile, datatype);
   
   return image.toArrayOrPointer(internal, "NIfTI image");

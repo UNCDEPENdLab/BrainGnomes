@@ -49,6 +49,7 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
         - Applying a brain mask
         - Spatial smoothing
         - Denoising using ICA-AROMA
+        - 'Scrubbing' of high-motion/high-artifact timepoints
         - Temporal filtering (e.g., high-pass filtering)
         - Intensity normalization
         - Confound calculation and regression
@@ -182,6 +183,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
     "apply_mask",
     "spatial_smooth",
     "apply_aroma",
+    "scrub_interpolate",
     "temporal_filter",
     "confound_regression",
     "scrub_timepoints",
@@ -190,7 +192,14 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
 
   processing_sequence <- character(0)
   for (step in step_order) {
-    enabled <- tryCatch(isTRUE(scfg$postprocess[[step]]$enable), error = function(e) FALSE)
+    enabled <- if (step == "scrub_timepoints") {
+      tryCatch(isTRUE(scfg$postprocess$scrubbing$enable) && isTRUE(scfg$postprocess$scrubbing$apply), error = function(e) FALSE)
+    } else if (step == "scrub_interpolate") {
+      tryCatch(isTRUE(scfg$postprocess$scrubbing$enable) && isTRUE(scfg$postprocess$scrubbing$interpolate), error = function(e) FALSE)
+    } else {
+      # all steps other than scrubbing have a single enable/disable
+      tryCatch(isTRUE(scfg$postprocess[[step]]$enable), error = function(e) FALSE)
+    }
     if (enabled) processing_sequence <- c(processing_sequence, step)
   }
 
@@ -287,8 +296,7 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
       For example, -1:0 scrubs the spike and one volume before, and if you omit this, it just scrubs the spike (0).
 
       If you say 'yes' here, you will be asked whether you want to use the scrubbing calculation to censor the fMRI data, removing
-      the volumes identified from the postprocessed fMRI NIfTI image. Please note that scrubbing volumes in this way requires the use of
-      AFNI 3dTproject, which combines temporal filtering, confound regression, and scrubbing.
+      the volumes identified from the postprocessed fMRI NIfTI image.
 
       Finally, if you ask to 'scrub' the fMRI data, you will also be asked whether you wish to interpolate the scrubbed timepoints prior
       to applying temporal filtering and confound regression. For temporal filtering, this can mitigate ringing artifacts surrounding
@@ -307,12 +315,15 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$postprocess$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
+    if (is.null(scfg$postprocess$scrubbing$interpolate)) fields <- c(fields, "postprocess/scrubbing/interpolate")
+    if (is.null(scfg$postprocess$scrubbing$interpolate_prefix)) fields <- c(fields, "postprocess/scrubbing/interpolate_prefix")
     if (is.null(scfg$postprocess$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
+    if (is.null(scfg$postprocess$scrubbing$prefix)) fields <- c(fields, "postprocess/scrubbing/prefix") # for post-scrubbing data, if applied
   }
 
   if ("postprocess/scrubbing/expression" %in% fields) {
     scfg$postprocess$scrubbing$expression <- prompt_input(
-      "Spike expression(s): ", type = "character", split = "\\s+", required = TRUE
+      "Scrubbing expression(s): ", type = "character", split = "\\s+", required = TRUE
     )
   }
 
@@ -320,12 +331,16 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
     scfg$postprocess$scrubbing$interpolate <- prompt_input(
       instruct = glue("\n\
       Do you want to interpolate over scrubbed timepoints before applying temporal filtering,
-      confound regression, and/or intensity normalization? This is achieved using 3dTproject -cenmode NTRP.
+      confound regression, and/or intensity normalization? This is achieved using cubic natural spline interpolation.
       \n"),
       prompt = "Interpolate scrubbed values?",
       type = "flag",
       default = FALSE
     )
+  }
+  
+  if ("postprocess/scrubbing/interpolate_prefix" %in% fields) {
+    scfg$postprocess$scrubbing$interpolate_prefix <- "i" # forced default
   }
 
   if ("postprocess/scrubbing/apply" %in% fields) {
@@ -337,6 +352,10 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
       type = "flag",
       default = FALSE
     )
+  }
+  
+  if ("postprocess/scrubbing/prefix" %in% fields) {
+    scfg$postprocess$scrubbing$interpolate_prefix <- "x" # forced default
   }
 
   return(scfg)

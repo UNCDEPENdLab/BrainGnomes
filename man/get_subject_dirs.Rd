@@ -52,7 +52,10 @@ from the folder names. The function returns a data frame with the subject and se
 and the corresponding folder paths.
 }
 \examples{
-get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
-                ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+\dontrun{
+  get_subject_dirs(root = "/path/to/root", sub_regex = "[0-9]+", sub_id_match = "([0-9]+)",
+                   ses_regex = "ses-[0-9]+", ses_id_match = "([0-9]+)", full.names = TRUE)
+}
+
 }
 \keyword{internal}

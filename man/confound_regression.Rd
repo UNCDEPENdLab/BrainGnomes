@@ -7,6 +7,7 @@
 confound_regression(
   in_file,
   to_regress = NULL,
+  censor_file = NULL,
   prefix = "r",
   overwrite = FALSE,
   lg = NULL,
@@ -17,6 +18,8 @@ confound_regression(
 \item{in_file}{Path to the input 4D NIfTI file.}
 
 \item{to_regress}{Path to a text file containing nuisance regressors (one column per regressor).}
+
+\item{censor_file}{An optional censor file (1s indicate volumes to keep) that is used to}
 
 \item{prefix}{Prefix to prepend to the output file name.}
 

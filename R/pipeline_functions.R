@@ -301,7 +301,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   checkmate::assert_flag(use_lgr)
   checkmate::assert_string(fsl_img, null.ok=TRUE)
   if (!is.null(fsl_img)) checkmate::assert_file_exists(fsl_img)
-  checkmate::assert_character(bind_paths)
+  checkmate::assert_character(bind_paths, null.ok = TRUE)
 
   if (use_lgr) {
     lg <- lgr::get_logger("run_fsl_command", reset = TRUE) # always get clean config
