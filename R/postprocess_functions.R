@@ -978,6 +978,52 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
 ## Confound Handling Helper -------------------------------------------------
 ## -------------------------------------------------------------------------
 
+#' Expand confound column patterns
+#'
+#' Supports perl-compatible regular expressions and simple integer
+#' range syntax using angle brackets. For example, the pattern
+#' `motion_param_<1-3>` expands to `motion_param_1`,
+#' `motion_param_2`, `motion_param_3`, while
+#' `motion_param_<1,25>` expands to `motion_param_1` and
+#' `motion_param_25`. Patterns without angle brackets are treated as
+#' regular expressions evaluated against the available column names.
+#'
+#' @param patterns Character vector of column patterns.
+#' @param available Character vector of available column names.
+#' @return Character vector of expanded column names.
+#' @keywords internal
+expand_confound_columns <- function(patterns, available) {
+  checkmate::assert_character(patterns, any.missing = FALSE, null.ok = TRUE)
+  if (length(patterns) == 0 || all(is.na(patterns))) return(character())
+
+  res <- unlist(lapply(patterns, function(pat) {
+    if (is.na(pat) || pat == "") return(character())
+
+    has_index <- grepl("<[^>]+>", pat)
+    if (has_index) {
+      pre <- sub("^([^<]*)<[^>]+>.*$", "\\1", pat)
+      post <- sub("^[^<]*<[^>]+>(.*)$", "\\1", pat)
+      idx_str <- sub("^[^<]*<([^>]+)>.*$", "\\1", pat)
+      idx_parts <- strsplit(idx_str, ",")[[1]]
+      idx <- unlist(lapply(idx_parts, function(x) {
+        if (grepl("-", x)) {
+          rng <- as.integer(strsplit(x, "-")[[1]])
+          if (length(rng) == 2 && !any(is.na(rng))) seq(rng[1], rng[2]) else as.integer(x)
+        } else {
+          as.integer(x)
+        }
+      }))
+      return(paste0(pre, idx, post))
+    } else {
+      matches <- grep(pat, available, value = TRUE, perl = TRUE)
+      if (length(matches) > 0) return(matches)
+      return(pat)
+    }
+  }))
+
+  unique(res)
+}
+
 # helper file to identify scrubbing censor file from input nifti
 get_censor_file <- function(input_bids_info) {
   checkmate::assert_list(input_bids_info)
@@ -1012,6 +1058,20 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
     confounds <- data.table::fread(proc_files$confounds,
                                    na.strings = c("n/a", "NA", "."))
+
+    cfg$confound_regression$columns <- expand_confound_columns(
+      cfg$confound_regression$columns, names(confounds)
+    )
+    cfg$confound_calculate$columns <- expand_confound_columns(
+      cfg$confound_calculate$columns, names(confounds)
+    )
+    cfg$confound_regression$noproc_columns <- expand_confound_columns(
+      cfg$confound_regression$noproc_columns, names(confounds)
+    )
+    cfg$confound_calculate$noproc_columns <- expand_confound_columns(
+      cfg$confound_calculate$noproc_columns, names(confounds)
+    )
+
     confound_cols <- as.character(union(cfg$confound_regression$columns,
                                          cfg$confound_calculate$columns))
     noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns,
