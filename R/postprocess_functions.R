@@ -1059,6 +1059,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     confounds <- data.table::fread(proc_files$confounds,
                                    na.strings = c("n/a", "NA", "."))
 
+    # handle regular expression and range expansion in column names
     cfg$confound_regression$columns <- expand_confound_columns(
       cfg$confound_regression$columns, names(confounds)
     )
@@ -1202,4 +1203,81 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   to_regress
+}
+
+#' Apply a Butterworth Filter to a 4D NIfTI Image
+#'
+#' This function performs voxelwise temporal filtering of a 4D fMRI image using
+#' a Butterworth IIR filter (low-pass, high-pass, or bandpass).
+#'
+#' @param infile Character string. Path to the input 4D NIfTI file.
+#' @param tr Numeric. The repetition time (TR) in seconds.
+#' @param low_hz Numeric or NULL. Low cutoff frequency in Hz for high-pass or bandpass filtering.
+#' @param high_hz Numeric or NULL. High cutoff frequency in Hz for low-pass or bandpass filtering.
+#' @param outfile Character string. If provided, the filtered image is written to this file.
+#' @param internal Logical. If FALSE (default), returns a `niftiImage` object with voxel values;
+#'   if TRUE, returns a minimal metadata internal object (see RNifti).
+#' @param order Integer. Filter order (default = 4).
+#' @param padtype Character string. Padding strategy: "even", "odd", "constant", or "zero". Default is "even".
+#' @param use_zi Logical. Whether to use steady-state initial conditions (default = TRUE).
+#'
+#' @return A 4D NIfTI image, either written to `outfile` or returned as an object.
+#'
+#' @details This function uses the `signal` package to compute IIR filter coefficients, and then
+#' applies a zero-phase forward-backward filter to each voxel using C++ code via Rcpp.
+#'
+#' @examples
+#' \dontrun{
+#' butterworth_filter_4d("bold.nii.gz", tr = 2, low_hz = 0.01, high_hz = 0.1,
+#'                        outfile = "bold_filtered.nii.gz")
+#' }
+#'
+#' @importFrom signal butter
+#' @export
+butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
+                                  outfile = "", internal = FALSE,
+                                  order = 2L, padtype = "even", use_zi = TRUE) {
+  checkmate::assert_file_exists(infile)
+  checkmate::assert_number(tr, lower=0.01, upper = 100)
+  checkmate::assert_number(low_hz, null.ok = TRUE)
+  checkmate::assert_number(high_hz, null.ok=TRUE)
+  checkmate::assert_integerish(order, len=1L, lower=1L, upper=50L)
+  
+  
+  if (!requireNamespace("signal", quietly = TRUE)) stop("The 'signal' package must be installed.")
+  
+  fs <- 1 / tr  # sampling frequency in Hz
+  nyq <- fs / 2
+  
+  if (is.null(low_hz) && is.null(high_hz)) {
+    stop("Must specify at least one of 'low_hz' or 'high_hz'.")
+  }
+  
+  # if (is.null(low_hz) || low_hz < 0) low_hz <- 0 # 0 indicates no filtering
+  # if (is.null(high_hz) || is.infinite(high_hz)) high_hz <- Inf # 0 indicates no filtering
+  # 
+  
+  if (!is.null(low_hz) && low_hz <= 0) stop("'low_hz' must be > 0")
+  if (!is.null(high_hz) && high_hz >= nyq) stop("'high_hz' must be < Nyquist frequency")
+  
+  # Design Butterworth filter
+  if (!is.null(low_hz) && !is.null(high_hz)) {
+    W <- c(low_hz, high_hz) / nyq
+    type <- "pass"
+  } else if (!is.null(low_hz)) {
+    W <- low_hz / nyq
+    type <- "high"
+  } else {
+    W <- high_hz / nyq
+    type <- "low"
+  }
+  
+  butter_coeff <- signal::butter(order, W, type = type)
+  b <- butter_coeff$b
+  a <- butter_coeff$a
+  
+  # Call C++ function for voxelwise filtering
+  butterworth_filter_cpp(infile = infile, b = b, a = a,
+                         outfile = outfile, internal = internal,
+                         padtype = padtype, use_zi = use_zi)
 }

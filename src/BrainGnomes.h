@@ -29,5 +29,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
 void remove_nifti_volumes(std::string infile, const std::vector<int>& remove_tpts, std::string outfile);
 
 Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat &X, const LogicalVector &include_rows, bool add_intercept, std::string outfile, bool internal);
-
+Rcpp::RObject butterworth_filter_4d(std::string infile, const std::vector<double>& b, const std::vector<double>& a,
+                                     std::string outfile, bool internal, std::string padtype, int padlen, bool use_zi);
+  
 #endif

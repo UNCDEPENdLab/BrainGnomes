@@ -11,6 +11,40 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// filtfilt_cpp
+NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a, int padlen, std::string padtype, bool use_zi);
+RcppExport SEXP _BrainGnomes_filtfilt_cpp(SEXP xSEXP, SEXP bSEXP, SEXP aSEXP, SEXP padlenSEXP, SEXP padtypeSEXP, SEXP use_ziSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type b(bSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type a(aSEXP);
+    Rcpp::traits::input_parameter< int >::type padlen(padlenSEXP);
+    Rcpp::traits::input_parameter< std::string >::type padtype(padtypeSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_zi(use_ziSEXP);
+    rcpp_result_gen = Rcpp::wrap(filtfilt_cpp(x, b, a, padlen, padtype, use_zi));
+    return rcpp_result_gen;
+END_RCPP
+}
+// butterworth_filter_cpp
+Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<double>& b, const std::vector<double>& a, std::string outfile, bool internal, std::string padtype, int padlen, bool use_zi);
+RcppExport SEXP _BrainGnomes_butterworth_filter_cpp(SEXP infileSEXP, SEXP bSEXP, SEXP aSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP padtypeSEXP, SEXP padlenSEXP, SEXP use_ziSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type infile(infileSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type b(bSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double>& >::type a(aSEXP);
+    Rcpp::traits::input_parameter< std::string >::type outfile(outfileSEXP);
+    Rcpp::traits::input_parameter< bool >::type internal(internalSEXP);
+    Rcpp::traits::input_parameter< std::string >::type padtype(padtypeSEXP);
+    Rcpp::traits::input_parameter< int >::type padlen(padlenSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_zi(use_ziSEXP);
+    rcpp_result_gen = Rcpp::wrap(butterworth_filter_cpp(infile, b, a, outfile, internal, padtype, padlen, use_zi));
+    return rcpp_result_gen;
+END_RCPP
+}
 // lmfit_residuals_4d
 Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const LogicalVector& include_rows, bool add_intercept, std::string outfile, bool internal, bool preserve_mean, double set_mean);
 RcppExport SEXP _BrainGnomes_lmfit_residuals_4d(SEXP infileSEXP, SEXP XSEXP, SEXP include_rowsSEXP, SEXP add_interceptSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP preserve_meanSEXP, SEXP set_meanSEXP) {
@@ -71,6 +105,8 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
+    {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 8},
     {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 8},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},
