@@ -71,8 +71,9 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
 
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-      if (is.null(scfg$postprocess$processing_steps)) {
-        stop("Cannot run postprocessing without a valid postprocess configuration.")
+      pp_names <- setdiff(names(scfg$postprocess), "enable")
+      if (length(pp_names) == 0L) {
+        stop("Cannot run postprocessing without at least one postprocess configuration.")
       }
     }
 
@@ -83,6 +84,19 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
+    pp_names <- setdiff(names(scfg$postprocess), "enable")
+    if (isTRUE(steps["postprocess"])) {
+      postprocess_names <- if (length(pp_names) == 1L) {
+        pp_names
+      } else {
+        prompt_input(
+          "Which postprocess configurations should be used? (separate names with spaces)",
+          type = "character", split = " ", min.len = 1L, among = pp_names
+        )
+      }
+    } else {
+      postprocess_names <- NULL
+    }
   } else {
     steps <- c()
     cat("\nPlease select which steps to run:\n")
@@ -91,17 +105,37 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
     steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
-    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && !is.null(scfg$postprocess$processing_steps), prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE)
-    if (isFALSE(steps["aroma"]) && "apply_aroma" %in% scfg$postprocess$processing_steps) {
-      warning(
-        "Postprocessing includes the removal of motion-related AROMA components from the fMRI data, but you declined ",
-        "to run AROMA as part of the pipeline. Postprocessing will likely fail if AROMA components cannot be found."
-      )
+    pp_names <- setdiff(names(scfg$postprocess), "enable")
+    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(pp_names) > 0,
+      prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE)
+    if (isFALSE(steps["aroma"])) {
+      has_aroma <- any(sapply(pp_names, function(nm) {
+        "apply_aroma" %in% scfg$postprocess[[nm]]$processing_steps
+      }))
+      if (has_aroma) {
+        warning(
+          "Postprocessing includes the removal of motion-related AROMA components from the fMRI data, but you declined ",
+          "to run AROMA as part of the pipeline. Postprocessing will likely fail if AROMA components cannot be found."
+        )
+      }
     }
     # check whether to run in debug mode
     scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
 
     scfg$force <- prompt_input(instruct = "Force each processing step, even if it appears to be complete?", type = "flag")
+
+    if (isTRUE(steps["postprocess"])) {
+      postprocess_names <- if (length(pp_names) == 1L) {
+        pp_names
+      } else {
+        prompt_input(
+          "Which postprocess configurations should be used? (separate names with spaces)",
+          type = "character", split = " ", min.len = 1L, among = pp_names
+        )
+      }
+    } else {
+      postprocess_names <- NULL
+    }
 
     # not currently used and would need to propagate the choice down to sbatch scripts through and environment variable (log_message)
     # scfg$log_level <- prompt_input(
@@ -141,8 +175,7 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
 
     for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps)
-      break
+      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_names = postprocess_names)
     }
   }
 }

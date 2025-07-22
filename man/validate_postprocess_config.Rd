@@ -7,7 +7,7 @@
 validate_postprocess_config(ppcfg, quiet = FALSE)
 }
 \arguments{
-\item{ppcfg}{a postprocess configuration block}
+\item{ppcfg}{a list of postprocess configuration blocks}
 
 \item{quiet}{a flag indicating whether to suppress messages}
 }

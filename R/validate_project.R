@@ -93,7 +93,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   # validate job settings
-  for (job in c("bids_conversion", "fmriprep", "mriqc", "aroma", "postprocess")) {
+  for (job in c("bids_conversion", "fmriprep", "mriqc", "aroma")) {
     validate_job_settings(job)
   }
 
@@ -112,7 +112,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   # Postprocessing settings validation (function in setup_postproc.R)
-  postprocess_result <- validate_postprocess_config(scfg$postprocess, quiet)
+  postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)
   scfg$postprocess <- postprocess_result$postprocess
   gaps <- c(gaps, postprocess_result$gaps)
 
@@ -126,8 +126,36 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 #' @param ppcfg a postprocess configuration block
 #' @param quiet a flag indicating whether to suppress messages
 #' @keywords internal
-validate_postprocess_config <- function(ppcfg, quiet = FALSE) {
+validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   gaps <- c()
+  validate_char <- function(arg) {
+    if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || arg[1L] == "") {
+      arg <- character(0)
+    }
+    return(arg)
+  }
+
+  # job settings
+  if (!checkmate::test_number(ppcfg$memgb, lower = 1, upper = 1000)) {
+    if (!quiet) message("Invalid memgb setting in postprocess configuration. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/memgb")
+    ppcfg$memgb <- NULL
+  }
+
+  if (!checkmate::test_number(ppcfg$nhours, lower = 1, upper = 1000)) {
+    if (!quiet) message("Invalid nhours setting in postprocess configuration. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/nhours")
+    ppcfg$nhours <- NULL
+  }
+
+  if (!checkmate::test_number(ppcfg$ncores, lower = 1, upper = 250)) {
+    if (!quiet) message("Invalid ncores setting in postprocess configuration. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/ncores")
+    ppcfg$ncores <- NULL
+  }
+
+  ppcfg$cli_options <- validate_char(ppcfg$cli_options)
+  ppcfg$sched_args <- validate_char(ppcfg$sched_args)
 
   # postprocess/input_regex
   if (!"input_regex" %in% names(ppcfg)) {
@@ -266,5 +294,17 @@ validate_postprocess_config <- function(ppcfg, quiet = FALSE) {
     }
   }
 
+  return(list(postprocess = ppcfg, gaps = gaps))
+}
+
+validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
+  reserved <- c("enable")
+  cfg_names <- setdiff(names(ppcfg), reserved)
+  gaps <- c()
+  for (nm in cfg_names) {
+    res <- validate_postprocess_config_single(ppcfg[[nm]], quiet)
+    ppcfg[[nm]] <- res$postprocess
+    gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
+  }
   return(list(postprocess = ppcfg, gaps = gaps))
 }
