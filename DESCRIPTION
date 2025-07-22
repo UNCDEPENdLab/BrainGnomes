@@ -3,7 +3,6 @@ Title: An R package for preprocessing and analyzing fMRI data
 Version: 0.2-3
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
-Maintainer: Michael Hallquist <michael.hallquist@gmail.com>
 Description: This R package handles preprocessing and analysis of fMRI data on HPC clusters.
 License: GPL-3
 BugReports: https://github.com/UNCDEPENdLab/BrainGnomes/issues

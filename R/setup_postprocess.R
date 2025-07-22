@@ -79,6 +79,28 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
   scfg <- setup_confound_regression(scfg, fields)
   scfg <- setup_postproc_steps(scfg, fields)
 
+  proc_cfg <- scfg$postprocess
+  enable_val <- proc_cfg$enable
+  proc_cfg$enable <- NULL
+  existing_names <- names(proc_cfg)[sapply(proc_cfg, function(x) {
+    is.list(x) && ("bids_desc" %in% names(x) || "input_regex" %in% names(x))
+  })]
+  existing_cfgs <- proc_cfg[existing_names]
+  proc_cfg[existing_names] <- NULL
+  scfg$postprocess <- c(list(enable = enable_val), existing_cfgs)
+  cfg_name <- prompt_input("Name for this postprocess configuration:", type = "character")
+  while (cfg_name %in% setdiff(names(scfg$postprocess), "enable")) {
+    message("Configuration name must be unique.")
+    cfg_name <- prompt_input("Name for this postprocess configuration:", type = "character")
+  }
+  # ensure unique bids_desc
+  existing_desc <- unlist(lapply(setdiff(names(scfg$postprocess), "enable"), function(nm) scfg$postprocess[[nm]]$bids_desc))
+  while (!is.null(proc_cfg$bids_desc) && proc_cfg$bids_desc %in% existing_desc) {
+    message("bids_desc must be unique across postprocess configurations.")
+    proc_cfg$bids_desc <- prompt_input("Enter a unique BIDS description:", type = "character")
+  }
+  scfg$postprocess[[cfg_name]] <- proc_cfg
+  return(scfg)
 }
 
 setup_postprocess_globals <- function(scfg, fields = NULL) {

@@ -3,11 +3,12 @@
 #' @param scfg A list of configuration settings
 #' @param sub_cfg A data.frame of subject configuration settings
 #' @param steps A named logical vector indicating which steps to run
+#' @param postprocess_names Optional character vector of postprocess configuration names to run
 #' @return A logical value indicating whether the preprocessing was successful
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_names = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -19,6 +20,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     if (any(duplicated(sub_cfg$ses_id))) stop("Duplicate session IDs found in sub_cfg. process_subject requires unique session IDs.")
   }
   checkmate::assert_logical(steps, names = "unique")
+  if (is.null(postprocess_names)) postprocess_names <- character()
+  checkmate::assert_character(postprocess_names, any.missing = FALSE)
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
 
@@ -36,8 +39,10 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
-  submit_step <- function(name, row_idx = 1L, parent_ids = NULL) {
+  submit_step <- function(name, row_idx = 1L, parent_ids = NULL, pp_name = NULL) {
     session_level <- name %in% c("bids_conversion", "postprocess") # only these two are session-level
+
+    name_tag <- if (name == "postprocess" && !is.null(pp_name)) glue("{name}_{pp_name}") else name
 
     sub_id <- sub_cfg$sub_id[row_idx]
     ses_id <- sub_cfg$ses_id[row_idx]
@@ -45,7 +50,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
     if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
-    complete_file <- file.path(sub_dir, glue(".{name}{sub_str}_complete")) # full path to expected complete file
+    complete_file <- file.path(sub_dir, glue(".{name_tag}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
 
     job_id <- NULL
@@ -65,7 +70,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
     }
 
     # shared components across specific jobs
-    jobid_str <- ifelse(has_ses, glue("{name}_sub-{sub_id}_ses-{ses_id}"), glue("{name}_sub-{sub_id}"))
+    jobid_str <- ifelse(has_ses, glue("{name_tag}_sub-{sub_id}_ses-{ses_id}"), glue("{name_tag}_sub-{sub_id}"))
     env_variables <- c(
       debug_pipeline = scfg$debug,
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
@@ -76,7 +81,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
       complete_file = complete_file
     )
     sched_script <- get_job_script(scfg, name)
-    sched_args <- get_job_sched_args(scfg, name)
+    if (name == "postprocess") {
+      scfg_tmp <- scfg
+      scfg_tmp$postprocess <- scfg$postprocess[[pp_name]]
+      sched_args <- get_job_sched_args(scfg_tmp, name)
+    } else {
+      sched_args <- get_job_sched_args(scfg, name)
+    }
     sched_args <- set_cli_options( # setup files for stdout and stderr, job name
       sched_args,
       c(
@@ -97,7 +108,9 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
 
     # launch submission function -- these all follow the same input argument structure
     lg$debug("Launching submit_{name} for subject: {sub_id}")
-    job_id <- do.call(glue("submit_{name}"), list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg))
+    args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
+    if (name == "postprocess") args$pp_name <- pp_name
+    job_id <- do.call(glue("submit_{name}"), args)
 
     return(job_id)
   }
@@ -149,7 +162,14 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL) {
   aroma_id <- submit_step("aroma", parent_ids = c(bids_conversion_ids, fmriprep_id))
 
   ## Handle postprocessing (session-level)
-  postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("postprocess", row_idx = idx, parent_ids = c(bids_conversion_ids, fmriprep_id, aroma_id))))
+  postprocess_ids <- c()
+  if (length(postprocess_names) > 0) {
+    postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
+      unlist(lapply(postprocess_names, function(pp_nm) {
+        submit_step("postprocess", row_idx = idx, parent_ids = c(bids_conversion_ids, fmriprep_id, aroma_id), pp_name = pp_nm)
+      }))
+    }))
+  }
 
   return(TRUE) # nothing interesting for now
 }
@@ -339,7 +359,7 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_name = NULL) {
 
   postproc_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
   postproc_image_sched_script <- get_job_script(scfg, "postprocess_image")
@@ -348,8 +368,9 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
   input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
   #scfg$postprocess$fsl_img <- scfg$compute_environment$fmriprep_container # always pass fmriprep container for running FSL commands in postprocessing
-  scfg$postprocess$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
-  postproc_cli <- nested_list_to_args(scfg$postprocess, collapse=TRUE) # convert postprocess config into CLI args
+  pp_cfg <- scfg$postprocess[[pp_name]]
+  pp_cfg$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
+  postproc_cli <- nested_list_to_args(pp_cfg, collapse = TRUE)
   
   env_variables <- c(
     env_variables,
@@ -359,7 +380,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
     postproc_cli = postproc_cli,
     postproc_rscript = postproc_rscript,
     input_dir = input_dir, # postprocess_subject.sbatch will figure out files to postprocess using input and input_regex
-    input_regex = scfg$postprocess$input_regex,
+    input_regex = pp_cfg$input_regex,
     postproc_image_sched_script = postproc_image_sched_script,
     sched_args = sched_args # pass through to child processes
   )
