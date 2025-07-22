@@ -41,7 +41,13 @@ fi
 
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
 
 [ -z "$fs_license_file" ] && fs_license_file="$FS_LICENSE" # fall back to global freesurfer license file if not set
 [ -z "$fs_license_file" ] && fs_license_file="$FREESURFER_HOME/license.txt" # fall back to freesurfer license file in $FREESURFER_HOME if not set
@@ -70,8 +76,6 @@ mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-[[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
@@ -100,9 +104,14 @@ rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set 
 rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_fmriprep()
+cmd_pid=$!
 
-wait
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
+exit $cmd_status

@@ -6,6 +6,10 @@
 #' @param prompt A logical value indicating whether to prompt the user for input on which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
+#' @param subject_filter Optional character vector or data.frame specifying which
+#'   subjects (and optionally sessions) to process. When a data.frame is
+#'   provided, it must contain a `sub_id` column and may include a `ses_id`
+#'   column to filter on specific subject/session combinations.
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
 #' @examples
@@ -16,12 +20,17 @@
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue
-run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE) {
+run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE,
+                        subject_filter = NULL) {
   checkmate::assert_list(scfg)
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert_flag(prompt)
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
+  checkmate::assert(
+    checkmate::check_character(subject_filter, any.missing = FALSE, null.ok = TRUE),
+    checkmate::check_data_frame(subject_filter, null.ok = TRUE)
+  )
 
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
@@ -41,12 +50,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
 
-    if ("bids_validation" %in% steps) {
-      if (!isTRUE(scfg$bids_validation$enable)) stop("bids_validation was requested, but it is disabled in the configuration.")
-      if (!validate_exists(scfg$compute_environment$bids_validator)) {
-        stop("Cannot run BIDS validation without a bids_validator location.")
-      }
-    }
 
     if ("mriqc" %in% steps) {
       if (!isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
@@ -101,7 +104,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps <- c()
     cat("\nPlease select which steps to run:\n")
     steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
-    steps["bids_validation"] <- ifelse(isTRUE(scfg$bids_validation$enable) && !is.null(scfg$compute_environment$bids_validator), prompt_input(instruct = "Run BIDS validation?", type = "flag"), FALSE)
     steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
     steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
@@ -154,11 +156,11 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   if (isTRUE(steps["bids_conversion"])) {
     subject_dicom_dirs <- get_subject_dirs(scfg$metadata$dicom_directory, sub_regex = scfg$bids_conversion$sub_regex, ses_regex = scfg$bids_conversion$ses_regex, full.names = TRUE)
 
-    # add DICOM prefix
-    names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
-
-    if (length(subject_dicom_dirs) == 0L) {
+    if (nrow(subject_dicom_dirs) == 0L) {
       warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))
+    } else {
+      # add DICOM prefix
+      names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
     }
   }
   
@@ -167,6 +169,30 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
   names(subject_bids_dirs) <- sub("(sub|ses)_dir", "bids_\\1_dir", names(subject_bids_dirs))
   
   subject_dirs <- merge(subject_dicom_dirs, subject_bids_dirs, by = c("sub_id", "ses_id"), all = TRUE)
+
+  if (!is.null(subject_filter)) {
+    if (is.data.frame(subject_filter)) {
+      checkmate::assert_names(names(subject_filter), must.include = "sub_id")
+      by_cols <- intersect(c("sub_id", "ses_id"), names(subject_filter))
+      subject_dirs <- merge(subject_dirs, subject_filter[, by_cols, drop = FALSE], by = by_cols)
+    } else {
+      subject_dirs <- subject_dirs[subject_dirs$sub_id %in% subject_filter, , drop = FALSE]
+    }
+
+    if (nrow(subject_dirs) == 0L) {
+      stop("No subject directories match the provided subject_filter")
+    }
+
+    msg_df <- unique(subject_dirs[, c("sub_id", "ses_id")])
+    msg_lines <- apply(msg_df, 1, function(rr) {
+      if (!is.na(rr["ses_id"])) {
+        glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}")
+      } else {
+        glue("  sub-{rr['sub_id']}")
+      }
+    })
+    cat("Processing the following subjects:\n", paste(msg_lines, collapse = "\n"), "\n")
+  }
 
   if (nrow(subject_dirs) == 0L) {
     stop(glue("Cannot find any valid subject folders in bids directory: {scfg$metadata$bids_directory}"))

@@ -15,9 +15,6 @@ set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
 source "${pkg_dir}/shell_functions"
 
-# Load the right instance of R to make this go -- TODO: need to abstract this as a configuration step
-module use /proj/mnhallqlab/sw/modules
-module load r/4.2.1
 
 # Set trap for common termination signals
 trap 'trap_job_failure postprocess SIGTERM' SIGTERM
@@ -41,6 +38,7 @@ ncores=$SLURM_NTASKS
 [ ! -f "$input_file" ] && echo "input_file $input_file not found. Exiting" && exit 1
 [ ! -r "$input_file" ] && echo "input_file $input_file not readable. Exiting" && exit 1
 [ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
+[ -z "$R_HOME" ] && echo "R_HOME not set. Exiting" && exit 1
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -61,7 +59,13 @@ mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-[[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
 
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
@@ -71,8 +75,13 @@ start_time=$(date +%s)
 
 log_message INFO Starting postprocessing for image $input_file in $out_dir with mem: $mem
 
-rel $rel_flag $log_flag Rscript --vanilla "$postproc_rscript" --input="$input_file" $postproc_cli &
-    
-wait
+rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postproc_rscript" --input="$input_file" $postproc_cli &
+cmd_pid=$!
+
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
 log_message INFO Finished postprocessing for image $input_file "(time elapsed: $(time_elapsed))"
+exit $cmd_status

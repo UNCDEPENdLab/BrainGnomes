@@ -20,7 +20,6 @@ get_job_script <- function(scfg = NULL, job_name) {
   }
   return(script)
 }
-
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg A list of configuration settings
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
@@ -29,36 +28,48 @@ get_job_script <- function(scfg = NULL, job_name) {
 #' @importFrom checkmate assert_string
 #' @keywords internal
 #' @noRd
-get_job_sched_args <- function(scfg=NULL, job_name) {
+get_job_sched_args <- function(scfg = NULL, job_name) {
   checkmate::assert_string(job_name)
 
   # TODO: need to use cli_opts approach to remove conflicting/redundant fields in sched_args for -n, -N, etc.
 
   sched_args <- scfg[[job_name]]$sched_args
+
+  memgb <- scfg[[job_name]]$memgb
+  nhours <- scfg[[job_name]]$nhours
+  ncores <- scfg[[job_name]]$ncores
+  if (isTRUE(scfg$debug)) {
+    memgb <- 4
+    nhours <- 0.1
+    ncores <- 1
+  }
   # convert empty strings to NULL for compatibility with glue
   if (length(sched_args) == 0L || is.na(sched_args[1L]) || sched_args[1L] == "") sched_args <- NULL
 
-   if (scfg$compute_environment$scheduler == "slurm") {
-     sched_args <- glue(
-       "-N 1",
-       "-n {scfg[[job_name]]$ncores}",
-       "--time={hours_to_dhms(scfg[[job_name]]$nhours)}",
-       "--mem={scfg[[job_name]]$memgb}g",
-       "{sched_args}",
-       .trim = TRUE, .sep = " ", .null = NULL
-     )
-   } else {
-     sched_args <- glue(
-       "-l nodes=1:ppn={scfg[[job_name]]$ncores}",
-       "-l walltime={hours_to_dhms(scfg[[job_name]]$nhours)}",
-       "-l mem={scfg[[job_name]]$memgb}",
-       "{sched_args}",
-       .trim = TRUE, .sep = " ", .null = NULL
-     )
-   }
-   
-  return(sched_args)
+  if (scfg$compute_environment$scheduler == "slurm") {
+    # ensure that we strip off any #SBATCH prefix since we are passing arguments directly to sbatch or qsub
+    if (!is.null(sched_args)) sched_args <- sub("^\\s*#SBATCH\\s+", "", sched_args, ignore.case = TRUE)
 
+    sched_args <- glue(
+      "-N 1",
+      "-n {ncores}",
+      "--time={hours_to_dhms(nhours)}",
+      "--mem={memgb}g",
+      "{paste(sched_args, collapse=' ')}",
+      .trim = TRUE, .sep = " ", .null = NULL
+    )
+  } else {
+    if (!is.null(sched_args)) sched_args <- sub("^\\s*#PBS\\s+", "", sched_args, ignore.case = TRUE)
+    sched_args <- glue(
+      "-l nodes=1:ppn={ncores}",
+      "-l walltime={hours_to_dhms(nhours)}",
+      "-l mem={memgb}",
+      "{paste(sched_args, collapse=' ')}",
+      .trim = TRUE, .sep = " ", .null = NULL
+    )
+  }
+
+  return(trimws(sched_args))
 }
 
 setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
@@ -290,7 +301,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   checkmate::assert_flag(use_lgr)
   checkmate::assert_string(fsl_img, null.ok=TRUE)
   if (!is.null(fsl_img)) checkmate::assert_file_exists(fsl_img)
-  checkmate::assert_character(bind_paths)
+  checkmate::assert_character(bind_paths, null.ok = TRUE)
 
   if (use_lgr) {
     lg <- lgr::get_logger("run_fsl_command", reset = TRUE) # always get clean config
@@ -401,7 +412,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   if (retcode != 0) {    
     errmsg <- glue("run_fsl_command failed with exit code: {retcode}, stdout: {paste(stdout, collapse='\n')}, stderr: {paste(stderr, collapse='\n')}")
     if (use_lgr) {
-      log_file$error(errmsg)
+      lg$error(errmsg)
     } else {
       cat(errmsg, "\n", file = log_file, append = TRUE)
     }    
@@ -471,7 +482,9 @@ nii_to_mat <- function(ni_in) {
   checkmate::assert_file_exists(ni_in)
 
   nii <- readNIfTI(ni_in, reorient = FALSE, rescale_data = FALSE)
-  mat <- t(nii[, 1, 1, ]) # x and z -- make back into time x variables
+  mat <- nii[, 1, 1, , drop = FALSE] # keep x and t
+  dim(mat) <- dim(mat)[c(1, 4)] # selectively drop y and z dimensions (handles singleton cases correctly)
+  mat <- t(mat) # make into time x variables
   return(mat)
 }
 
@@ -559,6 +572,16 @@ file_sans_ext <- function(file) {
 }
 
 
+# avoiding dplyr dependency
+lead <- function(x, n = 1L, default = NA) {
+  if (n < 0L) return(lag(x, -n, default))
+  c(tail(x, -n), rep(default, n))
+}
+
+lag <- function(x, n = 1L, default = NA) {
+  if (n < 0L) return(lead(x, -n, default))
+  c(rep(default, n), head(x, -n))
+}
 
 get_pipeline_status <- function(scfg) {
   # adapted from get_feat_status.

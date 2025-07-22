@@ -39,7 +39,15 @@ ncores=$SLURM_NTASKS
 [  -z "$postproc_image_sched_script" ] && echo "postproc_image_sched_script is not set. Exiting" && exit 1
 [ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
-[ -z "$debug_pipeline" ] && debug_pipeline=0
+
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
+
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 
 # add the job id to the log file variables in case of crash
@@ -61,8 +69,6 @@ mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-[[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
-
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
@@ -106,19 +112,7 @@ for f in "${files[@]}"; do
   job_ids+=("$jid")
 done
 
-
-### NOW WAIT ON KIDS
-
-# # Submit child jobs and collect their job IDs
-# job_ids=()
-# for file in input_files/*.nii.gz; do
-#   jid=$(sbatch --parsable child_job.sbatch "$file")
-#   echo "Submitted child job $jid for file $file"
-#   job_ids+=("$jid")
-# done
-
 # Wait for all child jobs to finish
-# Option 1: Poll using squeue
 echo "Waiting for child jobs to complete..."
 
 while true; do
@@ -134,6 +128,22 @@ while true; do
   sleep 300 # poll every 5 minutes
 done
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+# Check exit status of child jobs using sacct
+failed=0
+for jid in "${job_ids[@]}"; do
+  # Get job state and exit code. sacct may return multiple lines; take the first
+  state=$(sacct -n -j "$jid" -o State | head -n 1 | awk '{print $1}')
+  exit_code=$(sacct -n -j "$jid" -o ExitCode | head -n 1 | awk '{print $1}')
+  exit_main=${exit_code%%:*}
+
+  if [[ "$state" != "COMPLETED" || "$exit_main" != "0" ]]; then
+    log_message ERROR "Child job $jid failed with state $state exit code $exit_code"
+    failed=1
+  fi
+done
+
+[[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO Finished postprocessing for subject $sub_id $ses_str
+exit $failed

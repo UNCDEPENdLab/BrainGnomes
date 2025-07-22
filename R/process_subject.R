@@ -22,20 +22,20 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
   checkmate::assert_logical(steps, names = "unique")
   if (is.null(postprocess_names)) postprocess_names <- character()
   checkmate::assert_character(postprocess_names, any.missing = FALSE)
-  expected <- c("bids_conversion", "bids_validation", "mriqc", "fmriprep", "aroma", "postprocess")
+  expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
 
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
   lg <- get_subject_logger(scfg, sub_id)
   
-  bids_conversion_ids <- bids_validation_id <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
+  bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
 
 
   # N.B. fmriprep processes a subject, not a session... Thus, we need to submit a top-level job for the subject
 
   # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
-  # BIDS validation, fmriprep, mriqc, and aroma are subject-specific (sessions nested within subjects)
+  # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
 
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
@@ -74,6 +74,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
     env_variables <- c(
       debug_pipeline = scfg$debug,
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
+      R_HOME = R.home(),
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
@@ -116,7 +117,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
 
   lg$info(glue("Processing subject {sub_id} with {nrow(sub_cfg)} sessions."))
   # lg$info(glue("Processing steps: {glue_collapse(names(steps), sep = ', ')}"))
-  lg$info(glue("BIDS directory: {bids_sub_dir}"))
+  if (!is.na(bids_sub_dir))  lg$info(glue("BIDS directory: {bids_sub_dir}"))
 
   ## Handle BIDS conversion -- session-level
   n_inputs <- nrow(sub_cfg)
@@ -150,10 +151,6 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
 
   # Everything after BIDS conversion depends on the BIDS directory existing
 
-  ## Handle BIDS validation
-  # on further investigation, bids-validator only works on the root of the BIDS directory.
-  # so, maybe we should just let fmriprep handle this directly
-  # bids_validation_id <- submit_step("bids_validation", parent_ids = bids_conversion_ids)
 
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = bids_conversion_ids)
@@ -192,7 +189,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     ses_id = ses_id
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -205,17 +202,17 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
 
 }
 
-submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
   
   env_variables <- c(
     env_variables,
     bids_validator = scfg$compute_environment$bids_validator,
     bids_dir = sub_dir,
     sub_id = sub_id,
-    outfile = scfg$bids_validation$outfile
+    outfile = if (is.null(outfile)) scfg$bids_validation$outfile else outfile
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -269,7 +266,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -306,7 +303,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -351,7 +348,7 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     cli_options = cli_options
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE
@@ -388,7 +385,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
     sched_args = sched_args # pass through to child processes
   )
 
-  job_id <- fmri.pipeline::cluster_job_submit(sched_script,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE

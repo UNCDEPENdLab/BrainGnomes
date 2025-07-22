@@ -22,7 +22,8 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 
   required_dirs <- c(
     "metadata/project_directory", "metadata/dicom_directory", "metadata/bids_directory",
-    "metadata/fmriprep_directory", "metadata/scratch_directory", "metadata/templateflow_home"
+    "metadata/fmriprep_directory", "metadata/mriqc_directory", "metadata/log_directory",
+    "metadata/scratch_directory", "metadata/templateflow_home"
   )
   for (rr in required_dirs) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
@@ -56,6 +57,27 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     message("Cannot find AROMA container at ", scfg$compute_environment$aroma_container, ". You will be asked for this.")
     gaps <- c(gaps, "compute_environment/aroma_container")
     scfg$compute_environment$aroma_container <- NULL
+  }
+
+  if (!checkmate::test_subset(scfg$compute_environment$scheduler, c("slurm", "torque"), empty.ok = FALSE)) {
+    message("Invalid scheduler setting. You will be asked for this.")
+    gaps <- c(gaps, "compute_environment/scheduler")
+    scfg$compute_environment$scheduler <- NULL
+  }
+
+  if (isTRUE(scfg$mriqc$enable) && !checkmate::test_file_exists(scfg$compute_environment$mriqc_container)) {
+    message("MRIQC is enabled but mriqc_container is missing. You will be asked for this.")
+    gaps <- c(gaps, "compute_environment/mriqc_container")
+  }
+
+  if (isTRUE(scfg$aroma$enable) && !checkmate::test_file_exists(scfg$compute_environment$aroma_container)) {
+    message("AROMA is enabled but aroma_container is missing. You will be asked for this.")
+    gaps <- c(gaps, "compute_environment/aroma_container")
+  }
+
+  if (isTRUE(scfg$bids_validation$enable) && !checkmate::test_file_exists(scfg$compute_environment$bids_validator)) {
+    message("BIDS validation is enabled but bids_validator is missing. You will be asked for this.")
+    gaps <- c(gaps, "compute_environment/bids_validator")
   }
 
   # helper subfunction to convert NULL, empty list, or "" to character(0) for conformity
@@ -109,6 +131,36 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     message("Missing sub_id_match in $bids_conversion You will be asked for this.")
     gaps <- c(gaps, "bids_conversion/sub_id_match")
     scfg$bids_conversion$sub_id_match <- NULL
+  }
+
+  if (!checkmate::test_string(scfg$bids_conversion$ses_regex, na.ok = TRUE)) {
+    message("Invalid ses_regex in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/ses_regex")
+    scfg$bids_conversion$ses_regex <- NULL
+  }
+
+  if (!checkmate::test_string(scfg$bids_conversion$ses_id_match, na.ok = TRUE)) {
+    message("Invalid ses_id_match in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/ses_id_match")
+    scfg$bids_conversion$ses_id_match <- NULL
+  }
+
+  if (!checkmate::test_flag(scfg$bids_conversion$overwrite)) {
+    message("Invalid overwrite flag in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/overwrite")
+    scfg$bids_conversion$overwrite <- NULL
+  }
+
+  if (!checkmate::test_flag(scfg$bids_conversion$clear_cache)) {
+    message("Invalid clear_cache flag in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/clear_cache")
+    scfg$bids_conversion$clear_cache <- NULL
+  }
+
+  if (!checkmate::test_flag(scfg$bids_conversion$validate_bids)) {
+    message("Invalid validate_bids flag in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/validate_bids")
+    scfg$bids_conversion$validate_bids <- NULL
   }
 
   # Postprocessing settings validation (function in setup_postproc.R)
@@ -263,11 +315,11 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
       gaps <- c(gaps, "postprocess/confound_calculate/demean")
       ppcfg$confound_calculate$demean <- NULL
     }
-    if (!checkmate::test_string(ppcfg$confound_calculate$output_file)) {
-      if (!quiet) message("Invalid output_file field in $postprocess$confound_calculate")
-      gaps <- c(gaps, "postprocess/confound_calculate/output_file")
-      ppcfg$confound_calculate$output_file <- NULL
-    }
+    # if (!checkmate::test_string(ppcfg$confound_calculate$output_file)) {
+    #   if (!quiet) message("Invalid output_file field in $postprocess$confound_calculate")
+    #   gaps <- c(gaps, "postprocess/confound_calculate/output_file")
+    #   ppcfg$confound_calculate$output_file <- NULL
+    # }
     if (!checkmate::test_character(ppcfg$confound_calculate$columns)) {
       if (!quiet) message("Invalid columns field in $postprocess$confound_calculate")
       gaps <- c(gaps, "postprocess/confound_calculate/columns")
@@ -278,6 +330,56 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
       gaps <- c(gaps, "postprocess/confound_calculate/noproc_columns")
       ppcfg$confound_calculate$noproc_columns <- NULL
     }
+  }
+
+  if ("scrubbing" %in% names(ppcfg)) {
+    if (!checkmate::test_character(ppcfg$scrubbing$expression)) {
+      if (!quiet) message("Invalid expression field in $postprocess$scrubbing")
+      gaps <- c(gaps, "postprocess/scrubbing/expression")
+      ppcfg$scrubbing$expression <- NULL
+    }
+  }
+
+  if ("confound_regression" %in% names(ppcfg)) {
+    if (!checkmate::test_character(ppcfg$confound_regression$columns)) {
+      if (!quiet) message("Invalid columns field in $postprocess$confound_regression")
+      gaps <- c(gaps, "postprocess/confound_regression/columns")
+      ppcfg$confound_regression$columns <- NULL
+    }
+    if (!checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
+      if (!quiet) message("Invalid noproc_columns field in $postprocess$confound_regression")
+      gaps <- c(gaps, "postprocess/confound_regression/noproc_columns")
+      ppcfg$confound_regression$noproc_columns <- NULL
+    }
+    if (!checkmate::test_string(ppcfg$confound_regression$prefix)) {
+      if (!quiet) message("No valid prefix found for $postprocess$confound_regression")
+      gaps <- c(gaps, "postprocess/confound_regression/prefix")
+      ppcfg$confound_regression$prefix <- NULL
+    }
+  }
+
+  if ("apply_mask" %in% names(ppcfg)) {
+    if (!checkmate::test_string(ppcfg$apply_mask$mask_file, null.ok = TRUE) ||
+        (!is.na(ppcfg$apply_mask$mask_file) && !checkmate::test_file_exists(ppcfg$apply_mask$mask_file))) {
+      if (!quiet) message("Invalid mask_file in $postprocess$apply_mask. You will be asked for this.")
+      gaps <- c(gaps, "postprocess/apply_mask/mask_file")
+      ppcfg$apply_mask$mask_file <- NULL
+    }
+    if (!checkmate::test_string(ppcfg$apply_mask$prefix)) {
+      if (!quiet) message("No valid prefix found for $postprocess$apply_mask")
+      gaps <- c(gaps, "postprocess/apply_mask/prefix")
+      ppcfg$apply_mask$prefix <- NULL
+    }
+  }
+
+  if (!checkmate::test_flag(ppcfg$force_processing_order)) {
+    gaps <- c(gaps, "postprocess/force_processing_order")
+    ppcfg$force_processing_order <- FALSE
+  }
+
+  if (isTRUE(ppcfg$force_processing_order) && !checkmate::test_character(ppcfg$processing_steps)) {
+    gaps <- c(gaps, "postprocess/processing_steps")
+    ppcfg$processing_steps <- NULL
   }
 
   # validate AROMA application

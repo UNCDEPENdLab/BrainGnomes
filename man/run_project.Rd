@@ -4,7 +4,14 @@
 \alias{run_project}
 \title{Run the processing pipeline}
 \usage{
-run_project(scfg, steps = NULL, prompt = TRUE, debug = FALSE, force = FALSE)
+run_project(
+  scfg,
+  steps = NULL,
+  prompt = TRUE,
+  debug = FALSE,
+  force = FALSE,
+  subject_filter = NULL
+)
 }
 \arguments{
 \item{scfg}{A list containing the study configuration.}
@@ -17,6 +24,11 @@ Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").}
 \item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
 
 \item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
+
+\item{subject_filter}{Optional character vector or data.frame specifying which
+subjects (and optionally sessions) to process. When a data.frame is
+provided, it must contain a \code{sub_id} column and may include a \code{ses_id}
+column to filter on specific subject/session combinations.}
 }
 \value{
 A logical value indicating whether the processing pipeline was successfully run.

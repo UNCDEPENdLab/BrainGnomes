@@ -2,19 +2,22 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{setup_temporal_filter}
 \alias{setup_temporal_filter}
-\title{Specify the temporal filtering settings for postprocessing}
+\title{Configure temporal filtering settings for postprocessing}
 \usage{
 setup_temporal_filter(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object created by \code{setup_project}}
+\item{scfg}{A study configuration object created by \code{setup_project()}.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all temporal filtering fields will be prompted.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess$temporal_filter} field populated
+A modified version of \code{scfg} with the \verb{$postprocess$temporal_filter} entry updated.
 }
 \description{
-Specify the temporal filtering settings for postprocessing
+This function configures the temporal filtering step in the postprocessing pipeline.
+Temporal filtering removes unwanted frequency components from the BOLD signal, such as
+slow drifts (via high-pass filtering) or physiological noise (via low-pass filtering).
+This step is often used to improve signal quality for subsequent statistical analysis.
 }
 \keyword{internal}

@@ -35,7 +35,13 @@ ncores=$SLURM_NTASKS
 [ ! -r "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0 # set debug_pipeline to 1 if it is set to TRUE, otherwise set it to 0
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
 
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
@@ -49,7 +55,6 @@ mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-[[ "$debug_pipeline" -eq 1 ]] && rel_flag=c #if debug_pipeline is 1, only echo command to log, don't run it
 
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
@@ -66,9 +71,14 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
 rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
     $cli_options & # all options setup by submit_aroma()
+cmd_pid=$!
 
-wait
+set +e
+wait $cmd_pid
+cmd_status=$?
+set -e
 
-[[ $? -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 
 log_message INFO Finished aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
+exit $cmd_status

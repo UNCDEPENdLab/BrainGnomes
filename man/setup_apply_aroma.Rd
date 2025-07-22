@@ -2,19 +2,28 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{setup_apply_aroma}
 \alias{setup_apply_aroma}
-\title{Specify the intensity normalization settings for postprocessing}
+\title{Configure ICA-AROMA denoising application in postprocessing}
 \usage{
 setup_apply_aroma(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object created by \code{setup_project}}
+\item{scfg}{A study configuration object created by \code{setup_project()}.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of fields to prompt for. If \code{NULL}, all fields will be prompted.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess$apply_aroma} field populated
+A modified version of \code{scfg} with the \verb{$postprocess$apply_aroma} entry updated.
 }
 \description{
-Specify the intensity normalization settings for postprocessing
+This function configures the application of ICA-AROMA denoising to fMRI data as part of postprocessing.
+ICA-AROMA (Pruim et al., 2015) identifies and labels motion-related independent components (ICs) using
+spatiotemporal features, and outputs regressors that can be used to remove these components.
+}
+\details{
+If enabled, this step applies the AROMA regressors to remove noise components from the BOLD time series
+using either 'aggressive' or 'nonaggressive' regression. Nonaggressive denoising is recommended as it
+preserves shared variance with signal components.
+
+This step assumes that ICA-AROMA has already been run using a tool like \code{fmripost-aroma}.
 }
 \keyword{internal}

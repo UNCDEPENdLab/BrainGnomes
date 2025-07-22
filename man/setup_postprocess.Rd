@@ -2,19 +2,39 @@
 % Please edit documentation in R/setup_postprocess.R
 \name{setup_postprocess}
 \alias{setup_postprocess}
-\title{Specify postprocessing setting for a study}
+\title{Configure postprocessing settings for a study}
 \usage{
 setup_postprocess(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object produced by \code{setup_project}}
+\item{scfg}{A study configuration object, as produced by \code{setup_project()}.}
 
-\item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
+\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all postprocessing fields will be prompted.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess} field populated
+A modified version of \code{scfg} with the \verb{$postprocess} field populated.
 }
 \description{
-Specify postprocessing setting for a study
+This function enables and configures the postprocessing steps to be applied after fMRIPrep.
+Postprocessing may include denoising, smoothing, filtering, intensity normalization,
+and confound regression applied to preprocessed BOLD data.
+}
+\details{
+The function interactively prompts the user (or selectively prompts based on \code{fields})
+to specify whether postprocessing should be performed, and if so, how each step should be configured.
+
+Postprocessing is applied to the outputs of fMRIPrep to prepare BOLD time series for statistical modeling.
+This may include:
+\itemize{
+\item Applying brain masks
+\item Spatial smoothing
+\item ICA-AROMA denoising
+\item Temporal filtering
+\item Intensity normalization
+\item Confound calculation and regression
+}
+
+Each step is optional and configurable. This function sets default values for memory, runtime,
+and cores, and invokes a series of sub-setup functions to collect postprocessing parameters.
 }
 \keyword{internal}

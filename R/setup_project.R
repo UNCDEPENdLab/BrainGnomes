@@ -27,31 +27,51 @@ summary.bg_project_cfg <- function(x) {
 }
 
 #' Setup the processing pipeline for a new fMRI study
-#' @param input An existing `bg_project_cfg` object to be modified, or a string specifying the location of an existing configuration YAML file to load.
+#' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
+#'   directory containing \code{project_config.yaml}. If a directory is supplied
+#'   but the file is missing, \code{setup_project} starts from an empty list with
+#'   a warning. For \code{setup_project} only, this argument may also be
+#'   \code{NULL} to create a new configuration from scratch.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input, 
-#'   and missing entries are filled with defaults.
+#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input,
+#'   and missing entries are filled with defaults. The configuration is written
+#'   to `project_config.yaml` in the project directory unless the user declines
+#'   to overwrite an existing file.
 #' @importFrom yaml read_yaml
 #' @importFrom checkmate test_file_exists
 #' @export
 setup_project <- function(input = NULL, fields = NULL) {
-  if (checkmate::test_string(input) && checkmate::test_file_exists(input)) {
-    scfg <- load_project(input, validate=FALSE)
+  if (is.null(input)) {
+    scfg <- list()
   } else if (inherits(input, "bg_project_cfg")) {
     scfg <- input
-  } else if (!is.null(input)) {
-    stop("input must be a bg_project_cfg object or a string specifying the location of a YAML file")
+  } else if (checkmate::test_string(input)) {
+    if (grepl("\\.ya?ml$", input, ignore.case = TRUE)) {
+      if (!checkmate::test_file_exists(input)) {
+        stop("Cannot find file: ", input)
+      }
+      scfg <- load_project(input, validate = FALSE)
+    } else if (checkmate::test_directory_exists(input)) {
+      cfg_file <- file.path(input, "project_config.yaml")
+      if (file.exists(cfg_file)) {
+        scfg <- load_project(cfg_file, validate = FALSE)
+      } else {
+        warning("project_config.yaml not found in ", input, ". Starting with empty configuration.")
+        scfg <- list()
+      }
+    } else {
+      stop("input must be a bg_project_cfg object, YAML file, or project directory")
+    }
   } else {
-    scfg <- list()
+    stop("input must be a bg_project_cfg object, YAML file, or project directory")
   }
 
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
 
-
   # run through configuration of each step
-  scfg <- setup_project_globals(scfg, fields)
+  scfg <- setup_project_metadata(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
@@ -60,10 +80,28 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_postprocess(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
+  scfg <- save_project_config(scfg)
+
   return(scfg)
 }
 
-setup_project_globals <- function(scfg = NULL, fields = NULL) {
+#' Set up project metadata for an fMRI preprocessing study
+#'
+#' Prompts the user to configure essential metadata fields for a study-level configuration object.
+#' This includes directories for DICOM inputs, BIDS-formatted outputs, fMRIPrep outputs, MRIQC reports,
+#' TemplateFlow cache, and scratch space for intermediate files. It also ensures required directories
+#' exist or offers to create them interactively.
+#'
+#' The function is designed to be used during initial study setup, but can also be used later to fill in
+#' missing metadata or revise selected fields. If specific `fields` are provided, only those fields will be prompted.
+#'
+#' @param scfg A study configuration object created by `setup_project()`.
+#' @param fields A character vector of metadata fields to prompt for (e.g., `"metadata/project_name"`).
+#'   If `NULL`, all missing or unset fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$metadata` field populated with validated paths and project details.
+#' @keywords internal
+setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
     fields <- c()
@@ -92,9 +130,8 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
   }
 
   # location of DICOMs
-  # /nas/longleaf/home/willasc/repos/clpipe/tests/temp/clpipe_dir0/data_DICOMs
   if ("metadata/dicom_directory" %in% fields) {
-    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files files stored?", type = "character")
+    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
   }
 
   if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
@@ -125,8 +162,8 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
 
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
-      instruct = glue("
-      \nfmriprep uses a lot of disk space for processing intermediate files. It's best if these
+      instruct = glue("\n\n
+      fmriprep uses a lot of disk space for processing intermediate files. It's best if these
       are written to a scratch/temporary directory that is cleared regularly so that you don't
       use up precious disk space for unnecessary files. Please indicate where these intermediate
       file should be written.\n
@@ -139,12 +176,12 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
     if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
   }
 
-    if ("metadata/templateflow_home" %in% fields) {
+  if ("metadata/templateflow_home" %in% fields) {
     scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
-      instruct = glue("
-      \nThe pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
+      instruct = glue("\n\n
+      The pipeline uses TemplateFlow to download and cache templates for use in fMRI processing.
       Please specify the location of the TemplateFlow cache directory. The default is $HOME/.cache/templateflow.
-      You can also point to a different location if you have a shared cache directory for multiple users.
+      You can also point to a different location if you have a shared cache directory for multiple users.\n
       "), type = "character", default = file.path(Sys.getenv("HOME"), ".cache", "templateflow")
     )
   }
@@ -153,6 +190,9 @@ setup_project_globals <- function(scfg = NULL, fields = NULL) {
     create <- prompt_input(instruct = glue("The directory {scfg$metadata$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
     if (create) dir.create(scfg$metadata$templateflow_home, recursive = TRUE)
   }
+
+  # singularity bind paths are unhappy with symbolic links and ~/ notation
+  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home)
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
   if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
@@ -205,11 +245,9 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
       You will have the option to specify output spaces (e.g., MNI152NLin2009cAsym, T1w) and provide 
       a FreeSurfer license file, which is necessary for anatomical processing. You can also pass custom CLI
-      options and schedule settings.
-
-      Do you want to include fMRIPrep as part of your preprocessing pipeline?\n\n
+      options and schedule settings.\n\n
       "),
-      prompt = "Run fmriprep?",
+      prompt = "Do you want to include fMRIPrep as part of your preprocessing pipeline?",
       type = "flag",
       default = TRUE
     )
@@ -229,8 +267,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     fields <- c()
     if (is.null(scfg$fmriprep$output_spaces)) fields <- c(fields, "fmriprep/output_spaces")
     if (!validate_exists(scfg$fmriprep$fs_license_file)) fields <- c(fields, "fmriprep/fs_license_file")
-
-    cat("This step sets up fmriprep.  (For details, see https://fmriprep.org/en/stable/usage.html)\n")
   }
 
   if ("fmriprep/output_spaces" %in% fields) {
@@ -239,15 +275,14 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if ("fmriprep/fs_license_file" %in% fields) {
     scfg$fmriprep$fs_license_file <- prompt_input(
-      instruct = glue("
-      \nWhat is the location of your FreeSurfer license file? This is required for fmriprep to run.
+      instruct = glue("\n
+      What is the location of your FreeSurfer license file? This is required for fmriprep to run.
       The license file is might be called FreeSurferLicense.txt and is available from the FreeSurfer website.
-      https://surfer.nmr.mgh.harvard.edu/fswiki/License
-      \n
-    "),
+      https://surfer.nmr.mgh.harvard.edu/fswiki/License\n
+      "),
       prompt = "What is the location of your FreeSurfer license file?",
-      type = "file"
-    )
+      type = "file", default = scfg$fmriprep$fs_license_file
+    ) |> normalizePath(mustWork=TRUE)
   }
 
   return(scfg)
@@ -554,7 +589,7 @@ setup_aroma <- function(scfg, fields = NULL) {
     scfg$aroma$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
-      ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts) is a data-driven 
+      ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts) is a data-driven
       method for identifying and removing motion-related independent components from BOLD fMRI data using 
       non-aggressive regression. It is designed to reduce motion artifacts without relying on motion estimates 
       from realignment parameters.
@@ -650,7 +685,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  # location of fmriprep container
+  # location of fmriprep container -- use normalizePath() to follow any symbolic links or home directory shortcuts
   if ("compute_environment/fmriprep_container" %in% fields) {
     scfg$compute_environment$fmriprep_container <- prompt_input(
       instruct = glue("
@@ -661,7 +696,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       prompt = "Location of fmriprep container: ",
       type = "file",
       default = scfg$compute_environment$fmriprep_container
-    )
+    ) |> normalizePath()
   }
 
   # location of heudiconv container
@@ -675,7 +710,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       prompt = "Location of heudiconv container: ",
       type = "file",
       default = scfg$compute_environment$heudiconv_container
-    )
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of bids-validator binary
@@ -691,41 +726,38 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html.\n
     "),
       prompt = "Location of bids-validator program: ",
-      type = "file", required = ,
-      default = scfg$compute_environment$bids_validator
-    )
+      type = "file", default = scfg$compute_environment$bids_validator
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of mriqc container
   if ("compute_environment/mriqc_container" %in% fields) {
     scfg$compute_environment$mriqc_container <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n
       The pipeline can use MRIQC to produce automated QC reports. This is suggested, but not required.
       If you'd like to use MRIQC, you need a working mriqc container (docker or singularity).
       If you don't have this yet, this should work to build the latest version:
-        singularity build /location/to/mriqc-latest.simg docker://nipreps/mriqc:latest
-    ", .trim = FALSE),
+          singularity build /location/to/mriqc-latest.simg docker://nipreps/mriqc:latest\n
+      ", .trim = FALSE),
       prompt = "Location of mriqc container: ",
-      type = "file", required = FALSE,
-      default = scfg$compute_environment$mriqc_container
-    )
+      type = "file", default = scfg$compute_environment$mriqc_container
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   # location of ICA-AROMA fMRIprep container
   if ("compute_environment/aroma_container" %in% fields) {
     scfg$compute_environment$aroma_container <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n
       The pipeline can use ICA-AROMA to denoise fMRI timeseries. As descried in Pruim et al. (2015), this
       is a data-driven step that produces a set of temporal regressors that are thought to be motion-related.
       If you would like to use ICA-AROMA in the pipeline, you need to build a singularity container of this
       workflow. Follow the instructions here: https://fmripost-aroma.readthedocs.io/latest/
 
-      This is required if you say 'yes' to running AROMA during study setup.
-    ", .trim = FALSE),
+      This is required if you say 'yes' to running AROMA during study setup.\n
+      ", .trim = FALSE),
       prompt = "Location of ICA-AROMA container: ",
-      type = "file", required = FALSE,
-      default = scfg$compute_environment$aroma_container
-    )
+      type = "file", default = scfg$compute_environment$aroma_container
+    ) |> normalizePath(mustWork = TRUE)
   }
 
   return(scfg)

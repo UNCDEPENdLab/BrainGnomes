@@ -196,7 +196,8 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id)
   }
   
-  attr(jobid, "cmd") <- cmd # add the command executed as an attribute
+  if (!is.null(jobid)) attr(jobid, "cmd") <- cmd # add the command executed as an attribute
 
   return(jobid)
 }
+
