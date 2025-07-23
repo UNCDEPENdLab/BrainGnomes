@@ -18,6 +18,8 @@ A modified version of \code{scfg} with the \verb{$postprocess$temporal_filter} e
 This function configures the temporal filtering step in the postprocessing pipeline.
 Temporal filtering removes unwanted frequency components from the BOLD signal, such as
 slow drifts (via high-pass filtering) or physiological noise (via low-pass filtering).
-This step is often used to improve signal quality for subsequent statistical analysis.
+This step is often used to improve signal quality for subsequent statistical analysis. The
+user can choose between FSL's \code{fslmaths -bptf} implementation or an R-based
+Butterworth filter.
 }
 \keyword{internal}

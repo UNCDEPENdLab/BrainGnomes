@@ -258,6 +258,11 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$temporal_filter. Defaulting to 'f'"))
       ppcfg$temporal_filter$prefix <- "f"
     }
+    if (!checkmate::test_string(ppcfg$temporal_filter$method) ||
+        !(ppcfg$temporal_filter$method %in% c("fslmaths", "butterworth"))) {
+      if (!quiet) message(glue("Invalid method in $postprocess${cfg_name}$temporal_filter. Defaulting to 'fslmaths'"))
+      ppcfg$temporal_filter$method <- "fslmaths"
+    }
   }
 
   # validate spatial smoothing
