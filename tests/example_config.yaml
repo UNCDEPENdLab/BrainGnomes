@@ -80,6 +80,7 @@ postprocess:
     low_pass_hz: 0
     high_pass_hz: 0.0083333
     prefix: f
+    method: fslmaths
   intensity_normalize:
     enable: yes
     global_median: 10000.0

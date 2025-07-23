@@ -207,7 +207,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       cur_file <- temporal_filter(cur_file, prefix = cfg$temporal_filter$prefix,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz,
         high_pass_hz = cfg$temporal_filter$high_pass_hz,
-        overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
+        overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img,
+        method = cfg$temporal_filter$method
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "confound_regression") {
@@ -425,8 +426,10 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
 
 #' Apply temporal filtering to a 4D NIfTI image
 #'
-#' Uses FSL's \code{fslmaths -bptf} to apply high-pass and/or low-pass temporal filtering
-#' to an fMRI time series. The filter cutoffs are specified in Hz and internally converted
+#' Apply high-pass and/or low-pass temporal filtering to an fMRI time series.
+#' By default this calls FSL's \code{fslmaths -bptf} but a Butterworth filter
+#' implemented in \code{butterworth_filter_4d} can also be used. Filter cutoffs
+#' are specified in Hz; for the FSL implementation they are internally converted
 #' to sigma values in volumes using a standard FWHM-to-sigma transformation.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
@@ -437,6 +440,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr object used for logging messages
 #' @param fsl_img Optional Singularity image to execute FSL commands in a containerized environment.
+#' @param method Character. "fslmaths" to use FSL's -bptf or "butterworth" for a Butterworth filter.
 #'
 #' @return The path to the temporally filtered output NIfTI file.
 #'
@@ -447,7 +451,10 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
 #' @importFrom glue glue
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_string assert_number assert_flag
-temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/120, tr=NULL, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/120, tr=NULL,
+                            overwrite=FALSE, lg=NULL, fsl_img = NULL,
+                            method=c("fslmaths","butterworth")) {
+  method <- match.arg(method)
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(prefix)
   checkmate::assert_number(low_pass_hz)
@@ -471,28 +478,32 @@ temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/1
     out_file <- res$out_file
   }
 
-  # bptf specifies its filter cutoffs in terms of volumes, not frequencies
-  fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
+  if (method == "fslmaths") {
+    # bptf specifies its filter cutoffs in terms of volumes, not frequencies
+    fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
 
-  if (is.infinite(high_pass_hz)) {
-    #message("Low-pass filtering")
-    hp_volumes <- -1 # do not apply high-pass
+    if (is.infinite(high_pass_hz)) {
+      hp_volumes <- -1 # do not apply high-pass
+    } else {
+      hp_volumes <- 1 / (high_pass_hz * fwhm_to_sigma * tr)
+    }
+
+    if (is.infinite(low_pass_hz) || low_pass_hz==0) {
+      lp_volumes <- -1 # do not apply low-pass
+    } else {
+      lp_volumes <- 1 / (low_pass_hz * fwhm_to_sigma * tr)
+    }
+
+    temp_tmean <- tempfile(pattern="tmean")
+    run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
+    run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -bptf {hp_volumes} {lp_volumes} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean, out_file)))
+
+    rm_niftis(temp_tmean) # clean up temporal mean image
   } else {
-    hp_volumes <- 1 / (high_pass_hz * fwhm_to_sigma * tr)
+    bw_low <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
+    bw_high <- if (is.infinite(low_pass_hz) || low_pass_hz == 0) NULL else low_pass_hz
+    butterworth_filter_4d(infile = in_file, tr = tr, low_hz = bw_low, high_hz = bw_high, outfile = out_file)
   }
-
-  if (is.infinite(low_pass_hz) || low_pass_hz==0) {
-    #message("High-pass filtering")
-    lp_volumes <- -1 # do not apply low-pass
-  } else {
-    lp_volumes <- 1 / (low_pass_hz * fwhm_to_sigma * tr)
-  }
-
-  temp_tmean <- tempfile(pattern="tmean")
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -bptf {hp_volumes} {lp_volumes} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean, out_file)))
-
-  rm_niftis(temp_tmean) # clean up temporal mean image
   
   return(out_file)
 }
@@ -1118,7 +1129,8 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         tr = cfg$tr,
         low_pass_hz = cfg$temporal_filter$low_pass_hz,
         high_pass_hz = cfg$temporal_filter$high_pass_hz,
-        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img,
+        method = cfg$temporal_filter$method
       )
     }
 

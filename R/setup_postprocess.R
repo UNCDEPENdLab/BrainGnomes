@@ -862,6 +862,7 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
     if (is.null(scfg$postprocess$temporal_filter$low_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/low_pass_hz")
     if (is.null(scfg$postprocess$temporal_filter$high_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/high_pass_hz")
     if (is.null(scfg$postprocess$temporal_filter$prefix)) fields <- c(fields, "postprocess/temporal_filter/prefix")
+    if (is.null(scfg$postprocess$temporal_filter$method)) fields <- c(fields, "postprocess/temporal_filter/method")
   }
 
   if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
@@ -877,6 +878,13 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
 
   if ("postprocess/temporal_filter/prefix" %in% fields) {
     scfg$postprocess$temporal_filter$prefix <- prompt_input("File prefix: ", type = "character", default = "f")
+  }
+
+  if ("postprocess/temporal_filter/method" %in% fields) {
+    scfg$postprocess$temporal_filter$method <- prompt_input(
+      prompt = "Filtering method (fslmaths/butterworth):",
+      type = "character", among = c("fslmaths", "butterworth"), default = "fslmaths",
+      instruct = glue("\nChoose the implementation for temporal filtering:\n  - 'fslmaths' uses FSL's -bptf command.\n  - 'butterworth' uses an R-based Butterworth filter.\n"))
   }
   
   return(scfg)
