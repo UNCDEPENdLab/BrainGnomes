@@ -25,10 +25,81 @@
 #' Each step is optional and configurable. This function sets default values for memory, runtime,
 #' and cores, and invokes a series of sub-setup functions to collect postprocessing parameters.
 #'
-#' @importFrom checkmate test_class
-#' @importFrom glue glue
+#' Interactively manage multiple postprocessing configurations. Users can add,
+#' edit, or delete postprocessing streams. This wrapper is called by
+#' `setup_project()` and invokes `setup_postprocess()` for each stream.
+#'
+#' @inheritParams setup_postprocess
+#' @return Modified `scfg` with one or more postprocessing streams
 #' @keywords internal
-setup_postprocess <- function(scfg = list(), fields = NULL) {
+setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+
+  if (is.null(scfg$postprocess$enable) ||
+      (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
+    scfg$postprocess$enable <- prompt_input(
+      instruct = glue("\n\n",
+        "Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.",
+        " These steps may include:",
+        "   - Applying a brain mask",
+        "   - Spatial smoothing",
+        "   - Denoising using ICA-AROMA",
+        "   - 'Scrubbing' of high-motion/high-artifact timepoints",
+        "   - Temporal filtering (e.g., high-pass filtering)",
+        "   - Intensity normalization",
+        "   - Confound calculation and regression",
+        "\n\nDo you want to enable postprocessing for your BOLD data?\n"
+      ),
+      prompt = "Enable postprocessing?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$enable)) return(scfg)
+
+  repeat {
+    streams <- setdiff(names(scfg$postprocess), "enable")
+    cat("\nCurrent postprocessing streams:\n")
+    if (length(streams) == 0) {
+      cat("  (none defined yet)\n")
+    } else {
+      for (i in seq_along(streams)) cat(sprintf("  [%d] %s\n", i, streams[i]))
+    }
+
+    choice <- menu(c("Add a stream", "Edit a stream", "Delete a stream", "Finish"),
+                   title = "Modify postprocessing streams:")
+
+    if (choice == 1) {
+      scfg <- setup_postprocess(scfg, fields = fields)
+    } else if (choice == 2) {
+      if (length(streams) == 0) {
+        cat("No streams to edit.\n")
+        next
+      }
+      sel <- utils::select.list(streams, multiple = FALSE, title = "Select stream to edit")
+      if (sel == "") next
+      stream_cfg <- scfg$postprocess[[sel]]
+      scfg$postprocess[[sel]] <- NULL
+      for (nm in names(stream_cfg)) scfg$postprocess[[nm]] <- stream_cfg[[nm]]
+      scfg <- setup_postprocess(scfg, fields = fields, stream_name = sel)
+    } else if (choice == 3) {
+      if (length(streams) == 0) {
+        cat("No streams to delete.\n")
+        next
+      }
+      sel <- utils::select.list(streams, multiple = TRUE, title = "Select stream(s) to delete")
+      if (length(sel) == 0) next
+      scfg$postprocess[sel] <- NULL
+    } else if (choice == 4) {
+      break
+    }
+  }
+
+  return(scfg)
+}
+
+setup_postprocess <- function(scfg = list(), fields = NULL, stream_name = NULL) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
@@ -88,10 +159,18 @@ setup_postprocess <- function(scfg = list(), fields = NULL) {
   existing_cfgs <- proc_cfg[existing_names]
   proc_cfg[existing_names] <- NULL
   scfg$postprocess <- c(list(enable = enable_val), existing_cfgs)
-  cfg_name <- prompt_input("Name for this postprocess configuration:", type = "character")
+  cfg_name <- prompt_input(
+    "Name for this postprocess configuration:",
+    type = "character",
+    default = stream_name
+  )
   while (cfg_name %in% setdiff(names(scfg$postprocess), "enable")) {
     message("Configuration name must be unique.")
-    cfg_name <- prompt_input("Name for this postprocess configuration:", type = "character")
+    cfg_name <- prompt_input(
+      "Name for this postprocess configuration:",
+      type = "character",
+      default = stream_name
+    )
   }
   # ensure unique bids_desc
   existing_desc <- unlist(lapply(setdiff(names(scfg$postprocess), "enable"), function(nm) scfg$postprocess[[nm]]$bids_desc))

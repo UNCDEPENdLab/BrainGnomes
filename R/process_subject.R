@@ -31,7 +31,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     if (any(duplicated(sub_cfg$ses_id))) stop("Duplicate session IDs found in sub_cfg. process_subject requires unique session IDs.")
   }
   checkmate::assert_logical(steps, names = "unique")
-  checkmate::assert_character(postprocess_streams, null.ok = TRUE any.missing = FALSE)
+  checkmate::assert_character(postprocess_streams, null.ok = TRUE, any.missing = FALSE)
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
 

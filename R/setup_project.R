@@ -77,7 +77,7 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
   scfg <- setup_aroma(scfg, fields)
-  scfg <- setup_postprocess(scfg, fields)
+  scfg <- setup_postprocess_streams(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
   scfg <- save_project_config(scfg)
