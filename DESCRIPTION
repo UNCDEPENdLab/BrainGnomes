@@ -23,10 +23,11 @@ Imports:
     lgr,
     oro.nifti,
     reticulate,
-    RSQLite,
-    yaml,
     Rcpp,
     RNifti
+    RSQLite,
+    signal,
+    yaml
 Suggests: 
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
