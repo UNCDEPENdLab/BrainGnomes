@@ -3,7 +3,6 @@
 
 #define ARMA_NO_DEBUG
 
-
 #define RNIFTI_NIFTILIB_VERSION 2
 //#include "Rcpp.h"
 #include <RcppArmadillo.h>

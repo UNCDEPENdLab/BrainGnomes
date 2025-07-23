@@ -52,7 +52,7 @@ std::vector<double> lfilter_zi_arma(const arma::vec& b, const arma::vec& a) {
     a_norm = a_norm / a_trim(0);
   }
   
-  size_t n = std::max(b_norm.n_elem, a_norm.n_elem);
+  arma::uword n = std::max(b_norm.n_elem, a_norm.n_elem);
   if (a_norm.n_elem < n)
     a_norm.resize(n, true);
   if (b_norm.n_elem < n)
@@ -60,9 +60,9 @@ std::vector<double> lfilter_zi_arma(const arma::vec& b, const arma::vec& a) {
   
   // Companion matrix (transposed) for direct-form II
   mat A = zeros<mat>(n - 1, n - 1);
-  for (size_t i = 1; i < n; ++i)
+  for (arma::uword i = 1; i < n; ++i)
     A(0, i - 1) = -a_norm(i);
-  for (size_t i = 1; i < n - 1; ++i)
+  for (arma::uword i = 1; i < n - 1; ++i)
     A(i, i - 1) = 1.0;
   
   mat IminusAT = eye<mat>(n - 1, n - 1) - A.t();
@@ -285,7 +285,7 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile,
   }
   
   NiftiImageData data(image);
-  std::vector<long long int> dims = image.dim();
+  std::vector<dim_t> dims = image.dim();
   if (dims.size() < 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
     stop("Input image must be 4D");
   }

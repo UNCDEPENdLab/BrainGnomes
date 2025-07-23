@@ -48,3 +48,6 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 site-library/
+
+# Local files for development
+local/

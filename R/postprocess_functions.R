@@ -222,7 +222,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       cur_file <- scrub_timepoints(cur_file,
         censor_file = censor_file,
         prefix = cfg$scrubbing$prefix,
-        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
+        overwrite = cfg$overwrite, lg = lg
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "intensity_normalize") {

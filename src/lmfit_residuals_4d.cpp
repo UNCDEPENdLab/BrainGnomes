@@ -72,7 +72,7 @@ Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const L
   
   RNifti::NiftiImageData data(image);
   
-  std::vector<long long int> dims = image.dim();
+  std::vector<dim_t> dims = image.dim();
   if (dims.size() < 4 || dims[3] <= 1) stop("Image must be 4D with more than 1 timepoint.");
   
   int n_x = dims[0], n_y = dims[1], n_z = dims[2];

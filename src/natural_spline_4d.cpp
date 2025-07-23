@@ -89,7 +89,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   NiftiImageData data(image); // get pointer to image data
   
   //long nvox = data.length();
-  std::vector<long long int> dims = image.dim();
+  std::vector<dim_t> dims = image.dim();
   if (dims.size() < 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
     stop("Input image must be 4D");
   }

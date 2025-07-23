@@ -24,7 +24,7 @@ Imports:
     oro.nifti,
     reticulate,
     Rcpp,
-    RNifti
+    RNifti,
     RSQLite,
     signal,
     yaml
