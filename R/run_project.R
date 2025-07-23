@@ -10,6 +10,7 @@
 #'   subjects (and optionally sessions) to process. When a data.frame is
 #'   provided, it must contain a `sub_id` column and may include a `ses_id`
 #'   column to filter on specific subject/session combinations.
+#' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
 #' @examples
@@ -21,7 +22,7 @@
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue
 run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE,
-                        subject_filter = NULL) {
+                        subject_filter = NULL, postprocess_streams = NULL) {
   checkmate::assert_list(scfg)
   checkmate::assert_character(steps, null.ok = TRUE)
   checkmate::assert_flag(prompt)
@@ -34,6 +35,9 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
 
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
+
+  all_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
+
   cat(glue("
     \nRunning processing pipeline for: {scfg$metadata$project_name}
       Project directory:   {pretty_arg(scfg$metadata$project_directory)}
@@ -49,7 +53,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
       if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
-
 
     if ("mriqc" %in% steps) {
       if (!isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
@@ -74,10 +77,8 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
 
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-      pp_names <- setdiff(names(scfg$postprocess), "enable")
-      if (length(pp_names) == 0L) {
-        stop("Cannot run postprocessing without at least one postprocess configuration.")
-      }
+      if (length(all_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
+      if (is.null(postprocess_streams)) postprocess_streams <- all_streams # run all streams if no specifics were requested
     }
 
     nm <- steps
@@ -87,19 +88,6 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
-    pp_names <- setdiff(names(scfg$postprocess), "enable")
-    if (isTRUE(steps["postprocess"])) {
-      postprocess_names <- if (length(pp_names) == 1L) {
-        pp_names
-      } else {
-        prompt_input(
-          "Which postprocess configurations should be used? (separate names with spaces)",
-          type = "character", split = " ", min.len = 1L, among = pp_names
-        )
-      }
-    } else {
-      postprocess_names <- NULL
-    }
   } else {
     steps <- c()
     cat("\nPlease select which steps to run:\n")
@@ -107,37 +95,23 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
     steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
-    pp_names <- setdiff(names(scfg$postprocess), "enable")
-    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(pp_names) > 0,
-      prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE)
-    if (isFALSE(steps["aroma"])) {
-      has_aroma <- any(sapply(pp_names, function(nm) {
-        "apply_aroma" %in% scfg$postprocess[[nm]]$processing_steps
-      }))
-      if (has_aroma) {
-        warning(
-          "Postprocessing includes the removal of motion-related AROMA components from the fMRI data, but you declined ",
-          "to run AROMA as part of the pipeline. Postprocessing will likely fail if AROMA components cannot be found."
-        )
+
+    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(all_streams) > 0L,
+      prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE
+    )
+    
+    if (isTRUE(steps["postprocess"])) {
+      postprocess_streams <- if (length(all_streams) == 1L) {
+        all_streams # if there is only one stream and the user requested postprocessing, then run this stream
+      } else {
+        postprocess_streams <- select.list(all_streams, multiple = TRUE, title = "Which postprocessing streams should be run? Press ENTER to select all.")
+        if (length(postprocess_streams) == 0L) postprocess_streams <- all_streams # pressing ENTER means select all
       }
     }
+
     # check whether to run in debug mode
     scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
-
-    scfg$force <- prompt_input(instruct = "Force each processing step, even if it appears to be complete?", type = "flag")
-
-    if (isTRUE(steps["postprocess"])) {
-      postprocess_names <- if (length(pp_names) == 1L) {
-        pp_names
-      } else {
-        prompt_input(
-          "Which postprocess configurations should be used? (separate names with spaces)",
-          type = "character", split = " ", min.len = 1L, among = pp_names
-        )
-      }
-    } else {
-      postprocess_names <- NULL
-    }
+    scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
 
     # not currently used and would need to propagate the choice down to sbatch scripts through and environment variable (log_message)
     # scfg$log_level <- prompt_input(
@@ -201,7 +175,7 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
 
     for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_names = postprocess_names)
+      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_streams = postprocess_streams)
     }
   }
 }

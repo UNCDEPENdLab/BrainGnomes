@@ -263,7 +263,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   
   end_time <- Sys.time()
   lg$info("End postprocessing: {as.character(end_time)}")
-  return(cur_file)
+  return(final_filename)
 }
 
 ####################################
@@ -410,7 +410,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
   if (!any(t_scrub)) {
     lg$info("No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")
   } else {
-    lg$info("Applying timepoint scrubbing, removing {length(t_interpolate)} timepoints from {in_file}.")
+    lg$info("Applying timepoint scrubbing, removing {length(t_scrub)} timepoints from {in_file}.")
   }
 
   # run 4D interpolation with Rcpp function
@@ -1151,7 +1151,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         }
       }
 
-      if (isTRUE(cfg$scrubbing$enable) && exists("spike_mat") && !is.null(spike_mat)) {
+      if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$add_to_confounds) && exists("spike_mat") && !is.null(spike_mat)) {
         df <- cbind(df, spike_mat)
       }
 

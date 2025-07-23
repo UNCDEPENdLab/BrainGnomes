@@ -312,18 +312,30 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
       (isFALSE(scfg$postprocess$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
     scfg$postprocess$scrubbing$enable <- prompt_input(
       instruct = glue("\n\n
-      Scrubbing identifies high-motion/high-artifact volumes and creates a spike regressors file and an AFNI-compatible 'censor' file.
-      If you enable scrubbing here, you will be asked for an expression that is evaluated against the confounds file, such as 
-      'framewise_displacement > 0.9' or '-1:1; dvars > 1.5;'. The part before the semicolon denotes volumes around the spike to scrub.
-      For example, -1:0 scrubs the spike and one volume before, and if you omit this, it just scrubs the spike (0).
+      Scrubbing identifies timepoints (volumes) with excessive motion or artifacts based on a user-defined expression, such as:
+      'framewise_displacement > 0.9'. If you choose “yes,” you will be prompted to define what constitutes a bad timepoint.
+      This will generate two output files:
+        1. Spike Regressors File (*_scrub.tsv):
+          A binary matrix with one column per bad timepoint. Each column contains a 1 at the scrubbed timepoint and 0 elsewhere.
+	      2. AFNI-Compatible Censor File (*_censor.1D):
+          A single-column file with 1s indicating good timepoints and 0s for bad timepoints.
 
-      If you say 'yes' here, you will be asked whether you want to use the scrubbing calculation to censor the fMRI data, removing
-      the volumes identified from the postprocessed fMRI NIfTI image.
+      You will then be asked whether to append these spike regressors to the other confound variables identified during
+      the confound calculation step. If you say yes, the final *_confounds.tsv file will include the spike regressors
+      alongside the other selected confounds.
 
-      Finally, if you ask to 'scrub' the fMRI data, you will also be asked whether you wish to interpolate the scrubbed timepoints prior
-      to applying temporal filtering and confound regression. For temporal filtering, this can mitigate ringing artifacts surrounding
-      motion-related signal spikes (Carp, 2012, NeuroImage). For confound regression, interpolation of scrubbed timepoints can
-      to ensure that the regression fits (and thus, success of the operation) are driven more by uncensored volumes than by spiky censored ones.
+      Next, you will be asked whether to interpolate scrubbed timepoints before temporal filtering and confound regression:
+	      •	Interpolation before filtering helps reduce ringing artifacts caused by abrupt signal spikes (Carp, 2012, NeuroImage).
+	      •	Interpolation before regression ensures that model fits are influenced more by clean data than by high-motion spikes.
+        
+      Finally, you will be asked whether to remove bad timepoints from the final preprocessed NIfTI image. This is common in
+      resting-state fMRI, where scrubbed data are used to compute functional connectivity. Selecting “yes” will yield a NIfTI
+      file with all bad timepoints excluded.
+
+      Scrubbing expression FYI: You can specify a range of volumes to scrub using a format like: '-1:1; dvars > 1.5'.
+	    The part before the semicolon (-1:1) defines a temporal window around the bad timepoint. For example, '-1:0'
+      scrubs the bad timepoint and the volume before it. If omitted, only the bad timepoint (0) is scrubbed.
+      The part after the semicolon ('dvars > 1.5') defines the thresholding condition.
 
       Do you want to generate scrubbing regressors?\n"),
       prompt = "Enable scrubbing?",
@@ -337,6 +349,7 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$postprocess$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
+    if (is.null(scfg$postprocess$scrubbing$add_to_confounds)) fields <- c(fields, "postprocess/scrubbing/add_to_confounds") # cbind spike regressors to confounds
     if (is.null(scfg$postprocess$scrubbing$interpolate)) fields <- c(fields, "postprocess/scrubbing/interpolate")
     if (is.null(scfg$postprocess$scrubbing$interpolate_prefix)) fields <- c(fields, "postprocess/scrubbing/interpolate_prefix")
     if (is.null(scfg$postprocess$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
@@ -345,7 +358,15 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
 
   if ("postprocess/scrubbing/expression" %in% fields) {
     scfg$postprocess$scrubbing$expression <- prompt_input(
-      "Scrubbing expression(s): ", type = "character", split = "\\s+", required = TRUE
+      "Scrubbing expression(s): ",
+      type = "character", split = "\\s+", required = TRUE
+    )
+  }
+
+  if ("postprocess/scrubbing/add_to_confounds" %in% fields) {
+    scfg$postprocess$scrubbing$add_to_confounds <- prompt_input(
+      prompt="Add any spike regressors (bad volumes) to postprocessed confounds.tsv file?",
+      type = "flag", required = TRUE, default = TRUE
     )
   }
 

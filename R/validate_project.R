@@ -1,3 +1,42 @@
+# helper to convert NULL, empty list, or "" to character(0) for conformity
+validate_char <- function(arg) {
+  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || arg[1L] == "") {
+    arg <- character(0)
+  }
+  return(arg)
+}
+
+# check memgb, nhours, ncores, cli_options, and sched_args for all jobs
+validate_job_settings <- function(scfg, job_name) {
+  gaps <- c()
+
+  if (!checkmate::test_number(scfg[[job_name]]$memgb, lower = 1, upper = 1000)) {
+    message("Invalid memgb setting in ", job_name, ". We will ask you for a valid value")
+    gaps <- c(gaps, paste(job_name, "memgb", sep = "/"))
+    scfg[[job_name]]$memgb <- NULL
+  }
+
+  if (!checkmate::test_number(scfg[[job_name]]$nhours, lower = 1, upper = 1000)) {
+    message("Invalid nhours setting in ", job_name, ". We will ask you for a valid value")
+    gaps <- c(gaps, paste(job_name, "nhours", sep = "/"))
+    scfg[[job_name]]$nhours <- NULL
+  }
+
+  if (!checkmate::test_number(scfg[[job_name]]$ncores, lower = 1, upper = 250)) {
+    message("Invalid ncores setting in ", job_name, ". We will ask you for a valid value")
+    gaps <- c(gaps, paste(job_name, "ncores", sep = "/"))
+    scfg[[job_name]]$ncores <- NULL
+  }
+
+  # conform cli_options to character(0) on empty
+  scfg[[job_name]]$cli_options <- validate_char(get_nested_values(scfg, job_name)$cli_options)
+  scfg[[job_name]]$sched_args <- validate_char(get_nested_values(scfg, job_name)$sched_args)
+
+  attr(scfg, "gaps") <- gaps
+  return(scfg)
+}
+
+
 #' Validate the structure of a study configuration object
 #' @param scfg a study configuration file as produced by `load_project` or `setup_project`
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
@@ -80,43 +119,10 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, "compute_environment/bids_validator")
   }
 
-  # helper subfunction to convert NULL, empty list, or "" to character(0) for conformity
-  validate_char <- function(arg) {
-    if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || arg[1L] == "") {
-      arg <- character(0)
-    }
-    return(arg)
-  }
-
-  # check memgb, nhours, ncores, cli_options, and sched_args for all jobs
-  validate_job_settings <- function(job_name) {
-    if (!checkmate::test_number(scfg[[job_name]]$memgb, lower=1, upper=1000)) {
-      message("Invalid memgb setting in ", job_name, ". We will ask you for a valid value")
-      gaps <- c(gaps, paste(job_name, "memgb", sep="/"))
-      scfg[[job_name]]$memgb <- NULL
-    }
-
-    if (!checkmate::test_number(scfg[[job_name]]$nhours, lower=1, upper=1000)) {
-      message("Invalid nhours setting in ", job_name, ". We will ask you for a valid value")
-      gaps <- c(gaps, paste(job_name, "nhours", sep="/"))
-      scfg[[job_name]]$nhours <- NULL
-    }
-
-    if (!checkmate::test_number(scfg[[job_name]]$ncores, lower = 1, upper = 250)) {
-      message("Invalid ncores setting in ", job_name, ". We will ask you for a valid value")
-      gaps <- c(gaps, paste(job_name, "ncores", sep = "/"))
-      scfg[[job_name]]$ncores <- NULL
-    }
-    
-    # conform cli_options to character(0) on empty
-    scfg[[job_name]]$cli_options <- validate_char(scfg[[job_name]]$cli_options)
-    scfg[[job_name]]$sched_args <- validate_char(scfg[[job_name]]$sched_args)
-    
-  }
-
   # validate job settings
   for (job in c("bids_conversion", "fmriprep", "mriqc", "aroma")) {
-    validate_job_settings(job)
+    scfg <- validate_job_settings(scfg, job)
+    gaps <- c(gaps, attr(scfg, "gaps"))
   }
 
   # validate BIDS conversion sub_regex
@@ -178,42 +184,17 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 #' @param ppcfg a postprocess configuration block
 #' @param quiet a flag indicating whether to suppress messages
 #' @keywords internal
-validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
-  gaps <- c()
-  validate_char <- function(arg) {
-    if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || arg[1L] == "") {
-      arg <- character(0)
-    }
-    return(arg)
-  }
+validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = FALSE) {
 
-  # job settings
-  if (!checkmate::test_number(ppcfg$memgb, lower = 1, upper = 1000)) {
-    if (!quiet) message("Invalid memgb setting in postprocess configuration. You will be asked for this.")
-    gaps <- c(gaps, "postprocess/memgb")
-    ppcfg$memgb <- NULL
-  }
-
-  if (!checkmate::test_number(ppcfg$nhours, lower = 1, upper = 1000)) {
-    if (!quiet) message("Invalid nhours setting in postprocess configuration. You will be asked for this.")
-    gaps <- c(gaps, "postprocess/nhours")
-    ppcfg$nhours <- NULL
-  }
-
-  if (!checkmate::test_number(ppcfg$ncores, lower = 1, upper = 250)) {
-    if (!quiet) message("Invalid ncores setting in postprocess configuration. You will be asked for this.")
-    gaps <- c(gaps, "postprocess/ncores")
-    ppcfg$ncores <- NULL
-  }
-
-  ppcfg$cli_options <- validate_char(ppcfg$cli_options)
-  ppcfg$sched_args <- validate_char(ppcfg$sched_args)
+  # validate stream-specific job settings
+  ppcfg <- validate_job_settings(ppcfg, cfg_name)
+  gaps <- attr(ppcfg, "gaps")
 
   # postprocess/input_regex
   if (!"input_regex" %in% names(ppcfg)) {
     gaps <- c(gaps, "postprocess/input_regex")
   } else if (!checkmate::test_string(ppcfg$input_regex)) {
-    if (!quiet) message("Invalid input_regex in $postprocess. You will be asked for this.")
+    if (!quiet) message(glue("Invalid input_regex in $postprocess${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "postprocess/input_regex")
     ppcfg$input_regex <- NULL
   }
@@ -222,7 +203,7 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   if (!"bids_desc" %in% names(ppcfg)) {
     gaps <- c(gaps, "postprocess/bids_desc")
   } else if (!checkmate::test_string(ppcfg$bids_desc)) {
-    if (!quiet) message("Invalid bids_desc in $postprocess. You will be asked for this.")
+    if (!quiet) message(glue("Invalid bids_desc in $postprocess${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "postprocess/bids_desc")
     ppcfg$bids_desc <- NULL
   }
@@ -231,7 +212,7 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   if (!"keep_intermediates" %in% names(ppcfg)) {
     gaps <- c(gaps, "postprocess/keep_intermediates")
   } else if (!checkmate::test_flag(ppcfg$keep_intermediates)) {
-    if (!quiet) message("Invalid keep_intermediates in $postprocess. You will be asked for this.")
+    if (!quiet) message(glue("Invalid keep_intermediates in $postprocess${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "postprocess/keep_intermediates")
     ppcfg$keep_intermediates <- NULL
   }
@@ -240,7 +221,7 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   if (!"overwrite" %in% names(ppcfg)) {
     gaps <- c(gaps, "postprocess/overwrite")
   } else if (!checkmate::test_flag(ppcfg$overwrite)) {
-    if (!quiet) message("Invalid overwrite in $postprocess. You will be asked for this.")
+    if (!quiet) message(glue("Invalid overwrite in $postprocess${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "postprocess/overwrite")
     ppcfg$overwrite <- NULL
   }
@@ -249,7 +230,7 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   if (!"tr" %in% names(ppcfg)) {
     gaps <- c(gaps, "postprocess/tr")
   } else if (!checkmate::test_number(ppcfg$tr, lower = 0.01, upper = 100)) {
-    if (!quiet) message("Invalid tr in $postprocess. You will be asked for this.")
+    if (!quiet) message(glue("Invalid tr in $postprocess${cfg_name}. You will be asked for this."))
     gaps <- c(gaps, "postprocess/tr")
     ppcfg$tr <- NULL
   }
@@ -257,40 +238,38 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
   # validate temporal filtering
   if ("temporal_filter" %in% names(ppcfg)) {
     if (!checkmate::test_number(ppcfg$temporal_filter$low_pass_hz, lower=0)) {
-      if (!quiet) message("Missing low_pass_hz in $postprocess. You will be asked for this.")
+      if (!quiet) message(glue("Missing low_pass_hz in $postprocess${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "postprocess/temporal_filter/low_pass_hz")
       ppcfg$temporal_filter$low_pass_hz <- NULL
     }
     if (!checkmate::test_number(ppcfg$temporal_filter$high_pass_hz, lower = 0)) {
-      if (!quiet) message("Missing high_pass_hz in $postprocess. You will be asked for this.")
+      if (!quiet) message(glue("Missing high_pass_hz in $postprocess${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "postprocess/temporal_filter/high_pass_hz")
       ppcfg$temporal_filter$high_pass_hz <- NULL
     }
     if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) && 
         ppcfg$temporal_filter$high_pass_hz < ppcfg$temporal_filter$low_pass_hz) {
-      if (!quiet) message("high_pass_hz is greater than low_pass_hz $postprocess$temporal_filter. You will be asked to respecify valid values.")
+      if (!quiet) message("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values.")
       gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
       ppcfg$temporal_filter$low_pass_hz <- NULL
       ppcfg$temporal_filter$high_pass_hz <- NULL
     }
     if (!checkmate::test_string(ppcfg$temporal_filter$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$temporal_filter")
-      gaps <- c(gaps, "postprocess/temporal_filter/prefix")
-      ppcfg$temporal_filter$prefix <- NULL
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$temporal_filter. Defaulting to 'f'"))
+      ppcfg$temporal_filter$prefix <- "f"
     }
   }
 
   # validate spatial smoothing
   if ("spatial_smooth" %in% names(ppcfg)) {
     if (!checkmate::test_number(ppcfg$spatial_smooth$fwhm_mm, lower = 0.1)) {
-      if (!quiet) message("Missing fwhm_mm in $postprocess$spatial_smooth. You will be asked for this.")
+      if (!quiet) message(glue("Missing fwhm_mm in $postprocess${cfg_name}$spatial_smooth. You will be asked for this."))
       gaps <- c(gaps, "postprocess/spatial_smooth/fwhm_mm")
       ppcfg$spatial_smooth$fwhm_mm <- NULL
     }
     if (!checkmate::test_string(ppcfg$spatial_smooth$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$spatial_smooth")
-      gaps <- c(gaps, "postprocess/spatial_smooth/prefix")
-      ppcfg$spatial_smooth$prefix <- NULL
+      if (!quiet) message("No valid prefix found for $postprocess${cfg_name}$spatial_smooth. Defaulting to 's'")
+      ppcfg$spatial_smooth$prefix <- "s"
     }
   }
 
@@ -302,16 +281,15 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
       ppcfg$intensity_normalize$global_median <- NULL
     }
     if (!checkmate::test_string(ppcfg$intensity_normalize$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$intensity_normalize")
-      gaps <- c(gaps, "postprocess/intensity_normalize/prefix")
-      ppcfg$intensity_normalize$prefix <- NULL
+      if (!quiet) message("No valid prefix found for $postprocess${cfg_name}$intensity_normalize. Defaulting to 'n'")
+      ppcfg$intensity_normalize$prefix <- "n"
     }
   }
 
   # validate confound calculation
   if ("confound_calculate" %in% names(ppcfg)) {
     if (!checkmate::test_flag(ppcfg$confound_calculate$demean)) {
-      if (!quiet) message("Invalid demean field in $postprocess$confound_calculate. You will be asked for this.")
+      if (!quiet) message(glue("Invalid demean field in $postprocess${cfg_name}$confound_calculate. You will be asked for this."))
       gaps <- c(gaps, "postprocess/confound_calculate/demean")
       ppcfg$confound_calculate$demean <- NULL
     }
@@ -321,12 +299,12 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
     #   ppcfg$confound_calculate$output_file <- NULL
     # }
     if (!checkmate::test_character(ppcfg$confound_calculate$columns)) {
-      if (!quiet) message("Invalid columns field in $postprocess$confound_calculate")
+      if (!quiet) message(glue("Invalid columns field in $postprocess${cfg_name}$confound_calculate"))
       gaps <- c(gaps, "postprocess/confound_calculate/columns")
       ppcfg$confound_calculate$columns <- NULL
     }
     if (!checkmate::test_character(ppcfg$confound_calculate$noproc_columns)) {
-      if (!quiet) message("Invalid noproc_columns field in $postprocess$confound_calculate")
+      if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_calculate"))
       gaps <- c(gaps, "postprocess/confound_calculate/noproc_columns")
       ppcfg$confound_calculate$noproc_columns <- NULL
     }
@@ -334,7 +312,7 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
 
   if ("scrubbing" %in% names(ppcfg)) {
     if (!checkmate::test_character(ppcfg$scrubbing$expression)) {
-      if (!quiet) message("Invalid expression field in $postprocess$scrubbing")
+      if (!quiet) message(glue("Invalid expression field in $postprocess${cfg_name}$scrubbing"))
       gaps <- c(gaps, "postprocess/scrubbing/expression")
       ppcfg$scrubbing$expression <- NULL
     }
@@ -342,19 +320,18 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
 
   if ("confound_regression" %in% names(ppcfg)) {
     if (!checkmate::test_character(ppcfg$confound_regression$columns)) {
-      if (!quiet) message("Invalid columns field in $postprocess$confound_regression")
+      if (!quiet) message(glue("Invalid columns field in $postprocess${cfg_name}$confound_regression"))
       gaps <- c(gaps, "postprocess/confound_regression/columns")
       ppcfg$confound_regression$columns <- NULL
     }
     if (!checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
-      if (!quiet) message("Invalid noproc_columns field in $postprocess$confound_regression")
+      if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_regression."))
       gaps <- c(gaps, "postprocess/confound_regression/noproc_columns")
       ppcfg$confound_regression$noproc_columns <- NULL
     }
     if (!checkmate::test_string(ppcfg$confound_regression$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$confound_regression")
-      gaps <- c(gaps, "postprocess/confound_regression/prefix")
-      ppcfg$confound_regression$prefix <- NULL
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$confound_regression. Defaulting to 'r'"))
+      ppcfg$confound_regression$prefix <- "r"
     }
   }
 
@@ -366,9 +343,8 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
       ppcfg$apply_mask$mask_file <- NULL
     }
     if (!checkmate::test_string(ppcfg$apply_mask$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$apply_mask")
-      gaps <- c(gaps, "postprocess/apply_mask/prefix")
-      ppcfg$apply_mask$prefix <- NULL
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$apply_mask. Defaulting to 'm'"))
+      ppcfg$apply_mask$prefix <- "m"
     }
   }
 
@@ -390,9 +366,8 @@ validate_postprocess_config_single <- function(ppcfg, quiet = FALSE) {
       ppcfg$apply_aroma$nonaggressive <- NULL
     }
     if (!checkmate::test_string(ppcfg$apply_aroma$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess$apply_aroma")
-      gaps <- c(gaps, "postprocess/apply_aroma/prefix")
-      ppcfg$apply_aroma$prefix <- NULL
+      if (!quiet) message("No valid prefix found for $postprocess${cfg_name}$apply_aroma. Defaulting to 'a'")
+      ppcfg$apply_aroma$prefix <- "a"
     }
   }
 
@@ -404,8 +379,9 @@ validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
   cfg_names <- setdiff(names(ppcfg), reserved)
   gaps <- c()
   for (nm in cfg_names) {
-    res <- validate_postprocess_config_single(ppcfg[[nm]], quiet)
+    res <- validate_postprocess_config_single(ppcfg[[nm]], nm, quiet)
     ppcfg[[nm]] <- res$postprocess
+    # rename gaps by config, like postprocess/ppcfg1/temporal_filter/prefix
     gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
   }
   return(list(postprocess = ppcfg, gaps = gaps))

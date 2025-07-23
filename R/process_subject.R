@@ -1,14 +1,25 @@
+get_postprocess_stream_names <- function(scfg) {
+  if (is.null(scfg$postprocess)) {
+    # warning("No postprocess streams available because $postprocess is not populated")
+    return(NULL)
+  } else {
+    # only enable: TRUE/FALSE exists as a setting at the top level of $postprocess
+    # otherwise, any element of $postprocess is the name of a postprocess stream, like $postprocess$my_stream1
+    return(setdiff(names(scfg$postprocess), "enable"))
+  }
+}
 
 #' Preprocess a single subject
 #' @param scfg A list of configuration settings
 #' @param sub_cfg A data.frame of subject configuration settings
 #' @param steps A named logical vector indicating which steps to run
-#' @param postprocess_names Optional character vector of postprocess configuration names to run
+#' @param postprocess_streams Optional character vector of postprocess configuration names to run. If NULL,
+#'   all available streams will be run.
 #' @return A logical value indicating whether the preprocessing was successful
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_names = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -20,8 +31,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
     if (any(duplicated(sub_cfg$ses_id))) stop("Duplicate session IDs found in sub_cfg. process_subject requires unique session IDs.")
   }
   checkmate::assert_logical(steps, names = "unique")
-  if (is.null(postprocess_names)) postprocess_names <- character()
-  checkmate::assert_character(postprocess_names, any.missing = FALSE)
+  checkmate::assert_character(postprocess_streams, null.ok = TRUE any.missing = FALSE)
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
 
@@ -31,19 +41,23 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- NULL
 
-
-  # N.B. fmriprep processes a subject, not a session... Thus, we need to submit a top-level job for the subject
-
   # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
   # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
 
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
-  submit_step <- function(name, row_idx = 1L, parent_ids = NULL, pp_name = NULL) {
+  submit_step <- function(name, row_idx = 1L, parent_ids = NULL, pp_stream = NULL) {
     session_level <- name %in% c("bids_conversion", "postprocess") # only these two are session-level
 
-    name_tag <- if (name == "postprocess" && !is.null(pp_name)) glue("{name}_{pp_name}") else name
-
+    name_tag <- name # identifier for this step used in complete file and job names
+    if (name == "postprocess") {
+      if (is.null(pp_stream)) {
+        stop("Cannot run submit_step for postprocessing without a stream specified by pp_stream")
+      } else {
+        name_tag <- glue("{name}_{pp_stream}") # modify the tag to be specific to postprocessing this stream
+      }
+    }
+    
     sub_id <- sub_cfg$sub_id[row_idx]
     ses_id <- sub_cfg$ses_id[row_idx]
     has_ses <- !is.na(ses_id)
@@ -59,13 +73,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
       lg$debug("Skipping {name} for {sub_id} because step is not requested.")
       return(job_id)
     } else if (file_exists && !isTRUE(scfg$force)) {
-      lg$info("Skipping {name} for {sub_id} because .{name}{sub_str}_complete file already exists and force = FALSE.")
+      lg$info("Skipping {name_tag} for {sub_id} because {complete_file} already exists and force = FALSE.")
       return(job_id)
     }
 
     # clear existing complete file if we are starting over on this step
     if (file_exists) {
-      lg$info("Removing existing .{name}{sub_str}_complete file: {complete_file}")
+      lg$info("Removing existing .complete file: {complete_file}")
       unlink(complete_file)
     }
 
@@ -74,16 +88,17 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
     env_variables <- c(
       debug_pipeline = scfg$debug,
       pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
-      R_HOME = R.home(),
+      R_HOME = R.home(), # populate location of R installation so that it can be used by any child R jobs
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
       complete_file = complete_file
     )
-    sched_script <- get_job_script(scfg, name)
+
+    sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
     if (name == "postprocess") {
-      scfg_tmp <- scfg
-      scfg_tmp$postprocess <- scfg$postprocess[[pp_name]]
+      scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
+      scfg_tmp$postprocess <- scfg$postprocess[[pp_stream]]
       sched_args <- get_job_sched_args(scfg_tmp, name)
     } else {
       sched_args <- get_job_sched_args(scfg, name)
@@ -107,9 +122,9 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
     }
 
     # launch submission function -- these all follow the same input argument structure
-    lg$debug("Launching submit_{name} for subject: {sub_id}")
+    lg$debug("Launching submit_{name_tag} for subject: {sub_id}")
     args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
-    if (name == "postprocess") args$pp_name <- pp_name
+    if (name == "postprocess") args$pp_stream <- pp_stream # populate the current postprocess config to run
     job_id <- do.call(glue("submit_{name}"), args)
 
     return(job_id)
@@ -117,7 +132,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
 
   lg$info(glue("Processing subject {sub_id} with {nrow(sub_cfg)} sessions."))
   # lg$info(glue("Processing steps: {glue_collapse(names(steps), sep = ', ')}"))
-  if (!is.na(bids_sub_dir))  lg$info(glue("BIDS directory: {bids_sub_dir}"))
+  if (!is.na(bids_sub_dir)) lg$info(glue("BIDS directory: {bids_sub_dir}"))
 
   ## Handle BIDS conversion -- session-level
   n_inputs <- nrow(sub_cfg)
@@ -149,8 +164,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
     return(TRUE)
   }
 
-  # Everything after BIDS conversion depends on the BIDS directory existing
-
+  # N.B. Everything after BIDS conversion depends on the BIDS directory existing
 
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = bids_conversion_ids)
@@ -161,16 +175,27 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_name
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(bids_conversion_ids, fmriprep_id))
 
-  ## Handle postprocessing (session-level)
+  ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
-  if (length(postprocess_names) > 0) {
+  if (isTRUE(steps["postprocess"])) {
+    all_streams <- get_postprocess_stream_names(scfg)
+    if (is.null(postprocess_streams)) {
+      if (is.null(all_streams)) {
+        stop("Cannot run postprocessing in submit_subject because no streams exist")
+      } else {
+        lg$debug("Running all postprocessing streams because postprocess_streams was NULL in process_subject")
+        postprocess_streams <- all_streams # run all
+      }
+    }
+
+    # loop over inputs and processing streams
     postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
-      unlist(lapply(postprocess_names, function(pp_nm) {
-        submit_step("postprocess", row_idx = idx, parent_ids = c(bids_conversion_ids, fmriprep_id, aroma_id), pp_name = pp_nm)
+      unlist(lapply(postprocess_streams, function(pp_nm) {
+        submit_step("postprocess", row_idx = idx, parent_ids = c(bids_conversion_ids, fmriprep_id, aroma_id), pp_stream = pp_nm)
       }))
     }))
-  }
 
+  }
   return(TRUE) # nothing interesting for now
 }
 
@@ -359,7 +384,9 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_name = NULL) {
+submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, 
+sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL) {
+  if (is.null(pp_stream)) stop("Cannot submit a postprocessing job without specifying a pp_stream")
 
   postproc_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
   postproc_image_sched_script <- get_job_script(scfg, "postprocess_image")
@@ -367,10 +394,11 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
   # postprocessing
   input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
-  #scfg$postprocess$fsl_img <- scfg$compute_environment$fmriprep_container # always pass fmriprep container for running FSL commands in postprocessing
-  pp_cfg <- scfg$postprocess[[pp_name]]
+  
+  # pull the requested postprocessing stream from the broader list
+  pp_cfg <- scfg$postprocess[[pp_stream]]
   pp_cfg$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
-  postproc_cli <- nested_list_to_args(pp_cfg, collapse = TRUE)
+  postproc_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script
   
   env_variables <- c(
     env_variables,

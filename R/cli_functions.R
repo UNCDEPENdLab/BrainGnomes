@@ -75,6 +75,68 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
   return(lst)
 }
 
+#' Assign values to a nested list using key-value strings or named list
+#'
+#' Parses assignments like \code{"a/b/c=10"} or named lists like \code{list("a/b/c" = 10)} and returns
+#' \code{list(a = list(b = list(c = 10)))}.
+#'
+#' @param assignments Either a character vector of assignment strings (e.g., \code{"a/b=1"})
+#'   or a named list where names encode nested keys (e.g., \code{list("a/b" = 1)}).
+#' @param sep A character used to separate keys. Default is \code{"/"}.
+#' @param lst Optional list to update. If \code{NULL}, a new list is created.
+#' @param type_values Logical; whether to convert character values to appropriate types.
+#'
+#' @return A nested list with the specified keys and values.
+#' @importFrom utils modifyList
+#' @keywords internal
+set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
+  checkmate::assert_string(sep)
+  checkmate::assert_flag(type_values)
+  checkmate::assert_list(lst, null.ok = TRUE)
+  if (is.null(lst)) lst <- list()
+
+  # handle character vector input
+  if (is.character(assignments)) {
+    for (a in assignments) {
+      parts <- strsplit(a, "=", fixed = TRUE)[[1]]
+      if (length(parts) != 2L) stop("Invalid assignment format: ", a)
+      key_str <- parts[1]
+      val_str <- parts[2]
+
+      keys <- strsplit(key_str, sep, fixed = TRUE)[[1]]
+
+      value <- scan(text = val_str, what = character(), quote = "'\"", quiet = TRUE)
+      if (type_values) value <- type.convert(value, as.is = TRUE)
+
+      nested <- value
+      for (key in rev(keys)) {
+        nested <- setNames(list(nested), key)
+      }
+
+      lst <- modifyList(lst, nested)
+    }
+
+  # handle named list input
+  } else if (is.list(assignments) && !is.null(names(assignments))) {
+    for (nm in names(assignments)) {
+      if (!nzchar(nm)) stop("All elements of named list must have non-empty names.")
+      keys <- strsplit(nm, sep, fixed = TRUE)[[1]]
+      value <- assignments[[nm]]
+
+      nested <- value
+      for (key in rev(keys)) {
+        nested <- setNames(list(nested), key)
+      }
+
+      lst <- modifyList(lst, nested)
+    }
+
+  } else {
+    stop("assignments must be a character vector or a named list with non-empty names.")
+  }
+
+  return(lst)
+}
 
 #' Convert a nested list into CLI-style arguments using slash-separated keys
 #'
