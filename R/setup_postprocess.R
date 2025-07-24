@@ -31,38 +31,44 @@
 #'
 #' @return Modified `scfg` with one or more postprocessing streams
 #' @keywords internal
-setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
-  checkmate::assert_class(scfg, "bg_project_cfg")
+postprocess_field_list <- function() {
+  c(
+    "input_regex", "bids_desc", "keep_intermediates", "overwrite",
+    "tr", "brain_mask",
+    "apply_mask/mask_file", "apply_mask/prefix",
+    "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
+    "apply_aroma/nonaggressive", "apply_aroma/prefix",
+    "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
+    "temporal_filter/method", "temporal_filter/prefix",
+    "intensity_normalize/global_median", "intensity_normalize/prefix",
+    "confound_calculate/columns", "confound_calculate/noproc_columns",
+    "confound_calculate/demean",
+    "scrubbing/expression", "scrubbing/add_to_confounds",
+    "scrubbing/interpolate", "scrubbing/interpolate_prefix",
+    "scrubbing/apply", "scrubbing/prefix",
+    "confound_regression/columns", "confound_regression/noproc_columns",
+    "confound_regression/prefix",
+    "force_processing_order", "processing_steps"
+  )
+}
 
-  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
-    scfg$postprocess$enable <- prompt_input(
-      instruct = glue("\n\n
-        Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
-        These steps may include:
-            - Applying a brain mask
-            - Spatial smoothing
-            - Denoising using ICA-AROMA
-            - 'Scrubbing' of high-motion/high-artifact timepoints
-            - Temporal filtering (e.g., high-pass filtering)
-            - Intensity normalization
-            - Confound calculation and regression
-
-        Do you want to enable postprocessing of the BOLD data?\n"
-      ),
-      prompt = "Enable postprocessing?",
-      type = "flag",
-      default = TRUE
-    )
+#' Interactive menu for managing postprocessing streams
+#'
+#' Presents options to add, edit, delete, show, or finish editing postprocessing
+#' streams. Used by both `setup_postprocess_streams()` and `edit_project()`.
+#'
+#' @inheritParams setup_postprocess
+#' @param allow_empty Logical indicating whether finishing with zero streams is
+#'   permitted without confirmation.
+#' @return Modified `scfg` with updated postprocessing streams
+#' @keywords internal
+manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE) {
+  show_val <- function(val) {
+    if (is.null(val)) "[NULL]"
+    else if (is.logical(val)) toupper(as.character(val))
+    else if (is.character(val) && length(val) > 1) paste(val, collapse = ", ")
+    else as.character(val)
   }
-
-  if (isFALSE(scfg$postprocess$enable)) return(scfg)
-
-  cat(glue("\n
-    Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
-    Each stream also asks about which files should be postprocessed using the stream. For example,
-    files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
-    be processed a different way.\n
-    "))
 
   repeat {
     streams <- get_postprocess_stream_names(scfg)
@@ -73,7 +79,8 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       for (i in seq_along(streams)) cat(sprintf("  [%d] %s\n", i, streams[i]))
     }
 
-    choice <- menu(c("Add a stream", "Edit a stream", "Delete a stream", "Finish"),
+    choice <- menu(c("Add a stream", "Edit a stream", "Delete a stream",
+                     "Show stream settings", "Finish"),
                    title = "Modify postprocessing streams:")
 
     if (choice == 1) {
@@ -85,10 +92,20 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       }
       sel <- utils::select.list(streams, multiple = FALSE, title = "Select stream to edit")
       if (sel == "") next
+      rel_fields <- postprocess_field_list()
+      field_display <- sapply(rel_fields, function(fld) {
+        val <- get_nested_values(scfg, paste0("postprocess/", sel, "/", fld))
+        sprintf("%s [ %s ]", fld, show_val(val))
+      })
+      selected <- utils::select.list(field_display, multiple = TRUE,
+                                     title = sprintf("Select fields to edit in %s:", sel))
+      if (length(selected) == 0) next
       stream_cfg <- scfg$postprocess[[sel]]
       scfg$postprocess[[sel]] <- NULL
       for (nm in names(stream_cfg)) scfg$postprocess[[nm]] <- stream_cfg[[nm]]
-      scfg <- setup_postprocess(scfg, fields = fields, stream_name = sel)
+      scfg <- setup_postprocess(scfg,
+                                fields = paste0("postprocess/", names(selected)),
+                                stream_name = sel)
     } else if (choice == 3) {
       if (length(streams) == 0) {
         cat("No streams to delete.\n")
@@ -98,13 +115,60 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       if (length(sel) == 0) next
       scfg$postprocess[sel] <- NULL
     } else if (choice == 4) {
-      if (length(streams) == 0L) {
+      if (length(streams) == 0) {
+        cat("No streams defined.\n")
+        next
+      }
+      for (nm in streams) {
+        cat(sprintf("\nStream: %s\n", nm))
+        cat(yaml::as.yaml(scfg$postprocess[[nm]]))
+      }
+    } else if (choice == 5) {
+      if (!allow_empty && length(streams) == 0L) {
         proceed <- prompt_input("No postprocessing streams were setup. Are you sure you want to finish? This will disable postprocessing entirely.", type = "flag", default = FALSE)
         if (!proceed) next
       }
       break
     }
   }
+
+  return(scfg)
+}
+
+
+setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+
+  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
+    scfg$postprocess$enable <- prompt_input(
+      instruct = glue("\n\n",
+        "        Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.",
+        "        These steps may include:",
+        "            - Applying a brain mask",
+        "            - Spatial smoothing",
+        "            - Denoising using ICA-AROMA",
+        "            - 'Scrubbing' of high-motion/high-artifact timepoints",
+        "            - Temporal filtering (e.g., high-pass filtering)",
+        "            - Intensity normalization",
+        "            - Confound calculation and regression",
+        "\n        Do you want to enable postprocessing of the BOLD data?\n"
+      ),
+      prompt = "Enable postprocessing?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  if (isFALSE(scfg$postprocess$enable)) return(scfg)
+
+  cat(glue("\n",
+    "    Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.",
+    "    Each stream also asks about which files should be postprocessed using the stream. For example,",
+    "    files with 'rest' in their name could be postprocessed in one way and files with 'nback' could",
+    "    be processed a different way.\n",
+    "    "))
+
+  scfg <- manage_postprocess_streams(scfg, fields = fields, allow_empty = TRUE)
 
   return(scfg)
 }
