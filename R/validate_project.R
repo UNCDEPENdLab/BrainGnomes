@@ -307,6 +307,29 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/scrubbing/expression")
       ppcfg$scrubbing$expression <- NULL
     }
+    if (!checkmate::test_flag(ppcfg$scrubbing$add_to_confounds)) {
+      if (!quiet) message(glue("Invalid add_to_confounds field in $postprocess${cfg_name}$scrubbing"))
+      gaps <- c(gaps, "postprocess/scrubbing/add_to_confounds")
+      ppcfg$scrubbing$add_to_confounds <- NULL
+    }
+    if (!checkmate::test_flag(ppcfg$scrubbing$interpolate)) {
+      if (!quiet) message(glue("Invalid interpolate field in $postprocess${cfg_name}$scrubbing"))
+      gaps <- c(gaps, "postprocess/scrubbing/interpolate")
+      ppcfg$scrubbing$interpolate <- NULL
+    }
+    if (!checkmate::test_string(ppcfg$scrubbing$interpolate_prefix)) {
+      if (!quiet) message(glue("No valid interpolate_prefix found for $postprocess${cfg_name}$scrubbing. Defaulting to 'i'"))
+      ppcfg$scrubbing$interpolate_prefix <- "i"
+    }
+    if (!checkmate::test_flag(ppcfg$scrubbing$apply)) {
+      if (!quiet) message(glue("Invalid apply field in $postprocess${cfg_name}$scrubbing"))
+      gaps <- c(gaps, "postprocess/scrubbing/apply")
+      ppcfg$scrubbing$apply <- NULL
+    }
+    if (!checkmate::test_string(ppcfg$scrubbing$prefix)) {
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$scrubbing. Defaulting to 'x'"))
+      ppcfg$scrubbing$prefix <- "x"
+    }
   }
 
   if ("confound_regression" %in% names(ppcfg)) {
