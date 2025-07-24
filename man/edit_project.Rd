@@ -4,7 +4,7 @@
 \alias{edit_project}
 \title{Interactively edit a study configuration by field (field-guided)}
 \usage{
-edit_project(input)
+edit_project(input = NULL)
 }
 \arguments{
 \item{input}{A \code{bg_project_cfg} object, a YAML file path, or a project

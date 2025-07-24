@@ -26,21 +26,7 @@ summary.bg_project_cfg <- function(x) {
   pretty_print_list(x, indent=2)
 }
 
-#' Setup the processing pipeline for a new fMRI study
-#' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
-#'   directory containing \code{project_config.yaml}. If a directory is supplied
-#'   but the file is missing, \code{setup_project} starts from an empty list with
-#'   a warning. For \code{setup_project} only, this argument may also be
-#'   \code{NULL} to create a new configuration from scratch.
-#' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input,
-#'   and missing entries are filled with defaults. The configuration is written
-#'   to `project_config.yaml` in the project directory unless the user declines
-#'   to overwrite an existing file.
-#' @importFrom yaml read_yaml
-#' @importFrom checkmate test_file_exists
-#' @export
-setup_project <- function(input = NULL, fields = NULL) {
+get_scfg_from_input <- function(input = NULL) {
   if (is.null(input)) {
     scfg <- list()
   } else if (inherits(input, "bg_project_cfg")) {
@@ -56,7 +42,7 @@ setup_project <- function(input = NULL, fields = NULL) {
       if (file.exists(cfg_file)) {
         scfg <- load_project(cfg_file, validate = FALSE)
       } else {
-        warning("project_config.yaml not found in ", input, ". Starting with empty configuration.")
+        warning("project_config.yaml not found in ", input)
         scfg <- list()
       }
     } else {
@@ -65,6 +51,26 @@ setup_project <- function(input = NULL, fields = NULL) {
   } else {
     stop("input must be a bg_project_cfg object, YAML file, or project directory")
   }
+
+  return(scfg)
+}
+
+#' Setup the processing pipeline for a new fMRI study
+#' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
+#'   directory containing \code{project_config.yaml}. If a directory is supplied
+#'   but the file is missing, \code{setup_project} starts from an empty list with
+#'   a warning. For \code{setup_project} only, this argument may also be
+#'   \code{NULL} to create a new configuration from scratch.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
+#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input,
+#'   and missing entries are filled with defaults. The configuration is written
+#'   to `project_config.yaml` in the project directory unless the user declines
+#'   to overwrite an existing file.
+#' @importFrom yaml read_yaml
+#' @importFrom checkmate test_file_exists
+#' @export
+setup_project <- function(input = NULL, fields = NULL) {
+  scfg <- get_scfg_from_input(input)
 
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
@@ -214,9 +220,9 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
   # https://fmriprep.org/en/stable/usage.html
   # [--omp-nthreads OMP_NTHREADS] [--mem MEMORY_MB] [--low-mem]  [--nprocs NPROCS]
   defaults <- list(
-    memgb = 48,
-    nhours = 24,
-    ncores = 12,
+    memgb = 48L,
+    nhours = 24L,
+    ncores = 12L,
     cli_options = "",
     sched_args = ""
   )

@@ -21,8 +21,9 @@ Recursively traverses a nested list and returns a character vector or string
 of arguments like \code{--a/b=10 --c=25}.
 }
 \examples{
-nested_list_to_args(list(a = list(b = c(10, 11, 12)), c = 25))
-# Returns: c("--a/b='10' '11' '12'", "--c='25'")
+\dontrun{
+   nested_list_to_args(list(a = list(b = c(10, 11, 12)), c = 25))
+}
 
 }
 \keyword{internal}

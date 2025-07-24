@@ -1,36 +1,3 @@
-#' Configure postprocessing settings for a study
-#'
-#' This function enables and configures the postprocessing steps to be applied after fMRIPrep.
-#' Postprocessing may include denoising, smoothing, filtering, intensity normalization,
-#' and confound regression applied to preprocessed BOLD data.
-#'
-#' The function interactively prompts the user (or selectively prompts based on `fields`)
-#' to specify whether postprocessing should be performed, and if so, how each step should be configured.
-#'
-#' @param scfg A study configuration object, as produced by `setup_project()`.
-#' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
-#'
-#' @return A modified version of `scfg` with the `$postprocess` field populated.
-#'
-#' @details
-#' Postprocessing is applied to the outputs of fMRIPrep to prepare BOLD time series for statistical modeling.
-#' This may include:
-#' - Applying brain masks
-#' - Spatial smoothing
-#' - ICA-AROMA denoising
-#' - Temporal filtering
-#' - Intensity normalization
-#' - Confound calculation and regression
-#'
-#' Each step is optional and configurable. This function sets default values for memory, runtime,
-#' and cores, and invokes a series of sub-setup functions to collect postprocessing parameters.
-#'
-#' Interactively manage multiple postprocessing configurations. Users can add,
-#' edit, or delete postprocessing streams. This wrapper is called by
-#' `setup_project()` and invokes `setup_postprocess()` for each stream.
-#'
-#' @return Modified `scfg` with one or more postprocessing streams
-#' @keywords internal
 postprocess_field_list <- function() {
   c(
     "input_regex", "bids_desc", "keep_intermediates", "overwrite",
@@ -57,7 +24,8 @@ postprocess_field_list <- function() {
 #' Presents options to add, edit, delete, show, or finish editing postprocessing
 #' streams. Used by both `setup_postprocess_streams()` and `edit_project()`.
 #'
-#' @inheritParams setup_postprocess
+#' @param scfg A study configuration object, as produced by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
 #' @param allow_empty Logical indicating whether finishing with zero streams is
 #'   permitted without confirmation.
 #' @return Modified `scfg` with updated postprocessing streams
@@ -84,7 +52,7 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
                    title = "Modify postprocessing streams:")
 
     if (choice == 1) {
-      scfg <- setup_postprocess(scfg, fields = fields)
+      scfg <- setup_postprocess_stream(scfg, fields = fields)
     } else if (choice == 2) {
       if (length(streams) == 0) {
         cat("No streams to edit.\n")
@@ -97,13 +65,16 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
         val <- get_nested_values(scfg, paste0("postprocess/", sel, "/", fld))
         sprintf("%s [ %s ]", fld, show_val(val))
       })
-      selected <- utils::select.list(field_display, multiple = TRUE,
-                                     title = sprintf("Select fields to edit in %s:", sel))
+      selected <- utils::select.list(field_display,
+        multiple = TRUE,
+        title = sprintf("Select fields to edit in %s:", sel)
+      )
+
       if (length(selected) == 0) next
       stream_cfg <- scfg$postprocess[[sel]]
       scfg$postprocess[[sel]] <- NULL
       for (nm in names(stream_cfg)) scfg$postprocess[[nm]] <- stream_cfg[[nm]]
-      scfg <- setup_postprocess(scfg,
+      scfg <- setup_postprocess_stream(scfg,
                                 fields = paste0("postprocess/", names(selected)),
                                 stream_name = sel)
     } else if (choice == 3) {
@@ -135,7 +106,39 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
   return(scfg)
 }
 
-
+#' Configure postprocessing settings for a study
+#'
+#' This function enables and configures the postprocessing steps to be applied after fMRIPrep.
+#' Postprocessing may include denoising, smoothing, filtering, intensity normalization,
+#' and confound regression applied to preprocessed BOLD data.
+#'
+#' The function interactively prompts the user (or selectively prompts based on `fields`)
+#' to specify whether postprocessing should be performed, and if so, how each step should be configured.
+#'
+#' @param scfg A study configuration object, as produced by `setup_project()`.
+#' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
+#'
+#' @return A modified version of `scfg` with the `$postprocess` field populated.
+#'
+#' @details
+#' Postprocessing is applied to the outputs of fMRIPrep to prepare BOLD time series for statistical modeling.
+#' This may include:
+#' - Applying brain masks
+#' - Spatial smoothing
+#' - ICA-AROMA denoising
+#' - Temporal filtering
+#' - Intensity normalization
+#' - Confound calculation and regression
+#'
+#' Each step is optional and configurable. This function sets default values for memory, runtime,
+#' and cores, and invokes a series of sub-setup functions to collect postprocessing parameters.
+#'
+#' Interactively manage multiple postprocessing configurations. Users can add,
+#' edit, or delete postprocessing streams. This wrapper is called by
+#' `setup_project()` and invokes `setup_postprocess_stream()` for each stream.
+#'
+#' @return Modified `scfg` with one or more postprocessing streams
+#' @keywords internal
 setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
@@ -161,26 +164,27 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
 
-  cat(glue("\n",
-    "    Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.",
-    "    Each stream also asks about which files should be postprocessed using the stream. For example,",
-    "    files with 'rest' in their name could be postprocessed in one way and files with 'nback' could",
-    "    be processed a different way.\n",
-    "    "))
+  cat(glue("\n
+      Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
+      Each stream also asks about which files should be postprocessed using the stream. For example,
+      files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
+      be processed a different way.\n
+      "))
 
   scfg <- manage_postprocess_streams(scfg, fields = fields, allow_empty = TRUE)
 
   return(scfg)
 }
 
-setup_postprocess <- function(scfg = list(), fields = NULL, stream_name = NULL) {
+
+setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name = NULL) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
   defaults <- list(
-    memgb = 48,
-    nhours = 8,
+    memgb = 48L,
+    nhours = 8L,
     ncores = 1L,
     cli_options = "",
     sched_args = ""

@@ -179,10 +179,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 #' @param quiet a flag indicating whether to suppress messages
 #' @keywords internal
 validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = FALSE) {
-
-  # validate stream-specific job settings
-  ppcfg <- validate_job_settings(ppcfg, cfg_name)
-  gaps <- attr(ppcfg, "gaps")
+  gaps <- c()
 
   # postprocess/input_regex
   if (!"input_regex" %in% names(ppcfg)) {
@@ -275,12 +272,12 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate intensity normalization
   if ("intensity_normalize" %in% names(ppcfg)) {
     if (!checkmate::test_number(ppcfg$intensity_normalize$global_median, lower = 0.1)) {
-      if (!quiet) message("Invalid global_median in $postprocess$intensity_normalize. You will be asked for this.")
+      if (!quiet) message(glue("Invalid global_median in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
       gaps <- c(gaps, "postprocess/intensity_normalize/global_median")
       ppcfg$intensity_normalize$global_median <- NULL
     }
     if (!checkmate::test_string(ppcfg$intensity_normalize$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess${cfg_name}$intensity_normalize. Defaulting to 'n'")
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$intensity_normalize. Defaulting to 'n'"))
       ppcfg$intensity_normalize$prefix <- "n"
     }
   }
@@ -332,7 +329,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   if ("apply_mask" %in% names(ppcfg)) {
     if (!checkmate::test_string(ppcfg$apply_mask$mask_file, null.ok = TRUE) ||
         (!is.na(ppcfg$apply_mask$mask_file) && !checkmate::test_file_exists(ppcfg$apply_mask$mask_file))) {
-      if (!quiet) message("Invalid mask_file in $postprocess$apply_mask. You will be asked for this.")
+      if (!quiet) message(glue("Invalid mask_file in $postprocess${cfg_name}$apply_mask. You will be asked for this."))
       gaps <- c(gaps, "postprocess/apply_mask/mask_file")
       ppcfg$apply_mask$mask_file <- NULL
     }
@@ -355,12 +352,12 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate AROMA application
   if ("apply_aroma" %in% names(ppcfg)) {
     if (!checkmate::test_flag(ppcfg$apply_aroma$nonaggressive)) {
-      if (!quiet) message("Invalid nonaggressive field in $postprocess$apply_aroma. You will be asked for this.")
+      if (!quiet) message(glue("Invalid nonaggressive field in $postprocess${cfg_name}$apply_aroma. You will be asked for this."))
       gaps <- c(gaps, "postprocess/apply_aroma/nonaggressive")
       ppcfg$apply_aroma$nonaggressive <- NULL
     }
     if (!checkmate::test_string(ppcfg$apply_aroma$prefix)) {
-      if (!quiet) message("No valid prefix found for $postprocess${cfg_name}$apply_aroma. Defaulting to 'a'")
+      if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$apply_aroma. Defaulting to 'a'"))
       ppcfg$apply_aroma$prefix <- "a"
     }
   }
@@ -373,8 +370,13 @@ validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
   cfg_names <- setdiff(names(ppcfg), reserved)
   gaps <- c()
   for (nm in cfg_names) {
+    # validate stream job settings
+    ppcfg <- validate_job_settings(ppcfg, nm)
+    gaps <- c(gaps, paste0("postprocess/", attr(ppcfg, "gaps")))
+
     res <- validate_postprocess_config_single(ppcfg[[nm]], nm, quiet)
     ppcfg[[nm]] <- res$postprocess
+
     # rename gaps by config, like postprocess/ppcfg1/temporal_filter/prefix
     gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
   }

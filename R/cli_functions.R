@@ -150,8 +150,9 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
 #' @return A character vector (or single string if \code{collapse = TRUE}) of CLI-style arguments.
 #'
 #' @examples
-#' nested_list_to_args(list(a = list(b = c(10, 11, 12)), c = 25))
-#' # Returns: c("--a/b='10' '11' '12'", "--c='25'")
+#' \dontrun{
+#'    nested_list_to_args(list(a = list(b = c(10, 11, 12)), c = 25))
+#' }
 #'
 #' @keywords internal
 nested_list_to_args <- function(lst, sep = "/", collapse = FALSE) {

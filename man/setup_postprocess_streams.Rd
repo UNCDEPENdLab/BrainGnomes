@@ -41,6 +41,6 @@ and cores, and invokes a series of sub-setup functions to collect postprocessing
 
 Interactively manage multiple postprocessing configurations. Users can add,
 edit, or delete postprocessing streams. This wrapper is called by
-\code{setup_project()} and invokes \code{setup_postprocess()} for each stream.
+\code{setup_project()} and invokes \code{setup_postprocess_stream()} for each stream.
 }
 \keyword{internal}

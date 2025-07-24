@@ -12,29 +12,13 @@
 #' @return An updated `bg_project_cfg` object. The updated configuration is
 #'   written to `project_config.yaml` in the project directory unless the user
 #'   chooses not to overwrite an existing file.
+#' @importFrom utils select.list
 #' @export
-edit_project <- function(input) {
-  if (inherits(input, "bg_project_cfg")) {
-    scfg <- input
-  } else if (checkmate::test_string(input)) {
-    if (grepl("\\.ya?ml$", input, ignore.case = TRUE)) {
-      if (!checkmate::test_file_exists(input)) {
-        stop("Cannot find file: ", input)
-      }
-      scfg <- load_project(input, validate = FALSE)
-    } else if (checkmate::test_directory_exists(input)) {
-      cfg_file <- file.path(input, "project_config.yaml")
-      if (!file.exists(cfg_file)) {
-        stop("project_config.yaml not found in ", input)
-      }
-      scfg <- load_project(cfg_file, validate = FALSE)
-    } else {
-      stop("input must be a bg_project_cfg object, YAML file, or project directory")
-    }
-  } else {
-    stop("input must be a bg_project_cfg object, YAML file, or project directory")
-  }
-
+edit_project <- function(input = NULL) {
+  scfg <- get_scfg_from_input(input)
+  # a valid list must be returned for editing
+  if (length(scfg) == 0L) stop("input must be a bg_project_cfg object, YAML file, or project directory")
+  
   # Define editable fields per setup function
   config_map <- list(
     "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
@@ -52,25 +36,10 @@ edit_project <- function(input) {
     )),
     "fMRIPrep" = list(setup_fn = setup_fmriprep, prefix = "fmriprep/", fields = c(
       "output_spaces", "fs_license_file"
-    )),
-    "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
-    "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0)),
-    "Postprocessing" = list(setup_fn = setup_postprocess, prefix = "postprocess/", fields = c(
-      "input_regex", "bids_desc", "keep_intermediates", "overwrite",
-      "tr", "brain_mask",
-      "apply_mask/mask_file", "apply_mask/prefix",
-      "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
-      "apply_aroma/nonaggressive", "apply_aroma/prefix",
-      "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
-      "temporal_filter/prefix",
-      "intensity_normalize/global_median", "intensity_normalize/prefix",
-      "confound_calculate/columns", "confound_calculate/noproc_columns",
-      "confound_calculate/demean",
-      "scrubbing/expression",
-      "confound_regression/columns", "confound_regression/noproc_columns",
-      "confound_regression/prefix",
-      "force_processing_order", "processing_steps"
     ))
+    # At present, MRIQC and ICA-AROMA don't have any additional specific settings, just job settings
+    # "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
+    # "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0))
   )
 
   job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess")
@@ -85,46 +54,17 @@ edit_project <- function(input) {
 
   # Top-level menu loop
   repeat {
-    choice <- utils::menu(c(names(config_map), "Job settings", "Quit"),
+    choice <- select.list(c(names(config_map), "Job settings", "Quit"), graphics = FALSE,
                           title = "Select a configuration area to edit:")
 
-    if (choice == 0 || choice > length(config_map) + 1) {
+    if (choice == "Quit" || choice == "") {
       message("Exiting configuration editor.")
       break
     }
 
-    if (choice <= length(config_map)) {
-      # Standard config section
-      area <- names(config_map)[choice]
-      info <- config_map[[area]]
-      prefix <- info$prefix
-      fields <- info$fields
-      setup_fn <- info$setup_fn
-
-      if (area == "Postprocessing") {
-        scfg <- manage_postprocess_streams(scfg, fields = paste0(prefix, fields), allow_empty = TRUE)
-        next
-      }
-
-      if (length(fields) == 0) {
-        message(glue::glue("No individual fields listed for {area}, opening full setup..."))
-        scfg <- setup_fn(scfg)
-        next
-      }
-
-      field_display <- sapply(fields, function(fld) {
-        val <- get_nested_values(scfg, paste0(prefix, fld))
-        sprintf("%s [ %s ]", fld, show_val(val))
-      })
-
-      selected <- utils::select.list(field_display, multiple = TRUE,
-                                     title = glue::glue("Select fields to edit in {area}:"))
-
-      if (length(selected) == 0) next
-
-      scfg <- setup_fn(scfg, fields = paste0(prefix, names(selected)))
-
-    } else {
+    if (choice == "Postprocessing") {
+      scfg <- manage_postprocess_streams(scfg, fields = paste0(prefix, fields), allow_empty = TRUE)
+    } else if (choice == "Job settings") {
       # Job settings logic
       job <- utils::select.list(job_targets, title = "Select which job to configure:")
       if (length(job) == 0 || job == "") next
@@ -134,12 +74,40 @@ edit_project <- function(input) {
         sprintf("%s [ %s ]", fld, show_val(val))
       })
 
-      selected_job_fields <- utils::select.list(job_field_display, multiple = TRUE,
-                                                title = glue::glue("Select fields to edit for job '{job}':"))
+      selected_job_fields <- utils::select.list(job_field_display,
+        multiple = TRUE,
+        title = glue::glue("Select fields to edit for job '{job}':")
+      )
 
       if (length(selected_job_fields) == 0) next
 
       scfg <- setup_job(scfg, job_name = job, fields = paste(job, names(selected_job_fields), sep = "/"))
+    } else {
+      # Standard config section
+      info <- config_map[[choice]]
+      prefix <- info$prefix
+      fields <- info$fields
+      setup_fn <- info$setup_fn
+
+      if (length(fields) == 0) {
+        message(glue::glue("No individual fields listed for {choice}, opening full setup..."))
+        scfg <- setup_fn(scfg)
+        next
+      }
+
+      field_display <- sapply(fields, function(fld) {
+        val <- get_nested_values(scfg, paste0(prefix, fld))
+        sprintf("%s [ %s ]", fld, show_val(val))
+      })
+
+      selected <- utils::select.list(field_display,
+        multiple = TRUE,
+        title = glue::glue("Select fields to edit in {choice}:")
+      )
+
+      if (length(selected) == 0) next
+
+      scfg <- setup_fn(scfg, fields = paste0(prefix, names(selected)))
     }
   }
 
