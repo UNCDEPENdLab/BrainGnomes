@@ -71,12 +71,12 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
       )
 
       if (length(selected) == 0) next
-      stream_cfg <- scfg$postprocess[[sel]]
-      scfg$postprocess[[sel]] <- NULL
-      for (nm in names(stream_cfg)) scfg$postprocess[[nm]] <- stream_cfg[[nm]]
-      scfg <- setup_postprocess_stream(scfg,
-                                fields = paste0("postprocess/", names(selected)),
-                                stream_name = sel)
+      selected_fields <- names(field_display)[field_display %in% selected]
+      scfg <- setup_postprocess_stream(
+        scfg,
+        fields = paste0("postprocess/", sel, "/", selected_fields),
+        stream_name = sel
+      )
     } else if (choice == 3) {
       if (length(streams) == 0) {
         cat("No streams to delete.\n")
@@ -194,26 +194,28 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
 
   scfg <- setup_job(scfg, "postprocess", defaults, fields)
-  scfg <- setup_postprocess_globals(scfg, fields)
-  scfg <- setup_apply_mask(scfg, fields)
-  scfg <- setup_spatial_smooth(scfg, fields)
-  scfg <- setup_apply_aroma(scfg, fields)
-  scfg <- setup_temporal_filter(scfg, fields)
-  scfg <- setup_intensity_normalization(scfg, fields)
-  scfg <- setup_confound_calculate(scfg, fields)
-  scfg <- setup_scrubbing(scfg, fields)
-  scfg <- setup_confound_regression(scfg, fields)
-  scfg <- setup_postproc_steps(scfg, fields)
 
-  proc_cfg <- scfg$postprocess
-  enable_val <- proc_cfg$enable
-  proc_cfg$enable <- NULL
-  existing_names <- names(proc_cfg)[sapply(proc_cfg, function(x) {
-    is.list(x) && ("bids_desc" %in% names(x) || "input_regex" %in% names(x))
-  })]
-  existing_cfgs <- proc_cfg[existing_names]
-  proc_cfg[existing_names] <- NULL
-  scfg$postprocess <- c(list(enable = enable_val), existing_cfgs)
+  if (!is.null(stream_name) && !is.null(scfg$postprocess[[stream_name]])) {
+    ppcfg <- scfg$postprocess[[stream_name]]
+  } else {
+    ppcfg <- list()
+  }
+
+  if (!is.null(stream_name) && !is.null(fields)) {
+    fields <- sub(paste0("^postprocess/", stream_name, "/"), "postprocess/", fields)
+  }
+
+  ppcfg <- setup_postprocess_globals(ppcfg, fields)
+  ppcfg <- setup_apply_mask(ppcfg, fields)
+  ppcfg <- setup_spatial_smooth(ppcfg, fields)
+  ppcfg <- setup_apply_aroma(ppcfg, fields)
+  ppcfg <- setup_temporal_filter(ppcfg, fields)
+  ppcfg <- setup_intensity_normalization(ppcfg, fields)
+  ppcfg <- setup_confound_calculate(ppcfg, fields)
+  ppcfg <- setup_scrubbing(ppcfg, fields)
+  ppcfg <- setup_confound_regression(ppcfg, fields)
+  ppcfg <- setup_postproc_steps(ppcfg, fields)
+
   cfg_name <- prompt_input(
     prompt="Name for this postprocess configuration",
     type = "character",
@@ -230,30 +232,30 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   }
   # ensure unique bids_desc
   existing_desc <- unlist(lapply(stream_names, function(nm) scfg$postprocess[[nm]]$bids_desc))
-  while (!is.null(proc_cfg$bids_desc) && proc_cfg$bids_desc %in% existing_desc) {
+  while (!is.null(ppcfg$bids_desc) && ppcfg$bids_desc %in% existing_desc) {
     message("bids_desc must be unique across postprocess configurations.")
-    proc_cfg$bids_desc <- prompt_input("Enter a unique BIDS description", type = "character")
+    ppcfg$bids_desc <- prompt_input("Enter a unique BIDS description", type = "character")
   }
-  scfg$postprocess[[cfg_name]] <- proc_cfg
+  scfg$postprocess[[cfg_name]] <- ppcfg
   return(scfg)
 }
 
-setup_postprocess_globals <- function(scfg, fields = NULL) {
+setup_postprocess_globals <- function(ppcfg, fields = NULL) {
 
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$input_regex)) fields <- c(fields, "postprocess/input_regex")
-    if (is.null(scfg$postprocess$bids_desc)) fields <- c(fields, "postprocess/bids_desc")
-    if (is.null(scfg$postprocess$keep_intermediates)) fields <- c(fields, "postprocess/keep_intermediates")
-    if (is.null(scfg$postprocess$overwrite)) fields <- c(fields, "postprocess/overwrite")
-    if (is.null(scfg$postprocess$tr)) fields <- c(fields, "postprocess/tr")
-    if (is.null(scfg$postprocess$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
-    if (is.null(scfg$postprocess$brain_mask)) fields <- c(fields, "postprocess/brain_mask")
+    if (is.null(ppcfg$input_regex)) fields <- c(fields, "postprocess/input_regex")
+    if (is.null(ppcfg$bids_desc)) fields <- c(fields, "postprocess/bids_desc")
+    if (is.null(ppcfg$keep_intermediates)) fields <- c(fields, "postprocess/keep_intermediates")
+    if (is.null(ppcfg$overwrite)) fields <- c(fields, "postprocess/overwrite")
+    if (is.null(ppcfg$tr)) fields <- c(fields, "postprocess/tr")
+    if (is.null(ppcfg$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
+    if (is.null(ppcfg$brain_mask)) fields <- c(fields, "postprocess/brain_mask")
   }
 
   # global postprocessing settings
   if ("postprocess/input_regex" %in% fields) {
-    scfg$postprocess$input_regex <- prompt_input(
+    ppcfg$input_regex <- prompt_input(
       "What is the relevant file extension (or regular expression) for inputs?",
       type = "character", len = 1L, default = ".*_desc-preproc_bold.nii.gz$",
       instruct = glue("\n\n
@@ -269,7 +271,7 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
   }
 
   if ("postprocess/bids_desc" %in% fields) {
-    scfg$postprocess$bids_desc <- prompt_input(
+    ppcfg$bids_desc <- prompt_input(
       "Enter the BIDS description ('desc') for the fully postprocessed file",
       type = "character", len = 1L, default="postproc",
       instruct = glue("
@@ -280,17 +282,17 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
   }
   
   if ("postprocess/keep_intermediates" %in% fields) {
-    scfg$postprocess$keep_intermediates <- prompt_input("Do you want to keep postprocess intermediate files? This is typically only for debugging.", type = "flag", default = FALSE)
+    ppcfg$keep_intermediates <- prompt_input("Do you want to keep postprocess intermediate files? This is typically only for debugging.", type = "flag", default = FALSE)
   }
   if ("postprocess/overwrite" %in% fields) {
-    scfg$postprocess$overwrite <- prompt_input("Overwrite existing postprocess files?", type = "flag", default = FALSE)
+    ppcfg$overwrite <- prompt_input("Overwrite existing postprocess files?", type = "flag", default = FALSE)
   }
   if ("postprocess/tr" %in% fields) {
-    scfg$postprocess$tr <- prompt_input("Repetition time (in seconds) of the scan sequence", type = "numeric", lower = 0.01, upper = 100, len = 1)
+    ppcfg$tr <- prompt_input("Repetition time (in seconds) of the scan sequence", type = "numeric", lower = 0.01, upper = 100, len = 1)
   }
 
   if ("postprocess/brain_mask" %in% fields) {
-    scfg$postprocess$brain_mask <- prompt_input("Brain mask to be used in postprocessing",
+    ppcfg$brain_mask <- prompt_input("Brain mask to be used in postprocessing",
       instruct = glue("
       \nHere, you can specify a single file (e.g., the brain mask provided by MNI) that can be used
       across datasets. This is especially desirable if you will *apply* that mask to the data, an optional step, as
@@ -311,7 +313,7 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
     )
   }
 
-  return(scfg)
+  return(ppcfg)
 
 }
 
@@ -330,7 +332,7 @@ setup_postprocess_globals <- function(scfg, fields = NULL) {
 #'   particularly because if we filter certain frequencies from the fMRI data, we must filter any regressors that we
 #'   later apply to the data -- that is, confounds and fMRI data must match in frequency content prior to regression.
 #'   See Hallquist, Hwang, & Luna (2013) or Lindquist (2019) for details.
-setup_postproc_steps <- function(scfg = list(), fields = NULL) {
+setup_postproc_steps <- function(ppcfg = list(), fields = NULL) {
   # if (is.null(scfg$postprocess$processing_steps)) {
   #   stop("missing processing_steps. Run out of order?")
   # }
@@ -350,12 +352,11 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   processing_sequence <- character(0)
   for (step in step_order) {
     enabled <- if (step == "scrub_timepoints") {
-      tryCatch(isTRUE(scfg$postprocess$scrubbing$enable) && isTRUE(scfg$postprocess$scrubbing$apply), error = function(e) FALSE)
+      tryCatch(isTRUE(ppcfg$scrubbing$enable) && isTRUE(ppcfg$scrubbing$apply), error = function(e) FALSE)
     } else if (step == "scrub_interpolate") {
-      tryCatch(isTRUE(scfg$postprocess$scrubbing$enable) && isTRUE(scfg$postprocess$scrubbing$interpolate), error = function(e) FALSE)
+      tryCatch(isTRUE(ppcfg$scrubbing$enable) && isTRUE(ppcfg$scrubbing$interpolate), error = function(e) FALSE)
     } else {
-      # all steps other than scrubbing have a single enable/disable
-      tryCatch(isTRUE(scfg$postprocess[[step]]$enable), error = function(e) FALSE)
+      tryCatch(isTRUE(ppcfg[[step]]$enable), error = function(e) FALSE)
     }
     if (enabled) processing_sequence <- c(processing_sequence, step)
   }
@@ -379,8 +380,8 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   # }
 
   # Prompt to override the default order
-  if (is.null(scfg$postprocess$force_processing_order) || "postprocess/force_processing_order" %in% fields) {
-    scfg$postprocess$force_processing_order <- prompt_input("Do you want to specify the postprocessing sequence?",
+  if (is.null(ppcfg$force_processing_order) || "postprocess/force_processing_order" %in% fields) {
+    ppcfg$force_processing_order <- prompt_input("Do you want to specify the postprocessing sequence?",
       instruct = glue("\n
         The order of postprocessing steps is important. For instance, regressors must be filtered to match filtered fMRI data
         before regression can occur. Our default order is intended to maximize denoising and avoid problems with filter mismatches.
@@ -392,7 +393,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   }
 
   # If user wants to override, let them reorder the steps
-  if (isTRUE(scfg$postprocess$force_processing_order)) {
+  if (isTRUE(ppcfg$force_processing_order)) {
     proceed <- FALSE
     while (!proceed) {
       seq_glue <- glue("\nEnabled processing steps:\n\n{paste(seq_along(processing_sequence), processing_sequence, collapse = '\n', sep = '. ')}\n")
@@ -405,9 +406,9 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
       proceed_glue <- glue("\nYou specified the following order:\n\n{paste(seq_along(ss), processing_sequence[ss], collapse = '\n', sep = '. ')}\n")
       proceed <- prompt_input("Is this correct?", instruct = proceed_glue, type = "flag")
     }
-    scfg$postprocess$processing_steps <- processing_sequence[ss]
+    ppcfg$processing_steps <- processing_sequence[ss]
   } else {
-    scfg$postprocess$processing_steps <- processing_sequence
+    ppcfg$processing_steps <- processing_sequence
   }
   
   # if (isTRUE(scfg$postprocess$force_processing_order)) {
@@ -429,7 +430,7 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
   #   scfg$postprocess$processing_steps <- processing_sequence
   # }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure scrubbing of high-motion volumes
@@ -442,10 +443,10 @@ setup_postproc_steps <- function(scfg = list(), fields = NULL) {
 #' @param fields Optional vector of fields to prompt for.
 #' @return Modified `scfg` with `$postprocess$scrubbing` populated.
 #' @keywords internal
-setup_scrubbing <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$scrubbing$enable) ||
-      (isFALSE(scfg$postprocess$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
-    scfg$postprocess$scrubbing$enable <- prompt_input(
+setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$scrubbing$enable) ||
+      (isFALSE(ppcfg$scrubbing$enable) && any(grepl("postprocess/scrubbing/", fields)))) {
+    ppcfg$scrubbing$enable <- prompt_input(
       instruct = glue("\n\n
       -------------------------------------------------------------------------------------------------------------------------
       Scrubbing identifies timepoints (volumes) with excessive motion or artifacts based on a user-defined expression, such as:
@@ -480,34 +481,34 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  if (isFALSE(scfg$postprocess$scrubbing$enable)) return(scfg)
+  if (isFALSE(ppcfg$scrubbing$enable)) return(ppcfg)
 
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
-    if (is.null(scfg$postprocess$scrubbing$add_to_confounds)) fields <- c(fields, "postprocess/scrubbing/add_to_confounds") # cbind spike regressors to confounds
-    if (is.null(scfg$postprocess$scrubbing$interpolate)) fields <- c(fields, "postprocess/scrubbing/interpolate")
-    if (is.null(scfg$postprocess$scrubbing$interpolate_prefix)) scfg$postprocess$scrubbing$interpolate_prefix <- "i"
-    if (is.null(scfg$postprocess$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
-    if (is.null(scfg$postprocess$scrubbing$prefix)) scfg$postprocess$scrubbing$interpolate_prefix <- "x"
+    if (is.null(ppcfg$scrubbing$expression)) fields <- c(fields, "postprocess/scrubbing/expression")
+    if (is.null(ppcfg$scrubbing$add_to_confounds)) fields <- c(fields, "postprocess/scrubbing/add_to_confounds")
+    if (is.null(ppcfg$scrubbing$interpolate)) fields <- c(fields, "postprocess/scrubbing/interpolate")
+    if (is.null(ppcfg$scrubbing$interpolate_prefix)) ppcfg$scrubbing$interpolate_prefix <- "i"
+    if (is.null(ppcfg$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
+    if (is.null(ppcfg$scrubbing$prefix)) ppcfg$scrubbing$prefix <- "x"
   }
 
   if ("postprocess/scrubbing/expression" %in% fields) {
-    scfg$postprocess$scrubbing$expression <- prompt_input(
+    ppcfg$scrubbing$expression <- prompt_input(
       "Scrubbing expression(s)",
       type = "character", split = "\\s+", required = TRUE
     )
   }
 
   if ("postprocess/scrubbing/add_to_confounds" %in% fields) {
-    scfg$postprocess$scrubbing$add_to_confounds <- prompt_input(
+    ppcfg$scrubbing$add_to_confounds <- prompt_input(
       prompt="Add any spike regressors (bad volumes) to postprocessed confounds.tsv file?",
       type = "flag", required = TRUE, default = TRUE
     )
   }
 
   if ("postprocess/scrubbing/interpolate" %in% fields) {
-    scfg$postprocess$scrubbing$interpolate <- prompt_input(
+    ppcfg$scrubbing$interpolate <- prompt_input(
       instruct = glue("\n\
       Do you want to interpolate over scrubbed timepoints before applying temporal filtering,
       confound regression, and/or intensity normalization? This is achieved using cubic natural spline interpolation.
@@ -519,14 +520,14 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   }
   
   if ("postprocess/scrubbing/interpolate_prefix" %in% fields) {
-    scfg$postprocess$scrubbing$interpolate_prefix <- prompt_input(
+    ppcfg$scrubbing$interpolate_prefix <- prompt_input(
       prompt = "File description prefix for interpolated output",
       type = "character", default = "i"
     )
   }
 
   if ("postprocess/scrubbing/apply" %in% fields) {
-    scfg$postprocess$scrubbing$apply <- prompt_input(
+    ppcfg$scrubbing$apply <- prompt_input(
       instruct = glue("\n\
       Do you want to remove the scrubbed timepoints from the fMRI time series?
       \n"),
@@ -537,13 +538,13 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   }
   
   if ("postprocess/scrubbing/prefix" %in% fields) {
-    scfg$postprocess$scrubbing$prefix <- prompt_input(
+    ppcfg$scrubbing$prefix <- prompt_input(
       prompt = "File description prefix for scrubbed output",
       type = "character", default = "x"
     )
   }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure brain masking for postprocessing
@@ -561,11 +562,11 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$apply_mask` entry populated.
 #' @keywords internal
-setup_apply_mask <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$apply_mask$enable) ||
-      (isFALSE(scfg$postprocess$apply_mask$enable) && any(grepl("postprocess/apply_mask/", fields)))) {
+setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$apply_mask$enable) ||
+      (isFALSE(ppcfg$apply_mask$enable) && any(grepl("postprocess/apply_mask/", fields)))) {
 
-    scfg$postprocess$apply_mask$enable <- prompt_input(
+    ppcfg$apply_mask$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
@@ -583,17 +584,17 @@ setup_apply_mask <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  if (isFALSE(scfg$postprocess$apply_mask$enable)) return(scfg)
+  if (isFALSE(ppcfg$apply_mask$enable)) return(ppcfg)
 
   # Determine which fields to prompt for
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$apply_mask$mask_file)) fields <- c(fields, "postprocess/apply_mask/mask_file")
-    if (is.null(scfg$postprocess$apply_mask$prefix)) scfg$postprocess$apply_mask$prefix <- "m"
+    if (is.null(ppcfg$apply_mask$mask_file)) fields <- c(fields, "postprocess/apply_mask/mask_file")
+    if (is.null(ppcfg$apply_mask$prefix)) ppcfg$apply_mask$prefix <- "m"
   }
 
   if ("postprocess/apply_mask/mask_file" %in% fields) {
-    scfg$postprocess$apply_mask$mask_file <- prompt_input(
+    ppcfg$apply_mask$mask_file <- prompt_input(
       prompt = "Path to binary brain mask file (NIfTI)",
       type = "file",
       required = FALSE
@@ -601,13 +602,13 @@ setup_apply_mask <- function(scfg = list(), fields = NULL) {
   }
 
   if ("postprocess/apply_mask/prefix" %in% fields) {
-    scfg$postprocess$apply_mask$prefix <- prompt_input(
+    ppcfg$apply_mask$prefix <- prompt_input(
       prompt = "File description prefix for masked output",
       type = "character", default = "m"
     )
   }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 
@@ -647,11 +648,11 @@ setup_apply_mask <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$confound_regression` entry populated.
 #' @keywords internal
-setup_confound_regression <- function(scfg = list(), fields = NULL) {
-    if (is.null(scfg$postprocess$confound_regression$enable) ||
-      (isFALSE(scfg$postprocess$confound_regression$enable) && any(grepl("postprocess/confound_regression/", fields)))) {
-    
-    scfg$postprocess$confound_regression$enable <- prompt_input(
+setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
+    if (is.null(ppcfg$confound_regression$enable) ||
+      (isFALSE(ppcfg$confound_regression$enable) && any(grepl("postprocess/confound_regression/", fields)))) {
+
+    ppcfg$confound_regression$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Confound regression applies voxelwise multiple regression to remove nuisance signals from the fMRI data.
@@ -674,37 +675,37 @@ setup_confound_regression <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  if (isFALSE(scfg$postprocess$confound_regression$enable)) return(scfg)
+  if (isFALSE(ppcfg$confound_regression$enable)) return(ppcfg)
 
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$confound_regression$columns)) fields <- c(fields, "postprocess/confound_regression/columns")
-    if (is.null(scfg$postprocess$confound_regression$noproc_columns)) fields <- c(fields, "postprocess/confound_regression/noproc_columns")
-    if (is.null(scfg$postprocess$confound_regression$prefix)) scfg$postprocess$confound_regression$prefix <- "r"
+    if (is.null(ppcfg$confound_regression$columns)) fields <- c(fields, "postprocess/confound_regression/columns")
+    if (is.null(ppcfg$confound_regression$noproc_columns)) fields <- c(fields, "postprocess/confound_regression/noproc_columns")
+    if (is.null(ppcfg$confound_regression$prefix)) ppcfg$confound_regression$prefix <- "r"
   } 
     
   if ("postprocess/confound_regression/columns" %in% fields) {
-    scfg$postprocess$confound_regression$columns <- prompt_input(
+    ppcfg$confound_regression$columns <- prompt_input(
       prompt = "Confounds that will be filtered",
       type = "character", split = "\\s+", required = FALSE
     )
   }
 
   if ("postprocess/confound_regression/noproc_columns" %in% fields) {
-    scfg$postprocess$confound_regression$noproc_columns <- prompt_input(
+    ppcfg$confound_regression$noproc_columns <- prompt_input(
       prompt = "Confounds that will not be filtered",
       type = "character", split = "\\s+", required = FALSE
     )
   }
 
   if ("postprocess/confound_regression/prefix" %in% fields) {
-    scfg$postprocess$confound_regression$prefix <- prompt_input(
+    ppcfg$confound_regression$prefix <- prompt_input(
       prompt = "File description prefix for regression output",
       type = "character", default = "r"
     )
   }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure confound calculation for postprocessing
@@ -724,11 +725,11 @@ setup_confound_regression <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$confound_calculate` entry updated.
 #' @keywords internal
-setup_confound_calculate <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$confound_calculate$enable) ||
-      (isFALSE(scfg$postprocess$confound_calculate$enable) && any(grepl("postprocess/confound_calculate/", fields)))) {
-    
-    scfg$postprocess$confound_calculate$enable <- prompt_input(
+setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$confound_calculate$enable) ||
+      (isFALSE(ppcfg$confound_calculate$enable) && any(grepl("postprocess/confound_calculate/", fields)))) {
+
+    ppcfg$confound_calculate$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Confound calculation creates a nuisance regressor file that includes relevant noise signals (e.g., motion, 
@@ -748,34 +749,34 @@ setup_confound_calculate <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  if (isFALSE(scfg$postprocess$confound_calculate$enable)) return(scfg)
+  if (isFALSE(ppcfg$confound_calculate$enable)) return(ppcfg)
 
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$confound_calculate$columns)) fields <- c(fields, "postprocess/confound_calculate/columns")
-    if (is.null(scfg$postprocess$confound_calculate$noproc_columns)) fields <- c(fields, "postprocess/confound_calculate/noproc_columns")
-    if (is.null(scfg$postprocess$confound_calculate$demean)) fields <- c(fields, "postprocess/confound_calculate/demean")
+    if (is.null(ppcfg$confound_calculate$columns)) fields <- c(fields, "postprocess/confound_calculate/columns")
+    if (is.null(ppcfg$confound_calculate$noproc_columns)) fields <- c(fields, "postprocess/confound_calculate/noproc_columns")
+    if (is.null(ppcfg$confound_calculate$demean)) fields <- c(fields, "postprocess/confound_calculate/demean")
   }
 
   if ("postprocess/confound_calculate/columns" %in% fields) {
-    scfg$postprocess$confound_calculate$columns <- prompt_input(
+    ppcfg$confound_calculate$columns <- prompt_input(
       prompt="Confounds that will be filtered",
       type = "character", split = "\\s+", required = FALSE
     )
   }
 
   if ("postprocess/confound_calculate/noproc_columns" %in% fields) {
-    scfg$postprocess$confound_calculate$noproc_columns <- prompt_input(
+    ppcfg$confound_calculate$noproc_columns <- prompt_input(
       prompt="Confounds that will not be filtered",
       type = "character", split = "\\s+", required = FALSE
     )
   }
   
   if ("postprocess/confound_calculate/demean" %in% fields) {
-    scfg$postprocess$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
+    ppcfg$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
   }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure intensity normalization settings for postprocessing
@@ -789,10 +790,10 @@ setup_confound_calculate <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$intensity_normalize` entry updated.
 #' @keywords internal
-setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$intensity_normalize$enable) ||
-    (isFALSE(scfg$postprocess$intensity_normalize$enable) && any(grepl("postprocess/intensity_normalize/", fields)))) {
-    scfg$postprocess$intensity_normalize$enable <- prompt_input(
+setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$intensity_normalize$enable) ||
+    (isFALSE(ppcfg$intensity_normalize$enable) && any(grepl("postprocess/intensity_normalize/", fields)))) {
+    ppcfg$intensity_normalize$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Intensity normalization rescales the BOLD signal so that the global median intensity of the 4D image
@@ -808,31 +809,31 @@ setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
   }
   
   # Exit early if user disabled the step
-  if (isFALSE(scfg$postprocess$intensity_normalize$enable)) return(scfg)
+  if (isFALSE(ppcfg$intensity_normalize$enable)) return(ppcfg)
 
 
   # if fields passed in, only bother use about the requested fields
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$intensity_normalize$global_median)) fields <- c(fields, "postprocess/intensity_normalize/global_median")
-    if (is.null(scfg$postprocess$intensity_normalize$prefix)) scfg$postprocess$intensity_normalize$prefix <- "n"
+    if (is.null(ppcfg$intensity_normalize$global_median)) fields <- c(fields, "postprocess/intensity_normalize/global_median")
+    if (is.null(ppcfg$intensity_normalize$prefix)) ppcfg$intensity_normalize$prefix <- "n"
   }
 
   if ("postprocess/intensity_normalize/global_median" %in% fields) {
-    scfg$postprocess$intensity_normalize$global_median <- prompt_input(
+    ppcfg$intensity_normalize$global_median <- prompt_input(
       prompt="Global (4D) median intensity",
       type = "numeric", lower = -1e8, upper = 1e8, default = 10000
     )
   }
 
   if ("postprocess/intensity_normalize/prefix" %in% fields) {
-    scfg$postprocess$intensity_normalize$prefix <- prompt_input(
+    ppcfg$intensity_normalize$prefix <- prompt_input(
       prompt="File description prefix for normalized output",
       type = "character", default = "n"
     )
   }
 
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure spatial smoothing settings for fMRI postprocessing
@@ -855,9 +856,9 @@ setup_intensity_normalization <- function(scfg = list(), fields = NULL) {
 #' especially in standard space. This is accomplished using FSL's contrast-sensitive susan smoothing command.
 #'
 #' @keywords internal
-setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$spatial_smooth$enable) || (isFALSE(scfg$postprocess$spatial_smooth$enable) && any(grepl("postprocess/spatial_smooth/", fields)))) {
-    scfg$postprocess$spatial_smooth$enable <- prompt_input(
+setup_spatial_smooth <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$spatial_smooth$enable) || (isFALSE(ppcfg$spatial_smooth$enable) && any(grepl("postprocess/spatial_smooth/", fields)))) {
+    ppcfg$spatial_smooth$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Spatial smoothing applies a 3D Gaussian kernel to the BOLD fMRI data,
@@ -875,29 +876,29 @@ setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
   }
   
   # skip out if spatial smoothing is not requested
-  if (isFALSE(scfg$postprocess$spatial_smooth$enable)) return(scfg)
+  if (isFALSE(ppcfg$spatial_smooth$enable)) return(ppcfg)
   
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$spatial_smooth$fwhm_mm)) fields <- c(fields, "postprocess/spatial_smooth/fwhm_mm")
-    if (is.null(scfg$postprocess$spatial_smooth$prefix)) scfg$postprocess$spatial_smooth$prefix <- "s"
+    if (is.null(ppcfg$spatial_smooth$fwhm_mm)) fields <- c(fields, "postprocess/spatial_smooth/fwhm_mm")
+    if (is.null(ppcfg$spatial_smooth$prefix)) ppcfg$spatial_smooth$prefix <- "s"
   }
 
   if ("postprocess/spatial_smooth/fwhm_mm" %in% fields) {
-    scfg$postprocess$spatial_smooth$fwhm_mm <- prompt_input(
+    ppcfg$spatial_smooth$fwhm_mm <- prompt_input(
       prompt="Spatial smoothing FWHM (mm)",
       type = "numeric", lower = 0.1, upper = 100
     )
   }
 
   if ("postprocess/spatial_smooth/prefix" %in% fields) {
-    scfg$postprocess$spatial_smooth$prefix <- prompt_input(
+    ppcfg$spatial_smooth$prefix <- prompt_input(
       prompt = "File description prefix for smoothed output",
       type = "character", default = "s"
     )
   }
   
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure temporal filtering settings for postprocessing
@@ -912,11 +913,11 @@ setup_spatial_smooth <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$temporal_filter` entry updated.
 #' @keywords internal
-setup_temporal_filter <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$temporal_filter$enable) ||
-      (isFALSE(scfg$postprocess$temporal_filter$enable) && any(grepl("postprocess/temporal_filter/", fields)))) {
-    
-    scfg$postprocess$temporal_filter$enable <- prompt_input(
+setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$temporal_filter$enable) ||
+      (isFALSE(ppcfg$temporal_filter$enable) && any(grepl("postprocess/temporal_filter/", fields)))) {
+
+    ppcfg$temporal_filter$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Temporal filtering removes low- and/or high-frequency components from the fMRI time series.
@@ -943,31 +944,31 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
   }
 
   # Exit early if user disabled the step
-  if (isFALSE(scfg$postprocess$temporal_filter$enable)) return(scfg)
+  if (isFALSE(ppcfg$temporal_filter$enable)) return(ppcfg)
 
   # Determine which fields to prompt for
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$temporal_filter$low_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/low_pass_hz")
-    if (is.null(scfg$postprocess$temporal_filter$high_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/high_pass_hz")
-    if (is.null(scfg$postprocess$temporal_filter$prefix)) scfg$postprocess$temporal_filter$prefix <- "f"
-    if (is.null(scfg$postprocess$temporal_filter$method)) fields <- c(fields, "postprocess/temporal_filter/method")
+    if (is.null(ppcfg$temporal_filter$low_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/low_pass_hz")
+    if (is.null(ppcfg$temporal_filter$high_pass_hz)) fields <- c(fields, "postprocess/temporal_filter/high_pass_hz")
+    if (is.null(ppcfg$temporal_filter$prefix)) ppcfg$temporal_filter$prefix <- "f"
+    if (is.null(ppcfg$temporal_filter$method)) fields <- c(fields, "postprocess/temporal_filter/method")
   }
 
   if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
-    scfg$postprocess$temporal_filter$low_pass_hz <- prompt_input("Low-pass cutoff (Hz) ", type = "numeric", lower = 0)
+    ppcfg$temporal_filter$low_pass_hz <- prompt_input("Low-pass cutoff (Hz) ", type = "numeric", lower = 0)
   }
   
   if ("postprocess/temporal_filter/high_pass_hz" %in% fields) {
-    scfg$postprocess$temporal_filter$high_pass_hz <- prompt_input("High-pass cutoff (Hz) ", type = "numeric", lower = 0)
+    ppcfg$temporal_filter$high_pass_hz <- prompt_input("High-pass cutoff (Hz) ", type = "numeric", lower = 0)
   }
 
-  if (!is.null(scfg$postprocess$temporal_filter$low_pass_hz) && !is.null(scfg$postprocess$temporal_filter$high_pass_hz) &&
-    scfg$postprocess$temporal_filter$low_pass_hz > scfg$postprocess$temporal_filter$high_pass_hz) stop("Low-pass cutoff cannot be larger than high-pass cutoff")
+  if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
+    ppcfg$temporal_filter$low_pass_hz > ppcfg$temporal_filter$high_pass_hz) stop("Low-pass cutoff cannot be larger than high-pass cutoff")
 
 
   if ("postprocess/temporal_filter/method" %in% fields) {
-    scfg$postprocess$temporal_filter$method <- prompt_input(
+    ppcfg$temporal_filter$method <- prompt_input(
       prompt = "Filtering method (fslmaths/butterworth)",
       type = "character", among = c("fslmaths", "butterworth"), default = "fslmaths",
       instruct = glue("\n
@@ -978,13 +979,13 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
   }
   
   if ("postprocess/temporal_filter/prefix" %in% fields) {
-    scfg$postprocess$temporal_filter$prefix <- prompt_input(
+    ppcfg$temporal_filter$prefix <- prompt_input(
       prompt="File description prefix for filtered output",
       type = "character", default = "f"
     )
   }
   
-  return(scfg)
+  return(ppcfg)
 }
 
 #' Configure ICA-AROMA denoising application in postprocessing
@@ -1004,11 +1005,11 @@ setup_temporal_filter <- function(scfg = list(), fields = NULL) {
 #'
 #' @return A modified version of `scfg` with the `$postprocess$apply_aroma` entry updated.
 #' @keywords internal
-setup_apply_aroma <- function(scfg = list(), fields = NULL) {
-  if (is.null(scfg$postprocess$apply_aroma$enable) ||
-      (isFALSE(scfg$postprocess$apply_aroma$enable) && any(grepl("postprocess/apply_aroma/", fields)))) {
-    
-    scfg$postprocess$apply_aroma$enable <- prompt_input(
+setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$apply_aroma$enable) ||
+      (isFALSE(ppcfg$apply_aroma$enable) && any(grepl("postprocess/apply_aroma/", fields)))) {
+
+    ppcfg$apply_aroma$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       ICA-AROMA identifies motion-related independent components from the fMRI data and outputs
@@ -1028,25 +1029,25 @@ setup_apply_aroma <- function(scfg = list(), fields = NULL) {
     )
   }
 
-  if (isFALSE(scfg$postprocess$apply_aroma$enable)) return(scfg)
+  if (isFALSE(ppcfg$apply_aroma$enable)) return(ppcfg)
 
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(scfg$postprocess$apply_aroma$nonaggressive)) fields <- c(fields, "postprocess/apply_aroma/nonaggressive")
-    if (is.null(scfg$postprocess$apply_aroma$prefix)) scfg$postprocess$apply_aroma$prefix <- "a"
+    if (is.null(ppcfg$apply_aroma$nonaggressive)) fields <- c(fields, "postprocess/apply_aroma/nonaggressive")
+    if (is.null(ppcfg$apply_aroma$prefix)) ppcfg$apply_aroma$prefix <- "a"
   }
 
   if ("postprocess/apply_aroma/nonaggressive" %in% fields) {
-    scfg$postprocess$apply_aroma$nonaggressive <- prompt_input("Use nonaggressive denoising?", type = "flag", default = TRUE)
+    ppcfg$apply_aroma$nonaggressive <- prompt_input("Use nonaggressive denoising?", type = "flag", default = TRUE)
   }
   
   if ("postprocess/apply_aroma/prefix" %in% fields) {
-    scfg$postprocess$apply_aroma$prefix <- prompt_input(
+    ppcfg$apply_aroma$prefix <- prompt_input(
       prompt="File description prefix for AROMA output",
       type = "character", default = "a"
     )
   }
   
-  return(scfg)
+  return(ppcfg)
 }
 
