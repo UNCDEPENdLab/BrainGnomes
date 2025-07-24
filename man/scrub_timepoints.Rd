@@ -9,7 +9,6 @@ scrub_timepoints(
   censor_file = NULL,
   prefix = "i",
   confound_files = NULL,
-  interpolate = FALSE,
   overwrite = FALSE,
   lg = NULL
 )
@@ -23,8 +22,6 @@ scrub_timepoints(
 
 \item{confound_files}{Optional character vector of confound or regressor files to update.}
 
-\item{interpolate}{Logical; if \code{TRUE}, censored rows in \code{confound_files} are replaced using natural spline interpolation rather than being removed.}
-
 \item{overwrite}{Logical; whether to overwrite the output file if it exists.}
 
 \item{lg}{Optional \code{Logger} object for messages.}
@@ -33,6 +30,6 @@ scrub_timepoints(
 Character string giving the path to the scrubbed NIfTI file.
 }
 \description{
-Removes timepoints flagged in \code{censor_file} from a 4D NIfTI image. If \code{confound_files} are supplied, the corresponding rows are either removed or interpolated so that the resulting files have matching length.
+Removes timepoints flagged in \code{censor_file} from a 4D NIfTI image. If \code{confound_files} are supplied, the corresponding rows are removed so that the resulting files have matching length.
 }
 \keyword{internal}
