@@ -101,6 +101,11 @@ edit_project <- function(input) {
       fields <- info$fields
       setup_fn <- info$setup_fn
 
+      if (area == "Postprocessing") {
+        scfg <- manage_postprocess_streams(scfg, fields = paste0(prefix, fields), allow_empty = TRUE)
+        next
+      }
+
       if (length(fields) == 0) {
         message(glue::glue("No individual fields listed for {area}, opening full setup..."))
         scfg <- setup_fn(scfg)
