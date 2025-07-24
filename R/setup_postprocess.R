@@ -495,7 +495,7 @@ setup_scrubbing <- function(scfg = list(), fields = NULL) {
   if ("postprocess/scrubbing/expression" %in% fields) {
     scfg$postprocess$scrubbing$expression <- prompt_input(
       "Scrubbing expression(s)",
-      type = "character", split = "\\s+", required = TRUE
+      type = "character", required = TRUE # expression is a single character string
     )
   }
 

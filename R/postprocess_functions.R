@@ -198,7 +198,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     } else if (step == "scrub_interpolate") {
       lg$info("Applying spline interpolate to scrubbed timepoints")
       cur_file <- scrub_interpolate(
-        cur_file, censor_file = censor_file, 
+        cur_file, censor_file = censor_file, confound_files = to_regress,
         prefix = cfg$scrubbing$interpolate_prefix, overwrite=cfg$overwrite, lg=lg
       )
       file_set <- c(file_set, cur_file)
@@ -1272,7 +1272,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
       const_cols <- sapply(df, function(x) all(x == x[1L]))
       if (any(const_cols)) df <- df[, !const_cols, drop = FALSE]
-      df <- cbind(1, df)
+      df <- cbind(1, df) # add intercept
 
       data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
     }
