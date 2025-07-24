@@ -324,6 +324,10 @@ apply_mask <- function(in_file, mask_file, prefix="m", overwrite=FALSE, lg=NULL,
 #'   containing a binary vector of `1`s (keep) and `0`s (scrub) for each timepoint.
 #' @param prefix Optional character prefix to prepend to the interpolated output
 #'   filename (default is `"i"`).
+#' @param confound_files Optional character vector of confound or regressor
+#'   files to update alongside the fMRI data. Rows corresponding to interpolated
+#'   volumes are filled in using natural splines with nearest-neighbor
+#'   extrapolation.
 #' @param overwrite Logical indicating whether to overwrite an existing interpolated
 #'   file (default is `FALSE`).
 #' @param lg Optional `Logger` object (from the `lgr` package) for logging output.
@@ -342,11 +346,13 @@ apply_mask <- function(in_file, mask_file, prefix="m", overwrite=FALSE, lg=NULL,
 #' that performs the actual interpolation.
 #'
 #' @keywords internal
-scrub_interpolate <- function(in_file, censor_file, prefix="i", overwrite=FALSE, lg=NULL) {
+scrub_interpolate <- function(in_file, censor_file, prefix="i",
+                             confound_files = NULL, overwrite=FALSE, lg=NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_file_exists(censor_file)
   checkmate::assert_string(prefix)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
   
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
@@ -373,16 +379,61 @@ scrub_interpolate <- function(in_file, censor_file, prefix="i", overwrite=FALSE,
   }
 
   # run 4D interpolation with Rcpp function
+
   natural_spline_4d(in_file, t_interpolate = t_interpolate, edge_nn=TRUE, outfile = out_file, internal = TRUE)
-  
+
+  if (length(confound_files) > 0 && length(t_interpolate) > 0) {
+    good_idx <- which(censor == 1L)
+    first_valid <- min(good_idx)
+    last_valid <- max(good_idx)
+    for (cf in confound_files) {
+      if (!checkmate::test_file_exists(cf)) {
+        lg$warn("Confound file {cf} not found; skipping")
+        next
+      }
+      df <- data.table::fread(cf)
+      for (jj in seq_along(df)) {
+        sfun <- splinefun(good_idx, df[[jj]][good_idx], method = "natural")
+        yint <- sfun(t_interpolate)
+        yint[t_interpolate < first_valid] <- df[[jj]][first_valid]
+        yint[t_interpolate > last_valid] <- df[[jj]][last_valid]
+        df[[jj]][t_interpolate] <- yint
+      }
+      has_header <- !all(grepl("^V[0-9]+$", names(df)))
+      data.table::fwrite(df, file = cf, sep = "\t", col.names = has_header)
+    }
+  }
+
   return(out_file)
 }
 
 
-scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=FALSE, lg=NULL) {
+#' Remove Censored Volumes and Update Confounds
+#'
+#' Removes timepoints flagged in a censor file from a 4D NIfTI image. When
+#' \code{confound_files} are provided, the corresponding rows in those files
+#' are removed so that the time series remain aligned.
+#'
+#' @param in_file Path to the input 4D NIfTI file.
+#' @param censor_file Path to the 1D censor vector used to identify volumes to
+#'   remove.
+#' @param prefix Optional prefix for the scrubbed output file.
+#' @param confound_files Optional character vector of confound or regressor
+#'   files to update alongside the fMRI data.
+#'
+#' @param overwrite Logical; overwrite the output NIfTI if it exists.
+#' @param lg Optional \code{Logger} object for message output.
+#'
+#' @return The path to the scrubbed NIfTI image.
+#' @keywords internal
+
+scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i",
+                             confound_files = NULL,
+                             overwrite=FALSE, lg=NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(prefix)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
   
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
@@ -417,7 +468,20 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
   # run 4D interpolation with Rcpp function
   remove_nifti_volumes(in_file, t_scrub, out_file)
 
-  # TODO: scrub other outputs -- confounds etc.
+  if (length(confound_files) > 0 && length(t_scrub) > 0) {
+    for (cf in confound_files) {
+      if (!checkmate::test_file_exists(cf)) {
+        lg$warn("Confound file {cf} not found; skipping")
+        next
+      }
+      df <- data.table::fread(cf)
+      df <- df[-t_scrub, , drop = FALSE]
+      new_len <- nrow(df)
+      has_header <- !all(grepl("^V[0-9]+$", names(df)))
+      data.table::fwrite(df, file = cf, sep = "\t", col.names = has_header)
+    }
+    writeLines(rep("1", new_len), con = censor_file)
+  }
   
   return(out_file)
 }
