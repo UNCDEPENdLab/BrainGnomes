@@ -293,7 +293,7 @@ apply_mask <- function(in_file, mask_file, prefix="m", overwrite=FALSE, lg=NULL,
   checkmate::assert_string(prefix)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -349,7 +349,7 @@ scrub_interpolate <- function(in_file, censor_file, prefix="i", overwrite=FALSE,
   checkmate::assert_flag(overwrite)
   
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -385,7 +385,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
   checkmate::assert_flag(overwrite)
   
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -464,7 +464,7 @@ temporal_filter <- function(in_file, prefix="f", low_pass_hz=0, high_pass_hz=1/1
   checkmate::assert_flag(overwrite)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -533,7 +533,7 @@ apply_aroma <- function(in_file, prefix = "a", mixing_file, noise_ics, overwrite
   checkmate::assert_string(prefix)
   checkmate::assert_flag(overwrite)
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -607,7 +607,7 @@ spatial_smooth <- function(in_file, prefix = "s", fwhm_mm = 6, brain_mask = NULL
   checkmate::assert_number(fwhm_mm, lower = 0.1)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -673,7 +673,7 @@ intensity_normalize <- function(in_file, prefix="n", brain_mask=NULL, global_med
   checkmate::assert_number(global_median)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -722,7 +722,7 @@ confound_regression <- function(in_file, to_regress=NULL, censor_file = NULL, pr
   checkmate::assert_string(prefix)
 
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -790,7 +790,7 @@ confound_regression <- function(in_file, to_regress=NULL, censor_file = NULL, pr
 compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
   # use the 98 - 2 method from FSL (featlib.tcl ca. line 5345)
   if (!checkmate::test_class(lg, "Logger")) {
-    lg <- lgr::get_logger_glue() # use root logger
+    lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
@@ -925,7 +925,7 @@ resample_template_to_img <- function(
 #' @keywords internal
 compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, lg = NULL) {
   if (is.null(confounds_df) || is.null(spike_volume)) return(NULL)
-  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue()
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue("BrainGnomes")
   checkmate::assert_character(spike_volume, null.ok = TRUE)
 
   spikes <- do.call(cbind, lapply(seq_along(spike_volume), function(ii) {
@@ -1060,7 +1060,7 @@ get_censor_file <- function(input_bids_info) {
 #' @keywords internal
 postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                   input_bids_info, fsl_img = NULL, lg = NULL) {
-  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue()
+  if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue("BrainGnomes")
 
   to_regress <- NULL
   if (isTRUE(cfg$confound_regression$enable) ||
