@@ -373,16 +373,43 @@ scrub_interpolate <- function(in_file, censor_file, prefix="i", overwrite=FALSE,
   }
 
   # run 4D interpolation with Rcpp function
+
   natural_spline_4d(in_file, t_interpolate = t_interpolate, edge_nn=TRUE, outfile = out_file, internal = TRUE)
-  
+
   return(out_file)
 }
 
 
-scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=FALSE, lg=NULL) {
+#' Remove Censored Volumes and Update Confounds
+#'
+#' Removes timepoints flagged in a censor file from a 4D NIfTI image. When
+#' \code{confound_files} are provided, the corresponding rows in those files
+#' are either dropped or filled in using natural spline interpolation so that
+#' the time series remain aligned.
+#'
+#' @param in_file Path to the input 4D NIfTI file.
+#' @param censor_file Path to the 1D censor vector used to identify volumes to
+#'   remove.
+#' @param prefix Optional prefix for the scrubbed output file.
+#' @param confound_files Optional character vector of confound or regressor
+#'   files to update alongside the fMRI data.
+#' @param interpolate Logical; if \code{TRUE}, censored rows in
+#'   \code{confound_files} are replaced via spline interpolation instead of
+#'   being removed.
+#' @param overwrite Logical; overwrite the output NIfTI if it exists.
+#' @param lg Optional \code{Logger} object for message output.
+#'
+#' @return The path to the scrubbed NIfTI image.
+#' @keywords internal
+
+scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i",
+                             confound_files = NULL, interpolate = FALSE,
+                             overwrite=FALSE, lg=NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(prefix)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
+  checkmate::assert_flag(interpolate)
   
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue() # use root logger
@@ -417,7 +444,29 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i", overwrite=
   # run 4D interpolation with Rcpp function
   remove_nifti_volumes(in_file, t_scrub, out_file)
 
-  # TODO: scrub other outputs -- confounds etc.
+  if (length(confound_files) > 0 && length(t_scrub) > 0) {
+    for (cf in confound_files) {
+      if (!checkmate::test_file_exists(cf)) {
+        lg$warn("Confound file {cf} not found; skipping")
+        next
+      }
+      df <- data.table::fread(cf)
+      if (interpolate) {
+        good_idx <- setdiff(seq_len(nrow(df)), t_scrub)
+        for (jj in seq_along(df)) {
+          sfun <- splinefun(good_idx, df[[jj]][good_idx], method = "natural")
+          df[[jj]][t_scrub] <- sfun(t_scrub)
+        }
+        new_len <- nrow(df)
+      } else {
+        df <- df[-t_scrub, , drop = FALSE]
+        new_len <- nrow(df)
+      }
+      has_header <- !all(grepl("^V[0-9]+$", names(df)))
+      data.table::fwrite(df, file = cf, sep = "\t", col.names = has_header)
+    }
+    writeLines(rep("1", new_len), con = censor_file)
+  }
   
   return(out_file)
 }
