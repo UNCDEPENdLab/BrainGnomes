@@ -4,7 +4,7 @@
 \alias{process_subject}
 \title{Preprocess a single subject}
 \usage{
-process_subject(scfg, sub_cfg = NULL, steps = NULL)
+process_subject(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL)
 }
 \arguments{
 \item{scfg}{A list of configuration settings}
@@ -12,6 +12,9 @@ process_subject(scfg, sub_cfg = NULL, steps = NULL)
 \item{sub_cfg}{A data.frame of subject configuration settings}
 
 \item{steps}{A named logical vector indicating which steps to run}
+
+\item{postprocess_streams}{Optional character vector of postprocess configuration names to run. If NULL,
+all available streams will be run.}
 }
 \value{
 A logical value indicating whether the preprocessing was successful

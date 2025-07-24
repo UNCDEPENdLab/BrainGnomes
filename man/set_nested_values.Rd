@@ -5,21 +5,28 @@
 \title{Assign values to a nested list using key-value strings}
 \usage{
 set_nested_values(assignments, sep = "/", lst = NULL, type_values = TRUE)
+
+set_nested_values(assignments, sep = "/", lst = NULL, type_values = TRUE)
 }
 \arguments{
-\item{assignments}{A character vector of assignment strings (e.g., \code{"a/b=1"}, \code{"x/y/z=TRUE"}).}
+\item{assignments}{Either a character vector of assignment strings (e.g., \code{"a/b=1"})
+or a named list where names encode nested keys (e.g., \code{list("a/b" = 1)}).}
 
 \item{sep}{A character used to separate keys. Default is \code{"/"}.}
 
-\item{lst}{Optional list to update. If \code{NULL}, a new list is created from scratch.}
+\item{lst}{Optional list to update. If \code{NULL}, a new list is created.}
 
-\item{type_values}{Logical; whether to attempt to convert right-hand side strings to relevant data
-types using \code{type.convert}.}
+\item{type_values}{Logical; whether to convert character values to appropriate types.}
 }
 \value{
+A nested list with the specified keys and values.
+
 A nested list with the specified keys and values.
 }
 \description{
 Parses assignments like \code{"a/b/c=10"} and returns \code{list(a = list(b = list(c = 10)))}.
+
+Parses assignments like \code{"a/b/c=10"} or named lists like \code{list("a/b/c" = 10)} and returns
+\code{list(a = list(b = list(c = 10)))}.
 }
 \keyword{internal}

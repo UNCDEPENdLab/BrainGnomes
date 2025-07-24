@@ -10,7 +10,8 @@ run_project(
   prompt = TRUE,
   debug = FALSE,
   force = FALSE,
-  subject_filter = NULL
+  subject_filter = NULL,
+  postprocess_streams = NULL
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").}
 subjects (and optionally sessions) to process. When a data.frame is
 provided, it must contain a \code{sub_id} column and may include a \code{ses_id}
 column to filter on specific subject/session combinations.}
+
+\item{postprocess_streams}{Optional character vector specifying which postprocessing streams should be run}
 }
 \value{
 A logical value indicating whether the processing pipeline was successfully run.

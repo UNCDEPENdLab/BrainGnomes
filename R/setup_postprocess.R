@@ -29,7 +29,6 @@
 #' edit, or delete postprocessing streams. This wrapper is called by
 #' `setup_project()` and invokes `setup_postprocess()` for each stream.
 #'
-#' @inheritParams setup_postprocess
 #' @return Modified `scfg` with one or more postprocessing streams
 #' @keywords internal
 setup_postprocess_streams <- function(scfg = list(), fields = NULL) {

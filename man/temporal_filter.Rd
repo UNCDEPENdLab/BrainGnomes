@@ -13,7 +13,7 @@ temporal_filter(
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL,
-  method = "fslmaths"
+  method = c("fslmaths", "butterworth")
 )
 }
 \arguments{
@@ -33,17 +33,17 @@ temporal_filter(
 
 \item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
 
-\item{method}{Character. \code{"fslmaths"} to use FSL's \code{-bptf} or \code{"butterworth"} to use the Butterworth implementation.}
+\item{method}{Character. "fslmaths" to use FSL's -bptf or "butterworth" for a Butterworth filter.}
 }
 \value{
 The path to the temporally filtered output NIfTI file.
 }
 \description{
-Apply high-pass and/or low-pass temporal filtering to an fMRI time series. By
-default this calls FSL's \code{fslmaths -bptf}, but a Butterworth filter
-implemented in \code{butterworth_filter_4d} can also be used. Filter cutoffs are
-specified in Hz; for the FSL implementation they are internally converted to
-sigma values in volumes using a standard FWHM-to-sigma transformation.
+Apply high-pass and/or low-pass temporal filtering to an fMRI time series.
+By default this calls FSL's \code{fslmaths -bptf} but a Butterworth filter
+implemented in \code{butterworth_filter_4d} can also be used. Filter cutoffs
+are specified in Hz; for the FSL implementation they are internally converted
+to sigma values in volumes using a standard FWHM-to-sigma transformation.
 }
 \details{
 The mean image is added back after filtering to preserve signal intensity. Filtering

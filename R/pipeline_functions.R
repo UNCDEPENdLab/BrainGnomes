@@ -572,12 +572,53 @@ file_sans_ext <- function(file) {
 }
 
 
-# avoiding dplyr dependency
+#' Return the Next Values in a Vector (Lead)
+#'
+#' Returns a copy of the input vector with values shifted \code{n} steps forward, inserting \code{default} at the end.
+#' This function mimics \code{dplyr::lead()} but is implemented without external dependencies.
+#'
+#' @param x A vector.
+#' @param n An integer indicating the number of positions to lead by. Defaults to 1. If negative, this is equivalent to lagging.
+#' @param default A value to use for padding the end of the returned vector. Defaults to \code{NA}.
+#'
+#' @return A vector of the same type as \code{x}, with values shifted \code{n} places forward.
+#'
+#' @seealso \code{\link{lag}}, \code{\link[dplyr]{lead}}
+#'
+#' @examples
+#' lead(1:5)
+#' lead(1:5, 2)
+#' lead(1:5, -1)  # Equivalent to lag(1:5)
+#'
+#' @keywords internal
+#' @importFrom utils tail
+#' @noRd
 lead <- function(x, n = 1L, default = NA) {
   if (n < 0L) return(lag(x, -n, default))
   c(tail(x, -n), rep(default, n))
 }
 
+#' Return the Previous Values in a Vector (Lag)
+#'
+#' Returns a copy of the input vector with values shifted \code{n} steps backward, inserting \code{default} at the beginning.
+#' This function mimics \code{dplyr::lag()} but avoids external dependencies.
+#'
+#' @param x A vector.
+#' @param n An integer specifying how many positions to lag by. Defaults to 1. If negative, this is equivalent to leading.
+#' @param default A value to pad the beginning of the returned vector. Defaults to \code{NA}.
+#'
+#' @return A vector of the same type as \code{x}, with values shifted \code{n} places backward.
+#'
+#' @seealso \code{\link{lead}}, \code{\link[dplyr]{lag}}
+#'
+#' @examples
+#' lag(1:5)
+#' lag(1:5, 2)
+#' lag(1:5, -1)  # Equivalent to lead(1:5)
+#'
+#' @keywords internal
+#' @importFrom utils head
+#' @noRd
 lag <- function(x, n = 1L, default = NA) {
   if (n < 0L) return(lead(x, -n, default))
   c(rep(default, n), head(x, -n))
