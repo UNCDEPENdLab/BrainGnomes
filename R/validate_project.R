@@ -163,12 +163,6 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     scfg$bids_conversion$clear_cache <- NULL
   }
 
-  if (!checkmate::test_flag(scfg$bids_conversion$validate_bids)) {
-    message("Invalid validate_bids flag in $bids_conversion. You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/validate_bids")
-    scfg$bids_conversion$validate_bids <- NULL
-  }
-
   # Postprocessing settings validation (function in setup_postproc.R)
   postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)
   scfg$postprocess <- postprocess_result$postprocess
@@ -258,10 +252,10 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$temporal_filter. Defaulting to 'f'"))
       ppcfg$temporal_filter$prefix <- "f"
     }
-    if (!checkmate::test_string(ppcfg$temporal_filter$method) ||
-        !(ppcfg$temporal_filter$method %in% c("fslmaths", "butterworth"))) {
-      if (!quiet) message(glue("Invalid method in $postprocess${cfg_name}$temporal_filter. Defaulting to 'fslmaths'"))
-      ppcfg$temporal_filter$method <- "fslmaths"
+    if (!checkmate::test_string(ppcfg$temporal_filter$method) || !(ppcfg$temporal_filter$method %in% c("fslmaths", "butterworth"))) {
+      if (!quiet) message(glue("Invalid method in $postprocess${cfg_name}$temporal_filter. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/temporal_filter/method")
+      ppcfg$temporal_filter$method <- NULL
     }
   }
 
@@ -298,11 +292,6 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/confound_calculate/demean")
       ppcfg$confound_calculate$demean <- NULL
     }
-    # if (!checkmate::test_string(ppcfg$confound_calculate$output_file)) {
-    #   if (!quiet) message("Invalid output_file field in $postprocess$confound_calculate")
-    #   gaps <- c(gaps, "postprocess/confound_calculate/output_file")
-    #   ppcfg$confound_calculate$output_file <- NULL
-    # }
     if (!checkmate::test_character(ppcfg$confound_calculate$columns)) {
       if (!quiet) message(glue("Invalid columns field in $postprocess${cfg_name}$confound_calculate"))
       gaps <- c(gaps, "postprocess/confound_calculate/columns")

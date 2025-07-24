@@ -209,7 +209,6 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     loc_sub_dicoms = sub_dir,
     loc_bids_root = scfg$metadata$bids_directory,
     heudiconv_heuristic = scfg$bids_conversion$heuristic_file,
-    validate_bids = scfg$bids_conversion$validate_bids,
     sub_id = sub_id,
     ses_id = ses_id
   )

@@ -22,7 +22,6 @@ bids_conversion:
   heuristic_file: /proj/mnhallqlab/projects/preproc_pipeline_test_data/heuristic.py
   overwrite: no
   clear_cache: no
-  validate_bids: no
 compute_environment:
   heudiconv_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/heudiconv_latest.sif
   fmriprep_container: /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg

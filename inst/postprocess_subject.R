@@ -37,7 +37,7 @@ for (pkg in c("glue", "oro.nifti", "checkmate", "data.table", "yaml")) {
 #   "--spatial_smooth/prefix='s' --apply_aroma/nonaggressive='TRUE' --apply_aroma/prefix='a' --temporal_filter/low_pass_hz='0'",
 #   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --intensity_normalize/global_median='10000' --intensity_normalize/prefix='n'",
 #   "--confound_calculate/columns='filt*' --confound_calculate/noproc_columns='nofilt*' --confound_calculate/demean='TRUE'",
-#   "--confound_calculate/output_file='confound.txt' --force_processing_order='FALSE'",
+#   "--force_processing_order='FALSE'",
 #   "--input='/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294'",
 #   "--fsl_img='/proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg'"
 # ), collapse = " ")

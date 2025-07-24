@@ -142,22 +142,10 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # location of BIDS data -- enforce that this must be within the project directory with a fixed name
   scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
   if (!checkmate::test_directory_exists(scfg$metadata$bids_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    # default to creating the directory
+    # create <- prompt_input(instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+    create <- TRUE
     if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE) # should probably force this to happen
-  }
-
-  # location of fmriprep outputs -- enforce that this must be within the project directory
-  scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
-  if (!checkmate::test_directory_exists(scfg$metadata$fmriprep_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$fmriprep_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE) # should probably force this to happen
-  }
-
-  # location of mriqc reports -- enforce that this must be within the project directory
-  scfg$metadata$mriqc_directory <- file.path(scfg$metadata$project_directory, "mriqc_reports")
-  if (!checkmate::test_directory_exists(scfg$metadata$mriqc_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$mriqc_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$mriqc_directory, recursive = TRUE) # should probably force this to happen
   }
 
   if ("metadata/scratch_directory" %in% fields) {
@@ -254,6 +242,12 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
   }
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
+
+  # location of fmriprep outputs -- enforce that this must be within the project directory
+  scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  if (!checkmate::test_directory_exists(scfg$metadata$fmriprep_directory)) {
+    dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE)
+  }
 
   # prompt for fmriprep container at this step
   if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
@@ -380,6 +374,12 @@ setup_mriqc <- function(scfg, fields = NULL) {
   }
 
   if (isFALSE(scfg$mriqc$enable)) return(scfg)
+
+  # location of mriqc reports -- enforce that this must be within the project directory
+  scfg$metadata$mriqc_directory <- file.path(scfg$metadata$project_directory, "mriqc_reports")
+  if (!checkmate::test_directory_exists(scfg$metadata$mriqc_directory)) {
+    dir.create(scfg$metadata$mriqc_directory, recursive = TRUE)
+  }
 
   # prompt for mriqc container at this step
   if (!validate_exists(scfg$compute_environment$mriqc_container)) {
@@ -538,16 +538,6 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
     )
   }
 
-  if (is.null(scfg$bids_conversion$validate_bids) || "bids_conversion/validate_bids" %in% fields) {
-    scfg$bids_conversion$validate_bids <- prompt_input(
-      instruct = glue("
-      Should the BIDS folder be validated after conversion? This requires the bids-validator program to be installed.
-      This is generally a good idea to ensure that the BIDS folder is valid and conforms to the BIDS specification.
-      It can prevent downstream errors in fmriprep and other processing steps.
-      "), type = "flag", default = TRUE
-    )
-  }
-
   return(scfg)
 }
 
@@ -688,11 +678,11 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   # location of fmriprep container -- use normalizePath() to follow any symbolic links or home directory shortcuts
   if ("compute_environment/fmriprep_container" %in% fields) {
     scfg$compute_environment$fmriprep_container <- prompt_input(
-      instruct = glue("
+      instruct = glue("\n
       The pipeline depends on having a working fmriprep container (docker or singularity).
       If you don't have this yet, follow these instructions first:
-        https://fmriprep.org/en/stable/installation.html#containerized-execution-docker-and-singularity
-    ", .trim = FALSE),
+          https://fmriprep.org/en/stable/installation.html#containerized-execution-docker-and-singularity\n
+      "),
       prompt = "Location of fmriprep container: ",
       type = "file",
       default = scfg$compute_environment$fmriprep_container
@@ -705,8 +695,8 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       instruct = glue("
       \nBIDS conversion depends on having a working heudiconv container (docker or singularity).
       If you don't have this yet, follow these instructions first:
-        https://heudiconv.readthedocs.io/en/latest/installation.html#install-container\n
-    "),
+          https://heudiconv.readthedocs.io/en/latest/installation.html#install-container\n
+      "),
       prompt = "Location of heudiconv container: ",
       type = "file",
       default = scfg$compute_environment$heudiconv_container
@@ -738,7 +728,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       If you'd like to use MRIQC, you need a working mriqc container (docker or singularity).
       If you don't have this yet, this should work to build the latest version:
           singularity build /location/to/mriqc-latest.simg docker://nipreps/mriqc:latest\n
-      ", .trim = FALSE),
+      "),
       prompt = "Location of mriqc container: ",
       type = "file", default = scfg$compute_environment$mriqc_container
     ) |> normalizePath(mustWork = TRUE)
@@ -754,7 +744,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       workflow. Follow the instructions here: https://fmripost-aroma.readthedocs.io/latest/
 
       This is required if you say 'yes' to running AROMA during study setup.\n
-      ", .trim = FALSE),
+      "),
       prompt = "Location of ICA-AROMA container: ",
       type = "file", default = scfg$compute_environment$aroma_container
     ) |> normalizePath(mustWork = TRUE)
