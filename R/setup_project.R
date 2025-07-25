@@ -22,7 +22,7 @@ load_project <- function(file = NULL, validate=TRUE) {
 #' @return Invisibly returns `x` after printing its contents. This function is called 
 #'   for its side effect of printing a formatted summary of the study configuration.
 #' @export
-summary.bg_project_cfg <- function(x) {
+summary.bg_project_cfg <- function(x, ...) {
   pretty_print_list(x, indent=2)
 }
 

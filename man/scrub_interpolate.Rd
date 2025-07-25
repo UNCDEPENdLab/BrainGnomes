@@ -7,7 +7,7 @@
 scrub_interpolate(
   in_file,
   censor_file,
-  prefix = "i",
+  out_desc = NULL,
   confound_files = NULL,
   overwrite = FALSE,
   lg = NULL
@@ -19,8 +19,7 @@ scrub_interpolate(
 \item{censor_file}{Path to a 1D censor file (e.g., from fMRI preprocessing)
 containing a binary vector of \code{1}s (keep) and \code{0}s (scrub) for each timepoint.}
 
-\item{prefix}{Optional character prefix to prepend to the interpolated output
-filename (default is \code{"i"}).}
+\item{out_desc}{The BIDS description field for the file output by this step}
 
 \item{confound_files}{Optional character vector of confound or regressor
 files to update alongside the fMRI data. Rows corresponding to interpolated

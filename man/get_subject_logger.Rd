@@ -9,7 +9,7 @@ get_subject_logger(scfg, sub_id)
 \arguments{
 \item{scfg}{The study configuration object}
 
-\item{sub_dir}{The directory of the target subject's folder within the BIDS structure}
+\item{sub_id}{The id of the subject whose logger we wish to access}
 }
 \value{
 a configured lgr object for logging subject processing messages

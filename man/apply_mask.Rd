@@ -7,7 +7,7 @@
 apply_mask(
   in_file,
   mask_file,
-  prefix = "m",
+  out_desc = NULL,
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL
@@ -18,7 +18,7 @@ apply_mask(
 
 \item{mask_file}{Path to a binary mask NIfTI file (same dimensions as \code{in_file}).}
 
-\item{prefix}{Prefix to prepend to the output file name.}
+\item{out_desc}{The BIDS description field for the file output by this step}
 
 \item{overwrite}{Logical; whether to overwrite the output file if it already exists.}
 

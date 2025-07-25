@@ -2,7 +2,7 @@
 % Please edit documentation in R/job_tracking_functions.R
 \name{update_tracked_job_status}
 \alias{update_tracked_job_status}
-\title{Update job status in tracking SQLite database}
+\title{Update Job Status in Tracking SQLite Database}
 \usage{
 update_tracked_job_status(
   sqlite_db = NULL,
@@ -13,15 +13,35 @@ update_tracked_job_status(
 )
 }
 \arguments{
-\item{sqlite_db}{Character string specifying the SQLite database used for job tracking}
+\item{sqlite_db}{Character string. Path to the SQLite database file used for job tracking.}
 
-\item{job_id}{Character string specifying the job id to update as failed}
+\item{job_id}{Character string or numeric. ID of the job to update. If numeric, it will be coerced to a string.}
 
-\item{status}{Character string specifying the job status to set. Must be one of:
-"QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"}
+\item{status}{Character string. The job status to set. Must be one of:
+\code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.}
 
-\item{exclude}{Any job ids to ignore when cascading a status}
+\item{cascade}{Logical. If \code{TRUE}, and the \code{status} is a failure type (\code{"FAILED"} or \code{"FAILED_BY_EXT"}),
+the failure is recursively propagated to child jobs not listed in \code{exclude}.}
+
+\item{exclude}{Character or numeric vector. One or more job IDs to exclude from cascading failure updates.}
+}
+\value{
+Invisibly returns \code{NULL}. Side effect is a modification to the SQLite job tracking table.
 }
 \description{
-Update job status in tracking SQLite database
+Updates the status of a specific job in a tracking database, optionally cascading failure status to downstream jobs.
+}
+\details{
+The function updates both the job \code{status} and a timestamp corresponding to the status type:
+\itemize{
+\item \code{"QUEUED"} → updates \code{time_submitted}
+\item \code{"STARTED"} → updates \code{time_started}
+\item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} → updates \code{time_ended}
+}
+
+If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
+via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
+\code{"FAILED"} or they are listed in \code{exclude}.
+
+If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails silently and returns \code{NULL}.
 }

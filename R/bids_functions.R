@@ -197,7 +197,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 #' @importFrom checkmate assert_file_exists assert_string assert_flag test_file_exists
 #' @importFrom glue glue
 #' @keywords internal
-out_file_exists <- function(in_file, description, overwrite = TRUE, prepend = TRUE) {
+out_file_exists <- function(in_file, description, overwrite = TRUE) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(description)
   checkmate::assert_flag(overwrite)
@@ -205,7 +205,7 @@ out_file_exists <- function(in_file, description, overwrite = TRUE, prepend = TR
 
   # Parse and update BIDS fields
   bids_info <- extract_bids_info(in_file)
-  bids_info$description <- if (prepend) paste0(bids_info$description, description) else description # set desc to new description
+  bids_info$description <- description # set desc to new description
 
   # Reconstruct filename
   out_file <- file.path(dirname(in_file), construct_bids_filename(bids_info))

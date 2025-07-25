@@ -6,7 +6,7 @@
 \usage{
 intensity_normalize(
   in_file,
-  prefix = "n",
+  out_desc = NULL,
   brain_mask = NULL,
   global_median = 10000,
   overwrite = FALSE,
@@ -17,7 +17,7 @@ intensity_normalize(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{prefix}{Prefix to prepend to the output file name.}
+\item{out_desc}{The BIDS description field for the file output by this step}
 
 \item{brain_mask}{Optional path to a brain mask NIfTI file. If \code{NULL}, the entire image is used.}
 

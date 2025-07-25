@@ -8,27 +8,26 @@
 #' @return a named list of values corresponding to the keys in the key strings
 #' @keywords internal
 get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
-  split_keys_list <- strsplit(key_strings, sep)
-  
-  ret <- sapply(seq_along(split_keys_list), function(i) {
-    keys <- split_keys_list[[i]]
+  split_keys_list <- strsplit(key_strings, sep, fixed = TRUE)
+
+  ret <- lapply(split_keys_list, function(keys) {
     val <- lst
-    
     for (j in seq_along(keys)) {
       key <- keys[[j]]
-      
-      if (j == length(keys) && is.atomic(val) && !is.null(names(val))) {
-        # If last key and val is a named vector
-        return(val[[key]])
-      } else if (!is.list(val) || is.null(val[[key]])) {
-        # Otherwise, standard list traversal
-        return(NULL)
-      }
+      if (is.null(val[[key]])) return(NULL)
       val <- val[[key]]
     }
-    return(val)
-  }, USE.NAMES = FALSE, simplify = simplify)
+    val
+  })
+
   names(ret) <- key_strings
+
+  if (simplify && length(ret) == 1) {
+    return(ret[[1]])
+  } else if (simplify && all(vapply(ret, function(x) length(x) == 1 && is.atomic(x), logical(1)))) {
+    return(unlist(ret, use.names = TRUE))
+  }
+
   return(ret)
 }
 
@@ -44,6 +43,7 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
 #'
 #' @return A nested list with the specified keys and values.
 #' @importFrom utils modifyList
+#' @importFrom stats setNames
 #' @keywords internal
 set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
   checkmate::assert_character(assignments)
@@ -88,6 +88,7 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
 #'
 #' @return A nested list with the specified keys and values.
 #' @importFrom utils modifyList
+#' @importFrom stats setNames
 #' @keywords internal
 set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
   checkmate::assert_string(sep)

@@ -139,13 +139,34 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 }
 
 
-#' Update job status in tracking SQLite database
-#' 
-#' @param sqlite_db Character string specifying the SQLite database used for job tracking
-#' @param job_id Character string specifying the job id to update as failed
-#' @param status Character string specifying the job status to set. Must be one of: 
-#'   "QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"
-#' @param exclude Any job ids to ignore when cascading a status
+#' Update Job Status in Tracking SQLite Database
+#'
+#' Updates the status of a specific job in a tracking database, optionally cascading failure status to downstream jobs.
+#'
+#' @param sqlite_db Character string. Path to the SQLite database file used for job tracking.
+#' @param job_id Character string or numeric. ID of the job to update. If numeric, it will be coerced to a string.
+#' @param status Character string. The job status to set. Must be one of:
+#'   \code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.
+#' @param cascade Logical. If \code{TRUE}, and the \code{status} is a failure type (\code{"FAILED"} or \code{"FAILED_BY_EXT"}),
+#'   the failure is recursively propagated to child jobs not listed in \code{exclude}.
+#' @param exclude Character or numeric vector. One or more job IDs to exclude from cascading failure updates.
+#'
+#' @details
+#' The function updates both the job \code{status} and a timestamp corresponding to the status type:
+#' \itemize{
+#'   \item \code{"QUEUED"} → updates \code{time_submitted}
+#'   \item \code{"STARTED"} → updates \code{time_started}
+#'   \item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} → updates \code{time_ended}
+#' }
+#'
+#' If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
+#' via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
+#' \code{"FAILED"} or they are listed in \code{exclude}.
+#'
+#' If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails silently and returns \code{NULL}.
+#'
+#' @return Invisibly returns \code{NULL}. Side effect is a modification to the SQLite job tracking table.
+#'
 #' @importFrom glue glue
 #' @importFrom DBI dbConnect dbExecute dbDisconnect
 #' @export
@@ -181,12 +202,12 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
   if (cascade) {
     if (is.numeric(exclude)) exclude <- as.character(exclude)
     
-    status_tree <- fmri.pipeline::get_tracked_job_status(job_id, return_children = TRUE, sqlite_db = sqlite_db) # retreive current job and children
+    status_tree <- get_tracked_job_status(job_id, return_children = TRUE, sqlite_db = sqlite_db) # retreive current job and children
     job_ids <- status_tree$job_id # get list of job ids
     
     for (child_job in setdiff(job_ids, c(job_id, exclude))) {
       child_status <- with(status_tree, status[which(job_ids == child_job)]) # check status
-      if (child_status != "FAILED") fmri.pipeline::update_tracked_job_status(child_job, sqlite_db = sqlite_db, status = "FAILED_BY_EXT", cascade = TRUE)
+      if (child_status != "FAILED") update_tracked_job_status(child_job, sqlite_db = sqlite_db, status = "FAILED_BY_EXT", cascade = TRUE)
     }
   }
   
@@ -202,7 +223,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
 #' @param return_parent Return parent jobs of this job
 #' 
 #' @return An R data.frame version of the tracking database
-#' @importFrom DBI dbConnect
+#' @importFrom DBI dbConnect dbDisconnect
+#' @importFrom checkmate assert_logical test_file_exists
 #' @importFrom RSQLite SQLite
 #' @export
 get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, return_parent = FALSE, sqlite_db) {

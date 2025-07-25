@@ -6,9 +6,9 @@
 \usage{
 confound_regression(
   in_file,
+  out_desc = NULL,
   to_regress = NULL,
   censor_file = NULL,
-  prefix = "r",
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL
@@ -17,11 +17,11 @@ confound_regression(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
+\item{out_desc}{The BIDS description field for the file output by this step}
+
 \item{to_regress}{Path to a text file containing nuisance regressors (one column per regressor).}
 
 \item{censor_file}{An optional censor file (1s indicate volumes to keep) that is used to}
-
-\item{prefix}{Prefix to prepend to the output file name.}
 
 \item{overwrite}{Logical; whether to overwrite the output file if it already exists.}
 

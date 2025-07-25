@@ -6,7 +6,7 @@
 \usage{
 apply_aroma(
   in_file,
-  prefix = "a",
+  out_desc = NULL,
   mixing_file,
   noise_ics,
   overwrite = FALSE,
@@ -18,7 +18,7 @@ apply_aroma(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{prefix}{Prefix to prepend to the output file name.}
+\item{out_desc}{The BIDS description field for the file output by this step}
 
 \item{mixing_file}{Path to the MELODIC mixing matrix (e.g., \code{*_desc-MELODIC_mixing.tsv}).}
 

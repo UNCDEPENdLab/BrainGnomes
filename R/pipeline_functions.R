@@ -127,7 +127,7 @@ pretty_arg <- function(x, width = 80) {
 
 #' This function returns an lgr object corresponding to logging for a single subject directory
 #' @param scfg The study configuration object
-#' @param sub_dir The directory of the target subject's folder within the BIDS structure
+#' @param sub_id The id of the subject whose logger we wish to access
 #' @return a configured lgr object for logging subject processing messages
 #' @importFrom lgr get_logger_glue
 #' @keywords internal
@@ -527,16 +527,6 @@ get_image_quantile <- function(in_file, brain_mask=NULL, quantile=50, exclude_ze
 # Jun 2024: brain mask is required for calculating image quantiles for 2nd and 50th percentiles -- smoothing and intensity normalization
 # Given that it is used only for these quantiles, the fmriprep mask should be fine for this purpose
 # apply_mask is now considered an additional step that is optional and uses the brain_mask in the cfg
-
-# to_log <- function(str=NULL, log_file=NULL, stdout=TRUE) {
-#   checkmate::assert_string(str)
-#   checkmate::assert_string(log_file, null.ok = TRUE)
-#   if (is.null(str)) return(invisible(NULL))
-#   if (isTRUE(stdout)) cat(str, sep = "\n")
-#   if (!is.null(log_file)) cat(str, file = log_file, sep = "\n", append = TRUE)
-#   return(invisible(NULL))
-# }
-
 
 #' convert a number of hours to a days, hours, minutes, seconds format
 #'

@@ -7,7 +7,7 @@
 scrub_timepoints(
   in_file,
   censor_file = NULL,
-  prefix = "i",
+  out_desc = NULL,
   confound_files = NULL,
   overwrite = FALSE,
   lg = NULL
@@ -19,7 +19,7 @@ scrub_timepoints(
 \item{censor_file}{Path to the 1D censor vector used to identify volumes to
 remove.}
 
-\item{prefix}{Optional prefix for the scrubbed output file.}
+\item{out_desc}{The BIDS description field for the file output by this step}
 
 \item{confound_files}{Optional character vector of confound or regressor
 files to update alongside the fMRI data.}

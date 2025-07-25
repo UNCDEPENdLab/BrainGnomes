@@ -7,8 +7,11 @@ validate_char <- function(arg) {
 }
 
 # check memgb, nhours, ncores, cli_options, and sched_args for all jobs
-validate_job_settings <- function(scfg, job_name) {
+validate_job_settings <- function(scfg, job_name = NULL) {
   gaps <- c()
+
+  if (is.null(job_name)) stop("Invalid NULL job_name")
+  if (!is.list(scfg[[job_name]])) stop("scfg[[job_name]] is not a list")
 
   if (!checkmate::test_number(scfg[[job_name]]$memgb, lower = 1, upper = 1000)) {
     message("Invalid memgb setting in ", job_name, ". We will ask you for a valid value")

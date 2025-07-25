@@ -4,7 +4,7 @@
 \alias{summary.bg_project_cfg}
 \title{summary method for study configuration object}
 \usage{
-\method{summary}{bg_project_cfg}(x)
+\method{summary}{bg_project_cfg}(x, ...)
 }
 \arguments{
 \item{x}{The study configuration object (\code{bg_project_cfg}) to summarize.}

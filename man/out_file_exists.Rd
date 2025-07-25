@@ -4,7 +4,7 @@
 \alias{out_file_exists}
 \title{Check for Existence of a BIDS-Formatted Output File with a given description}
 \usage{
-out_file_exists(in_file, description, overwrite = TRUE, prepend = TRUE)
+out_file_exists(in_file, description, overwrite = TRUE)
 }
 \arguments{
 \item{in_file}{Path to the input BIDS file (e.g., a preprocessed BOLD image).}
