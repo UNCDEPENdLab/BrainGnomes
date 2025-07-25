@@ -29,8 +29,6 @@
 #' - Scipy Signal Documentation: \url{https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html}
 #' - Gustafsson, F. (1996). Determining the initial states in forward-backward filtering. IEEE Transactions on Signal Processing.
 #'
-#' @seealso \code{\link{lfilter}}, \code{\link{lfilter_zi_arma}}
-#'
 #' @export
 NULL
 
@@ -124,7 +122,7 @@ lmfit_residuals_4d <- function(infile, X, include_rows, add_intercept = TRUE, ou
 #' @name natural_spline_4d
 #' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 #' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-#'        Timepoints outside the valid range [1, T] are ignored with a warning.
+#'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
 #' @param edge_nn Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 #'        are filled in using nearest-neighbor extrapolation instead of cubic splines.
 #' @param outfile Character string (optional). If provided, the interpolated image will

@@ -25,7 +25,7 @@ void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, in
 //' @name natural_spline_4d
 //' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 //' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-//'        Timepoints outside the valid range [1, T] are ignored with a warning.
+//'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
 //' @param edge_nn Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 //'        are filled in using nearest-neighbor extrapolation instead of cubic splines.
 //' @param outfile Character string (optional). If provided, the interpolated image will
@@ -122,7 +122,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   }
   
   std::vector<bool> mask(n_t, true);
-  for (int ti : xout) mask[ti] = false;
+  for (double ti : xout) mask[static_cast<int>(ti)] = false;
   
   std::vector<double> x(n_t); // build a 0-based index vector for x (time/volume)
   for (int ti = 0; ti < n_t; ++ti) x[ti] = ti;
@@ -188,7 +188,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
         // handle nearest-neighbor edge interpolation, if requested
         if (edge_nn && first_valid >= 0 && last_valid >= 0) {
           for (size_t i = 0; i < n_pts; ++i) {
-            int t = xout[i];
+            int t = static_cast<int>(xout[i]);
             if (t < first_valid) y_interp[i] = y[first_valid];
             else if (t > last_valid) y_interp[i] = y[last_valid];
           }
@@ -196,7 +196,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
         
         // Write back any vector that has been interpolated
         for (size_t ti = 0; ti < n_pts; ++ti) {
-          int t = xout[ti];
+          int t = static_cast<int>(xout[ti]);
           data[flat_index(xi, yi, zi, t)] = static_cast<float>(y_interp[ti]); //y_interp[ti]; //
           //data[flat_index(xi, yi, zi, t)] = (y_interp[ti] - intercept) / slope;
         }

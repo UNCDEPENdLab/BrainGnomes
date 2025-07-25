@@ -4,15 +4,15 @@
 \alias{setup_postproc_steps}
 \title{Specify the postprocessing steps for a study}
 \usage{
-setup_postproc_steps(scfg = list(), fields = NULL)
+setup_postproc_steps(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object produced by \code{setup_project}}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{a character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
 }
 \value{
-a modified version of \code{scfg} with the \verb{$postprocess$processing_steps} field populated
+a modified version of \code{ppcfg} with the \verb{$postprocess$processing_steps} field populated
 }
 \description{
 This function determines the sequence of postprocessing steps to be applied after fMRIPrep.

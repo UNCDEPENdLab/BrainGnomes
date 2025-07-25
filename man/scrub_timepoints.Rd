@@ -16,20 +16,24 @@ scrub_timepoints(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{censor_file}{Path to a 1D censor file indicating which timepoints to remove.}
+\item{censor_file}{Path to the 1D censor vector used to identify volumes to
+remove.}
 
 \item{prefix}{Optional prefix for the scrubbed output file.}
 
-\item{confound_files}{Optional character vector of confound or regressor files to update.}
+\item{confound_files}{Optional character vector of confound or regressor
+files to update alongside the fMRI data.}
 
-\item{overwrite}{Logical; whether to overwrite the output file if it exists.}
+\item{overwrite}{Logical; overwrite the output NIfTI if it exists.}
 
-\item{lg}{Optional \code{Logger} object for messages.}
+\item{lg}{Optional \code{Logger} object for message output.}
 }
 \value{
-Character string giving the path to the scrubbed NIfTI file.
+The path to the scrubbed NIfTI image.
 }
 \description{
-Removes timepoints flagged in \code{censor_file} from a 4D NIfTI image. If \code{confound_files} are supplied, the corresponding rows are removed so that the resulting files have matching length.
+Removes timepoints flagged in a censor file from a 4D NIfTI image. When
+\code{confound_files} are provided, the corresponding rows in those files
+are removed so that the time series remain aligned.
 }
 \keyword{internal}

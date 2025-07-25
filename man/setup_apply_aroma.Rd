@@ -4,15 +4,15 @@
 \alias{setup_apply_aroma}
 \title{Configure ICA-AROMA denoising application in postprocessing}
 \usage{
-setup_apply_aroma(scfg = list(), fields = NULL)
+setup_apply_aroma(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of fields to prompt for. If \code{NULL}, all fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$apply_aroma} entry updated.
+A modified version of \code{ppcfg} with the \verb{$apply_aroma} entry updated.
 }
 \description{
 This function configures the application of ICA-AROMA denoising to fMRI data as part of postprocessing.

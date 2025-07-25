@@ -583,7 +583,7 @@ file_sans_ext <- function(file) {
 #'
 #' @return A vector of the same type as \code{x}, with values shifted \code{n} places forward.
 #'
-#' @seealso \code{\link{lag}}, \code{\link[dplyr]{lead}}
+#' @seealso \code{\link{lag}}
 #'
 #' @examples
 #' lead(1:5)
@@ -609,7 +609,7 @@ lead <- function(x, n = 1L, default = NA) {
 #'
 #' @return A vector of the same type as \code{x}, with values shifted \code{n} places backward.
 #'
-#' @seealso \code{\link{lead}}, \code{\link[dplyr]{lag}}
+#' @seealso \code{\link{lead}}
 #'
 #' @examples
 #' lag(1:5)

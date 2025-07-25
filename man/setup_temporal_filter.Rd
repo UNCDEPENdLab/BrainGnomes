@@ -4,15 +4,15 @@
 \alias{setup_temporal_filter}
 \title{Configure temporal filtering settings for postprocessing}
 \usage{
-setup_temporal_filter(scfg = list(), fields = NULL)
+setup_temporal_filter(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of field names to prompt for. If \code{NULL}, all temporal filtering fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$temporal_filter} entry updated.
+A modified version of \code{ppcfg} with the \verb{$temporal_filter} entry updated.
 }
 \description{
 This function configures the temporal filtering step in the postprocessing pipeline.

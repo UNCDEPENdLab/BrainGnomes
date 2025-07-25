@@ -233,8 +233,6 @@ std::vector<double> filtfilt(const std::vector<double>& x, const std::vector<dou
 //' - Scipy Signal Documentation: \url{https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html}
 //' - Gustafsson, F. (1996). Determining the initial states in forward-backward filtering. IEEE Transactions on Signal Processing.
 //'
-//' @seealso \code{\link{lfilter}}, \code{\link{lfilter_zi_arma}}
-//'
 //' @export
 
 // [[Rcpp::export]]

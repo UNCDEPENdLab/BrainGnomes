@@ -346,7 +346,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
 #' Specify the MRIQC settings
 #' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
-#' @param fields A character vector of fields to be prompted for. If `NULL`, all MRIQC fields will be prompted for.   # [Added]
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all MRIQC fields will be prompted for.
 #' @return A modified version of `scfg` with the `$mriqc` entry populated.
 #' @keywords internal
 setup_mriqc <- function(scfg, fields = NULL) {
@@ -490,7 +490,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       the id matching expression should be (.+), which matches all characters in the folder name.\n
     "),
       prompt = "What is the regex pattern for extracting the subject ID from the folder name?",
-      type = "character", default = "(.+)"
+      type = "character", default = "([0-9]+)"
     )
   }
 
@@ -516,7 +516,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       the id matching expression should be (.+), which matches all characters in the folder name.\n
     "),
       prompt = "What is the regex pattern for extracting the subject ID from the folder name?",
-      type = "character", default = "(.+)"
+      type = "character", default = "([0-9]+)"
     )
   } else {
     scfg$bids_conversion$ses_id_match <- NA_character_

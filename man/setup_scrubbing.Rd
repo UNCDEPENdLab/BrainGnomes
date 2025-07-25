@@ -4,10 +4,10 @@
 \alias{setup_scrubbing}
 \title{Configure scrubbing of high-motion volumes}
 \usage{
-setup_scrubbing(scfg = list(), fields = NULL)
+setup_scrubbing(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{Optional vector of fields to prompt for.}
 }

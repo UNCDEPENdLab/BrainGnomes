@@ -4,15 +4,15 @@
 \alias{setup_apply_mask}
 \title{Configure brain masking for postprocessing}
 \usage{
-setup_apply_mask(scfg = list(), fields = NULL)
+setup_apply_mask(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields related to brain masking will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$apply_mask} entry populated.
+A modified version of \code{ppcfg} with the \verb{$apply_mask} entry populated.
 }
 \description{
 This function configures the optional step of applying a brain mask to the functional MRI data

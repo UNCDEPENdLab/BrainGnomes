@@ -7,7 +7,7 @@
 \item{infile}{Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).}
 
 \item{t_interpolate}{Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-Timepoints outside the valid range \link{1, T} are ignored with a warning.}
+Timepoints outside the valid range \verb{[1, T]} are ignored with a warning.}
 
 \item{edge_nn}{Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 are filled in using nearest-neighbor extrapolation instead of cubic splines.}

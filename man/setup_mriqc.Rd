@@ -9,7 +9,7 @@ setup_mriqc(scfg, fields = NULL)
 \arguments{
 \item{scfg}{A study configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
 
-\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all MRIQC fields will be prompted for.   # \link{Added}}
+\item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all MRIQC fields will be prompted for.}
 }
 \value{
 A modified version of \code{scfg} with the \verb{$mriqc} entry populated.

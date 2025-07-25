@@ -26,7 +26,7 @@ save_project_config <- function(scfg, file = NULL) {
     old_cfg <- yaml::read_yaml(file)
     cfg_differences <- compare_lists(old_cfg, scfg)
 
-    if (attr(cfg_differences, "identical") == TRUE) {
+    if (length(cfg_differences) == 0L) {
       message("No configuration differences were found. File is unchanged.")
       return(invisible(scfg))
     } else {
@@ -62,7 +62,7 @@ save_project_config <- function(scfg, file = NULL) {
 #' @param max_diffs Maximum number of differences to report (default: 20).
 #'
 #' @return Invisibly returns \code{TRUE} if no differences are found; otherwise \code{FALSE}.
-#' @export
+#' @keywords internal
 compare_lists <- function(old, new, path = "", max_diffs = 100) {
   differences <- list()
   
@@ -76,35 +76,30 @@ compare_lists <- function(old, new, path = "", max_diffs = 100) {
         subpath <- if (nzchar(path)) paste0(path, "$", k) else k
         
         if (!k %in% names(old)) {
-          differences[[length(differences) + 1]] <<- paste0("$", subpath, " is absent in old")
+          # present in new, absent in old
+          differences[[length(differences) + 1]] <<- paste0(
+            "$", path, ":\n      old: [absent]\n      new: ",
+            deparse1(new), " <", typeof(new), ">"
+          )
         } else if (!k %in% names(new)) {
-          differences[[length(differences) + 1]] <<- paste0("$", subpath, " is absent in new")
+          differences[[length(differences) + 1]] <<- paste0(
+            "$", path, ":\n      old: ",
+            deparse1(old), " <", typeof(old), ">\n      new: [absent]"
+          )
         } else {
           compare_recursive(old[[k]], new[[k]], subpath)
         }
       }
     } else if (!identical(old, new)) {
       differences[[length(differences) + 1]] <<- paste0(
-        "$", path, " differs:\n      old: ",
+        "$", path, ":\n      old: ",
         deparse1(old), " <", typeof(old), ">\n      new: ", 
         deparse1(new), " <", typeof(new), ">")
     }
   }
   
   compare_recursive(old, new, path)
-  
-  if (length(differences) == 0) {
-    message("No differences found.")
-    attr(differences, "identical") <- TRUE
-    # return(invisible(TRUE))
-    return(invisible(differences))
-  } else {
-    cat("Differences:\n")
-    # for (diff in differences) cat("  - ", diff, "\n", sep = "")
-    # if (length(differences) >= max_diffs) cat("  ... more differences omitted\n")
-    # return(invisible(FALSE))
-    attr(differences, "identical") <- FALSE
-    return(invisible(differences))
-  }
+
+  return(invisible(differences))
 }
 

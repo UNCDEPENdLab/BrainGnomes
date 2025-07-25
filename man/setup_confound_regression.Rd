@@ -4,15 +4,15 @@
 \alias{setup_confound_regression}
 \title{Configure confound regression for postprocessing}
 \usage{
-setup_confound_regression(scfg = list(), fields = NULL)
+setup_confound_regression(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$confound_regression} entry populated.
+A modified version of \code{ppcfg} with the \verb{$confound_regression} entry populated.
 }
 \description{
 This function configures voxelwise regression of nuisance confounds from fMRI data. Confounds are typically drawn

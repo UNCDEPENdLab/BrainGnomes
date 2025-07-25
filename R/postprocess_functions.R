@@ -891,23 +891,35 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
   return(temp_mask)
 }
 
-
 #' Resample TemplateFlow Mask to fMRIPrep Image Using Python
 #'
-#' @param in_file Path to the BIDS-compliant NIfTI file.
-#' @param output Path to output resampled image.
-#' @param template_resolution Resolution index (e.g., 1 = 1mm).
+#' This function uses Python (via `reticulate`) to identify and resample a TemplateFlow mask
+#' to match the resolution and spatial dimensions of an fMRIPrep BOLD image.
+#'
+#' @param in_file Path to the BIDS-compliant NIfTI file (e.g., an fMRIPrep preprocessed BOLD image).
+#' @param output Optional path to write the resampled image. If NULL, a BIDS-style filename is constructed.
+#' @param template_resolution Integer specifying the TemplateFlow resolution index (e.g., 1 = 1mm).
 #' @param suffix TemplateFlow suffix (e.g., "mask", "T1w").
 #' @param desc TemplateFlow descriptor (e.g., "brain").
-#' @param extension File extension (default: ".nii.gz").
-#' @param interpolation Interpolation method ("nearest", "linear", "continuous").
-#' @param overwrite Logical. If `TRUE`, overwrite existing `output`.
+#' @param extension File extension for the template image (default is ".nii.gz").
+#' @param interpolation Interpolation method to use during resampling. Options are
+#'   "nearest", "linear", or "continuous".
+#' @param install_dependencies Logical. If \code{TRUE} (default), attempts to automatically install
+#'   required Python packages (nibabel, nilearn, templateflow) if they are missing from the active environment.
+#'   If \code{FALSE}, the function will raise an error if dependencies are not found.
+#' @param overwrite Logical. If \code{TRUE}, overwrite the existing output file (if present).
 #'
 #' @details
-#'   The relevant template will be identified using the space- entity for the BIDS-compliant input image.
-#'   For example, sub-221256_task-trust_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz
-#'   will use the MNI152NLin2009cAsym template image from TemplateFlow.
-#' @return Invisible `TRUE` on success. Writes output to `output`.
+#' The appropriate template is inferred from the `space-` entity of the BIDS-formatted input filename.
+#' For example, an input such as:
+#' \code{sub-221256_task-trust_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz}
+#' will lead to selection of the MNI152NLin2009cAsym template.
+#'
+#' This function depends on a companion Python script (\code{fetch_matched_template_image.py})
+#' that is bundled with the BrainGnomes package and sourced at runtime.
+#'
+#' @return Invisibly returns \code{TRUE} on success. A new NIfTI file is written to \code{output}.
+#'
 #' @importFrom reticulate source_python py_module_available py_install
 #' @export
 resample_template_to_img <- function(
@@ -953,8 +965,7 @@ resample_template_to_img <- function(
         "Please install them in your Python environment (e.g., with pip or reticulate::virtualenv_install).",
         call. = FALSE
       )
-    }
-    
+    } 
   }
 
   # Load Python module from script

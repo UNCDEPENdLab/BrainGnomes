@@ -22,9 +22,10 @@ containing a binary vector of \code{1}s (keep) and \code{0}s (scrub) for each ti
 \item{prefix}{Optional character prefix to prepend to the interpolated output
 filename (default is \code{"i"}).}
 
-\item{confound_files}{Optional character vector of confound/regressor files to
-update. Rows corresponding to interpolated volumes are filled in using natural
-spline interpolation with nearest-neighbor extrapolation at the boundaries.}
+\item{confound_files}{Optional character vector of confound or regressor
+files to update alongside the fMRI data. Rows corresponding to interpolated
+volumes are filled in using natural splines with nearest-neighbor
+extrapolation.}
 
 \item{overwrite}{Logical indicating whether to overwrite an existing interpolated
 file (default is \code{FALSE}).}

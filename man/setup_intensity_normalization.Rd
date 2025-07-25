@@ -4,15 +4,15 @@
 \alias{setup_intensity_normalization}
 \title{Configure intensity normalization settings for postprocessing}
 \usage{
-setup_intensity_normalization(scfg = list(), fields = NULL)
+setup_intensity_normalization(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of field names to prompt for. If \code{NULL}, all intensity normalization fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$intensity_normalize} entry updated.
+A modified version of \code{ppcfg} with the \verb{$intensity_normalize} entry updated.
 }
 \description{
 This function configures the intensity normalization step in the postprocessing pipeline.

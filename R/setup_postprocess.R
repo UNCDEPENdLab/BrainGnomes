@@ -254,7 +254,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   return(scfg)
 }
 
-setup_postprocess_globals <- function(ppcfg, fields = NULL, all_bids_desc = NULL) {
+setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_desc = NULL) {
 
   if (is.null(fields)) {
     fields <- c()
@@ -347,9 +347,9 @@ setup_postprocess_globals <- function(ppcfg, fields = NULL, all_bids_desc = NULL
 #' Steps are included based on whether the corresponding `$enable` field is `TRUE` in the study configuration.
 #' If the user opts to override the default order, they may manually specify a custom sequence.
 #'
-#' @param scfg a study configuration object produced by `setup_project`
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return a modified version of `scfg` with the `$postprocess$processing_steps` field populated
+#' @return a modified version of `ppcfg` with the `$postprocess$processing_steps` field populated
 #' @keywords internal
 #' @details This function is used to set up the postprocessing steps for a study. It prompts the user for
 #'   the order of the processing steps and whether to apply them. The order of the processing steps is important,
@@ -463,7 +463,7 @@ setup_postproc_steps <- function(ppcfg = list(), fields = NULL) {
 #' file (e.g., "framewise_displacement > 0.9" or "-1:1; dvars > 1.5"). These regressors can later be
 #' used to censor volumes during modeling.
 #'
-#' @param scfg A study configuration object.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields Optional vector of fields to prompt for.
 #' @return Modified `scfg` with `$postprocess$scrubbing` populated.
 #' @keywords internal
@@ -581,10 +581,10 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
 #' This step is especially useful when preparing data for statistical modeling, as it constrains the
 #' analysis to in-brain voxels and reduces computational burden.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields related to brain masking will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$apply_mask` entry populated.
+#' @return A modified version of `ppcfg` with the `$apply_mask` entry populated.
 #' @keywords internal
 setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$apply_mask$enable) ||
@@ -667,10 +667,10 @@ setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
 #' Regression is applied on a voxelwise basis. Filtered regressors typically include motion parameters, CompCor components,
 #' DVARS, or global signal. Unfiltered regressors usually include 0/1 indicators of outlier volumes.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$confound_regression` entry populated.
+#' @return A modified version of `ppcfg` with the `$confound_regression` entry populated.
 #' @keywords internal
 setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$confound_regression$enable) ||
@@ -744,10 +744,10 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
 #'
 #' This function only generates the confound regressors file. Actual regression is handled separately.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of fields to prompt for. If `NULL`, all relevant fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$confound_calculate` entry updated.
+#' @return A modified version of `ppcfg` with the `$confound_calculate` entry updated.
 #' @keywords internal
 setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$confound_calculate$enable) ||
@@ -809,10 +809,10 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
 #' Intensity normalization rescales the fMRI time series so that the median signal across the entire 4D image
 #' reaches a specified global value (e.g., 10,000). This step can help ensure comparability across runs and subjects.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of field names to prompt for. If `NULL`, all intensity normalization fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$intensity_normalize` entry updated.
+#' @return A modified version of `ppcfg` with the `$intensity_normalize` entry updated.
 #' @keywords internal
 setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$intensity_normalize$enable) ||
@@ -869,10 +869,10 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
 #' The user is asked whether they want to apply smoothing, and if so, to specify the full width at half maximum (FWHM)
 #' of the Gaussian smoothing kernel and a filename prefix.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of field names to prompt for. If `NULL`, all spatial smoothing fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$spatial_smooth` field populated.
+#' @return A modified version of `ppcfg` with the `$spatial_smooth` field populated.
 #'
 #' @details
 #' If enabled, spatial smoothing is applied to the preprocessed BOLD data using a Gaussian kernel
@@ -932,10 +932,10 @@ setup_spatial_smooth <- function(ppcfg = list(), fields = NULL) {
 #' slow drifts (via high-pass filtering) or physiological noise (via low-pass filtering).
 #' This step is often used to improve signal quality for subsequent statistical analysis.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of field names to prompt for. If `NULL`, all temporal filtering fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$temporal_filter` entry updated.
+#' @return A modified version of `ppcfg` with the `$temporal_filter` entry updated.
 #' @keywords internal
 setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$temporal_filter$enable) ||
@@ -1024,10 +1024,10 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
 #'
 #' This step assumes that ICA-AROMA has already been run using a tool like `fmripost-aroma`.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields A character vector of fields to prompt for. If `NULL`, all fields will be prompted.
 #'
-#' @return A modified version of `scfg` with the `$postprocess$apply_aroma` entry updated.
+#' @return A modified version of `ppcfg` with the `$apply_aroma` entry updated.
 #' @keywords internal
 setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
   if (is.null(ppcfg$apply_aroma$enable) ||

@@ -4,15 +4,15 @@
 \alias{setup_spatial_smooth}
 \title{Configure spatial smoothing settings for fMRI postprocessing}
 \usage{
-setup_spatial_smooth(scfg = list(), fields = NULL)
+setup_spatial_smooth(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of field names to prompt for. If \code{NULL}, all spatial smoothing fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$spatial_smooth} field populated.
+A modified version of \code{ppcfg} with the \verb{$spatial_smooth} field populated.
 }
 \description{
 This function configures the spatial smoothing step for postprocessing of BOLD fMRI data.

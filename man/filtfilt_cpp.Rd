@@ -38,6 +38,3 @@ step response of the filter (\code{lfilter_zi_arma()}).
 \item Gustafsson, F. (1996). Determining the initial states in forward-backward filtering. IEEE Transactions on Signal Processing.
 }
 }
-\seealso{
-\code{\link{lfilter}}, \code{\link{lfilter_zi_arma}}
-}

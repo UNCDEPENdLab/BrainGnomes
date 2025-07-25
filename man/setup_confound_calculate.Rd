@@ -4,15 +4,15 @@
 \alias{setup_confound_calculate}
 \title{Configure confound calculation for postprocessing}
 \usage{
-setup_confound_calculate(scfg = list(), fields = NULL)
+setup_confound_calculate(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
 
 \item{fields}{A character vector of fields to prompt for. If \code{NULL}, all relevant fields will be prompted.}
 }
 \value{
-A modified version of \code{scfg} with the \verb{$postprocess$confound_calculate} entry updated.
+A modified version of \code{ppcfg} with the \verb{$confound_calculate} entry updated.
 }
 \description{
 This function configures the generation of a confound file during postprocessing. The resulting file includes
