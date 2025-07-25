@@ -249,7 +249,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_confound_regression(ppcfg, fields)
   ppcfg <- setup_postproc_steps(ppcfg, fields)
 
-
+  # repopulate the relevant part of scfg
   scfg$postprocess[[stream_name]] <- ppcfg
   return(scfg)
 }
@@ -302,11 +302,7 @@ setup_postprocess_globals <- function(ppcfg, fields = NULL, all_bids_desc = NULL
       } else {
         bids_desc_valid <- TRUE
       }
-    }
-
-
-
-    
+    }    
   }
   
   if ("postprocess/keep_intermediates" %in% fields) {

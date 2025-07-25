@@ -370,7 +370,7 @@ scrub_interpolate <- function(in_file, censor_file, prefix="i",
   }
   
   censor <- as.integer(readLines(censor_file))
-  t_interpolate <- which(1L - censor) # bad timepoints are 0 in the censor file
+  t_interpolate <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
   if (!any(t_interpolate)) {
     lg$info("No timepoints to scrub found in {censor_file}. Interpolation will have no effect.")
@@ -457,7 +457,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, prefix="i",
   }
   
   censor <- as.integer(readLines(censor_file))
-  t_scrub <- which(1L - censor) # bad timepoints are 0 in the censor file
+  t_scrub <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
   if (!any(t_scrub)) {
     lg$info("No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")

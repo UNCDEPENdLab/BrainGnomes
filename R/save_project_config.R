@@ -24,18 +24,18 @@ save_project_config <- function(scfg, file = NULL) {
   overwrite <- TRUE
   if (file.exists(file)) {
     old_cfg <- yaml::read_yaml(file)
-    tmp_old <- tempfile()
-    tmp_new <- tempfile()
-    write_yaml(old_cfg, tmp_old)
-    write_yaml(scfg, tmp_new)
-    diff_out <- tools::Rdiff(tmp_old, tmp_new, Log = TRUE)
-    unlink(c(tmp_old, tmp_new))
-    if (diff_out$status == 0L) {
+    cfg_differences <- compare_lists(old_cfg, scfg)
+
+    if (attr(cfg_differences, "identical") == TRUE) {
       message("No configuration differences were found. File is unchanged.")
       return(invisible(scfg))
+    } else {
+      cat("Configuration differences:\n")
+      for (dd in cfg_differences) {
+        cat("  - ", dd, "\n", sep = "")
+      }
     }
-    cat("Old configuration settings begin with < and new settings begin with >\n")
-    cat("Configuration differences:\n", paste(diff_out$out, collapse = "\n"), "\n\n")
+
     overwrite <- if (interactive()) {
       prompt_input(instruct = "Overwrite existing project_config.yaml?", type = "flag")
     } else {
@@ -51,3 +51,60 @@ save_project_config <- function(scfg, file = NULL) {
   }
   invisible(scfg)
 }
+
+#' Recursively Compare Two List Objects
+#'
+#' Compares two list objects and prints a summary of any differences in structure or values.
+#'
+#' @param old First list object.
+#' @param new Second list object.
+#' @param path Internal parameter to track the location within the nested structure (used recursively).
+#' @param max_diffs Maximum number of differences to report (default: 20).
+#'
+#' @return Invisibly returns \code{TRUE} if no differences are found; otherwise \code{FALSE}.
+#' @export
+compare_lists <- function(old, new, path = "", max_diffs = 100) {
+  differences <- list()
+  
+  compare_recursive <- function(old, new, path) {
+    if (length(differences) >= max_diffs) return()
+    
+    if (is.list(old) && is.list(new)) {
+      all_keys <- union(names(old), names(new))
+      
+      for (k in all_keys) {
+        subpath <- if (nzchar(path)) paste0(path, "$", k) else k
+        
+        if (!k %in% names(old)) {
+          differences[[length(differences) + 1]] <<- paste0("$", subpath, " is absent in old")
+        } else if (!k %in% names(new)) {
+          differences[[length(differences) + 1]] <<- paste0("$", subpath, " is absent in new")
+        } else {
+          compare_recursive(old[[k]], new[[k]], subpath)
+        }
+      }
+    } else if (!identical(old, new)) {
+      differences[[length(differences) + 1]] <<- paste0(
+        "$", path, " differs:\n      old: ",
+        deparse1(old), " <", typeof(old), ">\n      new: ", 
+        deparse1(new), " <", typeof(new), ">")
+    }
+  }
+  
+  compare_recursive(old, new, path)
+  
+  if (length(differences) == 0) {
+    message("No differences found.")
+    attr(differences, "identical") <- TRUE
+    # return(invisible(TRUE))
+    return(invisible(differences))
+  } else {
+    cat("Differences:\n")
+    # for (diff in differences) cat("  - ", diff, "\n", sep = "")
+    # if (length(differences) >= max_diffs) cat("  ... more differences omitted\n")
+    # return(invisible(FALSE))
+    attr(differences, "identical") <- FALSE
+    return(invisible(differences))
+  }
+}
+
