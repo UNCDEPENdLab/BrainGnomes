@@ -44,7 +44,9 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
     if (length(streams) == 0) {
       cat("  (none defined yet)\n")
     } else {
+      cat("\n")
       for (i in seq_along(streams)) cat(sprintf("  [%d] %s\n", i, streams[i]))
+      cat("\n")
     }
 
     choice <- menu(c("Add a stream", "Edit a stream", "Delete a stream",
@@ -58,7 +60,8 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
         cat("No streams to edit.\n")
         next
       }
-      sel <- utils::select.list(streams, multiple = FALSE, title = "Select stream to edit")
+      # if we only have one stream, then default to editing it.
+      sel <- if (length(streams) == 1L) streams else utils::select.list(streams, multiple = FALSE, title = "Select stream to edit")
       if (sel == "") next
       rel_fields <- postprocess_field_list()
       field_display <- sapply(rel_fields, function(fld) {
@@ -178,6 +181,8 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
 
 setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name = NULL) {
+  checkmate::assert_string(stream_name, null.ok = TRUE)
+
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
@@ -190,22 +195,50 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
     sched_args = ""
   )
 
-  # enable should be set by setup_postprocess_streams
+  # enable should be set by setup_postprocess_streams -- if it's FALSE, don't even think about specific streams
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
+  
+  # convert fields from postprocess/<stream_name>/field to postprocess/field for simplicity in subordinate setup functions
+  if (!is.null(fields)) fields <- sub(paste0("^postprocess/", stream_name, "/"), "postprocess/", fields)
 
-  scfg <- setup_job(scfg, "postprocess", defaults, fields)
-
-  if (!is.null(stream_name) && !is.null(scfg$postprocess[[stream_name]])) {
-    ppcfg <- scfg$postprocess[[stream_name]]
-  } else {
+  existing_cfg <- TRUE
+  if (is.null(stream_name) || !stream_name %in% names(scfg$postprocess)) {
     ppcfg <- list()
+    existing_cfg <- FALSE
+  } else {
+    ppcfg <- scfg$postprocess[[stream_name]]
   }
-
-  if (!is.null(stream_name) && !is.null(fields)) {
-    fields <- sub(paste0("^postprocess/", stream_name, "/"), "postprocess/", fields)
+  
+  prompt_name <- !existing_cfg
+  if (existing_cfg && "postprocess/name" %in% fields) {
+    prompt_name <- prompt_input(
+      instruct=glue("This configuration is called {stream_name}."),
+      prompt="Change name?", type = "flag")
   }
-
-  ppcfg <- setup_postprocess_globals(ppcfg, fields)
+  
+  stream_names <- get_postprocess_stream_names(scfg)
+  if (prompt_name) {
+    name_valid <- FALSE
+    while (!name_valid) {
+      stream_name <- prompt_input(prompt = "Name for this postprocess configuration", type = "character")
+      if (stream_name %in% stream_names) {
+        message("Configuration name must be unique. Existing names are: ", paste(stream_names, collapse = ", "))
+      } else if (stream_name == "enable") {
+        message("Stream name cannot be 'enable'.")
+      } else {
+        name_valid <- TRUE
+      }
+    }
+  }
+  
+  # validate unique bids_desc
+  all_bids_desc <- unlist(lapply(stream_names[stream_names != stream_name], function(nm) scfg$postprocess[[nm]]$bids_desc))
+  
+  ppcfg <- setup_postprocess_globals(ppcfg, fields, all_bids_desc)
+  # setup_job requires the top-level list for postprocess -- spoof this for handling nested field names
+  spoof <- list(postprocess = ppcfg)
+  spoof <- setup_job(spoof, "postprocess", defaults, fields)
+  ppcfg <- spoof$postprocess
   ppcfg <- setup_apply_mask(ppcfg, fields)
   ppcfg <- setup_spatial_smooth(ppcfg, fields)
   ppcfg <- setup_apply_aroma(ppcfg, fields)
@@ -216,31 +249,12 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_confound_regression(ppcfg, fields)
   ppcfg <- setup_postproc_steps(ppcfg, fields)
 
-  cfg_name <- prompt_input(
-    prompt="Name for this postprocess configuration",
-    type = "character",
-    default = stream_name
-  )
-  stream_names <- get_postprocess_stream_names(scfg)
-  while (cfg_name %in% stream_names) {
-    message("Configuration name must be unique.")
-    cfg_name <- prompt_input(
-      "Name for this postprocess configuration",
-      type = "character",
-      default = stream_name
-    )
-  }
-  # ensure unique bids_desc
-  existing_desc <- unlist(lapply(stream_names, function(nm) scfg$postprocess[[nm]]$bids_desc))
-  while (!is.null(ppcfg$bids_desc) && ppcfg$bids_desc %in% existing_desc) {
-    message("bids_desc must be unique across postprocess configurations.")
-    ppcfg$bids_desc <- prompt_input("Enter a unique BIDS description", type = "character")
-  }
-  scfg$postprocess[[cfg_name]] <- ppcfg
+
+  scfg$postprocess[[stream_name]] <- ppcfg
   return(scfg)
 }
 
-setup_postprocess_globals <- function(ppcfg, fields = NULL) {
+setup_postprocess_globals <- function(ppcfg, fields = NULL, all_bids_desc = NULL) {
 
   if (is.null(fields)) {
     fields <- c()
@@ -271,14 +285,28 @@ setup_postprocess_globals <- function(ppcfg, fields = NULL) {
   }
 
   if ("postprocess/bids_desc" %in% fields) {
-    ppcfg$bids_desc <- prompt_input(
-      "Enter the BIDS description ('desc') for the fully postprocessed file",
-      type = "character", len = 1L, default="postproc",
-      instruct = glue("
-      \nWhat should be the description field for the final postprocessed file?
-      This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.\n
-      ")
-    )
+    bids_desc_valid <- FALSE
+
+    while (!bids_desc_valid) {
+      ppcfg$bids_desc <- prompt_input(
+        "Enter the BIDS description ('desc') for the fully postprocessed file",
+        type = "character", len = 1L, default = "postproc",
+        instruct = glue("\n
+          What should be the description field for the final postprocessed file?
+          This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.\n
+        ")
+      )
+      
+      if (ppcfg$bids_desc %in% all_bids_desc) {
+        message("bids_desc must be unique across postprocess configurations. Current values are: ", paste(all_bids_desc, collapse = ", "))
+      } else {
+        bids_desc_valid <- TRUE
+      }
+    }
+
+
+
+    
   }
   
   if ("postprocess/keep_intermediates" %in% fields) {

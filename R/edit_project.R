@@ -54,7 +54,7 @@ edit_project <- function(input = NULL) {
 
   # Top-level menu loop
   repeat {
-    choice <- select.list(c(names(config_map), "Job settings", "Quit"), graphics = FALSE,
+    choice <- select.list(c(names(config_map), "Postprocessing", "Job settings", "Quit"), graphics = FALSE,
                           title = "Select a configuration area to edit:")
 
     if (choice == "Quit" || choice == "") {
@@ -63,7 +63,7 @@ edit_project <- function(input = NULL) {
     }
 
     if (choice == "Postprocessing") {
-      scfg <- manage_postprocess_streams(scfg, fields = paste0(prefix, fields), allow_empty = TRUE)
+      scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
     } else if (choice == "Job settings") {
       # Job settings logic
       job <- utils::select.list(job_targets, title = "Select which job to configure:")
