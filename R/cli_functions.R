@@ -9,7 +9,7 @@
 #' @keywords internal
 get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
   split_keys_list <- strsplit(key_strings, sep, fixed = TRUE)
-
+  
   ret <- lapply(split_keys_list, function(keys) {
     val <- lst
     for (j in seq_along(keys)) {
@@ -19,15 +19,19 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
     }
     val
   })
-
+  
   names(ret) <- key_strings
-
-  if (simplify && length(ret) == 1) {
-    return(ret[[1]])
-  } else if (simplify && all(vapply(ret, function(x) length(x) == 1 && is.atomic(x), logical(1)))) {
-    return(unlist(ret, use.names = TRUE))
+  
+  if (simplify) {
+    atomic_lengths <- vapply(ret, function(x) is.atomic(x) && length(x) == 1, logical(1))
+    atomic_types <- vapply(ret, typeof, character(1))
+    
+    # simplify when we have only 1 element or when all elements are atomic and the same type
+    if (length(ret) == 1 || (all(atomic_lengths) && length(unique(atomic_types)) == 1)) {
+      ret <- unlist(ret, use.names = TRUE)
+    }
   }
-
+  
   return(ret)
 }
 
