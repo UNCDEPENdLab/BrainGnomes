@@ -1102,11 +1102,17 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
 #'
 #' @param patterns Character vector of column patterns.
 #' @param available Character vector of available column names.
+#' @details
+#'   If a given pattern does not match any of the available columns, it
+#'   will not appear in the expanded columns (i.e., invalid columns are dropped).
+#'   If all patterns fail to match, the funciton will return `NULL`.
+#' 
 #' @return Character vector of expanded column names.
 #' @keywords internal
 expand_confound_columns <- function(patterns, available) {
   checkmate::assert_character(patterns, any.missing = FALSE, null.ok = TRUE)
-  if (length(patterns) == 0 || all(is.na(patterns))) return(character())
+  if (length(patterns) == 0 || all(is.na(patterns))) return(NULL)
+  checkmate::assert_character(available)
 
   res <- unlist(lapply(patterns, function(pat) {
     if (is.na(pat) || pat == "") return(character())
@@ -1127,9 +1133,12 @@ expand_confound_columns <- function(patterns, available) {
       }))
       return(paste0(pre, idx, post))
     } else {
+      # enforce start and end characters to avoid expanding string literals
+      if (substr(pat, start = 1, 1) != "^") pat <- paste0("^", pat)
+      if (substr(pat, nchar(pat), nchar(pat)) != "$") pat <- paste0(pat, "$")
       matches <- grep(pat, available, value = TRUE, perl = TRUE)
-      if (length(matches) > 0) return(matches)
-      return(pat)
+      if (length(matches) == 0L) return(NULL) # return NULL on no match to drop from output
+      else return(matches)
     }
   }))
 
