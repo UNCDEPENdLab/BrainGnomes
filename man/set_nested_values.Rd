@@ -2,10 +2,8 @@
 % Please edit documentation in R/cli_functions.R
 \name{set_nested_values}
 \alias{set_nested_values}
-\title{Assign values to a nested list using key-value strings}
+\title{Assign values to a nested list using key-value strings or named list}
 \usage{
-set_nested_values(assignments, sep = "/", lst = NULL, type_values = TRUE)
-
 set_nested_values(assignments, sep = "/", lst = NULL, type_values = TRUE)
 }
 \arguments{
@@ -20,12 +18,8 @@ or a named list where names encode nested keys (e.g., \code{list("a/b" = 1)}).}
 }
 \value{
 A nested list with the specified keys and values.
-
-A nested list with the specified keys and values.
 }
 \description{
-Parses assignments like \code{"a/b/c=10"} and returns \code{list(a = list(b = list(c = 10)))}.
-
 Parses assignments like \code{"a/b/c=10"} or named lists like \code{list("a/b/c" = 10)} and returns
 \code{list(a = list(b = list(c = 10)))}.
 }

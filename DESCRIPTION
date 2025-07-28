@@ -7,8 +7,7 @@ Description: This R package handles preprocessing and analysis of fMRI data on H
 License: GPL-3
 BugReports: https://github.com/UNCDEPENdLab/BrainGnomes/issues
 Depends:
-    R (>= 4.1.0),
-    methods
+    R (>= 4.1.0)
 LazyData: yes
 LazyLoad: yes
 Encoding: UTF-8

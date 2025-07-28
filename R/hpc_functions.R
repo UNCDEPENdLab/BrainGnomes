@@ -25,6 +25,10 @@
 #' @param wait_jobs a character string of jobs or process ids that should complete before this job is executed
 #' @param wait_signal on torque or slurm clusters, the signal that should indicate that parent jobs have finished.
 #' @param repolling_interval The number of seconds to wait before rechecking job status (used only for local scheduler)
+#' @param tracking_sqlite_db Path to a SQLite database used for job tracking. If provided, job submission metadata
+#'   will be recorded, including job dependencies and parent-child relationships.
+#' @param tracking_args A named list of metadata fields to track about the submitted job. This may include the parent job ID,
+#'   batch script path, and scheduler options. This is used in conjunction with \code{tracking_sqlite_db} to support job tracking.
 #'
 #' @return A character string containing the jobid of the scheduled job.
 #'

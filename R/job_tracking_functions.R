@@ -223,7 +223,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
 #' @param return_parent Return parent jobs of this job
 #' 
 #' @return An R data.frame version of the tracking database
-#' @importFrom DBI dbConnect dbDisconnect
+#' @importFrom DBI dbConnect dbDisconnect dbGetQuery
 #' @importFrom checkmate assert_logical test_file_exists
 #' @importFrom RSQLite SQLite
 #' @export

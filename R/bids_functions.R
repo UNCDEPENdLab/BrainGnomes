@@ -188,7 +188,6 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 #' @param in_file Path to the input BIDS file (e.g., a preprocessed BOLD image).
 #' @param description Character string to use as the new `desc` field in the expected output file.
 #' @param overwrite Logical. If `FALSE`, existing files will not be overwritten.
-#' @param prepend Logical. If `TRUE`, prepend the `description` to the existing description to build a compound description
 #'
 #' @return A list with elements:
 #'   \item{out_file}{Path to the expected output file.}

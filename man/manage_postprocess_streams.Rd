@@ -4,12 +4,10 @@
 \alias{manage_postprocess_streams}
 \title{Interactive menu for managing postprocessing streams}
 \usage{
-manage_postprocess_streams(scfg, fields = NULL, allow_empty = FALSE)
+manage_postprocess_streams(scfg, allow_empty = FALSE)
 }
 \arguments{
 \item{scfg}{A study configuration object, as produced by \code{setup_project()}.}
-
-\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all postprocessing fields will be prompted.}
 
 \item{allow_empty}{Logical indicating whether finishing with zero streams is
 permitted without confirmation.}

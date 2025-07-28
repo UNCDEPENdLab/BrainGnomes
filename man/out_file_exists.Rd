@@ -12,8 +12,6 @@ out_file_exists(in_file, description, overwrite = TRUE)
 \item{description}{Character string to use as the new \code{desc} field in the expected output file.}
 
 \item{overwrite}{Logical. If \code{FALSE}, existing files will not be overwritten.}
-
-\item{prepend}{Logical. If \code{TRUE}, prepend the \code{description} to the existing description to build a compound description}
 }
 \value{
 A list with elements:

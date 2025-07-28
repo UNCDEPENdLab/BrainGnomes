@@ -1,17 +1,17 @@
 #' Load a study configuration from a file
 #' @param file A YAML file containing a valid study configuration.
 #' @param validate Logical indicating whether to validate the configuration after loading. Default: TRUE
-#' @return A list representing the study configuration (class `"bg_project_cfg"`). If `validate` is TRUE, 
+#' @return A list representing the study configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
 #'   the returned object is validated (missing fields may be set to NULL and noted).
 #' @importFrom yaml read_yaml
 #' @export
-load_project <- function(file = NULL, validate=TRUE) {
+load_project <- function(file = NULL, validate = TRUE) {
   if (!checkmate::test_file_exists(file)) stop("Cannot find file: ", file)
   checkmate::test_flag(validate)
   scfg <- read_yaml(file)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
   if (validate) scfg <- validate_project(scfg)
-  
+
   # fill in any gaps in the config
   if (!is.null(attr(scfg, "gaps"))) scfg <- setup_project(scfg, fields = attr(scfg, "gaps"))
   return(scfg)
@@ -19,11 +19,12 @@ load_project <- function(file = NULL, validate=TRUE) {
 
 #' summary method for study configuration object
 #' @param x The study configuration object (`bg_project_cfg`) to summarize.
+#' @param ... additional parameters to summary (not used)
 #' @return Invisibly returns `x` after printing its contents. This function is called 
 #'   for its side effect of printing a formatted summary of the study configuration.
 #' @export
-summary.bg_project_cfg <- function(x, ...) {
-  pretty_print_list(x, indent=2)
+summary.bg_project_cfg <- function(object, ...) {
+  pretty_print_list(object, indent=2)
 }
 
 get_scfg_from_input <- function(input = NULL) {
