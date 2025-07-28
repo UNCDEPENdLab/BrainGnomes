@@ -17,7 +17,8 @@ test_that("scrub_timepoints removes timepoints and updates confounds", {
 
   out <- scrub_timepoints(infile, censor_file,
                           confound_files = conf_file,
-                          prefix = "s", lg = lgr::get_logger_glue("BrainGnomes"))
+                          out_desc = "scrub", lg = lgr::get_logger_glue("BrainGnomes"))
+
   res <- RNifti::readNifti(out)
   expect_equal(dim(res)[4], 3)
 
@@ -45,7 +46,8 @@ test_that("scrub_interpolate updates confounds with nearest-neighbor edges", {
 
   out <- scrub_interpolate(infile, censor_file,
                            confound_files = conf_file,
-                           prefix = "s", lg = lgr::get_logger_glue("BrainGnomes"))
+                           out_desc = "scrub", lg = lgr::get_logger_glue("BrainGnomes"))
+
   conf_new <- data.table::fread(conf_file, header = FALSE)[[1]]
   expected <- conf_df$a
   expected[1] <- conf_df$a[2]

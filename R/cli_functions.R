@@ -23,17 +23,22 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
   names(ret) <- key_strings
   
   if (simplify) {
-    if (length(ret) == 1L) {
-      ret <- ret[[1L]]
-    } else {
+    do_unlist <- FALSE
+    # if more than one value is returned, see if they are atomic and of the same data type
+    if (length(ret) > 1L) {
       atomic_lengths <- vapply(ret, function(x) is.atomic(x) && length(x) == 1, logical(1))
       atomic_types <- vapply(ret, typeof, character(1))
       # simplify when we have only 1 element or when all elements are atomic and the same type
-      if (all(atomic_lengths) && length(unique(atomic_types)) == 1) {
-        ret <- unlist(ret, use.names = TRUE)
+      if (all(atomic_lengths) && length(unique(atomic_types)) == 1) do_unlist <- TRUE
+    } else if (length(ret) == 1L) {
+      if (is.atomic(ret[[1L]])) {
+        do_unlist <- TRUE
+      } else {
+        ret <- ret[[1L]] # pull out first element (probably a list) but don't mess with its names
       }
     }
     
+    if (do_unlist) ret <- unlist(ret, use.names = TRUE)
   }
   
   return(ret)

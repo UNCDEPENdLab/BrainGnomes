@@ -25,12 +25,17 @@ test_that("get_nested_values returns expected values for simplify = TRUE and FAL
   expect_equal(result3[[1]], 2)
   expect_equal(result3[[2]], "y")
   
-  # Test with a single key string
+  # Test with a single key string and atomic return
   result4 <- get_nested_values(nested_list, "postproc3/a", simplify = TRUE)
   expect_type(result4, "double")
   expect_equal(result4, c("postproc3/a" = 3.5))
   
+  # Test with a single key string and list return
+  result5 <- get_nested_values(nested_list, "postproc3", simplify = TRUE)
+  expect_type(result5, "list")
+  expect_equal(result5[[1L]], 3.5)
+  
   # Test with a missing key
-  result5 <- get_nested_values(nested_list, "postproc1/z", simplify = TRUE)
-  expect_true(is.na(result5) || is.null(result5[[1]]))
+  result6 <- get_nested_values(nested_list, "postproc1/z", simplify = TRUE)
+  expect_true(is.na(result6) || is.null(result6[[1]]))
 })
