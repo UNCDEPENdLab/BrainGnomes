@@ -181,6 +181,84 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
   return(TRUE)
 }
 
+#' Check whether a pipeline step is complete
+#'
+#' Determines if the expected output directory and `.complete` marker
+#' are present for a given subject/session and processing step.
+#'
+#' @param scfg Study configuration list
+#' @param sub_id Subject identifier
+#' @param ses_id Optional session identifier
+#' @param step_name Name of the processing step
+#' @param pp_stream Name of the postprocessing stream when `step_name` is
+#'   "postprocess"
+#' @return List containing `complete` (logical), `dir`, and
+#'   `complete_file`
+#' @keywords internal
+is_step_complete <- function(scfg, sub_id, ses_id = NULL,
+                             step_name, pp_stream = NULL) {
+  checkmate::assert_choice(step_name,
+    c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"))
+  if (is.null(ses_id) || is.na(ses_id)) ses_id <- NULL
+
+  session_level <- step_name %in% c("bids_conversion", "postprocess")
+  name_tag <- step_name
+  if (step_name == "postprocess") {
+    checkmate::assert_string(pp_stream)
+    name_tag <- glue("{step_name}_{pp_stream}")
+  }
+
+  sub_str <- glue("_sub-{sub_id}")
+  if (session_level && !is.null(ses_id)) {
+    sub_str <- glue("{sub_str}_ses-{ses_id}")
+  }
+
+  complete_file <- file.path(
+    scfg$metadata$log_directory,
+    glue("sub-{sub_id}"),
+    glue(".{name_tag}{sub_str}_complete")
+  )
+
+  out_dir <- switch(step_name,
+    bids_conversion = if (session_level && !is.null(ses_id)) {
+        file.path(scfg$metadata$bids_directory, glue("sub-{sub_id}"),
+                  glue("ses-{ses_id}"))
+      } else {
+        file.path(scfg$metadata$bids_directory, glue("sub-{sub_id}"))
+      },
+    mriqc = if (!is.null(ses_id)) {
+        file.path(scfg$metadata$mriqc_directory, glue("sub-{sub_id}"),
+                  glue("ses-{ses_id}"))
+      } else {
+        file.path(scfg$metadata$mriqc_directory, glue("sub-{sub_id}"))
+      },
+    fmriprep = if (!is.null(ses_id)) {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"),
+                  glue("ses-{ses_id}"))
+      } else {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+      },
+    aroma = if (!is.null(ses_id)) {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"),
+                  glue("ses-{ses_id}"))
+      } else {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+      },
+    postprocess = if (!is.null(ses_id)) {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"),
+                  glue("ses-{ses_id}"))
+      } else {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+      }
+  )
+
+  complete <- checkmate::test_directory_exists(out_dir) &&
+    checkmate::test_file_exists(complete_file)
+
+  list(complete = complete, dir = out_dir, complete_file = complete_file)
+}
+
+
 #' helper function to extract capturing groups from a string
 #' @param strings a character vector containing the strings to be processed
 #' @param pattern a regex pattern to match the strings

@@ -182,6 +182,18 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(bids_conversion_ids, fmriprep_id))
 
+  ## If postprocessing is requested without rerunning fmriprep, validate
+  ## that the expected fmriprep outputs exist before scheduling jobs
+  if (isTRUE(steps["postprocess"]) && !isTRUE(steps["fmriprep"])) {
+    chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
+    if (!chk$complete) {
+      lg$warn(glue(
+        "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})"
+      ))
+      return(TRUE)
+    }
+  }
+
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
   if (isTRUE(steps["postprocess"])) {
