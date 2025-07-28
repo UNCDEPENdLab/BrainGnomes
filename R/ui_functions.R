@@ -349,21 +349,21 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
 #' @importFrom utils menu select.list
 #' @noRd
 choose_fmriprep_spaces <- function(output_spaces = NULL) {
-  cat(glue("\nfmriprep uses --output-spaces to control the stereotaxic space and resolution
-           of preprocessed images. Its default space is MNI152NLin2009cAsym and the default
-           spatial resolution matches the raw/native data. Here, you can specify the output
-           spaces to be generated. This is not a comprehensive list of all templates available
-           in TemplateFlow (https://github.com/templateflow/templateflow), but it encompasses
-           the most useful ones. The default of MNI152NLin2009cAsym is pretty good, too!
-           For more detail, see: https://fmriprep.org/en/stable/spaces.html.
+  cat(glue("\n
+      fmriprep uses --output-spaces to control the stereotaxic space and resolution
+      of preprocessed images. Its default space is MNI152NLin2009cAsym and the default
+      spatial resolution matches the raw/native data. Here, you can specify the output
+      spaces to be generated. This is not a comprehensive list of all templates available
+      in TemplateFlow (https://github.com/templateflow/templateflow), but it encompasses
+      the most useful ones. The default of MNI152NLin2009cAsym is pretty good, too!
+      For more detail, see: https://fmriprep.org/en/stable/spaces.html.
 
-           Of note, the 'res-' specifier controls the output resolution, but it is not the
-           voxel size! Rather, it refers to a resolution index in the files uploaded to
-           TemplateFlow. Usually, res-1 is 1mm and res-2 is 2mm, but you mileage may vary.
+      Of note, the 'res-' specifier controls the output resolution, but it is not the
+      voxel size! Rather, it refers to a resolution index in the files uploaded to
+      TemplateFlow. Usually, res-1 is 1mm and res-2 is 2mm, but you mileage may vary.
 
-           If you are using AROMA as part of your pipeline, we will automatically add
-           MNI152NLin6Asym:res-2 so that fmripost-aroma can run.\n\n
-           "))
+      If you are using AROMA as part of your pipeline, we will automatically add
+      MNI152NLin6Asym:res-2 so that fmripost-aroma can run.\n\n"))
 
   templates_available <- c(
     "MNI152NLin2009cAsym", "MNI152NLin6Asym", "MNI152NLin6Sym",

@@ -17,6 +17,16 @@ if (is.null(args) || length(args) < 2L) {
   quit(save="no", 1, FALSE)
 }
 
+# ensure that package directory is in R's search path
+pkg_dir <- Sys.getenv("pkg_dir") # location of BrainGnomes installation at time of job queueing
+if (pkg_dir != "") {
+  lib_dir <- dirname(pkg_dir)
+
+  if (!(lib_dir %in% .libPaths())) {
+    .libPaths(c(lib_dir, .libPaths()))
+  }
+}
+
 if (!suppressMessages(require("BrainGnomes", character.only=TRUE))) {
   stop("This script must be run in an R environment with BrainGnomes installed.")
 }

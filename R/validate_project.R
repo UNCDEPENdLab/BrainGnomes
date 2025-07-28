@@ -311,7 +311,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate scrubbing
   if (is.null(ppcfg$scrubbing$enable)) gaps <- c(gaps, "postprocess/scrubbing/enable")
   if ("scrubbing" %in% names(ppcfg) && isTRUE(ppcfg$scrubbing$enable)) {
-    if (!checkmate::test_character(ppcfg$scrubbing$expression)) {
+    if (!checkmate::test_string(ppcfg$scrubbing$expression)) {
       if (!quiet) message(glue("Invalid expression field in $postprocess${cfg_name}$scrubbing"))
       gaps <- c(gaps, "postprocess/scrubbing/expression")
       ppcfg$scrubbing$expression <- NULL
@@ -362,7 +362,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate apply_mask
   if (is.null(ppcfg$apply_mask$enable)) gaps <- c(gaps, "postprocess/apply_mask/enable")
   if ("apply_mask" %in% names(ppcfg) && isTRUE(ppcfg$apply_mask$enable)) {
-    if (!checkmate::test_string(ppcfg$apply_mask$mask_file, null.ok = TRUE) || !checkmate::test_file_exists(ppcfg$apply_mask$mask_file)) {
+    if (!checkmate::test_string(ppcfg$apply_mask$mask_file, null.ok = TRUE, na.ok = TRUE) || (!ppcfg$apply_mask$mask_file[1L] == "template" && !checkmate::test_file_exists(ppcfg$apply_mask$mask_file))) {
       if (!quiet) message(glue("Invalid mask_file in $postprocess${cfg_name}$apply_mask. You will be asked for this."))
       gaps <- c(gaps, "postprocess/apply_mask/mask_file")
       ppcfg$apply_mask$mask_file <- NULL

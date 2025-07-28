@@ -67,7 +67,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     
     sub_id <- null_empty(sub_cfg$sub_id[row_idx]) # make NULL on empty to avoid env export in submit
     ses_id <- null_empty(sub_cfg$ses_id[row_idx])
-    has_ses <- !is.na(ses_id)
+    has_ses <- !is.null(ses_id)
     sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
     if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))

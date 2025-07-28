@@ -618,8 +618,8 @@ setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
       This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
       
       The mask will be applied as a binary filter to the 4D functional data, zeroing out signal outside the brain.
-      You can specify a custom mask file (in the same space and resolution as your fMRI data), or use the default
-      mask produced by your preprocessing pipeline.
+      You can specify a custom mask file (in the same space and resolution as your fMRI data), or use a mask
+      that matches the template space of the preprocessed data (e.g., MNI152NLin2009cAsym).
 
       Do you want to apply a brain mask to your fMRI data?\n
       "),
@@ -639,11 +639,21 @@ setup_apply_mask <- function(ppcfg = list(), fields = NULL) {
   }
 
   if ("postprocess/apply_mask/mask_file" %in% fields) {
-    ppcfg$apply_mask$mask_file <- prompt_input(
-      prompt = "Path to binary brain mask file (NIfTI)",
-      type = "file",
-      required = FALSE
-    )
+    repeat {
+      mask_file <- prompt_input(
+        instruct = "Type 'template' to use the brain mask from TemplateFlow matching the stereotaxic space of the image ('space-<identifier>').",
+        prompt = "Path to brain mask NIfTI file",
+        type = "character",
+        required = FALSE
+      )
+      # mask can be empty, template, or valid file
+      if (checkmate::test_file_exists(mask_file) || is.na(mask_file[1L]) || mask_file == "template") {
+        ppcfg$apply_mask$mask_file <- mask_file
+        break
+      } else {
+        cat("Cannot find mask_file:", mask_file, "\n")
+      }
+    }
   }
 
   if ("postprocess/apply_mask/prefix" %in% fields) {
