@@ -11,7 +11,7 @@ load_project <- function(file = NULL, validate=TRUE) {
   scfg <- read_yaml(file)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
   if (validate) scfg <- validate_project(scfg)
-
+  
   # fill in any gaps in the config
   if (!is.null(attr(scfg, "gaps"))) scfg <- setup_project(scfg, fields = attr(scfg, "gaps"))
   return(scfg)

@@ -1,7 +1,7 @@
-# helper to convert NULL, empty list, or "" to character(0) for conformity
+# helper to convert NULL, empty list, or "", character(0) to NA for conformity
 validate_char <- function(arg) {
-  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || arg[1L] == "") {
-    arg <- character(0)
+  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || (length(arg) == 1L && (is.na(arg[1L]) || arg[1L] == ""))) {
+    arg <- NA_character_
   }
   return(arg)
 }
@@ -31,7 +31,7 @@ validate_job_settings <- function(scfg, job_name = NULL) {
     scfg[[job_name]]$ncores <- NULL
   }
 
-  # conform cli_options to character(0) on empty
+  # conform cli_options to NA_character_ on empty
   scfg[[job_name]]$cli_options <- validate_char(get_nested_values(scfg, job_name)$cli_options)
   scfg[[job_name]]$sched_args <- validate_char(get_nested_values(scfg, job_name)$sched_args)
 
@@ -230,6 +230,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   }
 
   # validate temporal filtering
+  if (is.null(ppcfg$temporal_filter$enable)) gaps <- c(gaps, "postprocess/temporal_filter/enable")
   if ("temporal_filter" %in% names(ppcfg) && isTRUE(ppcfg$temporal_filter$enable)) {
     if (!checkmate::test_number(ppcfg$temporal_filter$low_pass_hz, lower=0)) {
       if (!quiet) message(glue("Missing low_pass_hz in $postprocess${cfg_name}. You will be asked for this."))
@@ -260,6 +261,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   }
 
   # validate spatial smoothing
+  if (is.null(ppcfg$spatial_smooth$enable)) gaps <- c(gaps, "postprocess/spatial_smooth/enable")
   if ("spatial_smooth" %in% names(ppcfg) && isTRUE(ppcfg$spatial_smooth$enable)) {
     if (!checkmate::test_number(ppcfg$spatial_smooth$fwhm_mm, lower = 0.1)) {
       if (!quiet) message(glue("Missing fwhm_mm in $postprocess${cfg_name}$spatial_smooth. You will be asked for this."))
@@ -273,6 +275,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   }
 
   # validate intensity normalization
+  if (is.null(ppcfg$intensity_normalize$enable)) gaps <- c(gaps, "postprocess/intensity_normalize/enable")
   if ("intensity_normalize" %in% names(ppcfg) && isTRUE(ppcfg$intensity_normalize$enable)) {
     if (!checkmate::test_number(ppcfg$intensity_normalize$global_median, lower = 0.1)) {
       if (!quiet) message(glue("Invalid global_median in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
@@ -286,6 +289,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   }
 
   # validate confound calculation
+  if (is.null(ppcfg$confound_calculate$enable)) gaps <- c(gaps, "postprocess/confound_calculate/enable")
   if ("confound_calculate" %in% names(ppcfg) && isTRUE(ppcfg$confound_calculate$enable)) {
     if (!checkmate::test_flag(ppcfg$confound_calculate$demean)) {
       if (!quiet) message(glue("Invalid demean field in $postprocess${cfg_name}$confound_calculate. You will be asked for this."))
@@ -304,6 +308,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
   }
 
+  # validate scrubbing
+  if (is.null(ppcfg$scrubbing$enable)) gaps <- c(gaps, "postprocess/scrubbing/enable")
   if ("scrubbing" %in% names(ppcfg) && isTRUE(ppcfg$scrubbing$enable)) {
     if (!checkmate::test_character(ppcfg$scrubbing$expression)) {
       if (!quiet) message(glue("Invalid expression field in $postprocess${cfg_name}$scrubbing"))
@@ -335,6 +341,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
   }
 
+  if (is.null(ppcfg$confound_regression$enable)) gaps <- c(gaps, "postprocess/confound_regression/enable")
   if ("confound_regression" %in% names(ppcfg) && isTRUE(ppcfg$confound_regression$enable)) {
     if (!checkmate::test_character(ppcfg$confound_regression$columns)) {
       if (!quiet) message(glue("Invalid columns field in $postprocess${cfg_name}$confound_regression"))
@@ -352,6 +359,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
   }
 
+  # validate apply_mask
+  if (is.null(ppcfg$apply_mask$enable)) gaps <- c(gaps, "postprocess/apply_mask/enable")
   if ("apply_mask" %in% names(ppcfg) && isTRUE(ppcfg$apply_mask$enable)) {
     if (!checkmate::test_string(ppcfg$apply_mask$mask_file, null.ok = TRUE) || !checkmate::test_file_exists(ppcfg$apply_mask$mask_file)) {
       if (!quiet) message(glue("Invalid mask_file in $postprocess${cfg_name}$apply_mask. You will be asked for this."))
@@ -365,6 +374,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   }
 
   # validate AROMA application
+  if (is.null(ppcfg$apply_aroma$enable)) gaps <- c(gaps, "postprocess/apply_aroma/enable")
   if ("apply_aroma" %in% names(ppcfg) && isTRUE(ppcfg$apply_aroma$enable)) {
     if (!checkmate::test_flag(ppcfg$apply_aroma$nonaggressive)) {
       if (!quiet) message(glue("Invalid nonaggressive field in $postprocess${cfg_name}$apply_aroma. You will be asked for this."))
@@ -397,7 +407,7 @@ validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
   for (nm in cfg_names) {
     # validate stream job settings
     ppcfg <- validate_job_settings(ppcfg, nm)
-    gaps <- c(gaps, paste0("postprocess/", attr(ppcfg, "gaps")))
+    if (!is.null(attr(ppcfg, "gaps"))) gaps <- c(gaps, paste0("postprocess/", attr(ppcfg, "gaps")))
 
     res <- validate_postprocess_config_single(ppcfg[[nm]], nm, quiet)
     ppcfg[[nm]] <- res$postprocess

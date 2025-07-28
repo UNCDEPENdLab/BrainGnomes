@@ -9,6 +9,13 @@ get_postprocess_stream_names <- function(scfg) {
   }
 }
 
+null_empty <- function(x) {
+  if (is.na(x) || identical(x, character(0)) || identical(x, list()) || length(x) == 0L || x[1L] == "") {
+    x <- NULL
+  }
+  return(x)
+}
+
 #' Preprocess a single subject
 #' @param scfg A list of configuration settings
 #' @param sub_cfg A data.frame of subject configuration settings
@@ -58,8 +65,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       }
     }
     
-    sub_id <- sub_cfg$sub_id[row_idx]
-    ses_id <- sub_cfg$ses_id[row_idx]
+    sub_id <- null_empty(sub_cfg$sub_id[row_idx]) # make NULL on empty to avoid env export in submit
+    ses_id <- null_empty(sub_cfg$ses_id[row_idx])
     has_ses <- !is.na(ses_id)
     sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
     if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")

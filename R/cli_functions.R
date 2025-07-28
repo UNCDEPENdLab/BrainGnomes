@@ -23,60 +23,20 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
   names(ret) <- key_strings
   
   if (simplify) {
-    atomic_lengths <- vapply(ret, function(x) is.atomic(x) && length(x) == 1, logical(1))
-    atomic_types <- vapply(ret, typeof, character(1))
-    
-    # simplify when we have only 1 element or when all elements are atomic and the same type
-    if (length(ret) == 1 || (all(atomic_lengths) && length(unique(atomic_types)) == 1)) {
-      ret <- unlist(ret, use.names = TRUE)
+    if (length(ret) == 1L) {
+      ret <- ret[[1L]]
+    } else {
+      atomic_lengths <- vapply(ret, function(x) is.atomic(x) && length(x) == 1, logical(1))
+      atomic_types <- vapply(ret, typeof, character(1))
+      # simplify when we have only 1 element or when all elements are atomic and the same type
+      if (all(atomic_lengths) && length(unique(atomic_types)) == 1) {
+        ret <- unlist(ret, use.names = TRUE)
+      }
     }
+    
   }
   
   return(ret)
-}
-
-#' Assign values to a nested list using key-value strings
-#'
-#' Parses assignments like \code{"a/b/c=10"} and returns \code{list(a = list(b = list(c = 10)))}.
-#'
-#' @param assignments A character vector of assignment strings (e.g., `"a/b=1"`, `"x/y/z=TRUE"`).
-#' @param sep A character used to separate keys. Default is \code{"/"}.
-#' @param lst Optional list to update. If `NULL`, a new list is created from scratch.
-#' @param type_values Logical; whether to attempt to convert right-hand side strings to relevant data
-#'   types using `type.convert`.
-#'
-#' @return A nested list with the specified keys and values.
-#' @importFrom utils modifyList
-#' @importFrom stats setNames
-#' @keywords internal
-set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
-  checkmate::assert_character(assignments)
-  checkmate::assert_list(lst, null.ok = TRUE)
-  checkmate::assert_flag(type_values)
-  if (is.null(lst)) lst <- list()
-
-  for (a in assignments) {
-    parts <- strsplit(a, "=", fixed = TRUE)[[1]]
-    if (length(parts) != 2L) stop("Invalid assignment format: ", assignment)
-    key_str <- parts[1]
-    val_str <- parts[2]
-
-    keys <- strsplit(key_str, sep, fixed = TRUE)[[1]]
-
-    value <- scan(text = val_str, what = character(), quote = "'\"", quiet = TRUE)
-    if (type_values) value <- type.convert(value, as.is = TRUE)
-
-    # Build nested list from inside out
-    nested <- value
-    for (key in rev(keys)) {
-      nested <- setNames(list(nested), key)
-    }
-
-    # Merge into overall list
-    lst <- modifyList(lst, nested)
-  }
-
-  return(lst)
 }
 
 #' Assign values to a nested list using key-value strings or named list

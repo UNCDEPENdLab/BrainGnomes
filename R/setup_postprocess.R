@@ -1,23 +1,3 @@
-postprocess_field_list <- function() {
-  c(
-    "input_regex", "bids_desc", "keep_intermediates", "overwrite",
-    "tr", "brain_mask",
-    "apply_mask/mask_file", "apply_mask/prefix",
-    "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
-    "apply_aroma/nonaggressive", "apply_aroma/prefix",
-    "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
-    "temporal_filter/method", "temporal_filter/prefix",
-    "intensity_normalize/global_median", "intensity_normalize/prefix",
-    "confound_calculate/columns", "confound_calculate/noproc_columns",
-    "confound_calculate/demean",
-    "scrubbing/expression", "scrubbing/add_to_confounds",
-    "scrubbing/interpolate", "scrubbing/interpolate_prefix",
-    "scrubbing/apply", "scrubbing/prefix",
-    "confound_regression/columns", "confound_regression/noproc_columns",
-    "confound_regression/prefix",
-    "force_processing_order", "processing_steps"
-  )
-}
 
 #' Interactive menu for managing postprocessing streams
 #'
@@ -25,12 +5,32 @@ postprocess_field_list <- function() {
 #' streams. Used by both `setup_postprocess_streams()` and `edit_project()`.
 #'
 #' @param scfg A study configuration object, as produced by `setup_project()`.
-#' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
 #' @param allow_empty Logical indicating whether finishing with zero streams is
 #'   permitted without confirmation.
 #' @return Modified `scfg` with updated postprocessing streams
 #' @keywords internal
-manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE) {
+manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
+  postprocess_field_list <- function() {
+    c(
+      "input_regex", "bids_desc", "keep_intermediates", "overwrite",
+      "tr", "brain_mask",
+      "apply_mask/mask_file", "apply_mask/prefix",
+      "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
+      "apply_aroma/nonaggressive", "apply_aroma/prefix",
+      "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
+      "temporal_filter/method", "temporal_filter/prefix",
+      "intensity_normalize/global_median", "intensity_normalize/prefix",
+      "confound_calculate/columns", "confound_calculate/noproc_columns",
+      "confound_calculate/demean",
+      "scrubbing/expression", "scrubbing/add_to_confounds",
+      "scrubbing/interpolate", "scrubbing/interpolate_prefix",
+      "scrubbing/apply", "scrubbing/prefix",
+      "confound_regression/columns", "confound_regression/noproc_columns",
+      "confound_regression/prefix",
+      "force_processing_order", "processing_steps"
+    )
+  }
+
   show_val <- function(val) {
     if (is.null(val)) "[NULL]"
     else if (is.logical(val)) toupper(as.character(val))
@@ -54,7 +54,7 @@ manage_postprocess_streams <- function(scfg, fields = NULL, allow_empty = FALSE)
                    title = "Modify postprocessing streams:")
 
     if (choice == 1) {
-      scfg <- setup_postprocess_stream(scfg, fields = fields)
+      scfg <- setup_postprocess_stream(scfg) # add new stream
     } else if (choice == 2) {
       if (length(streams) == 0) {
         cat("No streams to edit.\n")
@@ -167,6 +167,28 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
 
+  # if fields are present, prompt only for those that are present
+  if (!is.null(fields) && any(grepl("^postprocess/", fields))) {
+    postproc_fields <- grep("^postprocess/", fields, value = TRUE)
+
+    # Extract stream and setting using sub()
+    # stream_setting <- sub("^postprocess/", "", postproc_fields)
+    stream_split <- strsplit(postproc_fields, "/", fixed = TRUE)
+
+    # Build a named list of settings by stream
+    stream_list <- split(
+      postproc_fields,
+      #vapply(stream_split, function(parts) parts[[2]], character(1)),
+      vapply(stream_split, function(parts) parts[[2]], character(1))
+    )
+
+    for (ss in seq_along(stream_list)) {
+      scfg <- setup_postprocess_stream(scfg, fields = stream_list[[ss]], stream_name = names(stream_list)[ss])
+    }
+
+    return(scfg) # skip out before menu system when fields are passed
+  }
+
   cat(glue("\n
       Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
       Each stream also asks about which files should be postprocessed using the stream. For example,
@@ -174,7 +196,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       be processed a different way.\n
       "))
 
-  scfg <- manage_postprocess_streams(scfg, fields = fields, allow_empty = TRUE)
+  scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
 
   return(scfg)
 }
@@ -197,7 +219,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
 
   # enable should be set by setup_postprocess_streams -- if it's FALSE, don't even think about specific streams
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
-  
+
   # convert fields from postprocess/<stream_name>/field to postprocess/field for simplicity in subordinate setup functions
   if (!is.null(fields)) fields <- sub(paste0("^postprocess/", stream_name, "/"), "postprocess/", fields)
 
@@ -233,7 +255,6 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   
   # validate unique bids_desc
   all_bids_desc <- unlist(lapply(stream_names[stream_names != stream_name], function(nm) scfg$postprocess[[nm]]$bids_desc))
-  
   ppcfg <- setup_postprocess_globals(ppcfg, fields, all_bids_desc)
   # setup_job requires the top-level list for postprocess -- spoof this for handling nested field names
   spoof <- list(postprocess = ppcfg)

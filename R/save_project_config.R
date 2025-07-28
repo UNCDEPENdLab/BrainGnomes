@@ -65,41 +65,46 @@ save_project_config <- function(scfg, file = NULL) {
 #' @keywords internal
 compare_lists <- function(old, new, path = "", max_diffs = 100) {
   differences <- list()
-  
+
   compare_recursive <- function(old, new, path) {
-    if (length(differences) >= max_diffs) return()
-    
+    if (length(differences) >= max_diffs) {
+      return()
+    }
+
+    # If both are lists, compare their keys recursively
     if (is.list(old) && is.list(new)) {
       all_keys <- union(names(old), names(new))
-      
+
       for (k in all_keys) {
         subpath <- if (nzchar(path)) paste0(path, "$", k) else k
-        
+
         if (!k %in% names(old)) {
-          # present in new, absent in old
           differences[[length(differences) + 1]] <<- paste0(
-            "$", path, ":\n      old: [absent]\n      new: ",
-            deparse1(new), " <", typeof(new), ">"
+            "$", subpath, ":\n      old: [absent]\n      new: ",
+            deparse1(new[[k]]), " <", typeof(new[[k]]), ">"
           )
         } else if (!k %in% names(new)) {
           differences[[length(differences) + 1]] <<- paste0(
-            "$", path, ":\n      old: ",
-            deparse1(old), " <", typeof(old), ">\n      new: [absent]"
+            "$", subpath, ":\n      old: ",
+            deparse1(old[[k]]), " <", typeof(old[[k]]), ">\n      new: [absent]"
           )
         } else {
           compare_recursive(old[[k]], new[[k]], subpath)
+        }
+
+        if (length(differences) >= max_diffs) {
+          return()
         }
       }
     } else if (!identical(old, new)) {
       differences[[length(differences) + 1]] <<- paste0(
         "$", path, ":\n      old: ",
-        deparse1(old), " <", typeof(old), ">\n      new: ", 
-        deparse1(new), " <", typeof(new), ">")
+        deparse1(old), " <", typeof(old), ">\n      new: ",
+        deparse1(new), " <", typeof(new), ">"
+      )
     }
   }
-  
   compare_recursive(old, new, path)
-
+  
   return(invisible(differences))
 }
-
