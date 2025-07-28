@@ -97,38 +97,40 @@ function rel() {
     esac
   done
 
-  local cmd="$*"
+  # preserve original spacing and quoting of arguments
+  local cmd=("$@")
+  local cmd_str="${cmd[*]}" # cmd as single string for printing
 
   # Handle comment-only output
   if [ $comment -eq 1 ]; then
     # echo command to screen and log with dashes to offset text visually
     # if a blank string is passed as the command, include this without dashes (pure whitespace)
-    [[ -n "$cmd" ]] && cmd="--- $cmd"
+    [[ -n "$cmd_str" ]] && cmd_str="--- $cmd_str"
 
-    echo -e "$cmd" # echo to screen
+    echo -e "$cmd_str" # echo to screen
 
     # if we are writing comment to log, prepend with ## to separate comments from output
-    [ -n "$log" ] && echo -e "## $cmd" >> "$log" # log
+    [ -n "$log" ] && echo -e "## $cmd_str" >> "$log" # log
     
     return 0 # return immediately if we are just commenting
   fi
 
   # log the command
-  [ -n "$log" ] && echo -e "$cmd" >> "$log"
+  [ -n "$log" ] && echo -e "$cmd_str" >> "$log"
   
-  #echo command to screen verbatim if we are not capturing stdout
-  [ $capture_stdout -eq 0 ] && echo "$cmd"
+  # echo command to screen verbatim if we are not capturing stdout
+  [ $capture_stdout -eq 0 ] && echo "$cmd_str"
 
   #run command
   [ $timeit -eq 1 ] && tic=$(date +%s)
   if [ $capture_stdout -eq 1 ]; then
     # if we are capturing stdout, we need to save the output of the command and not echo it to the screen
-    cmdOutput=$(eval "$cmd")
+    cmdOutput=$("$cmd[@]")
     cmdExit=$?
     [ -n "$log" ] && echo -e "## stdout: $cmdOutput" >> "$log"
   else
     # otherwise, run the command and let it print to the screen
-    eval "$cmd"
+    "${cmd[@]}"
     cmdExit=$?
   fi
   [ $timeit -eq 1 ] && toc=$(date +%s)
