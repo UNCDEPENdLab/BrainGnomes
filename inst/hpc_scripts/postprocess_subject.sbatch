@@ -29,16 +29,17 @@ ncores=$SLURM_NTASKS
 [ ! -r "$loc_mrproc_root" ] && echo "loc_mrproc_root $loc_mrproc_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
-[ -z "$postproc_cli" ] && echo "postproc_cli not set. Exiting." && exit 1
-[ -z "$postproc_rscript" ] && echo "postproc_rscript not set. Exiting." && exit 1
-[ ! -f "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not found. Exiting" && exit 1
-[ ! -r "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not readable. Exiting" && exit 1
+[ -z "$postprocess_cli" ] && echo "postprocess_cli not set. Exiting." && exit 1
+[ -z "$postprocess_rscript" ] && echo "postprocess_rscript not set. Exiting." && exit 1
+[ ! -f "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not found. Exiting" && exit 1
+[ ! -r "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not readable. Exiting" && exit 1
 [ -z "$input_dir" ] && echo "input_dir is not set. Exiting" && exit 1
 [ ! -d "$input_dir" ] && echo "input_dir $input_dir cannot be found. Exiting" && exit 1
 [ -z "$input_regex" ] && echo "input_regex is not set. Exiting" && exit 1
-[  -z "$postproc_image_sched_script" ] && echo "postproc_image_sched_script is not set. Exiting" && exit 1
-[ ! -f "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not found. Exiting" && exit 1
-[ ! -r "$postproc_image_sched_script" ] && echo "postproc_image_sched_script $postproc_image_sched_script not readable. Exiting" && exit 1
+[  -z "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script is not set. Exiting" && exit 1
+[ ! -f "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not found. Exiting" && exit 1
+[ ! -r "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not readable. Exiting" && exit 1
+[ -z "$stream_name" ] && echo "stream_name not set. Exiting" && exit 1
 
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
@@ -74,7 +75,7 @@ log_flag=""
 
 ### Pass forward only sched_args and CLI options that don't conflict with the child arguments
 sched_args="$(rm_cli_fields "$sched_args" job-name output error)"
-postproc_cli="$(rm_cli_fields "$postproc_cli" input input_regex)"
+postprocess_cli="$(rm_cli_fields "$postprocess_cli" input input_regex)"
 
 ### Look for all relevant input files in the input directory
 full_regex="${input_dir%/}/$input_regex"  # Ensure slash between dir and file
@@ -93,20 +94,20 @@ job_ids=()
 for f in "${files[@]}"; do
   
   fname=$(remove_ext "$f")
-  jobname="postproc_${fname}"
+  jobname="postprocess_${fname}"
 
   # create separate logs for each image -- place in the same location as the subject-level job
-  postproc_stdout_log="$(dirname $stdout_log)/postproc_${fname}_jobid-%j.out"
-  postproc_stderr_log="$(dirname $stdout_log)/postproc_${fname}_jobid-%j.err"
+  postprocess_stdout_log="$(dirname $stdout_log)/postprocess_${stream_name}_${fname}_jobid-%j.out"
+  postprocess_stderr_log="$(dirname $stdout_log)/postprocess_${stream_name}_${fname}_jobid-%j.err"
   
   jid=$(sbatch \
     --parsable \
     $sched_args \
     --job-name="$jobname" \
-    --output="$postproc_stdout_log" \
-    --error="$postproc_stderr_log" \
-    --export=ALL,input_file="$f",stdout_log="$postproc_stdout_log",stderr_log="$postproc_stderr_log" \
-    "$postproc_image_sched_script")
+    --output="$postprocess_stdout_log" \
+    --error="$postprocess_stderr_log" \
+    --export=ALL,input_file="$f",stdout_log="$postprocess_stdout_log",stderr_log="$postprocess_stderr_log" \
+    "$postprocess_image_sched_script")
   
   log_message INFO Submitted postprocessing job $jid for $(basename $f) in $out_dir
   job_ids+=("$jid")

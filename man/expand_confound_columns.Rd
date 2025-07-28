@@ -4,7 +4,7 @@
 \alias{expand_confound_columns}
 \title{Expand confound column patterns}
 \usage{
-expand_confound_columns(patterns, available)
+expand_confound_columns(patterns = NULL, available)
 }
 \arguments{
 \item{patterns}{Character vector of column patterns.}

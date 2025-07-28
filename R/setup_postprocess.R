@@ -169,16 +169,15 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   # if fields are present, prompt only for those that are present
   if (!is.null(fields) && any(grepl("^postprocess/", fields))) {
-    postproc_fields <- grep("^postprocess/", fields, value = TRUE)
+    postprocess_fields <- grep("^postprocess/", fields, value = TRUE)
 
     # Extract stream and setting using sub()
-    # stream_setting <- sub("^postprocess/", "", postproc_fields)
-    stream_split <- strsplit(postproc_fields, "/", fixed = TRUE)
+    # stream_setting <- sub("^postprocess/", "", postprocess_fields)
+    stream_split <- strsplit(postprocess_fields, "/", fixed = TRUE)
 
     # Build a named list of settings by stream
     stream_list <- split(
-      postproc_fields,
-      #vapply(stream_split, function(parts) parts[[2]], character(1)),
+      postprocess_fields,
       vapply(stream_split, function(parts) parts[[2]], character(1))
     )
 
@@ -268,7 +267,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_confound_calculate(ppcfg, fields)
   ppcfg <- setup_scrubbing(ppcfg, fields)
   ppcfg <- setup_confound_regression(ppcfg, fields)
-  ppcfg <- setup_postproc_steps(ppcfg, fields)
+  ppcfg <- setup_postprocess_steps(ppcfg, fields)
 
   # repopulate the relevant part of scfg
   scfg$postprocess[[stream_name]] <- ppcfg
@@ -314,7 +313,7 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
         type = "character", len = 1L, default = "postproc",
         instruct = glue("\n
           What should be the description field for the final postprocessed file?
-          This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz.\n
+          This will yield a name like sub-540294_task-ridl_run-01_space-MNI152NLin6Asym_desc-postprocess_bold.nii.gz.\n
         ")
       )
       
@@ -377,7 +376,7 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
 #'   particularly because if we filter certain frequencies from the fMRI data, we must filter any regressors that we
 #'   later apply to the data -- that is, confounds and fMRI data must match in frequency content prior to regression.
 #'   See Hallquist, Hwang, & Luna (2013) or Lindquist (2019) for details.
-setup_postproc_steps <- function(ppcfg = list(), fields = NULL) {
+setup_postprocess_steps <- function(ppcfg = list(), fields = NULL) {
   # if (is.null(scfg$postprocess$processing_steps)) {
   #   stop("missing processing_steps. Run out of order?")
   # }

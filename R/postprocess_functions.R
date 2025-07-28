@@ -58,7 +58,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     log_dir <- dirname(sub_log_file)
   }
   
-  # Setup default log file -- need to make sure it always goes in the subject log folder
+  # Setup default postprocess log file -- need to make sure it always goes in the subject log folder
   if (is.null(cfg$log_file)) {
     cfg$log_file <- construct_bids_filename(modifyList(input_bids_info, list(ext=".log", description=cfg$bids_desc)), full.names=FALSE)
   } else {
@@ -157,7 +157,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   }
 
   lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
-  
+
   #### handle confounds, filtering to match MRI data. This will also calculate scrubbing information, if requested
   to_regress <- postprocess_confounds(
     proc_files = proc_files,
@@ -242,7 +242,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "intensity_normalize") {
-      lg$info("Intensity normalizing fMRI data to global median: {cfg$intensity_normalize$global_median}")
       cur_file <- intensity_normalize(cur_file, out_desc = out_desc,
         brain_mask = brain_mask,
         global_median = cfg$intensity_normalize$global_median,
@@ -767,7 +766,9 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
-  }  
+  }
+
+  lg$info("Intensity normalizing fMRI data to global median: {global_median}")
 
   # handle extant file
   res <- out_file_exists(in_file, out_desc, overwrite)
@@ -1042,11 +1043,16 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
     }
 
     spike_vec <- tryCatch(with(confounds_df, eval(parse(text = expr))), error = function(e) {
-      lg$error("Problem evaluating spike expression: %s", expr)
+      lg$error("Problem evaluating spike expression: {expr}")
       return(NULL)
     })
 
-    which_spike <- which(spike_vec)
+    if (!checkmate::test_logical(spike_vec)) {
+      lg$error("Spike expression {expr} did not return a vector of TRUE/FALSE values.")
+      return(NULL)
+    }
+
+    which_spike <- which(spike_vec == TRUE)
     if (length(which_spike) == 0L) return(NULL)
 
     spike_df <- do.call(cbind, lapply(which_spike, function(xx) {
@@ -1109,10 +1115,11 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
 #' 
 #' @return Character vector of expanded column names.
 #' @keywords internal
-expand_confound_columns <- function(patterns, available) {
-  checkmate::assert_character(patterns, any.missing = FALSE, null.ok = TRUE)
-  if (length(patterns) == 0 || all(is.na(patterns))) return(NULL)
-  checkmate::assert_character(available)
+expand_confound_columns <- function(patterns = NULL, available) {
+  if (is.null(patterns) || length(patterns) == 0 || all(is.na(patterns))) return(NULL) # nothing to expand
+  checkmate::assert_character(patterns, all.missing = FALSE)
+  patterns <- na.omit(patterns) # just in case 
+  checkmate::assert_character(available) 
 
   res <- unlist(lapply(patterns, function(pat) {
     if (is.na(pat) || pat == "") return(character())
@@ -1223,24 +1230,29 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     }
 
     confounds_to_filt <- subset(confounds, select = confound_cols)
-    tmp_out <- file.path(tempdir(), sub(".tsv$", "", basename(proc_files$confounds)))
+
+    # generate fake NIfTI with confound timeseries
+    confounds_bids <- extract_bids_info(proc_files$confounds)
+    tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
 
+    # Regress out AROMA components, if requested (overwrites file in place)
     if ("apply_aroma" %in% processing_sequence) {
       lg$info("Removing AROMA noise components from confounds")
-      confound_nii <- apply_aroma(confound_nii,
+      confound_nii <- apply_aroma(confound_nii, out_desc = cfg$bids_desc,
         mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
-        overwrite = cfg$overwrite, lg = lg, use_R = TRUE, fsl_img = fsl_img
+        overwrite = TRUE, lg = lg, use_R = TRUE, fsl_img = fsl_img
       )
     }
 
+    # Temporally filter confounds, if requested (overwrites file in place)
     if ("temporal_filter" %in% processing_sequence) {
       lg$info("Temporally filtering confounds")
       confound_nii <- temporal_filter(confound_nii,
-        tr = cfg$tr,
+        tr = cfg$tr, out_desc = cfg$bids_desc,
         low_pass_hz = cfg$temporal_filter$low_pass_hz,
         high_pass_hz = cfg$temporal_filter$high_pass_hz,
-        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img,
+        overwrite = TRUE, lg = lg, fsl_img = fsl_img,
         method = cfg$temporal_filter$method
       )
     }

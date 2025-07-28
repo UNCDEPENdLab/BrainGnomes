@@ -165,10 +165,15 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 
     suffix <- row["suffix"]
     ext <- row["ext"]
-    if (is.na(suffix) || suffix == "") stop("Missing suffix.")
-    if (is.na(ext) || ext == "") stop("Missing file extension.")
+    # if (is.na(suffix) || suffix == "") stop("Missing suffix.")
+    # if (is.na(ext) || ext == "") stop("Missing file extension.")
+    # prefix suffix with underscore if present
+    suffix <- if (checkmate::test_string(suffix, min.chars = 1L)) paste0("_", suffix) else ""
+     # add extension to filename, if present
+    if (checkmate::test_string(ext, min.chars = 1L)) suffix <- paste0(suffix, ext)
 
-    paste0(paste(parts, collapse = "_"), "_", suffix, ext)
+    # reconstruct the full filename
+    paste0(paste(parts, collapse = "_"), suffix)
   })
 
   # append directory 
@@ -200,7 +205,6 @@ out_file_exists <- function(in_file, description, overwrite = TRUE) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(description)
   checkmate::assert_flag(overwrite)
-  checkmate::assert_flag(prepend)
 
   # Parse and update BIDS fields
   bids_info <- extract_bids_info(in_file)

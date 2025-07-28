@@ -94,7 +94,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     jobid_str <- ifelse(has_ses, glue("{name_tag}_sub-{sub_id}_ses-{ses_id}"), glue("{name_tag}_sub-{sub_id}"))
     env_variables <- c(
       debug_pipeline = scfg$debug,
-      pkg_dir = system.file(package = "BrainGnomes"), # root of inst folder for installed R package
+      pkg_dir = find.package(package = "BrainGnomes"), # location of installed R package
       R_HOME = R.home(), # populate location of R installation so that it can be used by any child R jobs
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
@@ -182,21 +182,20 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(bids_conversion_ids, fmriprep_id))
 
-  ## If postprocessing is requested without rerunning fmriprep, validate
-  ## that the expected fmriprep outputs exist before scheduling jobs
-  if (isTRUE(steps["postprocess"]) && !isTRUE(steps["fmriprep"])) {
-    chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
-    if (!chk$complete) {
-      lg$warn(glue(
-        "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})"
-      ))
-      return(TRUE)
-    }
-  }
-
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
   if (isTRUE(steps["postprocess"])) {
+    ## If postprocessing is requested without running fmriprep, validate that the expected fmriprep outputs exist before scheduling jobs
+    if (!isTRUE(steps["fmriprep"])) {
+      chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
+      if (!chk$complete) {
+        lg$warn(glue(
+          "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})"
+        ))
+        return(TRUE)
+      }
+    }
+
     all_streams <- get_postprocess_stream_names(scfg)
     if (is.null(postprocess_streams)) {
       if (is.null(all_streams)) {
@@ -289,7 +288,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("--fs-license-file {scfg$fmriprep$fs_license_file}"),
     glue("--output-spaces {scfg$fmriprep$output_spaces}"),
     glue("--mem {scfg$fmriprep$memgb*1000}") # convert to MB
-  ), collapse=TRUE)
+  ), collapse = TRUE)
 
   if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
     lg$debug("Creating missing templateflow_home directory: {scfg$metadata$templateflow_home}")
@@ -406,8 +405,8 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
 sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL) {
   if (is.null(pp_stream)) stop("Cannot submit a postprocessing job without specifying a pp_stream")
 
-  postproc_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
-  postproc_image_sched_script <- get_job_script(scfg, "postprocess_image")
+  postprocess_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
+  postprocess_image_sched_script <- get_job_script(scfg, "postprocess_image")
 
   # postprocessing
   input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
@@ -416,19 +415,20 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   # pull the requested postprocessing stream from the broader list
   pp_cfg <- scfg$postprocess[[pp_stream]]
   pp_cfg$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
-  postproc_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script
+  postprocess_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script
   
   env_variables <- c(
     env_variables,
     loc_mrproc_root = scfg$metadata$fmriprep_directory,
     sub_id = sub_id,
     ses_id = ses_id,
-    postproc_cli = postproc_cli,
-    postproc_rscript = postproc_rscript,
+    postprocess_cli = postprocess_cli,
+    postprocess_rscript = postprocess_rscript,
     input_dir = input_dir, # postprocess_subject.sbatch will figure out files to postprocess using input and input_regex
     input_regex = pp_cfg$input_regex,
-    postproc_image_sched_script = postproc_image_sched_script,
-    sched_args = sched_args # pass through to child processes
+    postprocess_image_sched_script = postprocess_image_sched_script,
+    sched_args = sched_args, # pass through to child processes
+    stream_name = pp_stream
   )
 
   job_id <- cluster_job_submit(sched_script,
@@ -437,7 +437,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled postprocess job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled postprocess stream {pp_stream} job: {attr(job_id, 'cmd')}")
 
   return(job_id)
 

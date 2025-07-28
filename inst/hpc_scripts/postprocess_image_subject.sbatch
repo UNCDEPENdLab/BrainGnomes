@@ -30,10 +30,10 @@ ncores=$SLURM_NTASKS
 [ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
 [ ! -r "$loc_mrproc_root" ] && echo "loc_mrproc_root $loc_mrproc_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
-[ -z "$postproc_cli" ] && echo "postproc_cli not set. Exiting." && exit 1
-[ -z "$postproc_rscript" ] && echo "postproc_rscript not set. Exiting." && exit 1
-[ ! -f "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not found. Exiting" && exit 1
-[ ! -r "$postproc_rscript" ] && echo "postproc_rscript $postproc_rscript not readable. Exiting" && exit 1
+[ -z "$postprocess_cli" ] && echo "postprocess_cli not set. Exiting." && exit 1
+[ -z "$postprocess_rscript" ] && echo "postprocess_rscript not set. Exiting." && exit 1
+[ ! -f "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not found. Exiting" && exit 1
+[ ! -r "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not readable. Exiting" && exit 1
 [ -z "$input_file" ] && echo "input_file not set. Exiting." && exit 1
 [ ! -f "$input_file" ] && echo "input_file $input_file not found. Exiting" && exit 1
 [ ! -r "$input_file" ] && echo "input_file $input_file not readable. Exiting" && exit 1
@@ -75,7 +75,7 @@ start_time=$(date +%s)
 
 log_message INFO Starting postprocessing for image $input_file in $out_dir with mem: $mem
 
-rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postproc_rscript" --input="$input_file" $postproc_cli &
+rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &
 cmd_pid=$!
 
 set +e

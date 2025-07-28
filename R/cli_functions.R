@@ -268,6 +268,7 @@ args_to_df <- function(arg_vec = NULL) {
 set_cli_options <- function(args = NULL, new_values = NULL, collapse=FALSE) {
   checkmate::assert_character(new_values)
   if (is.list(args) && length(args) ==  0L) args <- NULL # convert empty list to NULL
+  if (!is.null(args) && length(args) == 1L && is.na(args[1L])) args <- NULL # convert NA input to NULL
 
   # helper to convert a parsed CLI data.frame back into a character string of CLI arguments
   df_to_args <- function(df) {

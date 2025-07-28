@@ -58,7 +58,7 @@ cli_args <- BrainGnomes::parse_cli_args(args)
 if (!is.null(cli_args$config_yaml)) {
   checkmate::assert_file_exists(cli_args$config_yaml)
   cfg <- yaml::read_yaml(cli_args$config_yaml)
-  cli_args$confg_yaml <- NULL # remove prior to additional updates
+  cli_args$config_yaml <- NULL # remove prior to additional updates
 } else {
   cfg <- list()
 }

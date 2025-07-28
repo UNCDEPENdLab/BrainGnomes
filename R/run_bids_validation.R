@@ -33,7 +33,7 @@ run_bids_validation <- function(scfg, outfile = NULL) {
 
   env_variables <- c(
     debug_pipeline = scfg$debug,
-    pkg_dir = system.file(package = "BrainGnomes"),
+    pkg_dir = find.package(package = "BrainGnomes"),
     R_HOME = R.home(),
     log_file = log_file,
     stdout_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
