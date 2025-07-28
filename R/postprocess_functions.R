@@ -173,7 +173,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # output files use camelCase, with desc on the end, like desc-ismPostproc1, where ism are the steps that have been applied
   prefix_chain <- "" # used for accumulating prefixes with each step
-  out_desc <- paste0(toupper(substr(cfg$bids_desc, 1, 1)), substr(cfg$bids_desc, 2, nchar(cfg$bids_desc)))
+  base_desc <- paste0(toupper(substr(cfg$bids_desc, 1, 1)), substr(cfg$bids_desc, 2, nchar(cfg$bids_desc)))
 
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
@@ -192,7 +192,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     )
 
     prefix_chain <- paste0(step_prefix, prefix_chain)
-    out_desc <- paste0(prefix_chain, out_desc)
+    out_desc <- paste0(prefix_chain, base_desc)
 
     if (step == "apply_mask") {
       lg$info("Masking fMRI data using file: {brain_mask}")
@@ -208,6 +208,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
       file_set <- c(file_set, cur_file)
     } else if (step == "apply_aroma") {
+      lg$info("Removing AROMA noise components from fMRI data")
       cur_file <- apply_aroma(cur_file, out_desc = out_desc,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
@@ -624,7 +625,6 @@ apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwr
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Removing AROMA noise components from fMRI data")
   lg$debug("in_file: {in_file}")
   lg$debug("mixing_file: {mixing_file}")
 
@@ -655,7 +655,7 @@ apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwr
     regfilt_rscript <- system.file("fsl_regfilt.R", package = "BrainGnomes")
     if (!file.exists(regfilt_rscript)) stop("Cannot find fsl_regfilt.R script in the BrainGnomes installation folder")
 
-    cmd <- glue("Rscript --vanilla {regfilt_rscript} --input={in_file} --melodic_mix={mixing_file} --filter={noise_ics} --njobs=1 --output={out_file}")
+    cmd <- glue("{Sys.getenv('R_HOME')}/Rscript --vanilla {regfilt_rscript} --input={in_file} --melodic_mix={mixing_file} --filter={noise_ics} --njobs=1 --output={out_file}")
     lg$info("Running fsl_regfilt.R: {cmd}")
     system(cmd)
   } else {
@@ -827,7 +827,7 @@ confound_regression <- function(in_file, out_desc = NULL, to_regress=NULL, censo
     out_file <- res$out_file
   }
 
-  method <- "lmfit" # for testing
+  method <- "lmfit" # default -- supports fitting coefficients to good timepoints
 
   if (method == "fsl") {
     # convert text file to FSL vest file for fsl_glm to accept it
@@ -848,7 +848,7 @@ confound_regression <- function(in_file, out_desc = NULL, to_regress=NULL, censo
     lg$info("Using internal lmfit confound regression function")
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
     if (checkmate::test_file_exists(censor_file)) {
-      good_vols <- as.logical(readLines(censor_file)) # bad timepoints are 0 in the censor file
+      good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
       if (sum(good_vols) < length(good_vols)) lg$info("Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
     }
     

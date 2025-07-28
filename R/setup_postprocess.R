@@ -794,7 +794,9 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
         - Filtered regressors: typically continuous-valued signals derived from fMRI (e.g., DVARS, a_comp_cor_*, global signal)
         - Unfiltered regressors: typically discrete-valued indicators (e.g., motion_outlier*) that should not be filtered
 
-      Wildcards (*) and ranges ([1-6]) can be used to match multiple column names.
+      The specification can be a regular expression (e.g., a_comp_cor_[0-9+]) or a numeric range using
+      a syntax like a_comp_cor_<1-10> or a subset like a_comp_cor_<1,2,5>. These will then be expanded
+      to encompass the matching confound regressors (e.g., the first 10 aCompCor components).
 
       Do you want to create a confound file in postprocessing?\n
       "),
