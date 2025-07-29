@@ -11,6 +11,7 @@ This R package handles preprocessing and analysis of fMRI data on HPC clusters.
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://uncdependlab.github.io/BrainGnomes/}
   \item Report bugs at \url{https://github.com/UNCDEPENdLab/BrainGnomes/issues}
 }
 
