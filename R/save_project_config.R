@@ -27,8 +27,7 @@ save_project_config <- function(scfg, file = NULL) {
     cfg_differences <- compare_lists(old_cfg, scfg)
 
     if (length(cfg_differences) == 0L) {
-      message("No configuration differences were found. File is unchanged.")
-      return(invisible(scfg))
+      return(invisible(scfg)) # no changes
     } else {
       cat("Configuration differences:\n")
       for (dd in cfg_differences) {

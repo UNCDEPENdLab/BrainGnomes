@@ -194,6 +194,7 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #'   "postprocess"
 #' @return List containing `complete` (logical), `dir`, and
 #'   `complete_file`
+#' @importFrom checkmate assert_choice
 #' @keywords internal
 is_step_complete <- function(scfg, sub_id, ses_id = NULL,
                              step_name, pp_stream = NULL) {

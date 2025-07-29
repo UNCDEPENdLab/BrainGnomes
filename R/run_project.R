@@ -1,16 +1,19 @@
 
 #' Run the processing pipeline
 #' @param scfg A list containing the study configuration.
-#' @param steps Character vector of pipeline steps to execute (or `NULL` to run all steps).
+#' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
 #'   Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
-#' @param prompt A logical value indicating whether to prompt the user for input on which steps to run.
+#'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
 #' @param subject_filter Optional character vector or data.frame specifying which
 #'   subjects (and optionally sessions) to process. When a data.frame is
 #'   provided, it must contain a `sub_id` column and may include a `ses_id`
 #'   column to filter on specific subject/session combinations.
-#' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run
+#' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run. If
+#'   `"postprocess"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all postprocess
+#'   streams will be run.
+#' 
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
 #' @examples
@@ -21,18 +24,24 @@
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue
-run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = FALSE,
-                        subject_filter = NULL, postprocess_streams = NULL) {
-  checkmate::assert_list(scfg)
+run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL,
+    debug = FALSE, force = FALSE) {
+
+  checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_character(steps, null.ok = TRUE)
-  checkmate::assert_flag(prompt)
-  checkmate::assert_flag(debug)
-  checkmate::assert_flag(force)
   checkmate::assert(
     checkmate::check_character(subject_filter, any.missing = FALSE, null.ok = TRUE),
     checkmate::check_data_frame(subject_filter, null.ok = TRUE)
   )
-
+  checkmate::assert_character(postprocess_streams, null.ok = TRUE)
+  checkmate::assert_subset(
+    postprocess_streams,
+    choices = c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"),
+    empty.ok = TRUE
+  )
+  checkmate::assert_flag(debug)
+  checkmate::assert_flag(force)
+  
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
 
@@ -45,7 +54,10 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       BIDS directory:      {pretty_arg(scfg$metadata$bids_directory)}
       fmriprep directory:  {pretty_arg(scfg$metadata$fmriprep_directory)}\n
       "))
-  
+
+  # by passing steps, user is asking for unattended execution
+  if (!is.null(steps)) prompt <- FALSE
+
   if (isFALSE(prompt)) {
     if ("bids_conversion" %in% steps) {
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
@@ -99,13 +111,17 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
     steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(all_streams) > 0L,
       prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE
     )
-    
+
     if (isTRUE(steps["postprocess"])) {
-      postprocess_streams <- if (length(all_streams) == 1L) {
-        all_streams # if there is only one stream and the user requested postprocessing, then run this stream
+      if (length(all_streams) == 1L) {
+        postprocess_streams <- all_streams # if we have only one stream, run it
       } else {
-        postprocess_streams <- select.list(all_streams, multiple = TRUE, title = "Which postprocessing streams should be run? Press ENTER to select all.")
-        if (length(postprocess_streams) == 0L) postprocess_streams <- all_streams # pressing ENTER means select all
+        postprocess_streams <- select.list(
+          all_streams,
+          multiple = TRUE,
+          title = "Which postprocessing streams should be run? Press ENTER to select all."
+        )
+        if (length(postprocess_streams) == 0L) postprocess_streams <- all_streams # if user presses enter, run all
       }
     }
 
@@ -137,11 +153,11 @@ run_project <- function(scfg, steps=NULL, prompt = TRUE, debug = FALSE, force = 
       names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
     }
   }
-  
+
   # look for all existing subject BIDS directories
   subject_bids_dirs <- get_subject_dirs(scfg$metadata$bids_directory, sub_regex = "^sub-.+", ses_regex = "^ses-.+", sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE)
   names(subject_bids_dirs) <- sub("(sub|ses)_dir", "bids_\\1_dir", names(subject_bids_dirs))
-  
+
   subject_dirs <- merge(subject_dicom_dirs, subject_bids_dirs, by = c("sub_id", "ses_id"), all = TRUE)
 
   if (!is.null(subject_filter)) {

@@ -44,6 +44,16 @@ params$output <- if (!is.null(params$output)) params$output else "denoised_func_
 # Strip .nii.gz extension if present to avoid double extension in writeNIfTI
 params$output <- sub("\\.nii(\\.gz)*$", "", params$output, perl = TRUE)
 
+# ensure that package directory is in R's search path
+pkg_dir <- Sys.getenv("pkg_dir") # location of BrainGnomes installation at time of job queueing
+if (pkg_dir != "") {
+  lib_dir <- dirname(pkg_dir)
+
+  if (!(lib_dir %in% .libPaths())) {
+    .libPaths(c(lib_dir, .libPaths()))
+  }
+}
+
 # Install and load required packages
 for (pkg in c("speedglm", "oro.nifti", "doParallel", "pracma")) {
   if (!suppressMessages(require(pkg, character.only = TRUE))) {

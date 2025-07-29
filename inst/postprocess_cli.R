@@ -13,7 +13,7 @@ if (length(argpos) > 0L) {
 }
 
 if (is.null(args) || length(args) < 2L) {
-  message("Minimal usage: postprocess_subject.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--fsl_img=<fsl_singularity_image>]")
+  message("Minimal usage: postprocess_cli.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--fsl_img=<fsl_singularity_image>]")
   quit(save="no", 1, FALSE)
 }
 
@@ -87,6 +87,6 @@ if (length(input_files) == 0L) {
 # cat("About to postprocess the following files: ")
 # print(input_files)
 
-out_files <- sapply(input_files, function(ii) BrainGnomes:::postprocess_subject(ii, cfg))
-cat("Processing completed. Output files: \n")
-print(out_files)
+out_files <- sapply(input_files, function(ii) BrainGnomes::postprocess_subject(ii, cfg), USE.NAMES = FALSE)
+# cat("Processing completed. Output files: \n")
+# print(out_files)

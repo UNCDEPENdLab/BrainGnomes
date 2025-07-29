@@ -405,7 +405,7 @@ submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NUL
 sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL) {
   if (is.null(pp_stream)) stop("Cannot submit a postprocessing job without specifying a pp_stream")
 
-  postprocess_rscript <- system.file("postprocess_subject.R", package = "BrainGnomes")
+  postprocess_rscript <- system.file("postprocess_cli.R", package = "BrainGnomes")
   postprocess_image_sched_script <- get_job_script(scfg, "postprocess_image")
 
   # postprocessing
