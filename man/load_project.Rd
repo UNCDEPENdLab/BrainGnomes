@@ -4,10 +4,10 @@
 \alias{load_project}
 \title{Load a study configuration from a file}
 \usage{
-load_project(file = NULL, validate = TRUE)
+load_project(input = NULL, validate = TRUE)
 }
 \arguments{
-\item{file}{A YAML file containing a valid study configuration.}
+\item{input}{A path to a YAML file, or a project directory containing \code{project_config.yaml}.}
 
 \item{validate}{Logical indicating whether to validate the configuration after loading. Default: TRUE}
 }

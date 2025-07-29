@@ -27,7 +27,10 @@ Imports:
     signal,
     yaml
 Suggests: 
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
 Config/testthat/edition: 3
 LinkingTo: Rcpp, RNifti, RcppArmadillo
 URL: https://uncdependlab.github.io/BrainGnomes/
+VignetteBuilder: knitr

@@ -2,11 +2,11 @@
 #'
 #' @param str Character string SQLite query
 #' @param sqlite_db Path to SQLite database used for tracking
-#' @param param List of parameters/arguments to be used in query
+#' @param params List of parameters/arguments to be used in query
 #' @importFrom DBI dbExistsTable
 #'
 #' @keywords internal
-submit_tracking_query = function(str, sqlite_db, param = NULL) {
+submit_tracking_query = function(str, sqlite_db, params = NULL) {
   # previously called submit_sqlite()
   checkmate::assert_string(str)
   
@@ -21,7 +21,7 @@ submit_tracking_query = function(str, sqlite_db, param = NULL) {
   }
   
   # open sqlite connection and execute query
-  submit_sqlite_query(str = str, sqlite_db = sqlite_db, param = param)
+  submit_sqlite_query(str = str, sqlite_db = sqlite_db, params = params)
   
 }
 
@@ -100,18 +100,18 @@ insert_tracked_job <- function(sqlite_db, job_id, tracking_args = list()) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
   # gather tracking parameters into a list
-  param <- list(job_id, tracking_args$job_name, tracking_args$batch_directory, 
+  params <- list(job_id, tracking_args$job_name, tracking_args$batch_directory, 
                 tracking_args$batch_file, tracking_args$compute_file, tracking_args$code_file, 
                 tracking_args$n_nodes, tracking_args$n_cpus, tracking_args$wall_time, 
                 tracking_args$mem_per_cpu, tracking_args$mem_total, tracking_args$scheduler,
                 tracking_args$scheduler_options, tracking_args$job_obj, as.character(Sys.time()), tracking_args$status)
   
-  for (i in 1:length(param)) {
-    param[[i]] <- ifelse(is.null(param[[i]]), NA, param[[i]]) # convert NULL values to NA for dbExecute
+  for (i in 1:length(params)) {
+    params[[i]] <- ifelse(is.null(params[[i]]), NA, paras[[i]]) # convert NULL values to NA for dbExecute
   }
   
   # order the tracking arguments to match the query; status is always 'QUEUED' when first added to the database
-  submit_tracking_query(str = sql, sqlite_db = sqlite_db, param = param)
+  submit_tracking_query(str = sql, sqlite_db = sqlite_db, params = params)
 }
 
 
@@ -135,7 +135,7 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
   
   tryCatch({
     # open sqlite connection and execute query
-    submit_sqlite_query(str = sql, sqlite_db = sqlite_db, param = list(parent_job_id, job_id))
+    submit_sqlite_query(str = sql, sqlite_db = sqlite_db, params = list(parent_job_id, job_id))
   }, error = function(e) { print(e); return(NULL)})
 }
 
@@ -196,7 +196,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
   
   tryCatch({
     submit_sqlite_query(str = glue("UPDATE job_tracking SET STATUS = ?, {time_field} = ? WHERE job_id = ?"),
-                        sqlite_db = sqlite_db, param = list(status, now, job_id))
+                        sqlite_db = sqlite_db, params = list(status, now, job_id))
   }, error = function(e) { print(e); return(NULL)})
   
   # recursive function for "cascading" failures using status "FAILED_BY_EXT"
@@ -246,7 +246,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
   str <- paste0("SELECT * FROM job_tracking WHERE job_id = ?", 
                 ifelse(return_children, " OR parent_id = (SELECT id FROM job_tracking WHERE job_id = ?)", ""),
                 ifelse(return_parent, " OR id = (SELECT parent_id FROM job_tracking WHERE job_id = ?)", ""))
-  df <- dbGetQuery(con, str, param = as.list(rep(job_id, 1 + return_children + return_parent)))
+  df <- dbGetQuery(con, str, params = as.list(rep(job_id, 1 + return_children + return_parent)))
   
   # rehydrate job_obj back into R6 class
   if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))
