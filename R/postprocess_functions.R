@@ -76,6 +76,7 @@ apply_mask <- function(in_file, mask_file, out_desc=NULL, overwrite=FALSE, lg=NU
 #' that performs the actual interpolation.
 #'
 #' @importFrom stats splinefun
+#' @importFrom data.table fread
 #' @keywords internal
 scrub_interpolate <- function(in_file, censor_file, out_desc = NULL,
                              confound_files = NULL, overwrite=FALSE, lg=NULL) {

@@ -515,32 +515,23 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
 #'
 #' @return The function invisibly returns \code{NULL}. A NIfTI file is written to \code{ni_out}.
 #'
-#' @details This function creates a NIfTI image using FSL’s \code{fslcreatehd}, fills it using \code{oro.nifti},
-#' and writes it back to disk with dimensions \code{[x, 1, 1, time]}. Missing values are replaced with zero.
+#' @details Missing values are replaced with zero.
 #'
 #' @keywords internal
-#' @importFrom oro.nifti readNIfTI writeNIfTI
+#' @importFrom RNifti asNifti writeNifti
 #' @importFrom glue glue
-mat_to_nii <- function(mat, ni_out="mat", fsl_img=NULL) {
+mat_to_nii <- function(mat, ni_out="mat") {
   if (is.data.frame(mat)) mat <- as.matrix(mat)
-  # this always puts regressors along the x dimension; y and z are singletons
-  ydim <- zdim <- 1 # size of y and z dimensions
-  xsz <- ysz <- zsz <- 1 # voxel size in x y z
-  tr <- 1
-  xorigin <- yorigin <- zorigin <- 0
-
-  run_fsl_command(glue("fslcreatehd {ncol(mat)} {ydim} {zdim} {nrow(mat)} {xsz} {ysz} {zsz} {tr} {xorigin} {yorigin} {zorigin} 64 {ni_out}"), fsl_img = fsl_img, bind_paths=dirname(ni_out))
-
-  ## read empty NIfTI into R
-  nif <- readNIfTI(ni_out, reorient = FALSE)
-  nif <- drop_img_dim(nif) # need to cleanup dim_ attribute to avoid writeNIfTI failure
-
+  
   # populate nifti -- need to transpose to be consistent with column-wise array filling
-  nif@.Data <- array(t(mat), dim = c(ncol(mat), 1, 1, nrow(mat))) # add singleton dimensions for y and z
+  arr <- array(t(mat), dim = c(ncol(mat), 1, 1, nrow(mat))) # add singleton dimensions for y and z
+  nif <- asNifti(arr)
+  
   nif[is.na(nif)] <- 0 # cannot handle missingness in NIfTIs
 
-  # write NIfTI with regressors back to file
-  writeNIfTI(nif, filename = ni_out) # this returns the filename to the caller
+  # write NIfTI with regressors to file
+  writeNifti(nif, file = ni_out)[["image"]] # this returns the filename to the caller
+
 }
 
 #' Convert a 4D NIfTI image to a matrix
@@ -555,19 +546,17 @@ mat_to_nii <- function(mat, ni_out="mat", fsl_img=NULL) {
 #' @details Assumes the input image has shape \code{[x, 1, 1, time]} as produced by \code{mat_to_nii()}.
 #'
 #' @keywords internal
-#' @importFrom oro.nifti readNIfTI
+#' @importFrom RNifti readNifti
 #' @importFrom checkmate assert_file_exists
 nii_to_mat <- function(ni_in) {
   checkmate::assert_file_exists(ni_in)
 
-  nii <- readNIfTI(ni_in, reorient = FALSE, rescale_data = FALSE)
-  mat <- nii[, 1, 1, , drop = FALSE] # keep x and t
+  nii <- readNifti(ni_in)
+  mat <- as.array(nii[, 1, 1, , drop = FALSE]) # keep x and t
   dim(mat) <- dim(mat)[c(1, 4)] # selectively drop y and z dimensions (handles singleton cases correctly)
   mat <- t(mat) # make into time x variables
   return(mat)
 }
-
-
 
 #' Compute an intensity quantile from a NIfTI image
 #'

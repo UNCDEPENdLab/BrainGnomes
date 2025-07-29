@@ -3,6 +3,7 @@
 #' @param str Character string SQLite query
 #' @param sqlite_db Path to SQLite database used for tracking
 #' @param param List of parameters/arguments to be used in query
+#' @importFrom DBI dbExistsTable
 #'
 #' @keywords internal
 submit_tracking_query = function(str, sqlite_db, param = NULL) {
@@ -83,7 +84,7 @@ create_tracking_db = function(sqlite_db) {
 #' @param sqlite_db Path to SQLite database used for tracking
 #'
 #' @keywords internal
-insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
+insert_tracked_job <- function(sqlite_db, job_id, tracking_args = list()) {
   # previously called sqlite_insert_job()
   if (is.null(sqlite_db) || is.null(job_id)) return(invisible(NULL)) # skip out if not using DB or if job_id is NULL
   if (is.numeric(job_id)) job_id <- as.character(job_id)

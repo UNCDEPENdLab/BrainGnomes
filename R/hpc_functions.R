@@ -35,7 +35,8 @@
 #' @examples
 #' \dontrun{
 #'   #simple PBS submission
-#'   cluster_job_submit('myscript.bash', scheduler="torque", sched_args=c('-l walltime=10:00:00', '-l nodes=1:ppn=20'),
+#'   cluster_job_submit('myscript.bash', scheduler="torque", 
+#'      sched_args=c('-l walltime=10:00:00', '-l nodes=1:ppn=20'),
 #'      env_variables=c(RUN_INDEX=2, MODEL_NAME='FSE21'))
 #'
 #'   #To forward environment variables without explicitly providing values. Note that these must
@@ -238,7 +239,6 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #' }
 #'
 #' @author Michael Hallquist
-#' @importFrom dplyr full_join if_else bind_rows
 #' @export
 wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 24,
                          scheduler = "local", quiet = TRUE, stop_on_timeout = TRUE) {
@@ -391,13 +391,9 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
     return(df_empty)
   }
 
-  if (length(res) == 1L) {
-    # data.table::fread will break down (see Github issue )
-    out <- readr::read_delim(I(res), delim = "|", show_col_types = FALSE)
-  } else {
-    out <- data.table::fread(text = res, data.table=FALSE)
-  }
-
+  # parse sacct output into data frame
+  out <- data.table::fread(text = res, data.table=FALSE)
+  
   if (!checkmate::test_subset(c("JobID", "State"), names(out))) {
     warning("Missing columns in sacct output")
     return(df_empty)
@@ -423,27 +419,34 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
 torque_job_status <- function(job_ids, user = NULL) {
   #res <- system2("qstat", args = paste("-f", paste(job_ids, collapse=" "), "| grep -i 'job_state'"), stdout = TRUE)
 
+  # Retrieve job lists from Torque scheduler via qselect
   q_jobs <- system2("qselect", args = "-u $USER -s QW", stdout = TRUE) # queued jobs
   r_jobs <- system2("qselect", args = "-u $USER -s EHRT", stdout = TRUE) # running jobs
   c_jobs <- system2("qselect", args = "-u $USER -s C", stdout = TRUE) # complete jobs
   m_jobs <- setdiff(job_ids, c(q_jobs, r_jobs, c_jobs)) # missing jobs
-  #state <- c("queued", "running", "complete", "missing")
-  state <- c("queued", "running", "complete", "complete")
+
+  #state_labels <- c("queued", "running", "complete", "missing")
+  state_labels <- c("queued", "running", "complete", "complete")
 
   # TORQUE clusters only keep jobs with status C (complete) for a limited period of time. After that, the job comes back as missing.
   # Because of this, if one job finishes at time X and another finishes at time Y, job X will be 'missing' if job Y takes a very long time.
   # Thus, we return any missing jobs as complete, which could be problematic if they are truly missing immediately after submission (as happened with slurm).
   # Ideally, we would track a job within wait_for_job such that it can be missing initially, then move into running, then move into complete.
 
-  j_list <- list(q_jobs, r_jobs, c_jobs, m_jobs)
-  state_list <- list()
-  for (ii in seq_along(j_list)) {
-    if (length(j_list[[ii]]) > 0L) {
-      state_list[[state[ii]]] <- data.frame(JobID = j_list[[ii]], State = state[ii])
+  job_lists <- list(q_jobs, r_jobs, c_jobs, m_jobs)
+
+  # Create a data frame for each state
+  state_dfs <- vector("list", length(job_lists))
+  for (i in seq_along(job_lists)) {
+    if (length(job_lists[[i]]) > 0L) {
+      state_dfs[[i]] <- data.frame(JobID = job_lists[[i]], State = rep(state_labels[i], length(job_lists[[i]])), stringsAsFactors = FALSE)
+    } else {
+      state_dfs[[i]] <- NULL
     }
   }
 
-  state_df <- bind_rows(state_list)
+  # Combine all job states into one data frame
+  state_df <- do.call(rbind, state_dfs)
 
   if (!is.null(attr(q_jobs, "status"))) {
     warning("qselect call generated non-zero exit status")
@@ -467,7 +470,7 @@ torque_job_status <- function(job_ids, user = NULL) {
 #' @param job_ids A numeric or character vector of process IDs (PIDs) to query.
 #' @param user Optional character vector of usernames used to filter processes by owner.
 #' @param ps_format A character string specifying the `ps` output format. Default:
-#'   \code{"user,pid,state,time,etime,%cpu,%mem,comm,xstat"}.
+#'   `"user,pid,state,time,etime,\%cpu,\%mem,comm,xstat"`.
 #'
 #' @return A data frame with one row per PID, including the `STAT` column which reports
 #'   the process status (e.g., R = running, S = sleeping, C = complete, Z = zombie).

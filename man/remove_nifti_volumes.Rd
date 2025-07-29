@@ -25,7 +25,8 @@ The input image must be 4-dimensional (i.e., include a time dimension).
 }
 \examples{
 \dontrun{
-remove_nifti_volumes("input_bold.nii.gz", remove_tpts = c(1, 2, 100), outfile = "trimmed_bold.nii.gz")
+remove_nifti_volumes("input_bold.nii.gz", remove_tpts = c(1, 2, 100), 
+  outfile = "trimmed_bold.nii.gz")
 }
 
 }

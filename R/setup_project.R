@@ -18,7 +18,7 @@ load_project <- function(file = NULL, validate = TRUE) {
 }
 
 #' summary method for study configuration object
-#' @param x The study configuration object (`bg_project_cfg`) to summarize.
+#' @param object The study configuration object (`bg_project_cfg`) to summarize.
 #' @param ... additional parameters to summary (not used)
 #' @return Invisibly returns `x` after printing its contents. This function is called 
 #'   for its side effect of printing a formatted summary of the study configuration.

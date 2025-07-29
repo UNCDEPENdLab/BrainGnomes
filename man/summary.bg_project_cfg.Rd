@@ -7,9 +7,9 @@
 \method{summary}{bg_project_cfg}(object, ...)
 }
 \arguments{
-\item{...}{additional parameters to summary (not used)}
+\item{object}{The study configuration object (\code{bg_project_cfg}) to summarize.}
 
-\item{x}{The study configuration object (\code{bg_project_cfg}) to summarize.}
+\item{...}{additional parameters to summary (not used)}
 }
 \value{
 Invisibly returns \code{x} after printing its contents. This function is called

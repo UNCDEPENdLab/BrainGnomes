@@ -4,7 +4,7 @@
 \alias{mat_to_nii}
 \title{Convert a matrix to a 4D NIfTI image}
 \usage{
-mat_to_nii(mat, ni_out = "mat", fsl_img = NULL)
+mat_to_nii(mat, ni_out = "mat")
 }
 \arguments{
 \item{mat}{A numeric matrix or data frame with dimensions \code{time x variables}.}
@@ -20,7 +20,6 @@ suitable for processing with FSL tools. Each column becomes a voxel in the x dim
 corresponds to a time point (t dimension).
 }
 \details{
-This function creates a NIfTI image using FSL’s \code{fslcreatehd}, fills it using \code{oro.nifti},
-and writes it back to disk with dimensions \code{[x, 1, 1, time]}. Missing values are replaced with zero.
+Missing values are replaced with zero.
 }
 \keyword{internal}

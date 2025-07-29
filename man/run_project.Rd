@@ -7,31 +7,31 @@
 run_project(
   scfg,
   steps = NULL,
-  prompt = TRUE,
-  debug = FALSE,
-  force = FALSE,
   subject_filter = NULL,
-  postprocess_streams = NULL
+  postprocess_streams = NULL,
+  debug = FALSE,
+  force = FALSE
 )
 }
 \arguments{
 \item{scfg}{A list containing the study configuration.}
 
-\item{steps}{Character vector of pipeline steps to execute (or \code{NULL} to run all steps).
-Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").}
-
-\item{prompt}{A logical value indicating whether to prompt the user for input on which steps to run.}
-
-\item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
-
-\item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
+\item{steps}{Character vector of pipeline steps to execute (or \code{"all"} to run all steps).
+Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
+If \code{NULL}, the user will be prompted for which steps to run.}
 
 \item{subject_filter}{Optional character vector or data.frame specifying which
 subjects (and optionally sessions) to process. When a data.frame is
 provided, it must contain a \code{sub_id} column and may include a \code{ses_id}
 column to filter on specific subject/session combinations.}
 
-\item{postprocess_streams}{Optional character vector specifying which postprocessing streams should be run}
+\item{postprocess_streams}{Optional character vector specifying which postprocessing streams should be run. If
+\verb{"postprocess"`` is included in }steps`, then this setting lets the user choose streams. If NULL, all postprocess
+streams will be run.}
+
+\item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
+
+\item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
 }
 \value{
 A logical value indicating whether the processing pipeline was successfully run.
