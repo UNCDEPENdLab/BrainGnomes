@@ -253,7 +253,7 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
   get_job_status <- function() { # use variables in parent environment
     if (scheduler %in% c("slurm", "sbatch")) {
       status <- slurm_job_status(job_ids)
-      state <- sapply(status$State, function(x) {
+      state <- vapply(status$State, function(x) {
         switch(x,
           "BOOT_FAIL" = "failed",
           "CANCELLED" = "cancelled",
@@ -269,12 +269,13 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
           "REVOKED" = "failed",
           "SUSPENDED" = "suspended",
           "TIMEOUT" = "failed",
-          "MISSING" = "missing" # scheduler has not registered the job
+          "MISSING" = "missing", # scheduler has not registered the job
+          "unknown"
         )
-      })
+      }, character(1))    
     } else if (scheduler %in% c("sh", "local")) {
       status <- local_job_status(job_ids)
-      state <- sapply(status$STAT, function(x) {
+      state <- vapply(status$STAT, function(x) {
         switch(x,
           "C" = "complete",
           "I" = "running", # idle/sleeping
@@ -283,9 +284,9 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
           "T" = "suspended",
           "U" = "running",
           "Z" = "failed", # zombie
-          stop("Unable to understand job state: ", x)
+          "unknown"
         )
-      })
+      }, character(1))
     } else if (scheduler %in% c("torque", "qsub")) {
       # QSUB
       status <- torque_job_status(job_ids)
@@ -314,33 +315,25 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
     status <- get_job_status()
 
     # update wait time
-    wait_total <- difftime(Sys.time(), wait_start, units = "sec")
+    wait_total <- as.numeric(difftime(Sys.time(), wait_start, units = "secs"))
 
     # Debugging
     # cat("Wait so far: ", wait_total, "\n")
 
-    if (any(status == "running")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) still running:", paste(job_ids[status == "running"], collapse = ", "), "\n")
-      }
+    if (any(status == "running") && isFALSE(quiet)) {
+      cat("Job(s) still running:", paste(job_ids[status == "running"], collapse = ", "), "\n")
     }
 
-    if (any(status == "queued")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) still queued:", paste(job_ids[status == "queued"], collapse = ", "), "\n")
-      }
+    if (any(status == "queued") && isFALSE(quiet)) {
+      cat("Job(s) still queued:", paste(job_ids[status == "queued"], collapse = ", "), "\n")
     }
 
-    if (any(status == "suspended")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) suspended:", paste(job_ids[status == "suspended"], collapse = ", "), "\n")
-      }
+    if (any(status == "suspended") && isFALSE(quiet)) {
+      cat("Job(s) suspended:", paste(job_ids[status == "suspended"], collapse = ", "), "\n")
     }
 
-    if (any(status == "missing")) {
-      if (isFALSE(quiet)) {
-        cat("Job(s) missing from scheduler response:", paste(job_ids[status == "missing"], collapse = ", "), "\n")
-      }
+    if (any(status == "missing") && isFALSE(quiet)) {
+      cat("Job(s) missing from scheduler response:", paste(job_ids[status == "missing"], collapse = ", "), "\n")
     }
 
     if (wait_total > max_wait) {
@@ -370,17 +363,8 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 
 # calls sacct with a job list
 slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,submit,timelimit,start,end,state") {
-  if (!is.null(job_ids)) {
-    jstring <- paste("-j", paste(job_ids, collapse = ","))
-  } else {
-    jstring <- ""
-  }
-
-  if (!is.null(user)) {
-    ustring <- paste("-u", paste(user, collapse = ","))
-  } else {
-    ustring <- ""
-  }
+  jstring <- if (!is.null(job_ids)) paste("-j", paste(job_ids, collapse = ",")) else ""
+  ustring <- if (!is.null(user)) paste("-u", paste(user, collapse = ",")) else ""
 
   # -P specifies a parsable output separated by pipes
   # -X avoids printing subsidiary jobs within each job id
@@ -389,15 +373,16 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
   # cat(cmd, "\n")
   res <- system2("sacct", args = cmd, stdout = TRUE)
 
-  df_base <- data.frame(JobID = job_ids)
-  df_empty <- df_base %>%
-    mutate(
-      Submit = NA_character_,
-      Timelimit = NA_character_,
-      Start = NA_character_,
-      End = NA_character_,
-      State = "MISSING"
-    )
+  df_base <- data.frame(JobID = job_ids, stringsAsFactors = FALSE)
+  df_empty <- data.frame(
+    JobID = job_ids,
+    Submit = NA_character_,
+    Timelimit = NA_character_,
+    Start = NA_character_,
+    End = NA_character_,
+    State = "MISSING",
+    stringsAsFactors = FALSE
+  )
 
   # handle non-zero exit status -- return empty data
   if (!is.null(attr(res, "status"))) {
@@ -419,11 +404,18 @@ slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,
   }
 
   out$JobID <- as.character(out$JobID)
-  df <- df_base %>%
-    dplyr::left_join(out, by = "JobID") %>%
-    mutate(State = if_else(is.na(State), "MISSING", State))
 
-  return(df)
+  # base R left join
+  merged <- merge(df_base, out, by = "JobID", all.x = TRUE)
+
+  # fill in missing State values with "MISSING"
+  if ("State" %in% names(merged)) {
+    merged$State[is.na(merged$State)] <- "MISSING"
+  } else {
+    merged$State <- "MISSING"
+  }
+
+  return(merged)
 }
 
 # torque does not keep information about completed jobs available in qstat or qselect
@@ -463,22 +455,52 @@ torque_job_status <- function(job_ids, user = NULL) {
   return(state_df)
 }
 
+#' Query local process status by PID
+#'
+#' This function queries the local system for process information using the `ps` command.
+#' It returns a data frame of status information for a set of PIDs (process IDs), including
+#' whether each process is running, sleeping, or has completed.
+#'
+#' The function is useful for checking the status of local jobs launched via background
+#' processes or system calls, particularly in scripting or pipeline execution.
+#'
+#' @param job_ids A numeric or character vector of process IDs (PIDs) to query.
+#' @param user Optional character vector of usernames used to filter processes by owner.
+#' @param ps_format A character string specifying the `ps` output format. Default:
+#'   \code{"user,pid,state,time,etime,%cpu,%mem,comm,xstat"}.
+#'
+#' @return A data frame with one row per PID, including the `STAT` column which reports
+#'   the process status (e.g., R = running, S = sleeping, C = complete, Z = zombie).
+#'
+#' @details
+#' This function uses the `ps` system command to query process state. If a PID
+#' does not appear in the `ps` output, it is assumed to have completed and its
+#' `STAT` value will be set to `"C"`. For running or sleeping processes, `STAT`
+#' reflects the current process state reported by the OS.
+#'
+#' Column names are harmonized across systems (e.g., renaming `S` to `STAT`
+#' and `COMMAND` to `COMM` if present). It uses `data.table::fread()` to parse output.
+#'
+#' @note This function is platform-dependent and intended for UNIX-like systems.
+#' It may not work properly on Windows.
+#'
+#' @examples
+#' \dontrun{
+#' # Check status of current R process
+#' local_job_status(Sys.getpid())
+#' }
+#'
+#' @importFrom checkmate assert_integerish
+#' @importFrom data.table fread setnames
+#' @keywords internal
+#' @noRd
 local_job_status <- function(job_ids = NULL, user = NULL,
                              ps_format = "user,pid,state,time,etime,%cpu,%mem,comm,xstat") {
   job_ids <- type.convert(job_ids, as.is = T) # convert to integers
   checkmate::assert_integerish(job_ids)
 
-  if (!is.null(job_ids)) {
-    jstring <- paste("-p", paste(job_ids, collapse = ","))
-  } else {
-    jstring <- ""
-  }
-
-  if (!is.null(user)) {
-    ustring <- paste("-u", paste(user, collapse = ","))
-  } else {
-    ustring <- ""
-  }
+  jstring <- if (!is.null(job_ids)) paste("-p", paste(job_ids, collapse = ",")) else ""
+  ustring <- if (!is.null(user)) paste("-u", paste(user, collapse = ",")) else ""
 
   # cat(paste("ps", jstring, ustring, "-o", ps_format), sep = "\n")
   res <- suppressWarnings(system2("ps", args = paste(jstring, ustring, "-o", ps_format), stdout = TRUE)) # intern=TRUE)
@@ -493,20 +515,27 @@ local_job_status <- function(job_ids = NULL, user = NULL,
     stopifnot(length(res) > 1)
     # fread and any other parsing can break down with consecutive spaces in body of output.
     # This happens with lstart and start, avoid these for now.
-    #header <- gregexpr("\\b", res[1], perl = T)
-    #l2 <- gregexpr("\\b", res[2], perl=T)
+    # header <- gregexpr("\\b", res[1], perl = T)
+    # l2 <- gregexpr("\\b", res[2], perl=T)
     dt <- data.table::fread(text = res)
   }
 
   # fix difference in column naming between FreeBSD and *nux (make all like FreeBSD)
   data.table::setnames(dt, c("S", "COMMAND"), c("STAT", "COMM"), skip_absent = TRUE)
 
-  # build df that fills in missing jobs (completed/killed)
-  all_dt <- data.frame(PID = as.integer(job_ids)) %>%
-    dplyr::full_join(dt, by = "PID") %>%
-    mutate(STAT = substr(STAT, 1, 1)) # only care about first character of state
+  # Build full job ID frame, filling in missing jobs (completed/killed)
+  base_df <- data.frame(PID = as.integer(job_ids), stringsAsFactors = FALSE)
 
-  all_dt$STAT[is.na(all_dt$STAT)] <- "C" # complete
+  # Use base R merge to simulate full_join
+  all_dt <- merge(base_df, dt, by = "PID", all = TRUE, sort = FALSE)
+
+  # Replace missing STAT values with "C"
+  if ("STAT" %in% names(all_dt)) {
+    all_dt$STAT <- substr(all_dt$STAT, 1, 1)
+    all_dt$STAT[is.na(all_dt$STAT)] <- "C"
+  } else {
+    all_dt$STAT <- rep("C", nrow(all_dt))
+  }
 
   return(all_dt)
 }
