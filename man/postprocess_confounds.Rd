@@ -8,7 +8,7 @@ postprocess_confounds(
   proc_files,
   cfg,
   processing_sequence,
-  input_bids_info,
+  output_bids_info,
   fsl_img = NULL,
   lg = NULL
 )
@@ -20,7 +20,7 @@ postprocess_confounds(
 
 \item{processing_sequence}{Character vector of enabled processing steps.}
 
-\item{input_bids_info}{Named list of BIDS entities for the current file.}
+\item{output_bids_info}{Named list of BIDS entities for the postprocessed output file}
 
 \item{fsl_img}{Optional path to a Singularity image with FSL installed.}
 

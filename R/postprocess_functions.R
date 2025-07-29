@@ -729,12 +729,13 @@ resample_template_to_img <- function(
 
   return(invisible(img))
 }
+utils::globalVariables("resample_template_to_bold") # avoid R CMD CHECK complaint about global function -- here, created by source_python
 
 # helper file to identify scrubbing censor file from input nifti
-get_censor_file <- function(input_bids_info) {
-  checkmate::assert_list(input_bids_info)
+get_censor_file <- function(bids_info) {
+  checkmate::assert_list(bids_info)
   construct_bids_filename(
-    modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "censor", ext = ".1D")),
+    modifyList(bids_info, list(suffix = "censor", ext = ".1D")),
     full.names = TRUE
   )
 }

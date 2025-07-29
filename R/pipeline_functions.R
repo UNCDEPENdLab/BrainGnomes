@@ -531,7 +531,6 @@ mat_to_nii <- function(mat, ni_out="mat") {
 
   # write NIfTI with regressors to file
   writeNifti(nif, file = ni_out)[["image"]] # this returns the filename to the caller
-
 }
 
 #' Convert a 4D NIfTI image to a matrix

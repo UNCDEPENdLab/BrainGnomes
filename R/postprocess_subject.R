@@ -72,7 +72,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # Reconstruct expected output file
-  output_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc)) # set desc to new description
+  output_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc)) # set desc to new postproc/output description
   final_filename <- construct_bids_filename(output_bids_info, full.names = TRUE)
 
   # determine if final output file already exists
@@ -172,7 +172,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   )
 
   # expected censor file for scrubbing
-  censor_file <- get_censor_file(input_bids_info)
+  censor_file <- get_censor_file(output_bids_info)
 
   # output files use camelCase, with desc on the end, like desc-ismPostproc1, where ism are the steps that have been applied
   prefix_chain <- "" # used for accumulating prefixes with each step

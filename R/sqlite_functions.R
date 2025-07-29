@@ -147,19 +147,20 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   if (is.null(session)) session <- 1
   checkmate::assert_integerish(run_number, lower = 1, null.ok = TRUE)
   checkmate::assert_string(table, null.ok = FALSE)
-  checkmate::assert_logical(drop_keys, len = 1L)
+  checkmate::assert_flag(drop_keys)
+  checkmate::assert_flag(quiet)
   
   # open connection if needed
   if (is.null(extant_con) || !DBI::dbIsValid(extant_con)) {
     con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
-    on.exit(try(DBI::dbDisconnect(con)))
+    on.exit(try(DBI::dbDisconnect(con)), add = TRUE)
   } else {
     con <- extant_con # recycle connection
   }
   
   # if table does not exist, then query is invalid (just return NULL)
   if (!DBI::dbExistsTable(con, table)) {
-    if (isFALSE(quiet)) warning(sprintf("Cannot find SQLite table %s in file %s.", table, db_file))
+    if (!quiet) warning(sprintf("Cannot find SQLite table %s in file %s.", table, db_file))
     return(NULL)
   }
   
@@ -172,15 +173,15 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
   )
   
   data <- tryCatch(DBI::dbGetQuery(con, query), error = function(e) {
-    if (isFALSE(quiet)) warning("Failed to obtain records for query: ", query)
+    if (!quiet) warning("Failed to obtain records for query: ", query)
     return(data.frame())
   })
   
-  if (nrow(data) > 0L && isTRUE(drop_keys)) {
-    data <- data %>% dplyr::select(-id, -session)
-    if (!is.null(run_number)) {
-      data <- data %>% dplyr::select(-run_number)
-    }
+  if (nrow(data) > 0L && drop_keys) {
+    drop_cols <- c("id", "session")
+    if (!is.null(run_number)) drop_cols <- c(drop_cols, "run_number")
+    drop_cols <- intersect(drop_cols, names(data))  # only drop if present
+    data <- data[ , !(names(data) %in% drop_cols), drop = FALSE]
   }
   
   # return NULL in case of zero matches

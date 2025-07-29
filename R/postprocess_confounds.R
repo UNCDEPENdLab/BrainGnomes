@@ -7,14 +7,14 @@
 #' @param proc_files List of files returned by `get_fmriprep_outputs()`.
 #' @param cfg Configuration list passed to `postprocess_subject`.
 #' @param processing_sequence Character vector of enabled processing steps.
-#' @param input_bids_info Named list of BIDS entities for the current file.
+#' @param output_bids_info Named list of BIDS entities for the postprocessed output file
 #' @param fsl_img Optional path to a Singularity image with FSL installed.
 #' @param lg Logger object for messages.
 #' @return Path to the nuisance regressor file or `NULL` if not created.
 #' @importFrom stats setNames
 #' @keywords internal
 postprocess_confounds <- function(proc_files, cfg, processing_sequence,
-                                  input_bids_info, fsl_img = NULL, lg = NULL) {
+                                  output_bids_info, fsl_img = NULL, lg = NULL) {
   if (!checkmate::test_class(lg, "Logger")) lg <- lgr::get_logger_glue("BrainGnomes")
 
   to_regress <- NULL
@@ -51,11 +51,10 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
       spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
       scrub_file <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "scrub", ext = ".tsv")),
-        full.names = TRUE
+        modifyList(output_bids_info, list(suffix = "scrub", ext = ".tsv")), full.names = TRUE
       )
       
-      censor_file <- get_censor_file(input_bids_info)
+      censor_file <- get_censor_file(output_bids_info)
       if (!is.null(spike_mat)) {
         data.table::fwrite(as.data.frame(spike_mat), file = scrub_file, sep = "\t", col.names = FALSE)
         censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
@@ -71,7 +70,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     # generate fake NIfTI with confound timeseries
     confounds_bids <- extract_bids_info(proc_files$confounds)
     tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
-    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out, fsl_img = fsl_img)
+    confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out)
 
     # Regress out AROMA components, if requested (overwrites file in place)
     if ("apply_aroma" %in% processing_sequence) {
@@ -99,8 +98,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
     if (isTRUE(cfg$confound_calculate$enable)) {
       confile <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "confounds", ext = ".tsv")),
-        full.names = TRUE
+        modifyList(output_bids_info, list(suffix = "confounds", ext = ".tsv")), full.names = TRUE
       )
 
       df <- subset(filtered_confounds, select = cfg$confound_calculate$columns)
@@ -162,8 +160,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       }
 
       to_regress <- construct_bids_filename(
-        modifyList(input_bids_info, list(description = cfg$bids_desc, suffix = "regressors", ext = ".tsv")),
-        full.names = TRUE
+        modifyList(output_bids_info, list(suffix = "regressors", ext = ".tsv")), full.names = TRUE
       )
 
       const_cols <- sapply(df, function(x) all(x == x[1L]))
@@ -195,6 +192,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 #'   If all patterns fail to match, the funciton will return `NULL`.
 #' 
 #' @return Character vector of expanded column names.
+#' @importFrom stats na.omit
 #' @keywords internal
 #' @noRd
 expand_confound_columns <- function(patterns = NULL, available) {
