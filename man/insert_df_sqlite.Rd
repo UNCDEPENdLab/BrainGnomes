@@ -18,6 +18,8 @@ insert_df_sqlite(
 )
 }
 \arguments{
+\item{gpa}{A \code{glm_pipeline_arguments} object used to lookup location of SQLite database for this insert}
+
 \item{id}{the id of the subject to whom these data belong}
 
 \item{session}{the session of these data}

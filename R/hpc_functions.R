@@ -221,8 +221,11 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #'   Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")
 #' @param quiet If \code{TRUE}, \code{wait_for_job} will not print out any status updates on jobs. If \code{FALSE},
 #'   the function prints out status updates for each tracked job so that the user knows what's holding up progress.
+#' @param stop_on_timeout Logical. If `TRUE`, the function throws an error if the `max_wait` is exceeded.
+#'   If `FALSE`, it returns `FALSE` instead of stopping. Default is `TRUE`.
 #'
-#' @return Nothing. Just returns when the blocking job completes.
+#' @return Returns (invisibly) `TRUE` if all jobs completed successfully, `FALSE` if any job failed or timeout occurred
+#'   and `stop_on_timeout = FALSE`. Otherwise, stops execution with an error if the timeout is exceeded.
 #'
 #' @details Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;
 #'   "slurm" and "sbatch" are the same, and "sh" and "local" are the same.

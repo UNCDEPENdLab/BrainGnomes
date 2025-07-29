@@ -166,7 +166,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     proc_files = proc_files,
     cfg = cfg,
     processing_sequence = processing_sequence,
-    input_bids_info = input_bids_info,
+    output_bids_info = output_bids_info,
     fsl_img = fsl_img,
     lg = lg
   )

@@ -1,5 +1,6 @@
 #' helper function to insert a keyed data.frame into the sqlite storage database
-#'
+#' 
+#' @param gpa A \code{glm_pipeline_arguments} object used to lookup location of SQLite database for this insert
 #' @param id the id of the subject to whom these data belong
 #' @param session the session of these data
 #' @param run_number the run_number of these data
@@ -203,14 +204,14 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 #' @importFrom RSQLite sqliteSetBusyHandler
 #' 
 #' @keywords internal
-submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL, busy_timeout = 10) {
+submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, params = NULL, busy_timeout = 10) {
   
   if(is.null(str) | is.null(sqlite_db)) return(invisible(NULL))
   
   con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
   
   sqliteSetBusyHandler(con, busy_timeout * 1000) # busy_timeout arg in seconds * 1000 ms
-  res <- dbExecute(con, str, param = param) # execute query
+  res <- dbExecute(con, str, params = params) # execute query
   dbDisconnect(con) # disconnect
   
   return(invisible(res)) # return number of rows affected by the statement

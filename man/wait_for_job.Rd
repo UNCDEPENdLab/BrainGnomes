@@ -26,9 +26,13 @@ Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")}
 
 \item{quiet}{If \code{TRUE}, \code{wait_for_job} will not print out any status updates on jobs. If \code{FALSE},
 the function prints out status updates for each tracked job so that the user knows what's holding up progress.}
+
+\item{stop_on_timeout}{Logical. If \code{TRUE}, the function throws an error if the \code{max_wait} is exceeded.
+If \code{FALSE}, it returns \code{FALSE} instead of stopping. Default is \code{TRUE}.}
 }
 \value{
-Nothing. Just returns when the blocking job completes.
+Returns (invisibly) \code{TRUE} if all jobs completed successfully, \code{FALSE} if any job failed or timeout occurred
+and \code{stop_on_timeout = FALSE}. Otherwise, stops execution with an error if the timeout is exceeded.
 }
 \description{
 It is intended to give you control over job dependencies within R when the formal PBS
