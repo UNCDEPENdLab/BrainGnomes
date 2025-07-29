@@ -4,7 +4,7 @@ pkgdown_sha: ~
 articles:
   BrainGnomes_Tutorial_Vignette: BrainGnomes_Tutorial_Vignette.html
   building_containers: building_containers.html
-last_built: 2025-07-29T21:40Z
+last_built: 2025-07-29T21:44Z
 urls:
   reference: https://uncdependlab.github.io/BrainGnomes/reference
   article: https://uncdependlab.github.io/BrainGnomes/articles
