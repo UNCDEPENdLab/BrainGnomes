@@ -503,7 +503,7 @@ local_job_status <- function(job_ids = NULL, user = NULL,
   ustring <- if (!is.null(user)) paste("-u", paste(user, collapse = ",")) else ""
 
   # cat(paste("ps", jstring, ustring, "-o", ps_format), sep = "\n")
-  res <- suppressWarnings(system2("ps", args = paste(jstring, ustring, "-o", ps_format), stdout = TRUE)) # intern=TRUE)
+  res <- suppressWarnings(system2("ps", args = paste(jstring, ustring, "-o", ps_format), stdout = TRUE))
 
   # need to trap res of length 1 (just header row) to avoid data.table bug.
   if (!is.null(attr(res, "status")) && attr(res, "status") != 0) {
@@ -526,7 +526,7 @@ local_job_status <- function(job_ids = NULL, user = NULL,
   # Build full job ID frame, filling in missing jobs (completed/killed)
   base_df <- data.frame(PID = as.integer(job_ids), stringsAsFactors = FALSE)
 
-  # Use base R merge to simulate full_join
+  # Full join in base R
   all_dt <- merge(base_df, dt, by = "PID", all = TRUE, sort = FALSE)
 
   # Replace missing STAT values with "C"

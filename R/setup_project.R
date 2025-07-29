@@ -80,11 +80,11 @@ setup_project <- function(input = NULL, fields = NULL) {
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
-  scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
   scfg <- setup_aroma(scfg, fields)
   scfg <- setup_postprocess_streams(scfg, fields)
+  scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
   scfg <- save_project_config(scfg)
@@ -309,21 +309,27 @@ setup_bids_validation <- function(scfg, fields=NULL) {
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
       BIDS validation checks whether your dataset adheres to the Brain Imaging Data Structure (BIDS) standard.
-      This is a recommended step to ensure that all filenames, metadata, and required files follow expected conventions.
-      It helps identify missing fields, naming issues, or formatting problems that could cause downstream tools to fail.
-      \n
+      This can be helpful for ensuring that all filenames, metadata, and required files follow expected conventions.
+      It can identify missing fields, naming issues, or formatting problems that could cause downstream tools to fail.
+      
       The validator can be run quickly, and produces an HTML report that summarizes any warnings or errors.
-      Even if you say 'no' here, fmriprep will run BIDS validation on each subject's dataset prior to execution.
-      Saying 'Yes' to this step runs BIDS validation on the entire *project* folder after BIDS conversion (if requested)
-      has completed for all subjects.\n
+      Note: Even if you say 'no' here, fmriprep will run BIDS validation on each subject's dataset prior to execution.
+      
+      Saying 'Yes' to this step will enable BIDS validation, but that step must be run separately, at your leisure,
+      using run_bids_validation().
       "),
-      prompt = "Run BIDS validation?",
+      prompt = "Enable BIDS validation?",
       type = "flag",
       default = TRUE
     )
   }
 
   if (isFALSE(scfg$bids_validation$enable)) return(scfg)
+
+  # prompt for BIDS validator at this point
+  if (!validate_exists(scfg$compute_environment$bids_validator)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/bids_validator")
+  }
 
   scfg <- setup_job(scfg, "bids_validation", defaults, fields)
 

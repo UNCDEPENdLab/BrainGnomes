@@ -147,17 +147,18 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
     scfg$postprocess$enable <- prompt_input(
-      instruct = glue("\n\n",
-        "        Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.",
-        "        These steps may include:",
-        "            - Applying a brain mask",
-        "            - Spatial smoothing",
-        "            - Denoising using ICA-AROMA",
-        "            - 'Scrubbing' of high-motion/high-artifact timepoints",
-        "            - Temporal filtering (e.g., high-pass filtering)",
-        "            - Intensity normalization",
-        "            - Confound calculation and regression",
-        "\n        Do you want to enable postprocessing of the BOLD data?\n"
+      instruct = glue("\n\n
+        Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
+                These steps may include:
+                  - Applying a brain mask
+                  - Spatial smoothing
+                  - Denoising using ICA-AROMA
+                  - 'Scrubbing' of high-motion/high-artifact timepoints
+                  - Temporal filtering (e.g., high-pass filtering)
+                  - Intensity normalization
+                  - Confound calculation and regression
+                  
+        Do you want to enable postprocessing of the BOLD data?\n"
       ),
       prompt = "Enable postprocessing?",
       type = "flag",
