@@ -589,7 +589,7 @@ confound_regression <- function(in_file, out_desc = NULL, to_regress=NULL, censo
 #' @return File path to the computed binary brain mask (not yet dilated). A dilated version
 #'   of the mask is also saved with a `_dil1x` suffix.
 #'
-#' @details This function replicates the "98-2" heuristic used in FSL’s featlib.tcl:
+#' @details This function replicates the "98-2" heuristic used in FSL's featlib.tcl:
 #'   it computes the 2nd and 98th percentiles from a skull-stripped mean image and thresholds
 #'   at 10% above the 2nd percentile. A final mask is formed by applying this threshold,
 #'   binarizing, and performing one dilation iteration.

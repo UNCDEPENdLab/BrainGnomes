@@ -46,7 +46,7 @@ void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, in
 //' is used for interpolation timepoints at the beginning or end of the timeseries, potentially reducing
 //' extreme values in extrapolation.
 //'
-//' This implementation uses RNifti’s C++ API (\code{NiftiImage}, \code{NiftiImageData}) for efficient
+//' This implementation uses RNifti's C++ API (\code{NiftiImage}, \code{NiftiImageData}) for efficient
 //' memory access and file handling, allowing the function to operate directly on NIfTI files.
 //'
 //' @examples

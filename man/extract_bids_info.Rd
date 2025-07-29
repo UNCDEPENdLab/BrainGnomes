@@ -12,7 +12,7 @@ extract_bids_info(filenames, drop_unused = FALSE)
 \item{drop_unused}{Logical; if \code{TRUE}, drop any BIDS entities that are not present in any of the filenames.}
 }
 \value{
-A data.frame containing the BIDS key–value fields extracted from each filename (each row corresponds to an input filename).
+A data.frame containing the BIDS key-value fields extracted from each filename (each row corresponds to an input filename).
 }
 \description{
 Extract fields from BIDS filenames

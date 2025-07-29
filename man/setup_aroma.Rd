@@ -15,7 +15,7 @@ setup_aroma(scfg, fields = NULL)
 A modified version of the \code{scfg} list with the \verb{$aroma} entry added or updated.
 }
 \description{
-This function configures the ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts)
+This function configures the ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts)
 step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
 AROMA-based denoising to BOLD fMRI data using FSL's \code{fsl_regfilt} or an equivalent wrapper.
 }

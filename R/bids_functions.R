@@ -2,7 +2,7 @@
 #' Extract fields from BIDS filenames
 #' @param filenames A character vector of BIDS file names (or paths). 
 #' @param drop_unused Logical; if `TRUE`, drop any BIDS entities that are not present in any of the filenames.
-#' @return A data.frame containing the BIDS key–value fields extracted from each filename (each row corresponds to an input filename).
+#' @return A data.frame containing the BIDS key-value fields extracted from each filename (each row corresponds to an input filename).
 #' @details Based on the BIDS specification for file naming (see BIDS documentation appendix on entities).
 #'   For more detail, see: https://bids-specification.readthedocs.io/en/stable/appendices/entities.html
 #' 

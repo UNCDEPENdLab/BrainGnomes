@@ -23,7 +23,7 @@ based on the 98-2 percentile intensity method. This method combines BET skull-st
 with percentile thresholding and binary dilation to produce a conservative mask.
 }
 \details{
-This function replicates the "98-2" heuristic used in FSL’s featlib.tcl:
+This function replicates the "98-2" heuristic used in FSL's featlib.tcl:
 it computes the 2nd and 98th percentiles from a skull-stripped mean image and thresholds
 at 10\% above the 2nd percentile. A final mask is formed by applying this threshold,
 binarizing, and performing one dilation iteration.

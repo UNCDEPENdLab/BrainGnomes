@@ -34,9 +34,9 @@ Updates the status of a specific job in a tracking database, optionally cascadin
 \details{
 The function updates both the job \code{status} and a timestamp corresponding to the status type:
 \itemize{
-\item \code{"QUEUED"} → updates \code{time_submitted}
-\item \code{"STARTED"} → updates \code{time_started}
-\item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} → updates \code{time_ended}
+\item \code{"QUEUED"} -> updates \code{time_submitted}
+\item \code{"STARTED"} -> updates \code{time_started}
+\item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} -> updates \code{time_ended}
 }
 
 If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined

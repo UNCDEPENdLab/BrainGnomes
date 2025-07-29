@@ -114,7 +114,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     fields <- c()
     if (is.null(scfg$metadata$project_name)) fields <- c(fields, "metadata/project_name")
     if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
-    if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory")
+    # if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory") # defer to setup_bids_conversion
     if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
     if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
@@ -448,13 +448,13 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       folder. Here is an example where the subject regex is 'sub-[0-9]+' and the session regex is 'ses-[0-9]+':
 
       /data/dicom/
-      ├── sub-01/
-      │   ├── ses-01/
-      │   │   ├── 1.dcm
-      │   │   ├── 2.dcm
-      │   └── ses-02/
-      │       ├── 1.dcm
-      │       ├── 2.dcm
+      |-- sub-01/
+      |   |-- ses-01/
+      |   |   |-- 1.dcm
+      |   |   |-- 2.dcm
+      |   |-- ses-02/
+      |       |-- 1.dcm
+      |       |-- 2.dcm
 
       You will also be asked for the location of the heuristic file. If you don't have a heuristic file,
       please see some examples here: https://github.com/nipy/heudiconv/tree/master/heudiconv/heuristics.\n\n
@@ -470,6 +470,11 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
   # prompt for heudiconv container at this step
   if (!validate_exists(scfg$compute_environment$heudiconv_container)) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/heudiconv_container")
+  }
+
+  # prompt for DICOM directory
+  if (is.null(scfg$metadata$dicom_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
   }
 
   scfg <- setup_job(scfg, "bids_conversion", defaults, fields)
@@ -556,7 +561,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
 #' Configure ICA-AROMA denoising
 #'
-#' This function configures the ICA-AROMA (Independent Component Analysis–based Automatic Removal Of Motion Artifacts)
+#' This function configures the ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts)
 #' step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
 #' AROMA-based denoising to BOLD fMRI data using FSL's `fsl_regfilt` or an equivalent wrapper.
 #'

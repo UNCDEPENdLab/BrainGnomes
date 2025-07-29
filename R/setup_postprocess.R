@@ -157,7 +157,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
                   - Temporal filtering (e.g., high-pass filtering)
                   - Intensity normalization
                   - Confound calculation and regression
-                  
+
         Do you want to enable postprocessing of the BOLD data?\n"
       ),
       prompt = "Enable postprocessing?",
@@ -495,7 +495,7 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
       instruct = glue("\n\n
       -------------------------------------------------------------------------------------------------------------------------
       Scrubbing identifies timepoints (volumes) with excessive motion or artifacts based on a user-defined expression, such as:
-      'framewise_displacement > 0.9'. If you choose “yes,” you will be prompted to define what constitutes a bad timepoint.
+      'framewise_displacement > 0.9'. If you choose 'yes,' you will be prompted to define what constitutes a bad timepoint.
       This will generate two output files:
         1. Spike Regressors File (*_scrub.tsv):
           A binary matrix with one column per bad timepoint. Each column contains a 1 at the scrubbed timepoint and 0 elsewhere.
@@ -507,11 +507,11 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
       alongside the other selected confounds.
 
       Next, you will be asked whether to interpolate scrubbed timepoints before temporal filtering and confound regression:
-	      •	Interpolation before filtering helps reduce ringing artifacts caused by abrupt signal spikes (Carp, 2012, NeuroImage).
-	      •	Interpolation before regression ensures that model fits are influenced more by clean data than by high-motion spikes.
+	      - Interpolation before filtering helps reduce ringing artifacts caused by abrupt signal spikes (Carp, 2012, NeuroImage).
+	      - Interpolation before regression ensures that model fits are influenced more by clean data than by high-motion spikes.
         
       Finally, you will be asked whether to remove bad timepoints from the final preprocessed NIfTI image. This is common in
-      resting-state fMRI, where scrubbed data are used to compute functional connectivity. Selecting “yes” will yield a NIfTI
+      resting-state fMRI, where scrubbed data are used to compute functional connectivity. Selecting 'yes' will yield a NIfTI
       file with all bad timepoints excluded.
 
       Scrubbing expression FYI: You can specify a range of volumes to scrub using a format like: '-1:1; dvars > 1.5'.
