@@ -57,7 +57,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       scfg <- setup_postprocess_stream(scfg) # add new stream
     } else if (choice == 2) {
       if (length(streams) == 0) {
-        cat("No streams to edit.\n")
+        cat("No streams to edit.\n\n")
         next
       }
       # if we only have one stream, then default to editing it.

@@ -1,14 +1,17 @@
 #' Load a study configuration from a file
-#' @param file A YAML file containing a valid study configuration.
+#' @param input A path to a YAML file, or a project directory containing \code{project_config.yaml}.
 #' @param validate Logical indicating whether to validate the configuration after loading. Default: TRUE
 #' @return A list representing the study configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
 #'   the returned object is validated (missing fields may be set to NULL and noted).
 #' @importFrom yaml read_yaml
 #' @export
-load_project <- function(file = NULL, validate = TRUE) {
-  if (!checkmate::test_file_exists(file)) stop("Cannot find file: ", file)
+load_project <- function(input = NULL, validate = TRUE) {
+  if (checkmate::test_directory_exists(input) && checkmate::test_file_exists(file.path(input, "project_config.yaml"))) {
+    input <- file.path(input, "project_config.yaml") # if input is directory, look for project_config.yaml in it.
+  }
+  if (!checkmate::test_file_exists(input)) stop("Cannot find file: ", input)
   checkmate::test_flag(validate)
-  scfg <- read_yaml(file)
+  scfg <- read_yaml(input)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
   if (validate) scfg <- validate_project(scfg)
 
@@ -139,12 +142,13 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # location of DICOMs
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
+
+    if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
+      create <- prompt_input(instruct = glue("The directory {scfg$metadata$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+      if (create) dir.create(scfg$metadata$dicom_directory, recursive = TRUE)
+    }
   }
 
-  if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$dicom_directory, recursive = TRUE)
-  }
 
   # location of BIDS data -- enforce that this must be within the project directory with a fixed name
   scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
@@ -164,12 +168,13 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       file should be written.\n
       "), type = "character"
     )
+
+    if (!checkmate::test_directory_exists(scfg$metadata$scratch_directory)) {
+      create <- prompt_input(instruct = glue("The directory {scfg$metadata$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
+      if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
+    }
   }
 
-  if (!checkmate::test_directory_exists(scfg$metadata$scratch_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
-  }
 
   if ("metadata/templateflow_home" %in% fields) {
     scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
