@@ -4,7 +4,8 @@ pkgdown_sha: ~
 articles:
   BrainGnomes_Tutorial_Vignette: BrainGnomes_Tutorial_Vignette.html
   building_containers: building_containers.html
-last_built: 2025-07-30T01:23Z
+  Postprocessing_Vignette: Postprocessing_Vignette.html
+last_built: 2025-07-30T14:01Z
 urls:
   reference: https://uncdependlab.github.io/BrainGnomes/reference
   article: https://uncdependlab.github.io/BrainGnomes/articles
