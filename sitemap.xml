@@ -1,9 +1,9 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/404.html</loc></url>
-<url><loc>https://uncdependlab.github.io/BrainGnomes/articles/BrainGnomes_Tutorial_Vignette.html</loc></url>
-<url><loc>https://uncdependlab.github.io/BrainGnomes/articles/Postprocessing_Vignette.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/index.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/authors.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/index.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/BrainGnomes-package.html</loc></url>
