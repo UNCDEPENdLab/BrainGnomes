@@ -19,7 +19,7 @@ using namespace Rcpp;
 //' @param in_file Path to the input 3D or 4D NIfTI image (.nii or .nii.gz).
 //' @param brain_mask Optional path to a 3D NIfTI image used as a brain mask. Voxels with values > 0.001 are retained.
 //'                  The mask must have the same spatial dimensions as the input image. If \code{R_NilValue}, no mask is used.
-//' @param quantiles A numeric vector of probabilities in [0, 1] specifying which quantiles to compute (e.g., 0.5 for the median).
+//' @param quantiles A numeric vector of probabilities in `[0, 1]` specifying which quantiles to compute (e.g., 0.5 for the median).
 //' @param exclude_zero If \code{true}, zero-valued voxels in the image will be excluded from the quantile calculation.
 //'
 //' @return A named numeric vector of quantiles. Names are formatted as percentage strings (e.g., "50.00%").
@@ -106,7 +106,7 @@ NumericVector image_quantile(std::string in_file,
   std::vector<float> values; // vector of values for quantile calculation
   values.reserve(nvals);
   
-  Rcout << "Voxels included is: " << nvals << std::endl;
+  // Rcout << "Voxels included is: " << nvals << std::endl;
   
   // populate values vector
   for (size_t i = 0; i < img_data.size(); ++i) {

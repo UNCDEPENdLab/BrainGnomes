@@ -107,7 +107,7 @@ insert_tracked_job <- function(sqlite_db, job_id, tracking_args = list()) {
                 tracking_args$scheduler_options, tracking_args$job_obj, as.character(Sys.time()), tracking_args$status)
   
   for (i in 1:length(params)) {
-    params[[i]] <- ifelse(is.null(params[[i]]), NA, paras[[i]]) # convert NULL values to NA for dbExecute
+    params[[i]] <- ifelse(is.null(params[[i]]), NA, params[[i]]) # convert NULL values to NA for dbExecute
   }
   
   # order the tracking arguments to match the query; status is always 'QUEUED' when first added to the database
