@@ -1,12 +1,12 @@
 ---
-title: "BrainGnomes: Building Singularity Containers"
+title: "Building Singularity containers for BrainGnomes"
 author: "Michael Hallquist"
 date: "29 Jul 2025"
 output: 
   rmarkdown::html_vignette:
     toc: true
 vignette: >
-  %\VignetteIndexEntry{BrainGnomes Building Containers}
+  %\VignetteIndexEntry{Building Singularity containers for BrainGnomes}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 editor_options:

@@ -16,15 +16,15 @@ can be applied *after* fMRIPrep has generated preprocessed BOLD files.
 These operations include masking, spatial smoothing, ICA‑AROMA denoising,
 scrubbing, temporal filtering, intensity normalisation and confound
 handling.  Configuration of these steps occurs via
-`setup_project()` when a study is first created or later through
+`setup_project()` when a project is first created or later through
 `edit_project()`.
 
-We assume you have created a study configuration object (`scfg`) using
+We assume you have created a project configuration object (`scfg`) using
 `setup_project()` or loaded one with `load_project()`.
 
 ```r
 library(BrainGnomes)
-# scfg <- setup_project()  # or load_project("project_config.yaml")
+# scfg <- setup_project()  # or load_project("/path/to/project")
 ```
 
 # Enabling Postprocessing
@@ -39,9 +39,29 @@ scfg <- edit_project(scfg)  # choose "Postprocessing" from the menu
 
 Once enabled, each step described below can be configured interactively.
 
+# Postprocessing streams
+
+
+```
+Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
+Each stream also asks about which files should be postprocessed using the stream. For example,
+files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
+be processed a different way.
+
+Current postprocessing streams:
+  (none defined yet)
+Modify postprocessing streams: 
+
+1: Add a stream
+2: Edit a stream
+3: Delete a stream
+4: Show stream settings
+5: Finish
+```
+
 # Global Options
 
-The first prompts define global postprocessing behaviour. You specify
+The first prompts define global postprocessing behavior. You specify
 which fMRIPrep outputs to process (`input_regex`), the BIDS description
 for final files (`bids_desc`), whether to keep intermediate images, and
 if existing outputs should be overwritten.  The TR of your scans and an

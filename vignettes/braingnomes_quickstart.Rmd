@@ -1,14 +1,14 @@
 ---
-title: "BrainGnomes: Study Setup and Execution Tutorial"
+title: "BrainGnomes Quickstart"
 author: "Michael Hallquist"
 date: "29 Jul 2025"
 output: 
   rmarkdown::html_vignette:
     toc: true
 vignette: >
-  %\VignetteIndexEntry{BrainGnomes Tutorial}
-  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{BrainGnomes Quickstart}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
 editor_options:
   chunk_output_type: console
 ---
@@ -21,7 +21,7 @@ BrainGnomes is an R package that streamlines the preprocessing and analysis of f
 - edit_project(): Interactively review and modify the study configuration by sections
 - run_project(): Execute the preprocessing pipeline steps on your dataset, utilizing the HPC environment
 
-Along the way, we assume you have the required Singularity container images for each tool and a working HPC environment. Additional information about setting up the compute environment is provided in ![BrainGnomes Singularity container setup](building_containers.html). This vignette provides example R code snippets, explains expected inputs/outputs, and offers troubleshooting tips for common issues. By the end of demo, a new user should understand how to configure a study and launch the BrainGnomes pipeline from start to finish.
+Along the way, we assume you have the required Singularity container images for each tool and a working HPC environment. Additional information about setting up the compute environment is provided in [BrainGnomes Singularity container setup](building_containers.html). This vignette provides example R code snippets, explains expected inputs/outputs, and offers troubleshooting tips for common issues. By the end of demo, a new user should understand how to configure a study and launch the BrainGnomes pipeline from start to finish.
 
 ## Things to include here
 
@@ -175,7 +175,7 @@ Modify postprocessing streams:
 5: Finish
 ```
 
-For additional details about postprocessing, see (in progress) postprocessing.html.
+For additional details about postprocessing, see (in progress) [Postprocessing vignette](postprocessing.html).
 
 ## BIDS validation setup
 
