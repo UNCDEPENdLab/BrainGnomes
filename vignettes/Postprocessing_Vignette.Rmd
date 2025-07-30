@@ -1,0 +1,229 @@
+---
+title: "BrainGnomes Postprocessing Walkthrough"
+author: "BrainGnomes Team"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Postprocessing Walkthrough}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Overview
+
+This vignette focuses on the **postprocessing** features of the
+`BrainGnomes` package. Postprocessing refers to the optional steps that
+can be applied *after* fMRIPrep has generated preprocessed BOLD files.
+These operations include masking, spatial smoothing, ICA‑AROMA denoising,
+scrubbing, temporal filtering, intensity normalisation and confound
+handling.  Configuration of these steps occurs via
+`setup_project()` when a study is first created or later through
+`edit_project()`.
+
+We assume you have created a study configuration object (`scfg`) using
+`setup_project()` or loaded one with `load_project()`.
+
+```r
+library(BrainGnomes)
+# scfg <- setup_project()  # or load_project("project_config.yaml")
+```
+
+# Enabling Postprocessing
+
+During `setup_project()` you will be asked whether to enable
+postprocessing for BOLD data. You can toggle this choice later with
+`edit_project(scfg)`.
+
+```r
+scfg <- edit_project(scfg)  # choose "Postprocessing" from the menu
+```
+
+Once enabled, each step described below can be configured interactively.
+
+# Global Options
+
+The first prompts define global postprocessing behaviour. You specify
+which fMRIPrep outputs to process (`input_regex`), the BIDS description
+for final files (`bids_desc`), whether to keep intermediate images, and
+if existing outputs should be overwritten.  The TR of your scans and an
+optional brain mask file are also collected.
+
+### Selecting BOLD files with `input_regex`
+
+The `input_regex` setting controls which preprocessed NIfTI files are
+included. It accepts any POSIX regular expression, allowing you to
+target a subset of your fMRIPrep directory. For example, to postprocess
+only resting‐state runs you might supply:
+
+```r
+.*task-rest.*_desc-preproc_bold\.nii\.gz$
+```
+
+This pattern matches any file containing `task-rest` and ending in
+`_desc-preproc_bold.nii.gz`. You could create another configuration for
+task-based data using a different expression. The prompts in
+`setup_postprocess_globals()` provide additional guidance and examples
+for constructing these expressions.【F:R/setup_postprocess.R†L199-L211】
+
+### Output naming with `bids_desc`
+
+The `bids_desc` value becomes the `desc` label of every postprocessed
+file. If the input filename is
+
+```
+sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz
+```
+
+and you choose `bids_desc = "clean"`, the output will be named
+
+```
+sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-clean_bold.nii.gz
+```
+
+The setup prompt illustrates this behaviour with a similar example.【F:R/setup_postprocess.R†L215-L221】
+
+# Individual Processing Steps
+
+After the global settings, `setup_project()` walks through a sequence of
+setup functions for each optional step. You may enable or skip any of
+them. Below we summarise the purpose of each step, how to enable it, and
+key options the setup functions will prompt for.
+
+## Applying a Brain Mask
+
+`setup_apply_mask()` controls whether to apply a binary brain mask to
+all BOLD runs.  The prompt explains the rationale and lets you provide a
+mask file and output prefix.
+
+```r
+# excerpt from setup_apply_mask()
+```
+
+```
+Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
+This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
+The mask will be applied as a binary filter to the 4D functional data, zeroing out signal outside the brain.
+You can specify a custom mask file (in the same space and resolution as your fMRI data), or use the default
+mask produced by your preprocessing pipeline.
+Do you want to apply a brain mask to your fMRI data?
+```
+
+Options include a path to the mask file (`mask_file`) and a prefix for
+the masked output (`prefix`, default `"m"`).【F:R/setup_postprocess.R†L496-L544】
+
+## Spatial Smoothing
+
+If you choose to smooth the data, `setup_spatial_smooth()` asks for a
+Gaussian kernel size in millimetres and a filename prefix. Smoothing can
+improve signal-to-noise ratio and alignment across subjects.
+
+## ICA‑AROMA Denoising
+
+When ICA‑AROMA outputs are available, `setup_apply_aroma()` allows you
+to regress out noise components. You can opt for nonaggressive (default)
+or aggressive removal and set a prefix for the cleaned file. The setup
+text summarises the method and provides guidance.【F:R/setup_postprocess.R†L910-L943】
+This step mirrors the AROMA-based denoising used in xcp-d, ensuring
+consistency with contemporary pipelines.
+
+## Scrubbing High‑Motion Volumes
+
+`setup_scrubbing()` generates spike regressors and optional censoring of
+bad time points. The prompts describe how expressions such as
+`framewise_displacement > 0.9` mark volumes for removal. You may also
+interpolate over these time points or drop them from the final NIfTI
+file. The following lines show part of the interactive help text.【F:R/setup_postprocess.R†L389-L475】
+This interpolation mirrors the approach used in the xcp-d pipeline,
+where censored frames are replaced via cubic splines before further
+processing. Filtering and regression then operate on a contiguous time
+series, minimising edge artefacts.
+
+## Temporal Filtering
+
+`setup_temporal_filter()` configures high‑pass and/or low‑pass cutoffs
+and the filtering method (FSL or a Butterworth implementation). Filtering
+removes unwanted frequency components such as slow drifts or fast
+physiological noise.
+
+The two methods behave slightly differently. The FSL approach calls
+`fslmaths -bptf`, which performs Gaussian weighted high‑ and low‑pass
+filtering by specifying the cutoffs in volumes (internally converted
+from Hz using a FWHM‑to‑sigma formula). This approach yields smooth
+roll‑off around the specified frequencies and minimises ringing at the
+expense of a somewhat broad transition band. The Butterworth option uses
+a digital IIR filter designed with the `signal` package and applied
+voxelwise via C++ code. Filtering is applied in a forward and reverse
+pass to preserve phase. The Butterworth design allows sharper cutoffs
+and explicit control of the filter order, producing a steeper response
+than the Gaussian implementation.
+The xcp-d developers favour Butterworth filtering for its zero-phase
+design and sharper transition bands, though the FSL option remains
+compatible with many existing workflows.
+
+## Intensity Normalisation
+
+`setup_intensity_normalization()` rescales each run so that the global
+median intensity matches a user‑specified value (default 10,000). This
+helps make signal units comparable across subjects.
+
+## Confound Calculation and Regression
+
+Two steps handle confounds. `setup_confound_calculate()` creates a TSV
+file of nuisance regressors (motion parameters, CompCor components, DVARS,
+global signal, etc.) that may be filtered to match the BOLD data. Columns
+to include are selected with patterns that can contain regular expressions
+or numeric ranges inside angle brackets. For example
+`a_comp_cor_<1-6>` expands to `a_comp_cor_1` through `a_comp_cor_6` and a
+pattern like `^trans_` will match all six motion parameters. This expansion
+is implemented in `expand_confound_columns()`.【F:R/postprocess_functions.R†L996-L1036】
+
+Filtered confounds (listed in `columns`) undergo the same temporal
+filtering as the BOLD data, while unfiltered confounds (listed in
+`noproc_columns`) are appended without processing. Typical unfiltered
+regressors include binary spike regressors from scrubbing.
+
+Confound selection accepts regular expressions and numeric ranges. For
+instance `^trans_` matches all six translational motion parameters and
+`a_comp_cor_<1-6>` expands to the first six CompCor components. Both
+filtered and unfiltered sets may use these patterns, giving fine-grained
+control over nuisance regressors.
+
+`setup_confound_regression()` optionally performs voxelwise regression of
+these confounds. If scrubbing is enabled, the censor file written during
+`setup_scrubbing()` is passed to the regression step so that model fits are
+computed using only volumes marked as “good.”【F:R/postprocess_functions.R†L748-L764】
+The residuals are written to new NIfTI files with a chosen prefix.
+Because filtered confounds match the exact temporal treatment of the BOLD
+data, this regression step is safe from mismatch artifacts, similar to the
+strategy described in the xcp-d documentation.
+
+## Ordering Steps
+
+Finally, `setup_postproc_steps()` determines the order in which enabled
+steps run. By default the order is masking, smoothing, AROMA, optional
+scrubbing/interpolation, temporal filtering, confound regression, and
+intensity normalisation. You may override this order by answering “yes”
+to the prompt shown in the code below.【F:R/setup_postprocess.R†L321-L358】
+
+# Running Postprocessing
+
+After configuration, running `run_project()` will execute the selected
+postprocessing steps for each subject.
+
+```r
+run_project(scfg, steps = "postprocess")
+```
+
+The processing log for each subject is written to the project’s `logs`
+folder, and the final postprocessed NIfTIs receive the BIDS description
+specified earlier.
+
+# Summary
+
+Postprocessing in BrainGnomes is fully configurable. Using
+`setup_project()` or `edit_project()` you can enable or disable each
+operation, control parameters such as smoothing kernel and filtering
+cutoffs, and decide the order in which steps occur. Running the project
+then applies these settings consistently across all subjects.
+
+For more details on individual functions see the package documentation
+and the help pages referenced above.
