@@ -557,37 +557,6 @@ nii_to_mat <- function(ni_in) {
   return(mat)
 }
 
-#' Compute an intensity quantile from a NIfTI image
-#'
-#' Uses FSL's \code{fslstats} to compute a specified intensity quantile from a NIfTI image,
-#' optionally restricted to a brain mask and excluding zero-valued voxels.
-#'
-#' @param in_file Path to the input NIfTI image file.
-#' @param brain_mask Optional path to a binary brain mask image. If provided, quantiles are computed within the masked region.
-#' @param quantile Numeric value between 0 and 100 indicating the desired quantile (e.g., 50 for median).
-#' @param exclude_zero Logical; if \code{TRUE}, exclude zero-valued voxels from the computation.
-#' @param log_file Optional file path to capture FSL command output.
-#' @param fsl_img Optional Singularity image to execute FSL commands in a containerized environment.
-#'
-#' @return A single numeric value representing the requested intensity quantile.
-#'
-#' @keywords internal
-#' @importFrom checkmate assert_number assert_file_exists test_file_exists
-#' @importFrom glue glue
-get_image_quantile <- function(in_file, brain_mask=NULL, quantile=50, exclude_zero=FALSE, log_file=NULL, fsl_img = NULL) {
-  # checkmate::assert_file_exists(in_file)
-  checkmate::assert_number(quantile, lower = 0, upper = 100)
-  pstr <- ifelse(isTRUE(exclude_zero), "-P", "-p")
-  if (is.null(brain_mask)) {
-     quantile_value <- as.numeric(run_fsl_command(glue("fslstats {in_file} {pstr} {quantile}"), intern = TRUE, log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(in_file)))
-  } else {
-    if (!checkmate::test_file_exists(brain_mask)) checkmate::assert_file_exists(paste0(brain_mask, ".nii.gz"))
-    quantile_value <- as.numeric(run_fsl_command(glue("fslstats {in_file} -k {brain_mask} {pstr} {quantile}"), intern = TRUE, log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(in_file)))
-  }
-  return(quantile_value)
-}
-
-
 ### CURRENTLY ONLY USED BY POSTPROCESSING
 
 

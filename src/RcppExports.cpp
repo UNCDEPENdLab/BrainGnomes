@@ -45,6 +45,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// image_quantile
+NumericVector image_quantile(std::string in_file, Nullable<std::string> brain_mask, NumericVector quantiles, bool exclude_zero);
+RcppExport SEXP _BrainGnomes_image_quantile(SEXP in_fileSEXP, SEXP brain_maskSEXP, SEXP quantilesSEXP, SEXP exclude_zeroSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type in_file(in_fileSEXP);
+    Rcpp::traits::input_parameter< Nullable<std::string> >::type brain_mask(brain_maskSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type quantiles(quantilesSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclude_zero(exclude_zeroSEXP);
+    rcpp_result_gen = Rcpp::wrap(image_quantile(in_file, brain_mask, quantiles, exclude_zero));
+    return rcpp_result_gen;
+END_RCPP
+}
 // lmfit_residuals_4d
 Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const LogicalVector& include_rows, bool add_intercept, std::string outfile, bool internal, bool preserve_mean, double set_mean);
 RcppExport SEXP _BrainGnomes_lmfit_residuals_4d(SEXP infileSEXP, SEXP XSEXP, SEXP include_rowsSEXP, SEXP add_interceptSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP preserve_meanSEXP, SEXP set_meanSEXP) {
@@ -107,6 +121,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
     {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 8},
+    {"_BrainGnomes_image_quantile", (DL_FUNC) &_BrainGnomes_image_quantile, 4},
     {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 8},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},

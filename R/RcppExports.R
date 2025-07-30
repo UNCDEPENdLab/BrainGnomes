@@ -57,6 +57,41 @@ butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE,
     .Call(`_BrainGnomes_butterworth_filter_cpp`, infile, b, a, outfile, internal, padtype, padlen, use_zi)
 }
 
+#' Compute Quantiles from a 3D or 4D NIfTI Image
+#'
+#' Computes one or more quantiles from a 3D or 4D NIfTI image. Optionally applies a 3D brain mask
+#' and/or excludes zero-valued voxels. For 4D images, the function pools over all timepoints.
+#'
+#' @name image_quantile
+#' @param in_file Path to the input 3D or 4D NIfTI image (.nii or .nii.gz).
+#' @param brain_mask Optional path to a 3D NIfTI image used as a brain mask. Voxels with values > 0.001 are retained.
+#'                  The mask must have the same spatial dimensions as the input image. If \code{R_NilValue}, no mask is used.
+#' @param quantiles A numeric vector of probabilities in [0, 1] specifying which quantiles to compute (e.g., 0.5 for the median).
+#' @param exclude_zero If \code{true}, zero-valued voxels in the image will be excluded from the quantile calculation.
+#'
+#' @return A named numeric vector of quantiles. Names are formatted as percentage strings (e.g., "50.00%").
+#'
+#' @details
+#' - For 4D images, the mask (if used) is applied identically to all volumes.
+#' - Quantile calculation uses partial sorting for performance (via \code{std::nth_element}).
+#' - Throws an error if no voxels are valid after masking or zero exclusion.
+#'
+#' @examples
+#' \dontrun{
+#' # Compute the median
+#' image_quantile("bold.nii.gz", 0.5)
+#'
+#' # With masking and zero exclusion
+#' image_quantile("bold.nii.gz", "mask.nii.gz", c(0.25, 0.5, 0.75), exclude_zero=TRUE)
+#' }
+#'
+#' @export
+NULL
+
+image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c(0.5)), exclude_zero = FALSE) {
+    .Call(`_BrainGnomes_image_quantile`, in_file, brain_mask, quantiles, exclude_zero)
+}
+
 #' Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear Models
 #'
 #' This function performs voxelwise confound regression by fitting a linear model to a subset of timepoints

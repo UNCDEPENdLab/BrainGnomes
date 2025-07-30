@@ -430,8 +430,8 @@ spatial_smooth <- function(in_file, out_desc = NULL, fwhm_mm = 6, brain_mask = N
   fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
   sigma <- fwhm_mm / fwhm_to_sigma
 
-  p2_intensity <- get_image_quantile(in_file, brain_mask, 2, log_file = log_file, fsl_img = fsl_img)
-  median_intensity <- get_image_quantile(in_file, brain_mask, 50, log_file = log_file, fsl_img = fsl_img)
+  p2_intensity <- image_quantile(in_file, brain_mask, .02)
+  median_intensity <- image_quantile(in_file, brain_mask, .5)
   susan_thresh <- (median_intensity - p2_intensity) * .75 # also see featlib.tcl
 
   # always compute extents mask that is reapplied to data post-smoothing to avoid any "new" voxels
@@ -495,7 +495,7 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
     out_file <- res$out_file
   }
 
-  median_intensity <- get_image_quantile(in_file, brain_mask, 50, log_file=log_file, fsl_img=fsl_img)
+  median_intensity <- image_quantile(in_file, brain_mask, .5)
   rescaling_factor <- global_median / median_intensity
 
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {rescaling_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))
@@ -617,8 +617,8 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {temp_bet}_mask {temp_stripped}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_bet, temp_stripped)))
 
   # now compute 2nd and 98th percentiles on skull-stripped image
-  p2 <- get_image_quantile(temp_stripped, quantile=2, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img)
-  p98 <- get_image_quantile(temp_stripped, quantile=98, exclude_zero = FALSE, log_file = log_file, fsl_img = fsl_img)
+  p2 <- image_quantile(temp_stripped, quantiles=.02, exclude_zero = FALSE)
+  p98 <- image_quantile(temp_stripped, quantiles=.98, exclude_zero = FALSE)
   
   thresh <- p2 + (p98 - p2)/10
 
