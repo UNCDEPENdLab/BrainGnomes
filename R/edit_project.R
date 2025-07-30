@@ -69,19 +69,48 @@ edit_project <- function(input = NULL) {
       job <- utils::select.list(job_targets, title = "Select which job to configure:")
       if (length(job) == 0 || job == "") next
 
-      job_field_display <- sapply(job_fields, function(fld) {
-        val <- get_nested_values(scfg, paste0(job, "/", fld))
-        sprintf("%s [ %s ]", fld, show_val(val))
-      })
+      if (job == "postprocess") {
+        streams <- get_postprocess_stream_names(scfg)
+        if (length(streams) == 0) {
+          message("No postprocess streams defined.")
+          next
+        }
 
-      selected_job_fields <- utils::select.list(job_field_display,
-        multiple = TRUE,
-        title = glue::glue("Select fields to edit for job '{job}':")
-      )
+        stream <- if (length(streams) == 1L) streams else utils::select.list(streams, title = "Select postprocess stream:")
+        if (length(stream) == 0 || stream == "") next
 
-      if (length(selected_job_fields) == 0) next
+        job_field_display <- sapply(job_fields, function(fld) {
+          val <- get_nested_values(scfg, paste0("postprocess/", stream, "/", fld))
+          sprintf("%s [ %s ]", fld, show_val(val))
+        })
 
-      scfg <- setup_job(scfg, job_name = job, fields = paste(job, names(selected_job_fields), sep = "/"))
+        selected_job_fields <- utils::select.list(job_field_display,
+          multiple = TRUE,
+          title = glue::glue("Select fields to edit for postprocess stream '{stream}':")
+        )
+
+        if (length(selected_job_fields) == 0) next
+
+        scfg <- setup_postprocess_stream(
+          scfg,
+          stream_name = stream,
+          fields = paste0("postprocess/", stream, "/", names(selected_job_fields))
+        )
+      } else {
+        job_field_display <- sapply(job_fields, function(fld) {
+          val <- get_nested_values(scfg, paste0(job, "/", fld))
+          sprintf("%s [ %s ]", fld, show_val(val))
+        })
+
+        selected_job_fields <- utils::select.list(job_field_display,
+          multiple = TRUE,
+          title = glue::glue("Select fields to edit for job '{job}':")
+        )
+
+        if (length(selected_job_fields) == 0) next
+
+        scfg <- setup_job(scfg, job_name = job, fields = paste(job, names(selected_job_fields), sep = "/"))
+      }
     } else {
       # Standard config section
       info <- config_map[[choice]]
