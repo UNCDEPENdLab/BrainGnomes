@@ -28,8 +28,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // butterworth_filter_cpp
-Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<double>& b, const std::vector<double>& a, std::string outfile, bool internal, std::string padtype, int padlen, bool use_zi);
-RcppExport SEXP _BrainGnomes_butterworth_filter_cpp(SEXP infileSEXP, SEXP bSEXP, SEXP aSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP padtypeSEXP, SEXP padlenSEXP, SEXP use_ziSEXP) {
+Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<double>& b, const std::vector<double>& a, std::string outfile, bool internal, std::string padtype, int padlen, bool use_zi, bool demean);
+RcppExport SEXP _BrainGnomes_butterworth_filter_cpp(SEXP infileSEXP, SEXP bSEXP, SEXP aSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP padtypeSEXP, SEXP padlenSEXP, SEXP use_ziSEXP, SEXP demeanSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -41,7 +41,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type padtype(padtypeSEXP);
     Rcpp::traits::input_parameter< int >::type padlen(padlenSEXP);
     Rcpp::traits::input_parameter< bool >::type use_zi(use_ziSEXP);
-    rcpp_result_gen = Rcpp::wrap(butterworth_filter_cpp(infile, b, a, outfile, internal, padtype, padlen, use_zi));
+    Rcpp::traits::input_parameter< bool >::type demean(demeanSEXP);
+    rcpp_result_gen = Rcpp::wrap(butterworth_filter_cpp(infile, b, a, outfile, internal, padtype, padlen, use_zi, demean));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -120,7 +121,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
-    {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 8},
+    {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 9},
     {"_BrainGnomes_image_quantile", (DL_FUNC) &_BrainGnomes_image_quantile, 4},
     {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 8},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},

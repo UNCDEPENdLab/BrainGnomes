@@ -32,10 +32,6 @@
 #' @export
 NULL
 
-filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = TRUE) {
-    .Call(`_BrainGnomes_filtfilt_cpp`, x, b, a, padlen, padtype, use_zi)
-}
-
 #' Apply Butterworth Filter to 4D NIfTI Image
 #'
 #' This function applies a temporal Butterworth filter to each voxel time series
@@ -49,12 +45,19 @@ filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = T
 #' @param internal Logical. Whether to return an internal RNifti image object (default = false).
 #' @param padtype String. Padding type: "even", "odd", "constant", or "zero" (default = "even").
 #' @param use_zi Logical. Whether to use steady-state initial conditions (default = true).
+#' @param demean Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove 
+NULL
+
+filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = TRUE) {
+    .Call(`_BrainGnomes_filtfilt_cpp`, x, b, a, padlen, padtype, use_zi)
+}
+
 #'
 #' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
 #'
 #' @keywords internal
-butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE, padtype = "even", padlen = -1L, use_zi = TRUE) {
-    .Call(`_BrainGnomes_butterworth_filter_cpp`, infile, b, a, outfile, internal, padtype, padlen, use_zi)
+butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE, padtype = "even", padlen = -1L, use_zi = TRUE, demean = TRUE) {
+    .Call(`_BrainGnomes_butterworth_filter_cpp`, infile, b, a, outfile, internal, padtype, padlen, use_zi, demean)
 }
 
 #' Compute Quantiles from a 3D or 4D NIfTI Image

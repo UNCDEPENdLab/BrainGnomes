@@ -12,7 +12,8 @@ butterworth_filter_cpp(
   internal = FALSE,
   padtype = "even",
   padlen = -1L,
-  use_zi = TRUE
+  use_zi = TRUE,
+  demean = TRUE
 )
 }
 \arguments{
@@ -29,6 +30,8 @@ butterworth_filter_cpp(
 \item{padtype}{String. Padding type: "even", "odd", "constant", or "zero" (default = "even").}
 
 \item{use_zi}{Logical. Whether to use steady-state initial conditions (default = true).}
+
+\item{demean}{Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove}
 }
 \value{
 A 4D filtered NIfTI image as a niftiImage or internalImage object.

@@ -130,9 +130,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   cur_file <- proc_files$bold
   file_set <- cur_file # tracks all of the files used in the postprocessing stream
 
-  cat("At beginning of postprocessing loop, scrubbing expression is: '", cfg$scrubbing$expression, "'\n", sep="")
-  cat("length expr is: ", length(cfg$scrubbing$expression), "\n")
-
   ## setup order of processing steps
   if (isTRUE(cfg$force_processing_order)) {
 

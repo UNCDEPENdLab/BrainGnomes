@@ -246,6 +246,16 @@ NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a,
   return NumericVector(result.begin(), result.end());
 }
 
+void demean_vec(std::vector<double> &ts) {
+  if (ts.empty()) return;
+
+  // Compute the mean
+  double mean = std::accumulate(ts.begin(), ts.end(), 0.0) / ts.size();
+
+  // Subtract the mean from each element
+  for (double &x : ts) x -= mean;
+}
+
 //' Apply Butterworth Filter to 4D NIfTI Image
 //'
 //' This function applies a temporal Butterworth filter to each voxel time series
@@ -259,19 +269,16 @@ NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a,
 //' @param internal Logical. Whether to return an internal RNifti image object (default = false).
 //' @param padtype String. Padding type: "even", "odd", "constant", or "zero" (default = "even").
 //' @param use_zi Logical. Whether to use steady-state initial conditions (default = true).
+//' @param demean Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove 
+//     DC (mean) component (default = true).
 //'
 //' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
 //'
 //' @keywords internal
 // [[Rcpp::export]]
-Rcpp::RObject butterworth_filter_cpp(std::string infile,
-                                     const std::vector<double>& b,
-                                     const std::vector<double>& a,
-                                     std::string outfile = "",
-                                     bool internal = false,
-                                     std::string padtype = "even",
-                                     int padlen = -1,
-                                     bool use_zi = true) {
+Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<double>& b, const std::vector<double>& a,
+                                     std::string outfile = "", bool internal = false, std::string padtype = "even",
+                                     int padlen = -1, bool use_zi = true, bool demean = true) {
   
   NiftiImage image(infile); // read input
   int datatype = image->datatype;
@@ -315,6 +322,7 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile,
         }
         
         if (is_constant) continue;
+        if (demean) demean_vec(y);
         
         // apply frequency filter to this voxel
         y_filt = filtfilt(y, b, a, padlen, padtype, use_zi);

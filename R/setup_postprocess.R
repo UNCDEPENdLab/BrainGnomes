@@ -1013,11 +1013,19 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
   }
 
   if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$low_pass_hz <- prompt_input("Low-pass cutoff (Hz) ", type = "numeric", lower = 0)
+    ppcfg$temporal_filter$low_pass_hz <- prompt_input("Low-pass cutoff (Hz)", type = "numeric", lower = 0, required = FALSE)
+    if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
+      cat("Omitting low-pass filtering\n")
+      ppcfg$temporal_filter$low_pass_hz <- -Inf # indicates no low-pass cutoff
+    }
   }
   
   if ("postprocess/temporal_filter/high_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$high_pass_hz <- prompt_input("High-pass cutoff (Hz) ", type = "numeric", lower = 0)
+    ppcfg$temporal_filter$high_pass_hz <- prompt_input("High-pass cutoff (Hz) ", type = "numeric", lower = 0, required = FALSE)
+    if (is.na(ppcfg$temporal_filter$high_pass_hz)) {
+      cat("Omitting high-pass filtering\n")
+      ppcfg$temporal_filter$high_pass_hz <- Inf # indicates no high-pass cutoff
+    }
   }
 
   if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&

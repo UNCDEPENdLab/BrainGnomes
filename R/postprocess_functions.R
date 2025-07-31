@@ -269,7 +269,7 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Temporal filtering with low-pass: {cfg$temporal_filter$low_pass_hz} Hz, high-pass: {cfg$temporal_filter$high_pass_hz} Hz given TR: {cfg$tr}")
+  lg$info("Temporal filtering with low-pass: {low_pass_hz} Hz, high-pass: {high_pass_hz} Hz given TR: {tr}")
   lg$debug("in_file: {in_file}")
   
   # handle extant file
@@ -284,17 +284,9 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
     # bptf specifies its filter cutoffs in terms of volumes, not frequencies
     fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
 
-    if (is.infinite(high_pass_hz)) {
-      hp_volumes <- -1 # do not apply high-pass
-    } else {
-      hp_volumes <- 1 / (high_pass_hz * fwhm_to_sigma * tr)
-    }
-
-    if (is.infinite(low_pass_hz) || low_pass_hz==0) {
-      lp_volumes <- -1 # do not apply low-pass
-    } else {
-      lp_volumes <- 1 / (low_pass_hz * fwhm_to_sigma * tr)
-    }
+    # set volumes to -1 to skip that side of filter in -bptf
+    hp_volumes <- if (is.infinite(high_pass_hz)) -1 else 1 / (high_pass_hz * fwhm_to_sigma * tr)
+    lp_volumes <- if (is.infinite(low_pass_hz) || low_pass_hz==0) -1 else 1 / (low_pass_hz * fwhm_to_sigma * tr)
 
     temp_tmean <- tempfile(pattern="tmean")
     run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
@@ -303,8 +295,8 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
     rm_niftis(temp_tmean) # clean up temporal mean image
   } else {
     lg$info("Using internal Butterworth filter function")
-    bw_low <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
-    bw_high <- if (is.infinite(low_pass_hz) || low_pass_hz == 0) NULL else low_pass_hz
+    bw_low <- if (is.infinite(low_pass_hz) || low_pass_hz == 0) NULL else low_pass_hz
+    bw_high <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
     butterworth_filter_4d(infile = in_file, tr = tr, low_hz = bw_low, high_hz = bw_high, outfile = out_file)
   }
   
@@ -755,6 +747,8 @@ get_censor_file <- function(bids_info) {
 #' @param order Integer. Filter order (default = 4).
 #' @param padtype Character string. Padding strategy: "even", "odd", "constant", or "zero". Default is "even".
 #' @param use_zi Logical. Whether to use steady-state initial conditions (default = TRUE).
+#' @param demean Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove 
+#'   DC (mean) component (default = true).
 #'
 #' @return A 4D NIfTI image, either written to `outfile` or returned as an object.
 #'
@@ -771,13 +765,12 @@ get_censor_file <- function(bids_info) {
 #' @export
 butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
                                   outfile = "", internal = FALSE,
-                                  order = 2L, padtype = "even", use_zi = TRUE) {
+                                  order = 2L, padtype = "even", use_zi = TRUE, demean = TRUE) {
   checkmate::assert_file_exists(infile)
   checkmate::assert_number(tr, lower=0.01, upper = 100)
   checkmate::assert_number(low_hz, null.ok = TRUE)
   checkmate::assert_number(high_hz, null.ok=TRUE)
   checkmate::assert_integerish(order, len=1L, lower=1L, upper=50L)
-  
   
   if (!requireNamespace("signal", quietly = TRUE)) stop("The 'signal' package must be installed.")
   
@@ -790,7 +783,6 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
   
   # if (is.null(low_hz) || low_hz < 0) low_hz <- 0 # 0 indicates no filtering
   # if (is.null(high_hz) || is.infinite(high_hz)) high_hz <- Inf # 0 indicates no filtering
-  # 
   
   if (!is.null(low_hz) && low_hz <= 0) stop("'low_hz' must be > 0")
   if (!is.null(high_hz) && high_hz >= nyq) stop("'high_hz' must be < Nyquist frequency")
@@ -810,9 +802,9 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
   butter_coeff <- signal::butter(order, W, type = type)
   b <- butter_coeff$b
   a <- butter_coeff$a
-  
+
   # Call C++ function for voxelwise filtering
   butterworth_filter_cpp(infile = infile, b = b, a = a,
                          outfile = outfile, internal = internal,
-                         padtype = padtype, use_zi = use_zi)
+                         padtype = padtype, use_zi = use_zi, demean=demean)
 }

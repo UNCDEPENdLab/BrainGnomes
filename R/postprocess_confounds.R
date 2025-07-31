@@ -67,7 +67,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
     confounds_to_filt <- subset(confounds, select = confound_cols)
 
-    # generate fake NIfTI with confound timeseries
+    # generate NIfTI with confound timeseries
     confounds_bids <- extract_bids_info(proc_files$confounds)
     tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out)
