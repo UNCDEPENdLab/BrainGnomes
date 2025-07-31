@@ -13,7 +13,8 @@ butterworth_filter_4d(
   internal = FALSE,
   order = 2L,
   padtype = "even",
-  use_zi = TRUE
+  use_zi = TRUE,
+  demean = TRUE
 )
 }
 \arguments{
@@ -35,6 +36,9 @@ if TRUE, returns a minimal metadata internal object (see RNifti).}
 \item{padtype}{Character string. Padding strategy: "even", "odd", "constant", or "zero". Default is "even".}
 
 \item{use_zi}{Logical. Whether to use steady-state initial conditions (default = TRUE).}
+
+\item{demean}{Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove
+DC (mean) component (default = true).}
 }
 \value{
 A 4D NIfTI image, either written to \code{outfile} or returned as an object.

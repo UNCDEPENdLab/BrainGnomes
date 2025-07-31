@@ -136,6 +136,23 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 }
 
 
+# function that allows line input in interactive session or Rscript with tty
+getline <- function(prompt = "") {
+  if (interactive()) {
+    out <- readline(prompt)
+  } else if (base::isatty(stdin())) {
+    cat(prompt)
+    out <- tryCatch(
+      scan(file = "stdin", what = "", nmax = 1, quiet = TRUE, sep = "\n", blank.lines.skip = FALSE),
+      error = function(e) ""
+    )
+    if (length(out) == 0) return("")
+  } else {
+    stop("getline requires an interactive session or a tty")
+  }
+  
+  return(out)
+}
 
 #' Obtain user input from the console
 #' @param prompt The character string to display before the user input prompt (e.g., `"Enter location"`).
@@ -164,8 +181,13 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
   len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL) {
 
-  if (!interactive()) stop("prompt_input() requires an interactive session.")
-
+  # In non-interactive sessions launched via Rscript, interactive() returns
+  # FALSE even though reading from stdin is possible. Allow such cases when the
+  # standard input is a TTY.
+  if (!interactive() && !base::isatty(stdin())) {
+    stop("prompt_input() requires an interactive session.")
+  }
+  
   if (is.null(prompt)) prompt <- ""
   if (is.null(prompt_eol)) prompt_eol <- ""
 
@@ -267,7 +289,9 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   # obtain user input
   res <- ""
   while (is.na(res[1L]) || res[1L] == "") {
-    r <- readline(prompt)
+    #r <- readline(prompt)
+    r <- getline(prompt)
+    
     if (!is.null(split) && nzchar(r)) r <- strsplit(r, split, perl = TRUE)[[1]]
 
     if (!is.null(default) && r[1L] == "") {
