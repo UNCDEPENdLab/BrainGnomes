@@ -56,7 +56,8 @@ a Butterworth IIR filter (low-pass, high-pass, or bandpass).</p>
 <span>  internal <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  order <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  padtype <span class="op">=</span> <span class="st">"even"</span>,</span>
-<span>  use_zi <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  use_zi <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  demean <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -99,6 +100,11 @@ if TRUE, returns a minimal metadata internal object (see RNifti).</p></dd>
 
 <dt id="arg-use-zi">use_zi<a class="anchor" aria-label="anchor" href="#arg-use-zi"></a></dt>
 <dd><p>Logical. Whether to use steady-state initial conditions (default = TRUE).</p></dd>
+
+
+<dt id="arg-demean">demean<a class="anchor" aria-label="anchor" href="#arg-demean"></a></dt>
+<dd><p>Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove
+DC (mean) component (default = true).</p></dd>
 
 </dl></div>
     <div class="section level2">
