@@ -1,0 +1,56 @@
+#!/usr/bin/env Rscript
+
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 1L) {
+  cat("Usage: BrainGnomes <command> [options]\n")
+  cat("Commands:\n")
+  cat("  setup_project [project_name] [project_directory]\n")
+  cat("  edit_project <project_directory|config.yaml>\n")
+  cat("  run_project <project_directory|config.yaml> -steps <steps> -subject_filter <ids> -postprocess_streams <streams> [-debug] [-force]\n")
+  quit(status = 1)
+}
+
+cmd <- args[1]
+opts <- if (length(args) > 1) args[-1] else character()
+
+if (!requireNamespace("BrainGnomes", quietly = TRUE)) {
+  stop("BrainGnomes package is required to run this script.")
+}
+
+run_setup <- function(opts) {
+  project_name <- if (length(opts) >= 1) opts[1] else NULL
+  project_dir  <- if (length(opts) >= 2) opts[2] else NULL
+  scfg <- list(metadata = list())
+  if (!is.null(project_name)) scfg$metadata$project_name <- project_name
+  if (!is.null(project_dir)) scfg$metadata$project_directory <- project_dir
+  class(scfg) <- "bg_project_cfg"
+  BrainGnomes::setup_project(scfg)
+}
+
+run_edit <- function(opts) {
+  if (length(opts) < 1) stop("edit_project requires a project directory or YAML file")
+  BrainGnomes::edit_project(opts[1])
+}
+
+run_run <- function(opts) {
+  if (length(opts) < 1) stop("run_project requires a project directory or YAML file")
+  input <- opts[1]
+  cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
+  steps <- cli_args$steps
+  subject_filter <- cli_args$subject_filter
+  postprocess_streams <- cli_args$postprocess_streams
+  debug <- FALSE
+  force <- FALSE
+  if (!is.null(cli_args$debug)) debug <- isTRUE(cli_args$debug) || is.na(cli_args$debug)
+  if (!is.null(cli_args$force)) force <- isTRUE(cli_args$force) || is.na(cli_args$force)
+  scfg <- BrainGnomes::load_project(input)
+  BrainGnomes::run_project(scfg, steps = steps, subject_filter = subject_filter,
+    postprocess_streams = postprocess_streams, debug = debug, force = force)
+}
+
+switch(cmd,
+  setup_project = run_setup(opts),
+  edit_project = run_edit(opts),
+  run_project = run_run(opts),
+  stop(paste("Unknown command:", cmd))
+)
