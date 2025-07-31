@@ -488,6 +488,11 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
   }
 
   median_intensity <- image_quantile(in_file, brain_mask, .5)
+
+  # a heuristic for now, but we must have a small positive median to avoid wild scaling values (divide by ~0) and accidental sign flips (if median is negative)
+  # long-term, we need to decide whether to additive scaling x + (10000 - median) or to add a number to all voxels to bring the min > 0.01, then do multiplicative median scaling
+  if (median_intensity < 1) median_intensity <- 1.0
+
   rescaling_factor <- global_median / median_intensity
 
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {rescaling_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))

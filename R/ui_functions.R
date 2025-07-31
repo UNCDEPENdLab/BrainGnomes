@@ -23,7 +23,7 @@ read_multiline_input <- function(instruct=NULL, prompt="> ", n_blank=1, collapse
   empty_count <- 0
   
   repeat {
-    line <- readline(prompt)
+    line <- getline(prompt)
     
     if (nchar(trimws(line)) == 0) {
       empty_count <- empty_count + 1
@@ -89,7 +89,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       cat("  3: Delete argument\n")
       cat("  4: Done\n")
 
-      choice <- readline("Enter choice [1-4]: ")
+      choice <- getline("Enter choice [1-4]: ")
     } else {
       choice <- "1" # if no arguments, start by prompting
     }
@@ -99,10 +99,10 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       args <- c(args, new_arg)
       if (!has_args) break # don't require confirmation on first entry of arguments
     } else if (choice == "2") {
-      idx <- as.integer(readline("Enter argument number to edit: "))
+      idx <- as.integer(getline("Enter argument number to edit: "))
       if (!is.na(idx) && idx >= 1 && idx <= length(args)) {
         current_val <- args[idx]
-        new_val <- readline(sprintf("New value for [%s] (press Enter to keep): ", current_val))
+        new_val <- getline(sprintf("New value for [%s] (press Enter to keep): ", current_val))
         if (nzchar(new_val)) {
           args[idx] <- new_val
         } else {
@@ -113,7 +113,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       }
       
     } else if (choice == "3") {
-      idx <- as.integer(readline("Enter argument number to delete: "))
+      idx <- as.integer(getline("Enter argument number to delete: "))
       if (!is.na(idx) && idx >= 1 && idx <= length(args)) {
         args <- args[-idx]
       } else {
@@ -422,7 +422,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
         # Select a template
         selected_template <- utils::select.list(templates_available, multiple = FALSE, title = "Choose a template")
         if (selected_template != "") {
-          res_input <- readline(paste0("Enter resolution index for ", selected_template, " (or press ENTER to skip): "))
+          res_input <- getline(paste0("Enter resolution index for ", selected_template, " (or press ENTER to skip): "))
           space_string <- if (res_input == "") {
             selected_template
           } else {
