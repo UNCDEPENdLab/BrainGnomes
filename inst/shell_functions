@@ -269,23 +269,26 @@ function traperror () {
         echo -n "$0: DEBUG Error in ${funcstack} "
         [[ "$linecallfunc" != "N/A" ]] && echo "called at line $linecallfunc"
       fi
-      
-      echo -en "\nCurrent working directory:\n  $PWD\n" | tee -a "$dotfile"
+
+      echo -en "\nCurrent working directory:\n  $PWD\n"
       [ -n "$pkg_dir" ] && echo "Location of BrainGnomes installation: $pkg_dir"
 
       if [ -r "$log_file" ]; then
-        echo -en "\n\nLast 10 lines of command log file:\n---------\n\n"
-        tail -n 10 "$log_file"
+        local cmd_tail
+        cmd_tail=$(tail -n 10 "$log_file")
+        printf "\n\nLast 10 lines of command log file:\n---------\n\n%s\n" "$cmd_tail"
       fi
 
       if [ -r "$stdout_log" ]; then
-        echo -en "\n\nLast 10 lines of stdout file:\n---------\n\n"
-        tail -n 10 "$stdout_log"
+        local stdout_tail
+        stdout_tail=$(tail -n 10 "$stdout_log")
+        printf "\n\nLast 10 lines of stdout file:\n---------\n\n%s\n" "$stdout_tail"
       fi
 
       if [ -r "$stderr_log" ]; then
-        echo -en "\n\nLast 10 lines of stderr file:\n---------\n\n"
-        tail -n 10 "$stderr_log"
+        local stderr_tail
+        stderr_tail=$(tail -n 10 "$stderr_log")
+        printf "\n\nLast 10 lines of stderr file:\n---------\n\n%s\n" "$stderr_tail"
       fi
     } | tee -a "$dotfile"
 
