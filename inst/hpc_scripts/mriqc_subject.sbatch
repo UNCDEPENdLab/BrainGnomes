@@ -63,9 +63,9 @@ singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch
 log_message INFO Starting mriqc for subject $sub_id in $out_dir
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag $singularity_cmd \
+rel $rel_flag "$log_flag" "$singularity_cmd" \
     "$loc_bids_root" "$loc_mriqc_root/" participant \
-    $cli_options & # all options setup by submit_mriqc()
+    "$cli_options" & # all options setup by submit_mriqc()
 cmd_pid=$!
 
 set +e

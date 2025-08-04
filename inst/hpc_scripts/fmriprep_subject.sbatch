@@ -101,9 +101,9 @@ rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_hom
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag $singularity_cmd \
+rel $rel_flag "$log_flag" "$singularity_cmd" \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
-    $cli_options & # all options setup by submit_fmriprep()
+    "$cli_options" & # all options setup by submit_fmriprep()
 cmd_pid=$!
 
 set +e

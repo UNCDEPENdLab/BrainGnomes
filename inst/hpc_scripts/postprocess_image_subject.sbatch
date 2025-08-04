@@ -75,7 +75,7 @@ start_time=$(date +%s)
 
 log_message INFO Starting postprocessing for image $input_file in $out_dir with mem: $mem
 
-rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &
+rel $rel_flag "$log_flag" "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" "$postprocess_cli" &
 cmd_pid=$!
 
 set +e

@@ -56,13 +56,33 @@ function build_qsub_string() {
 }
 
 # rel is shorthand for "run, echo, log". It looks for the environment $log_file and will write outputs there if specified.
+# 
 # Initial arguments specify what to do, including
 # c: "comment"  -- print the command to the screen and log, but do not execute it
 # t: "timeit"   -- print the command to screen and log, execute it, and include execution timing in output
 # o: "output"   -- print the command to the log, but not screen, execute it, and print the command result to screen (can be captured by caller)
 # -l <log>      -- specify the location of a log file used for logging. If not specified, rel will look at $log_file
 #
-# After parsing these arguments, all remaining arguments are assumed to be part of the command to be run
+# After parsing these arguments, all remaining arguments are assumed to be part of the command to be run. 
+# rel uses printf-style quoting to preserve complex argument structure, including arguments with spaces,
+# quotes, or shell metacharacters.
+#
+# Quoting Behavior:
+#   - relq preserves spaces and special characters in arguments using shell-safe quoting.
+#   - Each argument is quoted independently via `printf %q`, so complex argument structure is preserved.
+#
+# DO NOT pass unquoted variables that contain multiple words or special characters.
+#    For example, this will NOT work as expected:
+#       var="--arg='value with spaces'"
+#       relq echo "Starting:" $var       # Will split into multiple arguments
+#
+# INSTEAD, quote the variable:
+#       relq echo "Starting:" "$var"     # Preserves structure as a single argument
+#
+# Limitations:
+#   - Cannot preserve nested quotes **within** arguments if they are broken during variable expansion.
+#   - relq does not parse shell syntax; it only escapes each argument for safe shell execution.
+#   - If you need true preservation of original quoting and spacing, pass arguments individually and quote variables.
 # 
 # Examples:
 #   # Just write a comment to the log
@@ -77,16 +97,17 @@ function rel() {
   #function that runs, echos to terminal, and logs to file an arbitrary command
   local comment=0
   local timeit=0
+  local capture_stdout=0
+  local log=""          # log file where results should be written
   local tic=0
   local toc=0
-  local capture_stdout=0
-  local cmdExit=0       # return value of this command
+  local cmdExit=0       # return value of this command    
   local cmdOutput=""    # stdout output of the command
-  local log=""          # log file where results should be written
 
   [ -n "$log_file" ] && log="$log_file"
   [[ $# -eq 0 ]] && echo "No arguments to rel provided" && return 1
 
+  # Parse control flags
   while [[ $# -gt 0 ]]; do
     case "$1" in
       c) comment=1; shift ;;
@@ -97,42 +118,44 @@ function rel() {
     esac
   done
 
-  # preserve original spacing and quoting of arguments
-  local cmd=("$@")
-  local cmd_str="${cmd[*]}" # cmd as single string for printing
+  # Quote each remaining argument safely
+  local quoted_args=()
+  for arg in "$@"; do
+    quoted_args+=("$(printf "%q" "$arg")")
+  done
+  local cmd_str="${quoted_args[*]}"
 
   # Handle comment-only output
-  if [ $comment -eq 1 ]; then
+  if [[ $comment -eq 1 ]]; then
     # echo command to screen and log with dashes to offset text visually
     # if a blank string is passed as the command, include this without dashes (pure whitespace)
     [[ -n "$cmd_str" ]] && cmd_str="--- $cmd_str"
-
-    echo -e "$cmd_str" # echo to screen
-
+    echo -e "$cmd_str"
     # if we are writing comment to log, prepend with ## to separate comments from output
-    [ -n "$log" ] && echo -e "## $cmd_str" >> "$log" # log
-    
-    return 0 # return immediately if we are just commenting
+    [ -n "$log" ] && echo -e "## $cmd_str" >> "$log"
+    return 0
   fi
 
   # log the command
   [ -n "$log" ] && echo -e "$cmd_str" >> "$log"
-  
+
   # echo command to screen verbatim if we are not capturing stdout
   [ $capture_stdout -eq 0 ] && echo "$cmd_str"
 
+  [ $timeit -eq 1 ] && tic=$(date +%s) # start timing
+  
   #run command
-  [ $timeit -eq 1 ] && tic=$(date +%s)
-  if [ $capture_stdout -eq 1 ]; then
+  if [[ $capture_stdout -eq 1 ]]; then
     # if we are capturing stdout, we need to save the output of the command and not echo it to the screen
-    cmdOutput=$("$cmd[@]")
+    cmdOutput=$(eval "$cmd_str")
     cmdExit=$?
     [ -n "$log" ] && echo -e "## stdout: $cmdOutput" >> "$log"
   else
-    # otherwise, run the command and let it print to the screen
-    "${cmd[@]}"
+    # otherwise, run the command and let its output print to the screen
+    eval "$cmd_str"
     cmdExit=$?
   fi
+
   [ $timeit -eq 1 ] && toc=$(date +%s)
 
   # handle timing output
