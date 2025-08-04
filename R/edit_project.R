@@ -46,7 +46,8 @@ edit_project <- function(input = NULL) {
   job_fields <- c("memgb", "nhours", "ncores", "cli_options", "sched_args")
 
   show_val <- function(val) {
-    if (is.null(val)) "[NULL]"
+    if (is.null(val)) "NULL"
+    else if (length(val) == 0L || all(is.na(val))) "None"
     else if (is.logical(val)) toupper(as.character(val))
     else if (is.character(val) && length(val) > 1) paste(val, collapse = ", ")
     else as.character(val)

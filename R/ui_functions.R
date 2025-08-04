@@ -69,7 +69,8 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
   lines <- character()
 
   # If existing args are passed in, prompt edits and confirmation of changes. If no args, just accept entry and return
-  has_args <- !is.null(args)
+  has_args <- !is.null(args) && !all(is.na(args))
+  args <- args[!is.na(args)] # NA is indicator of unset cli args
   
   # Step 2: Interactive edit loop
   repeat {
@@ -121,6 +122,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       }
       
     } else if (choice == "4") {
+      if (length(args) == 0L) args <- NA_character_ # indicator of empty
       break # Done action
     } else {
       cat("Invalid choice. Please enter 1, 2, 3, or 4.\n")
