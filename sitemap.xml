@@ -28,8 +28,10 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_nested_values.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_subject_dirs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_subject_logger.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_tracked_job_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/hours_to_dhms.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/image_quantile.html</loc></url>
@@ -89,6 +91,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/submit_sqlite_query.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/submit_tracking_query.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/summary.bg_project_cfg.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/summary.bg_status_df.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/temporal_filter.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_exists.html</loc></url>
