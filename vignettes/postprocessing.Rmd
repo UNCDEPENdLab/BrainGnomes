@@ -196,6 +196,10 @@ or numeric ranges inside angle brackets. For example
 pattern like `^trans_` will match all six motion parameters. This expansion
 is implemented in `expand_confound_columns()`.【F:R/postprocess_functions.R†L996-L1036】
 
+Standard motion-confound bundles can also be selected using shortcuts such as
+`"6p"`, `"12p"`, `"24p"`, or `"36p"` to request common sets of motion
+parameters and their derivatives/squared terms.
+
 Filtered confounds (listed in `columns`) undergo the same temporal
 filtering as the BOLD data, while unfiltered confounds (listed in
 `noproc_columns`) are appended without processing. Typical unfiltered

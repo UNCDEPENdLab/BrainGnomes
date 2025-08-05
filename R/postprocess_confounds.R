@@ -183,6 +183,9 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 #' `motion_param_<1,25>` expands to `motion_param_1` and
 #' `motion_param_25`. Patterns without angle brackets are treated as
 #' regular expressions evaluated against the available column names.
+#' In addition, common motion-confound sets can be requested using the
+#' shortcuts `"6p"`, `"12p"`, `"24p"`, and `"36p"` which expand to the
+#' corresponding standard collections of parameters.
 #'
 #' @param patterns Character vector of column patterns.
 #' @param available Character vector of available column names.
@@ -198,8 +201,43 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 expand_confound_columns <- function(patterns = NULL, available) {
   if (is.null(patterns) || length(patterns) == 0 || all(is.na(patterns))) return(NULL) # nothing to expand
   checkmate::assert_character(patterns, all.missing = FALSE)
-  patterns <- na.omit(patterns) # just in case 
-  checkmate::assert_character(available) 
+  patterns <- na.omit(patterns) # just in case
+  checkmate::assert_character(available)
+
+  # expand standard motion/confound sets if present
+  shortcuts <- list(
+    "6p" = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
+    "12p" = c(
+      "rot_x", "rot_x_derivative1", "rot_y", "rot_y_derivative1",
+      "rot_z", "rot_z_derivative1", "trans_x", "trans_x_derivative1",
+      "trans_y", "trans_y_derivative1", "trans_z", "trans_z_derivative1"
+    ),
+    "24p" = c(
+      "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+      "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+      "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+      "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+      "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+      "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2"
+    ),
+    "36p" = c(
+      "csf", "csf_derivative1", "csf_derivative1_power2", "csf_power2",
+      "global_signal", "global_signal_derivative1", "global_signal_derivative1_power2",
+      "global_signal_power2",
+      "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+      "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+      "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+      "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+      "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+      "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2",
+      "white_matter", "white_matter_derivative1", "white_matter_derivative1_power2",
+      "white_matter_power2"
+    )
+  )
+  if (any(patterns %in% names(shortcuts))) {
+    expanded <- unlist(shortcuts[patterns[patterns %in% names(shortcuts)]], use.names = FALSE)
+    patterns <- c(setdiff(patterns, names(shortcuts)), expanded)
+  }
 
   res <- unlist(lapply(patterns, function(pat) {
     if (is.na(pat) || pat == "") return(character())
