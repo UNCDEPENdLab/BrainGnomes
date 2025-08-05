@@ -251,6 +251,10 @@ example <code>a_comp_cor_&lt;1-6&gt;</code> expands to
 pattern like <code>^trans_</code> will match all six motion parameters.
 This expansion is implemented in
 <code>expand_confound_columns()</code>.【F:R/postprocess_functions.R†L996-L1036】</p>
+<p>Standard motion-confound bundles can also be selected using shortcuts
+such as <code>"6p"</code>, <code>"12p"</code>, <code>"24p"</code>, or
+<code>"36p"</code> to request common sets of motion parameters and their
+derivatives/squared terms.</p>
 <p>Filtered confounds (listed in <code>columns</code>) undergo the same
 temporal filtering as the BOLD data, while unfiltered confounds (listed
 in <code>noproc_columns</code>) are appended without processing. Typical
