@@ -550,6 +550,9 @@ mat_to_nii <- function(mat, ni_out="mat") {
   
   nif[is.na(nif)] <- 0 # cannot handle missingness in NIfTIs
 
+  # enforce .nii.gz extension on ni_out since it defaults to .nii and downstream fsl commands usually assume .nii.gz
+  ni_out <- sub("(\\.nii)?(\\.gz)?$", ".nii.gz", ni_out)
+
   # write NIfTI with regressors to file
   writeNifti(nif, file = ni_out)[["image"]] # this returns the filename to the caller
 }
