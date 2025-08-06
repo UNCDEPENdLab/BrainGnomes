@@ -55,6 +55,10 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
 #' @param lst Optional list to update. If \code{NULL}, a new list is created.
 #' @param type_values Logical; whether to convert character values to appropriate types.
 #'
+#' Supports values containing `=` characters; only the first `=` is treated as the
+#' separator between key and value. Subsequent `=` characters are preserved in
+#' the value.
+#'
 #' @return A nested list with the specified keys and values.
 #' @importFrom utils modifyList
 #' @importFrom stats setNames
@@ -69,9 +73,14 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
   if (is.character(assignments)) {
     for (a in assignments) {
       parts <- strsplit(a, "=", fixed = TRUE)[[1]]
-      if (length(parts) != 2L) stop("Invalid assignment format: ", a)
+      if (length(parts) < 2L) stop("Invalid assignment format: ", a)
       key_str <- parts[1]
-      val_str <- parts[2]
+      if (length(parts) > 2L) {
+        # if additional equal signs are present, treat everything after the first as the value
+        val_str <- paste(parts[-1], collapse = "=")
+      } else {
+        val_str <- parts[2]
+      }
 
       keys <- strsplit(key_str, sep, fixed = TRUE)[[1]]
 
@@ -226,7 +235,7 @@ args_to_df <- function(arg_vec = NULL) {
           has_equals <- TRUE
           parts <- strsplit(token_naked, "=", fixed = TRUE)[[1]]
           lhs <- parts[1]
-          rhs_vals <- parts[2]
+          rhs_vals <- if (length(parts) > 1) paste(parts[-1], collapse = "=") else ""
           #to_parse <- c(parts[2], tokens)
         } else {
           has_equals <- FALSE
