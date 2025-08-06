@@ -238,7 +238,8 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   )
 
   # log submission command
-  lg$info("Scheduled bids_conversion job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled bids_conversion job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 
@@ -260,7 +261,8 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled bids_validation job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -280,6 +282,8 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     scfg$fmriprep$output_spaces <- paste(scfg$fmriprep$output_spaces, "MNI152NLin6Asym:res-2")
   }
 
+  # for the mem request, have fmriprep request a bit less than the job gets itself
+  # https://neurostars.org/t/fmriprep-failing-on-hpc-via-singularity/26342/27
   cli_options <- set_cli_options(scfg$fmriprep$cli_options, c(
     glue("--nthreads {scfg$fmriprep$ncores}"),
     glue("--omp-nthreads {scfg$fmriprep$ncores}"),
@@ -287,7 +291,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("-w {scfg$metadata$scratch_directory}"),
     glue("--fs-license-file {scfg$fmriprep$fs_license_file}"),
     glue("--output-spaces {scfg$fmriprep$output_spaces}"),
-    glue("--mem {scfg$fmriprep$memgb*1000}") # convert to MB
+    glue("--mem {format(max(4, scfg$fmriprep$memgb - 4)*1000, scientific=FALSE)}") # convert to MB
   ), collapse = TRUE)
 
   if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
@@ -314,7 +318,8 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled fmriprep job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -351,7 +356,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled mriqc job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -396,7 +402,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled aroma job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -437,7 +444,8 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled postprocess stream {pp_stream} job: {attr(job_id, 'cmd')}")
+  lg$info("Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 

@@ -260,6 +260,7 @@ function traperror () {
     local command="${5:-unknown_command}"
     local funcstack="${6:-::}"
     local dotfile=".${step}_fail"
+    [ -n "$complete_file" ] && dotfile="${complete_file%_complete}_fail" # prefer complete file
 
     archive_file "$dotfile" #move any existing crash file out of the way
     {
@@ -290,7 +291,7 @@ function traperror () {
         stderr_tail=$(tail -n 10 "$stderr_log")
         printf "\n\nLast 10 lines of stderr file:\n---------\n\n%s\n" "$stderr_tail"
       fi
-    } | tee -a "$dotfile"
+    } >> "$dotfile"
 
     exit "$err"  
 }

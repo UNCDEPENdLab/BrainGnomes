@@ -67,6 +67,9 @@ start_time=$(date +%s)
 
 log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
+# protect existing sub-<id>.html file
+[ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag $singularity_cmd \
     "$loc_bids_root" "$loc_mrproc_root/" participant \
@@ -78,7 +81,17 @@ wait $cmd_pid
 cmd_status=$?
 set -e
 
-[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+# fmripost-aroma somehow decides to throw a non-zero exit status even when it completes successfully.
+# fall back to looking for success string in fmriprep log file
+success=$(grep -q "fMRIPost-AROMA finished successfully!" "$stdout_log" && echo 0 || echo 1)
 
-log_message INFO Finished aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
-exit $cmd_status
+log_message DEBUG "Exit status of fmripost-aroma is $cmd_status, success is $success"
+
+[ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_aroma.html"
+[ -f "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" "${loc_mrproc_root}/sub-${sub_id}.html"
+
+# [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
+exit $success

@@ -57,15 +57,13 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
-  -B '$loc_mriqc_root' '$mriqc_container'"
-
 log_message INFO Starting mriqc for subject $sub_id in $out_dir
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag "$log_flag" "$singularity_cmd" \
-    "$loc_bids_root" "$loc_mriqc_root/" participant \
-    "$cli_options" & # all options setup by submit_mriqc()
+rel $rel_flag $log_flag singularity run --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
+  -B "$loc_mriqc_root" "$mriqc_container" \
+  "$loc_bids_root" "$loc_mriqc_root/" participant \
+  $cli_options & # all options setup by submit_mriqc()
 cmd_pid=$!
 
 set +e
