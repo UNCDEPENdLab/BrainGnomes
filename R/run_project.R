@@ -7,9 +7,11 @@
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
 #' @param subject_filter Optional character vector or data.frame specifying which
-#'   subjects (and optionally sessions) to process. When a data.frame is
-#'   provided, it must contain a `sub_id` column and may include a `ses_id`
-#'   column to filter on specific subject/session combinations.
+#'   subjects (and optionally sessions) to process. When `NULL` and run
+#'   interactively, the user will be prompted to enter space-separated subject
+#'   IDs (press ENTER to process all subjects). When a data.frame is provided, it
+#'   must contain a `sub_id` column and may include a `ses_id` column to filter
+#'   on specific subject/session combinations.
 #' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run. If
 #'   `"postprocess"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all postprocess
 #'   streams will be run.
@@ -56,7 +58,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       "))
 
   # by passing steps, user is asking for unattended execution
-  if (!is.null(steps)) prompt <- FALSE
+  prompt <- is.null(steps)
 
   if (isFALSE(prompt)) {
     if ("bids_conversion" %in% steps) {
@@ -101,6 +103,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
   } else {
+    ids <- prompt_input(
+      instruct = "Enter subject IDs to process, separated by spaces. Press enter to process all subjects.",
+      type = "character", split = " ", required = FALSE
+    )
+    if (!is.na(ids[1])) subject_filter <- ids
+
     steps <- c()
     cat("\nPlease select which steps to run:\n")
     steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
