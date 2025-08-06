@@ -220,6 +220,15 @@ expand_confound_columns <- function(patterns = NULL, available) {
       "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
       "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2"
     ),
+    "27p" = c(
+      "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+      "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+      "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+      "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+      "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+      "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2",
+      "white_matter", "csf", "global_signal"
+    ),
     "36p" = c(
       "csf", "csf_derivative1", "csf_derivative1_power2", "csf_power2",
       "global_signal", "global_signal_derivative1", "global_signal_derivative1_power2",
@@ -234,9 +243,12 @@ expand_confound_columns <- function(patterns = NULL, available) {
       "white_matter_power2"
     )
   )
-  if (any(patterns %in% names(shortcuts))) {
-    expanded <- unlist(shortcuts[patterns[patterns %in% names(shortcuts)]], use.names = FALSE)
-    patterns <- c(setdiff(patterns, names(shortcuts)), expanded)
+
+  lp <- tolower(patterns) # ignore case
+  if (any(lp %in% names(shortcuts))) {
+    expanded <- unlist(shortcuts[lp[lp %in% names(shortcuts)]], use.names = FALSE)
+    # drop terms to expand, leaving remainder and forcing unique column names to avoid redundancy
+    patterns <- unique(c(setdiff(lp, names(shortcuts)), expanded))
   }
 
   res <- unlist(lapply(patterns, function(pat) {
@@ -256,6 +268,7 @@ expand_confound_columns <- function(patterns = NULL, available) {
           as.integer(x)
         }
       }))
+      idx <- sprintf("%02d", idx) # fmriprep uses two-digit zero padding
       return(paste0(pre, idx, post))
     } else {
       # enforce start and end characters to avoid expanding string literals
