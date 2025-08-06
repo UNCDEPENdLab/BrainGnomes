@@ -293,6 +293,9 @@ function traperror () {
       fi
     } >> "$dotfile"
 
+    # send dotfile to stderr
+    cat "$dotfile" >&2
+
     exit "$err"  
 }
 
