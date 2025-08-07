@@ -20,6 +20,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/compute_spike_regressors.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/confound_regression.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_filename.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_regex.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/create_tracking_db.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/edit_project.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.html</loc></url>
@@ -50,6 +51,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/nii_to_mat.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/out_file_exists.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/parse_cli_args.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/parse_complete_time.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/populate_list_arg.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/postprocess_confounds.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/postprocess_subject.html</loc></url>

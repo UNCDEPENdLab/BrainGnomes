@@ -65,9 +65,7 @@ acquisition, space, resolution, and description, along with the suffix and file 
 Must include at least the columns <code>suffix</code> and <code>ext</code>, and optionally:
 <code>subject</code>, <code>session</code>, <code>task</code>, <code>acquisition</code>, <code>run</code>, <code>modality</code>, <code>echo</code>,
 <code>direction</code>, <code>reconstruction</code>, <code>hemisphere</code>, <code>space</code>, <code>resolution</code>,
-<code>description</code>, and <code>fieldmap</code>. Column names may be given using full
-entity names or their abbreviated forms (e.g., <code>rec</code>, <code>desc</code>);
-abbreviations are normalized internally.</p></dd>
+<code>description</code>, and <code>fieldmap</code>.</p></dd>
 
 
 <dt id="arg-full-names">full.names<a class="anchor" aria-label="anchor" href="#arg-full-names"></a></dt>
@@ -78,6 +76,13 @@ field of <code>bids_df</code>.</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A character vector of reconstructed BIDS filenames, one per row of <code>bids_df</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Column names in <code>bids_df</code> may be provided either as full
+BIDS entity names (e.g., <code>reconstruction</code>, <code>description</code>) or using
+their abbreviated forms (<code>rec</code>, <code>desc</code>, etc.); abbreviated names are
+normalized internally.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
