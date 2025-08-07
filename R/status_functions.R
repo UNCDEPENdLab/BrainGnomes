@@ -7,8 +7,10 @@
 parse_complete_time <- function(file) {
   if (!file.exists(file)) return(as.POSIXct(NA))
   tm <- tryCatch(readLines(file, n = 1L, warn = FALSE), error = function(e) NULL)
-  if (is.null(tm) || length(tm) == 0L) return(as.POSIXct(NA))
-  parsed <- suppressWarnings(lubridate::parse_date_time(tm[1L], orders = c("mdy@HM", "mdy@HMS", "ymd HMS", "ymd HM", "mdy HM", "mdy HMS")))
+  if (is.null(tm) || length(tm) == 0L) {
+    return(as.POSIXct(NA))
+  }
+  parsed <- suppressWarnings(lubridate::parse_date_time(tm[1L], orders = c("y-m-d H:M:S", "mdy@HM", "mdy@HMS", "ymd HMS", "ymd HM", "mdy HM", "mdy HMS")))
   if (length(parsed) == 0L || is.na(parsed[1L])) return(as.POSIXct(NA))
   as.POSIXct(parsed)
 }
@@ -73,7 +75,7 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
         }
       }
     }
-    row
+    as.data.frame(row) # needed to preserve posixct objects in rbind
   })
 
   df <- do.call(rbind.data.frame, res)
@@ -84,7 +86,7 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
 #' Get processing status for all subjects
 #'
 #' @param scfg Study configuration list.
-#' @return Data.frame with one row per subject/session containing completion status columns.
+#' @return data.frame with one row per subject/session containing completion status columns.
 #' @export
 #' @importFrom checkmate assert_class
 get_project_status <- function(scfg) {
@@ -96,7 +98,9 @@ get_project_status <- function(scfg) {
     bids_sub_dir <- file.path(scfg$metadata$bids_directory, paste0("sub-", id))
     ses_dirs <- if (dir.exists(bids_sub_dir)) {
       list.dirs(bids_sub_dir, recursive = FALSE, full.names = FALSE)
-    } else character(0)
+    } else {
+      character(0)
+    }
     ses_ids <- sub("^ses-", "", ses_dirs[grepl("^ses-", ses_dirs)])
     if (length(ses_ids) == 0) {
       get_subject_status(scfg, id)
@@ -112,7 +116,9 @@ get_project_status <- function(scfg) {
 #' Summarize project status
 #'
 #' @param object A data.frame produced by `get_project_status()`.
-#' @return Data.frame summarizing number of subjects completed for each step.
+#' @param ... Additional arguments (unused)
+#' @description Provides a tabular summary of completion counts for each step in the pipeline.
+#' @return data.frame summarizing number of subjects completed for each step.
 #' @export
 summary.bg_status_df <- function(object, ...) {
   step_cols <- grep("_complete$", names(object), value = TRUE)

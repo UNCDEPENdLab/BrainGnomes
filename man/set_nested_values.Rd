@@ -14,7 +14,11 @@ or a named list where names encode nested keys (e.g., \code{list("a/b" = 1)}).}
 
 \item{lst}{Optional list to update. If \code{NULL}, a new list is created.}
 
-\item{type_values}{Logical; whether to convert character values to appropriate types.}
+\item{type_values}{Logical; whether to convert character values to appropriate types.
+
+Supports values containing \code{=} characters; only the first \code{=} is treated as the
+separator between key and value. Subsequent \code{=} characters are preserved in
+the value.}
 }
 \value{
 A nested list with the specified keys and values.
@@ -22,7 +26,5 @@ A nested list with the specified keys and values.
 \description{
 Parses assignments like \code{"a/b/c=10"} or named lists like \code{list("a/b/c" = 10)} and returns
 \code{list(a = list(b = list(c = 10)))}.
-Supports values containing \code{=} characters; only the first \code{=} is
-treated as the separator between key and value.
 }
 \keyword{internal}

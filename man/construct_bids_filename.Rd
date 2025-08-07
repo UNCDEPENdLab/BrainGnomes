@@ -11,9 +11,7 @@ construct_bids_filename(bids_df, full.names = FALSE)
 Must include at least the columns \code{suffix} and \code{ext}, and optionally:
 \code{subject}, \code{session}, \code{task}, \code{acquisition}, \code{run}, \code{modality}, \code{echo},
 \code{direction}, \code{reconstruction}, \code{hemisphere}, \code{space}, \code{resolution},
-\code{description}, and \code{fieldmap}. Column names may be given using full
-entity names or their abbreviated forms (e.g., \code{rec}, \code{desc});
-abbreviations are normalized internally.}
+\code{description}, and \code{fieldmap}.}
 
 \item{full.names}{If TRUE, return the full path to the file using the \verb{$directory}
 field of \code{bids_df}.}
@@ -26,6 +24,12 @@ Given a data frame of BIDS entities (as returned by \code{extract_bids_info()}),
 this function reconstructs filenames following the BIDS specification.
 It supports standard BIDS entities including subject, session, task, run,
 acquisition, space, resolution, and description, along with the suffix and file extension.
+}
+\details{
+Column names in \code{bids_df} may be provided either as full
+BIDS entity names (e.g., \code{reconstruction}, \code{description}) or using
+their abbreviated forms (\code{rec}, \code{desc}, etc.); abbreviated names are
+normalized internally.
 }
 \examples{
 df <- data.frame(

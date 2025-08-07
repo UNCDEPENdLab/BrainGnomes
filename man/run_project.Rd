@@ -22,9 +22,9 @@ If \code{NULL}, the user will be prompted for which steps to run.}
 
 \item{subject_filter}{Optional character vector or data.frame specifying which
 subjects (and optionally sessions) to process. When \code{NULL} and run
-interactively, the user will be prompted to enter space-separated subject IDs
-(press ENTER to process all subjects). When a data.frame is provided, it must
-contain a \code{sub_id} column and may include a \code{ses_id} column to filter
+interactively, the user will be prompted to enter space-separated subject
+IDs (press ENTER to process all subjects). When a data.frame is provided, it
+must contain a \code{sub_id} column and may include a \code{ses_id} column to filter
 on specific subject/session combinations.}
 
 \item{postprocess_streams}{Optional character vector specifying which postprocessing streams should be run. If
