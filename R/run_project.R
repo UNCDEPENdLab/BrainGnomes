@@ -198,8 +198,34 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     # split data.frame by subject (some steps are subject-level, some are session-level)
     subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
 
+    # avoid race condition in setting up fsaverage folder: https://github.com/nipreps/fmriprep/issues/3492
+    fsaverage_id <- NULL
+    if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
+
     for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_streams = postprocess_streams)
+      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_streams = postprocess_streams, parent_ids = fsaverage_id)
     }
   }
+}
+
+# helper for avoiding race condition in setting up fsaverage folder in data_fmriprep
+# avoid race condition in setting up fsaverage folder: https://github.com/nipreps/fmriprep/issues/3492
+submit_fsaverage_setup <- function(scfg) {
+  checkmate::assert_directory_exists(scfg$metadata$fmriprep_directory)
+  checkmate::assert_file_exists(scfg$compute_environment$fmriprep_container)
+
+  # get resource allocation request
+  scfg$fsaverage <- list(nhours = 0.15, memgb = 8, ncores = 1) # fake top-level job to let get_job_sched_args work
+  sched_args <- c(
+    get_job_sched_args(scfg, "fsaverage"),
+    glue::glue("--output={scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  )
+
+  # copy fsaverage from fmriprep's instance of freesurfer to the output destination
+  cmd <- glue::glue("singularity exec --cleanenv --containall -B '{scfg$metadata$fmriprep_directory}' '{scfg$compute_environment$fmriprep_container}' \\
+    rsync --mkpath -a /opt/freesurfer/subjects/fsaverage '{scfg$metadata$fmriprep_directory}/sourcedata/freesurfer'")
+
+  job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+
+  return(job_id)
 }
