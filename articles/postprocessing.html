@@ -79,9 +79,10 @@ smoothing, ICA‑AROMA denoising, scrubbing, temporal filtering, intensity
 normalisation and confound handling. Configuration of these steps occurs
 via <code><a href="../reference/setup_project.html">setup_project()</a></code> when a project is first created or
 later through <code><a href="../reference/edit_project.html">edit_project()</a></code>.</p>
-<p>We assume you have created a project configuration object
-(<code>scfg</code>) using <code><a href="../reference/setup_project.html">setup_project()</a></code> or loaded one
-with <code><a href="../reference/load_project.html">load_project()</a></code>.</p>
+<p>To get started, make sure you have created a project configuration
+object (here, we will call it <code>scfg</code>) using
+<code><a href="../reference/setup_project.html">setup_project()</a></code> or loaded one with
+<code><a href="../reference/load_project.html">load_project()</a></code>.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span><span class="co"># scfg &lt;- setup_project()  # or load_project("/path/to/project")</span></span></code></pre></div>
@@ -100,13 +101,17 @@ interactively.</p>
 <div class="section level2">
 <h2 id="postprocessing-streams">Postprocessing streams<a class="anchor" aria-label="anchor" href="#postprocessing-streams"></a>
 </h2>
-<pre><code>Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
-Each stream also asks about which files should be postprocessed using the stream. For example,
-files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
-be processed a different way.
-
-Current postprocessing streams:
+<p>Postprocessing supports multiple streams, allowing you to postprocess
+data in multiple ways. For example, perhaps you’d like to compare
+results for a 5mm versus 6mm spatial smoothing kernel.</p>
+<p>Each stream also asks about which files should be entered into the
+stream. For example, files with ‘rest’ in their name could be
+postprocessed in one way and files with ‘nback’ could be processed a
+different way.</p>
+<p>The menu for setting up postprocessing streams looks like this:</p>
+<pre><code>Current postprocessing streams:
   (none defined yet)
+
 Modify postprocessing streams: 
 
 1: Add a stream
@@ -114,6 +119,8 @@ Modify postprocessing streams:
 3: Delete a stream
 4: Show stream settings
 5: Finish</code></pre>
+<p>If you choose to add a stream, you will be guided through major
+decision points.</p>
 </div>
 <div class="section level2">
 <h2 id="global-options">Global Options<a class="anchor" aria-label="anchor" href="#global-options"></a>
@@ -123,9 +130,9 @@ which fMRIPrep outputs to process (<code>input_regex</code>), the BIDS
 description for final files (<code>bids_desc</code>), whether to keep
 intermediate images, and if existing outputs should be overwritten. The
 TR of your scans and an optional brain mask file are also collected.</p>
-<div class="section level4">
-<h4 id="selecting-bold-files-with-input_regex">Selecting BOLD files with <code>input_regex</code><a class="anchor" aria-label="anchor" href="#selecting-bold-files-with-input_regex"></a>
-</h4>
+<div class="section level3">
+<h3 id="selecting-bold-files-with-input_regex">Selecting BOLD files with <code>input_regex</code><a class="anchor" aria-label="anchor" href="#selecting-bold-files-with-input_regex"></a>
+</h3>
 <p>The <code>input_regex</code> setting controls which preprocessed
 NIfTI files are included. Instead of writing a full regular expression,
 you may supply BIDS entity-value pairs that are converted to a regex at
@@ -137,29 +144,30 @@ runtime. For example:</p>
 <p>To provide a custom regular expression, prefix it with
 <code>regex:</code>:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>regex<span class="sc">:</span> .<span class="sc">*</span>task<span class="sc">-</span>rest.<span class="sc">*</span>preproc.<span class="sc">*</span>\.nii\.gz<span class="sc">$</span></span></code></pre></div>
-<p>The prompts in <code>setup_postprocess_globals()</code> provide
-additional guidance and examples for constructing these
-expressions.【F:R/setup_postprocess.R†L199-L211】</p>
+<p>This pattern matches any file containing <code>task-rest</code> and
+ending in <code>_desc-preproc_bold.nii.gz</code>. You could create
+another configuration for task-based data using a different
+expression.</p>
 </div>
-<div class="section level4">
-<h4 id="output-naming-with-bids_desc">Output naming with <code>bids_desc</code><a class="anchor" aria-label="anchor" href="#output-naming-with-bids_desc"></a>
-</h4>
-<p>The <code>bids_desc</code> value becomes the <code>desc</code> label
-of every postprocessed file. If the input filename is</p>
+<div class="section level3">
+<h3 id="output-naming-with-bids_desc">Output naming with <code>bids_desc</code><a class="anchor" aria-label="anchor" href="#output-naming-with-bids_desc"></a>
+</h3>
+<p>Every postprocessing stream is also defined by a <a href="https://bids-specification.readthedocs.io/en/stable/derivatives/common-data-types.html#preprocessed-or-cleaned-data" class="external-link">BIDS
+description field</a>. This field (<code>bids_desc</code>) is used to
+label of every postprocessed for the stream. For example, if the input
+filename is</p>
 <pre><code>sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz</code></pre>
 <p>and you choose <code>bids_desc = "clean"</code>, the output will be
 named</p>
 <pre><code>sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-clean_bold.nii.gz</code></pre>
-<p>The setup prompt illustrates this behaviour with a similar
-example.【F:R/setup_postprocess.R†L215-L221】</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="individual-processing-steps">Individual Processing Steps<a class="anchor" aria-label="anchor" href="#individual-processing-steps"></a>
 </h2>
-<p>After the global settings, <code><a href="../reference/setup_project.html">setup_project()</a></code> walks through
-a sequence of setup functions for each optional step. You may enable or
-skip any of them. Below we summarise the purpose of each step, how to
+<p>After the global settings, the postprocessing menus walk through a
+sequence of setup functions for each optional step. You may enable or
+skip any of them. Below we summarize the purpose of each step, how to
 enable it, and key options the setup functions will prompt for.</p>
 <div class="section level3">
 <h3 id="applying-a-brain-mask">Applying a Brain Mask<a class="anchor" aria-label="anchor" href="#applying-a-brain-mask"></a>
@@ -167,8 +175,6 @@ enable it, and key options the setup functions will prompt for.</p>
 <p><code><a href="../reference/setup_apply_mask.html">setup_apply_mask()</a></code> controls whether to apply a binary
 brain mask to all BOLD runs. The prompt explains the rationale and lets
 you provide a mask file and output prefix.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># excerpt from setup_apply_mask()</span></span></code></pre></div>
 <pre><code>Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
 This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
 The mask will be applied as a binary filter to the 4D functional data, zeroing out signal outside the brain.
@@ -182,25 +188,89 @@ a prefix for the masked output (<code>prefix</code>, default
 <div class="section level3">
 <h3 id="spatial-smoothing">Spatial Smoothing<a class="anchor" aria-label="anchor" href="#spatial-smoothing"></a>
 </h3>
-<p>If you choose to smooth the data, <code><a href="../reference/setup_spatial_smooth.html">setup_spatial_smooth()</a></code>
-asks for a Gaussian kernel size in millimetres and a filename prefix.
-Smoothing can improve signal-to-noise ratio and alignment across
-subjects.</p>
+<p>Spatial smoothing applies a 3D Gaussian kernel to the BOLD fMRI data,
+which typically increases the signal-to-noise ratio and improves overlap
+across subjects by reducing high-frequency spatial noise.</p>
+<p>You will be asked to specify the size of the smoothing kernel in
+millimeters (full width at half maximum, or FWHM). Common choices range
+from 4mm to 8mm. Smoothing is achieved using FSL’s susan command, which
+applies a nonlinear filtering algorithm that seeks to smooth together
+only voxels of similar intensities. Technical details are <a href="https://users.fmrib.ox.ac.uk/~steve/susan/susan/node18.html#SECTION00062000000000000000" class="external-link">here</a></p>
 </div>
 <div class="section level3">
 <h3 id="icaaroma-denoising">ICA‑AROMA Denoising<a class="anchor" aria-label="anchor" href="#icaaroma-denoising"></a>
 </h3>
-<p>When ICA‑AROMA outputs are available,
-<code><a href="../reference/setup_apply_aroma.html">setup_apply_aroma()</a></code> allows you to regress out noise
-components. You can opt for nonaggressive (default) or aggressive
-removal and set a prefix for the cleaned file. The setup text summarises
-the method and provides guidance.【F:R/setup_postprocess.R†L910-L943】
-This step mirrors the AROMA-based denoising used in xcp-d, ensuring
-consistency with contemporary pipelines.</p>
+<p>For ICA-AROMA denoising to be applied during postprocessing, you must
+enable it in the project configuration and it must have been run at some
+point (i.e., <code>Run ICA-AROMA?</code> in <code><a href="../reference/run_project.html">run_project()</a></code>).
+This will produce a set of output files, including
+<code>*_desc-MELODIC_mixing.tsv</code> (the mixing matrix), which
+contains the spatiotemporal components identified both as noise and
+signal by the algorithm.</p>
+<p>When ICA‑AROMA outputs are available, you can regress out the noise
+components as a postprocessing step. Building on the original papers
+(Pruim et al., 2015), we recommend ‘nonaggressive’ removal, which only
+removes the variance in ‘noise’ components that is not correlated with
+signal components (i.e., partial effects in multiple regression). As
+detailed below, if AROMA is applied to the fMRI data, the components
+will also be regressed out of any confounds.</p>
 </div>
 <div class="section level3">
 <h3 id="scrubbing-highmotion-volumes">Scrubbing High‑Motion Volumes<a class="anchor" aria-label="anchor" href="#scrubbing-highmotion-volumes"></a>
 </h3>
+<p>‘Scrubbing’ refers to a set of procedures for reducing the impact of
+high-motion/high-artifact volumes on fMRI analysis. The most typical
+approach is to flag volumes based on their framewise displacement, a
+measure of overall head displacement in any direction/rotation, and to
+remove those volumes from the time series. That said, scrubbing
+encompasses a wider range of decisions, such as whether to interpolate
+the bad timepoints and whether to generate spike regressors while
+leaving the fMRI data intact (e.g., for subsequent use in task-based
+analysis). Importantly, scrubbing has tricky interactions with other
+postprocessing steps, especially confound regression and temporal
+filtering.</p>
+<p>Temporal filtering removes specific <em>frequencies</em> from the
+data, so we cannot simply delete volumes from the time series and hope
+to have the filtering work as intended. Moreover, if we apply the
+temporal filter prior to scrubbing, we can induce ‘ringing artifacts’
+where large signal changes due to head motion are propagated to adjacent
+timepoints (Carp, 2012, NeuroImage). One effective way to handle this is
+to interpolate over bad volumes (cubic spline is common), then apply the
+temporal filter, and later scrub out the bad (now interpolated)
+timepoints. This is how <a href="https://nilearn.github.io/stable/modules/generated/nilearn.signal.clean.html#nilearn.signal.clean" class="external-link">nilearn</a>
+and <a href="https://xcp-d.readthedocs.io/en/latest/workflows.html" class="external-link">XCP-D</a>
+approach the problem. BrainGnomes also allows for spline interpolation
+as a precursor to temporal filtering.</p>
+<p>Another scrubbing interaction occurs with confound regression. If we
+plan to regress out confound signals from the fMRI, we want to maximize
+the denoising for the volumes we ultimately wish to analyze, not the
+volumes we plan to scrub out. Consequently, we could either a) run
+confound regression after scrubbing or b) optimize the fit of the
+regression model only for good timepoints. Aligned with XCP-D pipeline,
+we adopt the latter strategy, fitting the confound model on good
+timepoints. This allows for (potentially interpolated) high-motion
+timepoints to be retained in the final fMRI timeseries. Typically, we
+would remove/scrub these, but if your analysis requires intact
+timeseries (e.g., for a frequency-based analysis), perhaps you’d like to
+keep all timepoints.</p>
+<div class="section level4">
+<h4 id="setting-up-scrubbing">Setting up scrubbing<a class="anchor" aria-label="anchor" href="#setting-up-scrubbing"></a>
+</h4>
+<p>If you enable scrubbing, you will be asked to define what constitutes
+a ‘scrubbed’ volume. This should be a single logical expression in R
+syntax that can be evaluated against the confounds TSV file produced by
+fmriprep. For example, if you wish to scrub any volume with more than
+0.5mm framewise displacement, the expression would be:
+<code>framewise_displacement &gt; 0.5</code>. You can have logical
+operators in the expression, too, allowing something like
+<code>framewise_displacement &gt; 0.5 | dvars &gt; 5</code>.</p>
+<p>In addition, your scrubbing expression can specify a range of volumes
+to scrub using a format like: ‘-1:1; dvars &gt; 1.5’. The part before
+the semicolon (-1:1) defines a temporal window around the bad timepoint.
+For example, ‘-1:0’ scrubs the bad timepoint and the volume before it.
+If omitted, only the bad timepoint (0) is scrubbed. The part after the
+semicolon (‘dvars &gt; 1.5’) defines the thresholding condition.</p>
+<p>Next, you will be asked whether you want any</p>
 <p><code><a href="../reference/setup_scrubbing.html">setup_scrubbing()</a></code> generates spike regressors and
 optional censoring of bad time points. The prompts describe how
 expressions such as <code>framewise_displacement &gt; 0.9</code> mark
@@ -212,13 +282,19 @@ censored frames are replaced via cubic splines before further
 processing. Filtering and regression then operate on a contiguous time
 series, minimising edge artefacts.</p>
 </div>
+</div>
 <div class="section level3">
 <h3 id="temporal-filtering">Temporal Filtering<a class="anchor" aria-label="anchor" href="#temporal-filtering"></a>
 </h3>
-<p><code><a href="../reference/setup_temporal_filter.html">setup_temporal_filter()</a></code> configures high‑pass and/or
-low‑pass cutoffs and the filtering method (FSL or a Butterworth
-implementation). Filtering removes unwanted frequency components such as
-slow drifts or fast physiological noise.</p>
+<p>Temporal filtering is common in both task-based and resting-state
+fMRI analyses. In task fMRI, we often apply a gentle high-pass filter
+(e.g. .008 Hz) to remove low-frequency drift that can weaken GLM
+analyses that assume a constant baseline. In resting-state analyses,
+people often bandpass</p>
+<p>configures high‑pass and/or low‑pass cutoffs and the filtering method
+(FSL or a Butterworth implementation). Filtering removes unwanted
+frequency components such as slow drifts or fast physiological
+noise.</p>
 <p>The two methods behave slightly differently. The FSL approach calls
 <code>fslmaths -bptf</code>, which performs Gaussian weighted high‑ and
 low‑pass filtering by specifying the cutoffs in volumes (internally
@@ -277,6 +353,33 @@ are written to new NIfTI files with a chosen prefix. Because filtered
 confounds match the exact temporal treatment of the BOLD data, this
 regression step is safe from mismatch artifacts, similar to the strategy
 described in the xcp-d documentation.</p>
+<pre><code>"6p" = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
+"12p" = c(
+  "rot_x", "rot_x_derivative1", "rot_y", "rot_y_derivative1",
+  "rot_z", "rot_z_derivative1", "trans_x", "trans_x_derivative1",
+  "trans_y", "trans_y_derivative1", "trans_z", "trans_z_derivative1"
+),
+"24p" = c(
+  "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+  "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+  "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+  "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+  "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+  "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2"
+),
+"36p" = c(
+  "csf", "csf_derivative1", "csf_derivative1_power2", "csf_power2",
+  "global_signal", "global_signal_derivative1", "global_signal_derivative1_power2",
+  "global_signal_power2",
+  "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+  "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+  "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+  "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+  "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+  "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2",
+  "white_matter", "white_matter_derivative1", "white_matter_derivative1_power2",
+  "white_matter_power2"
+)</code></pre>
 </div>
 <div class="section level3">
 <h3 id="ordering-steps">Ordering Steps<a class="anchor" aria-label="anchor" href="#ordering-steps"></a>
@@ -299,6 +402,15 @@ the selected postprocessing steps for each subject.</p>
 <p>The processing log for each subject is written to the project’s
 <code>logs</code> folder, and the final postprocessed NIfTIs receive the
 BIDS description specified earlier.</p>
+</div>
+<div class="section level2">
+<h2 id="naming-and-use-of-intermediate-files">Naming and use of intermediate files<a class="anchor" aria-label="anchor" href="#naming-and-use-of-intermediate-files"></a>
+</h2>
+<p>During the setup of postprocessing, you will be asked whether to keep
+intermediate files. Generally speaking, you should say ‘no’ since these
+files only have a subset of postprocessing steps applied to them (e.g.,
+smoothed, but not temporally filtered). That said, if you’d like to
+inspect intermediate stages of processing, you acn</p>
 </div>
 <div class="section level2">
 <h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
