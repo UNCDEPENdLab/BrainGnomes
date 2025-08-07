@@ -17,7 +17,8 @@ parse_complete_time <- function(file) {
 #'
 #' @param scfg Study configuration list.
 #' @param sub_id Subject identifier.
-#' @param ses_id Optional session identifier. When `NULL`, all sessions found in the log directory are returned.
+#' @param ses_id Optional session identifier. When `NULL`, all sessions found in the
+#'   subject's directory are returned.
 #' @return A data.frame with columns indicating completion status and times for each enabled step.
 #' @export
 #' @importFrom checkmate assert_class assert_string
@@ -38,9 +39,19 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
   log_dir <- scfg$metadata$log_directory
   sub_log_dir <- file.path(log_dir, paste0("sub-", sub_id))
   comp_files <- list.files(sub_log_dir, pattern = "_complete$", full.names = FALSE)
-  ses_ids <- if (!is.null(ses_id)) ses_id else {
-    sids <- unique(sub("^.*_ses-([^_]+)_complete$", "\\1", comp_files[grepl("_ses-", comp_files)]))
-    sids <- sids[!is.na(sids) & sids != "^.*_ses-([^_]+)_complete$"]
+  ses_ids <- if (!is.null(ses_id)) {
+    ses_id
+  } else {
+    # sessions referenced by .complete files
+    comp_ses <- unique(sub("^.*_ses-([^_]+)_complete$", "\\1", comp_files[grepl("_ses-", comp_files)]))
+    comp_ses <- comp_ses[!is.na(comp_ses) & comp_ses != "^.*_ses-([^_]+)_complete$"]
+    # sessions present as directories in BIDS layout
+    bids_sub_dir <- file.path(scfg$metadata$bids_directory, paste0("sub-", sub_id))
+    bids_ses_dirs <- if (dir.exists(bids_sub_dir)) {
+      list.dirs(bids_sub_dir, recursive = FALSE, full.names = FALSE)
+    } else character(0)
+    bids_ses <- sub("^ses-", "", bids_ses_dirs[grepl("^ses-", bids_ses_dirs)])
+    sids <- union(comp_ses, bids_ses)
     if (length(sids) == 0) NA_character_ else sids
   }
 
@@ -48,7 +59,10 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
     row <- list(sub_id = sub_id, ses_id = ifelse(is.na(ss), NA_character_, ss))
     for (st in steps) {
       if (st != "postprocess") {
-        chk <- is_step_complete(scfg, sub_id, ses_id = if (st == "bids_conversion" && !is.na(ss)) ss else NULL, step_name = st)
+        chk <- is_step_complete(scfg, sub_id,
+          ses_id = if (st %in% c("bids_conversion") && !is.na(ss)) ss else NULL,
+          step_name = st
+        )
         row[[paste0(st, "_complete")]] <- chk$complete
         row[[paste0(st, "_time")]] <- if (chk$complete) parse_complete_time(chk$complete_file) else as.POSIXct(NA)
       } else {
@@ -78,7 +92,18 @@ get_project_status <- function(scfg) {
   log_dir <- scfg$metadata$log_directory
   sub_dirs <- list.dirs(log_dir, recursive = FALSE, full.names = FALSE)
   sub_ids <- sub("^sub-", "", sub_dirs[grepl("^sub-", sub_dirs)])
-  res <- lapply(sub_ids, function(id) get_subject_status(scfg, id))
+  res <- lapply(sub_ids, function(id) {
+    bids_sub_dir <- file.path(scfg$metadata$bids_directory, paste0("sub-", id))
+    ses_dirs <- if (dir.exists(bids_sub_dir)) {
+      list.dirs(bids_sub_dir, recursive = FALSE, full.names = FALSE)
+    } else character(0)
+    ses_ids <- sub("^ses-", "", ses_dirs[grepl("^ses-", ses_dirs)])
+    if (length(ses_ids) == 0) {
+      get_subject_status(scfg, id)
+    } else {
+      do.call(rbind, lapply(ses_ids, function(ss) get_subject_status(scfg, id, ss)))
+    }
+  })
   df <- do.call(rbind.data.frame, res)
   class(df) <- c("bg_status_df", class(df))
   df

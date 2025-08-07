@@ -25,6 +25,14 @@ test_that("parse_cli_args converts CLI arguments to nested list", {
   expect_equal(res$flag2, "e f") # quoted spaces parsed into string
 })
 
+# values containing '=' are parsed correctly
+test_that("parse_cli_args handles embedded equals signs", {
+  args <- c("--foo=bar=baz", "--bar='a=b'")
+  res <- parse_cli_args(args)
+  expect_equal(res$foo, "bar=baz")
+  expect_equal(res$bar, "a=b")
+})
+
 # nested_list_to_args round-trips with parse_cli_args
 
 test_that("nested_list_to_args creates expected CLI strings", {
