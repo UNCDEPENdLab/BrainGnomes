@@ -337,6 +337,27 @@ rm_niftis <- function(files=NULL) {
 }
 
 
+truncate_str <- function(x, max_chars = 100, continuation = "...") {
+  checkmate::assert_character(x, any.missing = TRUE)
+  checkmate::assert_int(max_chars, lower = 1)
+  checkmate::assert_string(continuation)
+
+  continuation_len <- nchar(continuation)
+
+  # Vectorized truncation
+  truncated <- ifelse(
+    is.na(x),
+    NA_character_,
+    ifelse(
+      nchar(x) > max_chars,
+      paste0(substr(x, 1, max_chars - continuation_len), continuation),
+      x
+    )
+  )
+
+  return(truncated)
+}
+
 #' Run an FSL command with optional Singularity container support and structured logging
 #'
 #' Executes an FSL command in a clean shell environment, with support for Singularity containers, optional logging via the `lgr` package, and flexible control over execution and output.
@@ -528,6 +549,9 @@ mat_to_nii <- function(mat, ni_out="mat") {
   nif <- asNifti(arr)
   
   nif[is.na(nif)] <- 0 # cannot handle missingness in NIfTIs
+
+  # enforce .nii.gz extension on ni_out since it defaults to .nii and downstream fsl commands usually assume .nii.gz
+  ni_out <- sub("(\\.nii)?(\\.gz)?$", ".nii.gz", ni_out)
 
   # write NIfTI with regressors to file
   writeNifti(nif, file = ni_out)[["image"]] # this returns the filename to the caller

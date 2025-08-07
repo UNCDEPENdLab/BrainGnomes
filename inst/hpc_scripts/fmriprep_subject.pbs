@@ -23,7 +23,6 @@ source "$env_file" #setup relevant variables for this processing environment
 
 ####
 #verify necessary arguments
-[ -z "$fmriprep_nthreads" ] && echo "No fmriprep_nthreads environment variable. Defaulting to 4" && fmriprep_nthreads=4
 [ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
 [ -z "$loc_root" ] && echo "loc_root not set. Exiting." && exit 1
 [ -z "$loc_bids_root" ] && echo "loc_bids_root not set. Exiting." && exit 1

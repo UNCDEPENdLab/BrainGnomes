@@ -10,4 +10,3 @@
 \value{Data.frame summarizing completion status and times for the requested subject/session(s).}
 \description{Checks the log directory for \code{.complete} files and returns completion information for each enabled processing step. If \code{ses_id} is not supplied, any session directories found for the subject are enumerated and one row per session is returned.}
 \seealso{\code{\link{get_project_status}}}
-

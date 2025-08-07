@@ -5,6 +5,7 @@ test_that("get_project_status reports completion", {
   fmriprep_dir <- file.path(root, "fmriprep"); dir.create(fmriprep_dir)
   mriqc_dir <- file.path(root, "mriqc"); dir.create(mriqc_dir)
 
+
   sub <- "01"; ses_a <- "A"; ses_b <- "B"
   dir.create(file.path(log_dir, paste0("sub-", sub)))
   dir.create(file.path(bids_dir, paste0("sub-", sub), paste0("ses-", ses_a)), recursive = TRUE)

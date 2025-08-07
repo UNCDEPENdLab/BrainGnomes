@@ -18,9 +18,6 @@ trap 'trap_job_failure fmriprep SIGHUP' SIGHUP
 trap 'trap_job_failure fmriprep SIGQUIT' SIGQUIT
 trap 'traperror fmriprep $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
-# default nthreads to however many cores we have $SLURM_SOMETHING
-[ -z "$fmriprep_nthreads" ] && echo "No fmriprep_nthreads environment variable. Defaulting to 4" && fmriprep_nthreads=4
-
 ncores=$SLURM_NTASKS
 
 ####
@@ -88,9 +85,6 @@ for var in "${vars[@]}"; do
   eval "$var=\"\$abs\""
 done
 
-singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
-  -B '$loc_mrproc_root' -B '$templateflow_home' -B '$fs_dir' '$fmriprep_container'"
-
 mem=$((SLURM_MEM_PER_NODE / 1024))GB
 start_time=$(date +%s)
 
@@ -101,9 +95,10 @@ rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_hom
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag "$log_flag" "$singularity_cmd" \
-    "$loc_bids_root" "$loc_mrproc_root/" participant \
-    "$cli_options" & # all options setup by submit_fmriprep()
+rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_scratch" \
+  -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" \
+  "$loc_bids_root" "$loc_mrproc_root/" participant \
+  $cli_options & # all options setup by submit_fmriprep()
 cmd_pid=$!
 
 set +e
@@ -111,7 +106,14 @@ wait $cmd_pid
 cmd_status=$?
 set -e
 
-[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+# fmriprep somehow decides to throw a non-zero exit status even when it completes successfully.
+# fall back to looking for success string in fmriprep log file
+success=$(grep -q "fMRIPrep finished successfully!" "$stdout_log" && echo 0 || echo 1)
 
-log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
-exit $cmd_status
+log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
+
+# [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
+exit $success
