@@ -184,6 +184,60 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   return(filenames)
 }
 
+#' Construct a regex pattern for BIDS filenames
+#'
+#' Given a set of BIDS entity specifications, this helper builds a regular
+#' expression that matches filenames containing those entities in order. Each
+#' entity in the regex is explicitly followed by an underscore before allowing
+#' `.*` to consume intermediate tokens, preventing partial matches (e.g.,
+#' "task-ridlye" will not match "task:ridl").
+#'
+#' @param spec A character string of key:value pairs separated by spaces
+#'   (e.g., "task:ridl desc:preproc suffix:bold").
+#' @return A character string containing the regex pattern.
+#' @keywords internal
+construct_bids_regex <- function(spec) {
+  checkmate::assert_string(spec)
+
+  # Map shorthand keys to the names used by construct_bids_filename()
+  key_map <- c(
+    sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
+    dir = "direction", rec = "reconstruction", hemi = "hemisphere",
+    res = "resolution", desc = "description", fmap = "fieldmap"
+  )
+
+  tokens <- strsplit(spec, "\u005cs+")[[1]]
+  kv <- strsplit(tokens, ":")
+  keys <- vapply(kv, `[`, character(1), 1)
+  vals <- vapply(kv, `[`, character(1), 2)
+  keys <- ifelse(keys %in% names(key_map), key_map[keys], keys)
+
+  info <- as.list(vals)
+  names(info) <- keys
+  if (!"ext" %in% names(info)) info$ext <- ""
+
+  filename <- construct_bids_filename(info)
+  entities <- strsplit(filename, "_")[[1]]
+  entities <- entities[entities != ""]
+  suffix <- tail(entities, 1)
+  entities <- head(entities, -1)
+
+  pattern <- ".*"
+  if (length(entities) > 0) {
+    pattern <- paste0(pattern, "_", entities[1])
+    if (length(entities) > 1) {
+      pattern <- paste0(pattern, "_")
+      for (i in 2:length(entities)) {
+        pattern <- paste0(pattern, ".*", entities[i])
+        if (i < length(entities)) pattern <- paste0(pattern, "_")
+      }
+    }
+  }
+  pattern <- paste0(pattern, "_", suffix)
+
+  return(pattern)
+}
+
 #' Check for Existence of a BIDS-Formatted Output File with a given description
 #'
 #' This function constructs a BIDS-compliant filename based on an input file, replacing
