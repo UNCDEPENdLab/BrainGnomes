@@ -4,8 +4,9 @@
 #'
 #' The function returns the jobid of the scheduled job.
 #'
-#' @param script A script that should be executed by the scheduler. This can contain scheduler directives, but in the
-#'      case of conflicts, the directives passed with \code{sched_args} will take precedence.
+#' @param script A path to a script that should be executed by the scheduler or a single command to be run. When
+#'      \code{script} does not point to an existing file, it is treated as a one-line command to execute. In the case of
+#'      conflicts, the directives passed with \code{sched_args} will take precedence.
 #' @param scheduler Which scheduler to use for job submission. Options are 'qsub', 'torque', 'sbatch', 'slurm', or 'sh'.
 #'      The terms 'qsub' and 'torque' are aliases (where 'torque' submits via the qsub command). Likewise for 'sbatch'
 #'      and 'slurm'. The scheduler 'sh' does not submit to any scheduler at all, but instead executes the command
@@ -44,6 +45,9 @@
 #'   cluster_job_submit('myscript.sbatch', scheduler="slurm",
 #'      sched_args=c('-p general', '-N 1', '-n 12', '--mem=10g', '-t 02-00:00:00'),
 #'      env_variables=c(RUN_INDEX=2, R_HOME=NA, JAVA_HOME=NA))
+#'
+#'   # submit a single command without a script file
+#'   cluster_job_submit('echo "hello"', scheduler="slurm")
 #' }
 #'
 #' @author Michael Hallquist
@@ -56,7 +60,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            tracking_sqlite_db=NULL, tracking_args=list()) {
 
   checkmate::assert_string(script)
-  checkmate::assert_file_exists(script)
+  script_exists <- file.exists(script)
   checkmate::assert_string(scheduler)
   checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh", "local"))
   checkmate::assert_logical(export_all, max.len = 1L)
@@ -130,16 +134,19 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   }
 
   # use unique temp files to avoid parallel collisions in job tracking
-  sub_stdout <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stdout") 
-  sub_stderr <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_stderr")
-  sub_pid <- paste0(tempfile(), "_", tools::file_path_sans_ext(basename(script)), "_pid")
+  script_label <- if (script_exists) tools::file_path_sans_ext(basename(script)) else "oneliner"
+  sub_stdout <- paste0(tempfile(), "_", script_label, "_stdout")
+  sub_stderr <- paste0(tempfile(), "_", script_label, "_stderr")
+  sub_pid <- paste0(tempfile(), "_", script_label, "_pid")
 
   if (scheduler == "sh") {
-    # if an R script is provided, execute with Rscript --vanilla as command
-    if (grepl(".+\\.R$", script, ignore.case = TRUE)) {
-      bin <- "Rscript --vanilla"
+    # if an R script file is provided, execute with Rscript --vanilla
+    if (script_exists && grepl(".+\\.R$", script, ignore.case = TRUE)) {
+      run_part <- paste("Rscript --vanilla", script)
+    } else if (script_exists) {
+      run_part <- paste("sh", script)
     } else {
-      bin <- "sh"
+      run_part <- script
     }
 
     # for local scheduler, we need to hold jobs manually by waiting for relevant parents to complete
@@ -150,17 +157,30 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
 
     # for direct execution, need to pass environment variables by prepending
-    cmd <- paste(env_variables, bin, script)
+    cmd <- paste(env_variables, run_part)
     if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
     jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
     Sys.sleep(.05) #sometimes the pid file is not in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
-    cmd <- paste(scheduler, sched_args, script)
-    if (isTRUE(echo)) cat(cmd, "\n")
-    # submit the job script and return the jobid
-    jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
+    if (script_exists) {
+      cmd <- paste(scheduler, sched_args, script)
+      if (isTRUE(echo)) cat(cmd, "\n")
+      jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
+    } else if (scheduler == "sbatch") {
+      cmd <- paste(scheduler, sched_args, "--wrap", shQuote(script))
+      if (isTRUE(echo)) cat(cmd, "\n")
+      jobres <- system2(scheduler, args = paste(sched_args, "--wrap", shQuote(script)), stdout = sub_stdout, stderr = sub_stderr)
+    } else if (scheduler == "qsub") {
+      cmd <- paste("echo", shQuote(script), "|", scheduler, sched_args)
+      if (isTRUE(echo)) cat(cmd, "\n")
+      jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr))
+    } else {
+      cmd <- paste(scheduler, sched_args, script)
+      if (isTRUE(echo)) cat(cmd, "\n")
+      jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
+    }
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
   }
 
