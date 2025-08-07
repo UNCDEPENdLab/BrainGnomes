@@ -27,10 +27,10 @@ test_that("parse_cli_args converts CLI arguments to nested list", {
 
 # values containing '=' are parsed correctly
 test_that("parse_cli_args handles embedded equals signs", {
-  args <- c("--foo=bar=baz", "--bar='a=b'")
+  args <- c("--foo=bar=baz", "--bar='a = b'")
   res <- parse_cli_args(args)
   expect_equal(res$foo, "bar=baz")
-  expect_equal(res$bar, "a=b")
+  expect_equal(res$bar, "a = b")
 })
 
 # nested_list_to_args round-trips with parse_cli_args

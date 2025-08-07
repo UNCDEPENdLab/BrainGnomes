@@ -19,7 +19,7 @@ handling.  Configuration of these steps occurs via
 `setup_project()` when a project is first created or later through
 `edit_project()`.
 
-We assume you have created a project configuration object (`scfg`) using
+To get started, make sure you have created a project configuration object (here, we will call it `scfg`) using
 `setup_project()` or loaded one with `load_project()`.
 
 ```r
@@ -41,15 +41,19 @@ Once enabled, each step described below can be configured interactively.
 
 # Postprocessing streams
 
-
-```
 Postprocessing supports multiple streams, allowing you to postprocess data in multiple ways.
-Each stream also asks about which files should be postprocessed using the stream. For example,
+For example, perhaps you'd like to compare results for a 5mm versus 6mm spatial smoothing kernel.
+
+Each stream also asks about which files should be entered into the stream. For example,
 files with 'rest' in their name could be postprocessed in one way and files with 'nback' could
 be processed a different way.
 
+The menu for setting up postprocessing streams looks like this:
+
+```
 Current postprocessing streams:
   (none defined yet)
+
 Modify postprocessing streams: 
 
 1: Add a stream
@@ -59,6 +63,8 @@ Modify postprocessing streams:
 5: Finish
 ```
 
+If you choose to add a stream, you will be guided through major decision points.
+
 # Global Options
 
 The first prompts define global postprocessing behavior. You specify
@@ -67,7 +73,7 @@ for final files (`bids_desc`), whether to keep intermediate images, and
 if existing outputs should be overwritten.  The TR of your scans and an
 optional brain mask file are also collected.
 
-### Selecting BOLD files with `input_regex`
+## Selecting BOLD files with `input_regex`
 
 The `input_regex` setting controls which preprocessed NIfTI files are
 included. Instead of writing a full regular expression, you may supply
@@ -87,13 +93,14 @@ To provide a custom regular expression, prefix it with `regex:`:
 regex: .*task-rest.*preproc.*\.nii\.gz$
 ```
 
-The prompts in `setup_postprocess_globals()` provide additional guidance
-and examples for constructing these expressions.【F:R/setup_postprocess.R†L199-L211】
+This pattern matches any file containing `task-rest` and ending in
+`_desc-preproc_bold.nii.gz`. You could create another configuration for
+task-based data using a different expression.
 
-### Output naming with `bids_desc`
+## Output naming with `bids_desc`
 
-The `bids_desc` value becomes the `desc` label of every postprocessed
-file. If the input filename is
+Every postprocessing stream is also defined by a [BIDS description field](https://bids-specification.readthedocs.io/en/stable/derivatives/common-data-types.html#preprocessed-or-cleaned-data).
+This field (`bids_desc`) is used to label of every postprocessed for the stream. For example, if the input filename is
 
 ```
 sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz
@@ -105,13 +112,11 @@ and you choose `bids_desc = "clean"`, the output will be named
 sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-clean_bold.nii.gz
 ```
 
-The setup prompt illustrates this behaviour with a similar example.【F:R/setup_postprocess.R†L215-L221】
-
 # Individual Processing Steps
 
-After the global settings, `setup_project()` walks through a sequence of
+After the global settings, the postprocessing menus walk through a sequence of
 setup functions for each optional step. You may enable or skip any of
-them. Below we summarise the purpose of each step, how to enable it, and
+them. Below we summarize the purpose of each step, how to enable it, and
 key options the setup functions will prompt for.
 
 ## Applying a Brain Mask
@@ -119,10 +124,6 @@ key options the setup functions will prompt for.
 `setup_apply_mask()` controls whether to apply a binary brain mask to
 all BOLD runs.  The prompt explains the rationale and lets you provide a
 mask file and output prefix.
-
-```r
-# excerpt from setup_apply_mask()
-```
 
 ```
 Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
@@ -138,20 +139,66 @@ the masked output (`prefix`, default `"m"`).【F:R/setup_postprocess.R†L496-L5
 
 ## Spatial Smoothing
 
-If you choose to smooth the data, `setup_spatial_smooth()` asks for a
-Gaussian kernel size in millimetres and a filename prefix. Smoothing can
-improve signal-to-noise ratio and alignment across subjects.
+Spatial smoothing applies a 3D Gaussian kernel to the BOLD fMRI data,
+which typically increases the signal-to-noise ratio and improves overlap across subjects
+by reducing high-frequency spatial noise.
+
+You will be asked to specify the size of the smoothing kernel in millimeters
+(full width at half maximum, or FWHM). Common choices range from 4mm to 8mm.
+Smoothing is achieved using FSL's susan command, which applies a nonlinear filtering algorithm
+that seeks to smooth together only voxels of similar intensities.
+Technical details are [here](https://users.fmrib.ox.ac.uk/~steve/susan/susan/node18.html#SECTION00062000000000000000)
 
 ## ICA‑AROMA Denoising
 
-When ICA‑AROMA outputs are available, `setup_apply_aroma()` allows you
-to regress out noise components. You can opt for nonaggressive (default)
-or aggressive removal and set a prefix for the cleaned file. The setup
-text summarises the method and provides guidance.【F:R/setup_postprocess.R†L910-L943】
-This step mirrors the AROMA-based denoising used in xcp-d, ensuring
-consistency with contemporary pipelines.
+For ICA-AROMA denoising to be applied during postprocessing, you must enable it in the project configuration
+and it must have been run at some point (i.e., `Run ICA-AROMA?` in `run_project()`). This will produce a set
+of output files, including `*_desc-MELODIC_mixing.tsv` (the mixing matrix), which contains the spatiotemporal
+components identified both as noise and signal by the algorithm.
+
+When ICA‑AROMA outputs are available, you can regress out the noise components as a postprocessing step.
+Building on the original papers (Pruim et al., 2015), we recommend 'nonaggressive' removal, which
+only removes the variance in 'noise' components that is not correlated with signal components 
+(i.e., partial effects in multiple regression). As detailed below, if AROMA is applied to the fMRI data,
+the components will also be regressed out of any confounds.
 
 ## Scrubbing High‑Motion Volumes
+
+'Scrubbing' refers to a set of procedures for reducing the impact of high-motion/high-artifact volumes on fMRI analysis.
+The most typical approach is to flag volumes based on their framewise displacement, a measure of overall head displacement
+in any direction/rotation, and to remove those volumes from the time series. That said, scrubbing encompasses a wider range of
+decisions, such as whether to interpolate the bad timepoints and whether to generate spike regressors while leaving the fMRI
+data intact (e.g., for subsequent use in task-based analysis). Importantly, scrubbing has tricky
+interactions with other postprocessing steps, especially confound regression and temporal filtering.
+
+Temporal filtering removes specific *frequencies* from the data, so we cannot simply delete volumes from the time series
+and hope to have the filtering work as intended. Moreover, if we apply the temporal filter prior to scrubbing, we can induce
+'ringing artifacts' where large signal changes due to head motion are propagated to adjacent timepoints (Carp, 2012, NeuroImage).
+One effective way to handle this is to interpolate over bad volumes (cubic spline is common), then apply the temporal filter, and
+later scrub out the bad (now interpolated) timepoints. This is how [nilearn](https://nilearn.github.io/stable/modules/generated/nilearn.signal.clean.html#nilearn.signal.clean)
+and [XCP-D](https://xcp-d.readthedocs.io/en/latest/workflows.html) approach the problem. BrainGnomes also allows for spline interpolation
+as a precursor to temporal filtering.
+
+Another scrubbing interaction occurs with confound regression. If we plan to regress out confound signals from the fMRI, we want to
+maximize the denoising for the volumes we ultimately wish to analyze, not the volumes we plan to scrub out. Consequently,
+we could either a) run confound regression after scrubbing or b) optimize the fit of the regression model only for good timepoints.
+Aligned with XCP-D pipeline, we adopt the latter strategy, fitting the confound model on good timepoints. This allows
+for (potentially interpolated) high-motion timepoints to be retained in the final fMRI timeseries. Typically, we would remove/scrub these,
+but if your analysis requires intact timeseries (e.g., for a frequency-based analysis), perhaps you'd like to keep all timepoints.
+
+### Setting up scrubbing
+
+If you enable scrubbing, you will be asked to define what constitutes a 'scrubbed' volume. This should be a single logical expression
+in R syntax that can be evaluated against the confounds TSV file produced by fmriprep. For example, if you wish to scrub any volume
+with more than 0.5mm framewise displacement, the expression would be: `framewise_displacement > 0.5`. You can have logical operators
+in the expression, too, allowing something like `framewise_displacement > 0.5 | dvars > 5`.
+
+In addition, your scrubbing expression can specify a range of volumes to scrub using a format like: '-1:1; dvars > 1.5'.
+The part before the semicolon (-1:1) defines a temporal window around the bad timepoint. For example, '-1:0'
+scrubs the bad timepoint and the volume before it. If omitted, only the bad timepoint (0) is scrubbed.
+The part after the semicolon ('dvars > 1.5') defines the thresholding condition.
+
+Next, you will be asked whether you want any 
 
 `setup_scrubbing()` generates spike regressors and optional censoring of
 bad time points. The prompts describe how expressions such as
@@ -165,7 +212,12 @@ series, minimising edge artefacts.
 
 ## Temporal Filtering
 
-`setup_temporal_filter()` configures high‑pass and/or low‑pass cutoffs
+Temporal filtering is common in both task-based and resting-state fMRI analyses. In task
+fMRI, we often apply a gentle high-pass filter (e.g. .008 Hz) to remove low-frequency drift
+that can weaken GLM analyses that assume a constant baseline. In resting-state analyses,
+people often bandpass
+
+configures high‑pass and/or low‑pass cutoffs
 and the filtering method (FSL or a Butterworth implementation). Filtering
 removes unwanted frequency components such as slow drifts or fast
 physiological noise.
@@ -226,6 +278,34 @@ Because filtered confounds match the exact temporal treatment of the BOLD
 data, this regression step is safe from mismatch artifacts, similar to the
 strategy described in the xcp-d documentation.
 
+    "6p" = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
+    "12p" = c(
+      "rot_x", "rot_x_derivative1", "rot_y", "rot_y_derivative1",
+      "rot_z", "rot_z_derivative1", "trans_x", "trans_x_derivative1",
+      "trans_y", "trans_y_derivative1", "trans_z", "trans_z_derivative1"
+    ),
+    "24p" = c(
+      "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+      "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+      "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+      "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+      "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+      "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2"
+    ),
+    "36p" = c(
+      "csf", "csf_derivative1", "csf_derivative1_power2", "csf_power2",
+      "global_signal", "global_signal_derivative1", "global_signal_derivative1_power2",
+      "global_signal_power2",
+      "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
+      "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
+      "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
+      "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
+      "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
+      "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2",
+      "white_matter", "white_matter_derivative1", "white_matter_derivative1_power2",
+      "white_matter_power2"
+    )
+
 ## Ordering Steps
 
 Finally, `setup_postproc_steps()` determines the order in which enabled
@@ -246,6 +326,13 @@ run_project(scfg, steps = "postprocess")
 The processing log for each subject is written to the project’s `logs`
 folder, and the final postprocessed NIfTIs receive the BIDS description
 specified earlier.
+
+# Naming and use of intermediate files
+
+During the setup of postprocessing, you will be asked whether to keep intermediate files.
+Generally speaking, you should say 'no' since these files only have a subset of postprocessing
+steps applied to them (e.g., smoothed, but not temporally filtered). That said, if you'd like to
+inspect intermediate stages of processing, you acn 
 
 # Summary
 

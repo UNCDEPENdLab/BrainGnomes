@@ -30,11 +30,11 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
     session = "ses-(\\d+)",
     task = "task-([a-zA-Z0-9]+)",
     acquisition = "acq-([a-zA-Z0-9]+)",
+    reconstruction = "rec-([a-zA-Z0-9]+)",
+    direction = "dir-([a-zA-Z0-9]+)",
     run = "run-(\\d+)",
     modality = "mod-([a-zA-Z0-9]+)",
     echo = "echo-(\\d+)",
-    direction = "dir-([a-zA-Z0-9]+)",
-    reconstruction = "rec-([a-zA-Z0-9]+)",
     hemisphere = "hemi-([a-zA-Z0-9]+)",
     space = "space-([a-zA-Z0-9]+)",
     resolution = "res-(\\d+)",
@@ -148,19 +148,19 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 
   # Standard BIDS ordering
   entity_order <- c(
-    "subject", "session", "task", "acquisition", "run", "modality",
-    "echo", "direction", "reconstruction", "hemisphere", "space",
-    "resolution", "description", "fieldmap"  # <- added "resolution"
+    "subject", "session", "task", "acquisition", "reconstruction", 
+    "direction", "run", "modality", "echo",  "hemisphere", "space",
+    "resolution", "description", "fieldmap"
   )
-
+  
   # BIDS entity prefixes
   prefixes <- c(
-    subject = "sub", session = "ses", task = "task", acquisition = "acq",
-    run = "run", modality = "mod", echo = "echo", direction = "dir",
-    reconstruction = "rec", hemisphere = "hemi", space = "space",
+    subject = "sub", session = "ses", task = "task", acquisition = "acq", reconstruction = "rec", 
+    direction = "dir", run = "run", modality = "mod", echo = "echo",
+    hemisphere = "hemi", space = "space",
     resolution = "res", description = "desc", fieldmap = "fmap"
   )
-
+  
   # only attempt to reconstruct entities present in the input data
   reconstruct_entities <- intersect(entity_order, names(bids_df))
 
@@ -195,48 +195,76 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   return(filenames)
 }
 
-#' Construct a regex pattern for BIDS filenames
-#'
-#' Given a set of BIDS entity specifications, this helper builds a regular
-#' expression that matches filenames containing those entities in order. Each
-#' entity in the regex is explicitly followed by an underscore before allowing
-#' `.*` to consume intermediate tokens, preventing partial matches (e.g.,
-#' "task-ridlye" will not match "task:ridl").
-#'
-#' @param spec A character string of key:value pairs separated by spaces
-#'   (e.g., "task:ridl desc:preproc suffix:bold").
-#' @return A character string containing the regex pattern.
-#' @keywords internal
-construct_bids_regex <- function(spec) {
+construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   checkmate::assert_string(spec)
-
+  checkmate::assert_flag(add_niigz_ext)
+  
   spec <- trimws(spec)
   if (grepl("^regex:", spec)) return(trimws(sub("^regex:", "", spec)))
-
+  
+  # Parse key-value pairs from spec
   tokens <- strsplit(spec, "\\s+")[[1]]
-
   kv <- strsplit(tokens, ":")
   keys <- vapply(kv, `[`, character(1), 1)
   vals <- vapply(kv, `[`, character(1), 2)
-
+  
+  # Expand abbreviated keys
+  abbr_map <- c(
+    sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
+    dir = "direction", rec = "reconstruction", hemi = "hemisphere",
+    res = "resolution", desc = "description", fmap = "fieldmap"
+  )
+  keys_full <- ifelse(keys %in% names(abbr_map), abbr_map[keys], keys)
+  
   info <- as.list(vals)
-  names(info) <- keys
-  if (!"ext" %in% names(info)) info$ext <- ""
-
-  filename <- construct_bids_filename(info)
-  entities <- strsplit(filename, "_")[[1]]
-  entities <- entities[entities != ""]
-  suffix <- tail(entities, 1)
-  entities <- head(entities, -1)
-
-  pattern <- ".*"
-  if (length(entities) > 0) {
-    for (entity in entities) {
-      pattern <- paste0(pattern, "_", entity, "(_[^_]+)*")
-    }
+  names(info) <- keys_full
+  
+  if (!"suffix" %in% names(info)) info$suffix <- ".*" # match any suffix
+  if (!"ext" %in% names(info)) {
+    info$ext <- if (add_niigz_ext) "\\.nii(\\.gz)?$" else ".*" # match any extension if not provided
   }
-  pattern <- paste0(pattern, "_", suffix)
+  
+  # BIDS entity ordering and prefixes
+  entity_order <- c(
+    "subject", "session", "task", "acquisition", "reconstruction", 
+    "direction", "run", "modality", "echo",  "hemisphere", "space",
+    "resolution", "description", "fieldmap"
+  )
+  prefixes <- c(
+    subject = "sub", session = "ses", task = "task", acquisition = "acq", reconstruction = "rec", 
+    direction = "dir", run = "run", modality = "mod", echo = "echo",
+    hemisphere = "hemi", space = "space",
+    resolution = "res", description = "desc", fieldmap = "fmap"
+  )
+  
+  # Entities in order
+  used_entities <- intersect(entity_order, names(info))
+  pattern <- ifelse("subject" %in% used_entities, "^", ".*") # allow preceding entities unles it's subject (always first)
+  
+  for (i in seq_along(used_entities)) {
+    entity <- used_entities[i]
+    value <- info[[entity]]
+    token <- paste0(prefixes[entity], "-", value)
+    
+    # if (i == 1) {
+    #   pattern <- paste0(pattern, token)
+    # } else {
+      # Allow intermediate entities, then match next
+      #pattern <- paste0(pattern, "(_[^_]+)*_", token)
+    pattern <- paste0(pattern, token, "(_[^_]+)*_")
+    # }
+  }
+  
+  # Append suffix and extension
+  suffix <- info[["suffix"]]
+  ext <- gsub("(?<!\\\\)\\.", "\\\\.", info[["ext"]], perl = TRUE) # escape any unescaped periods
+  
+  # ensure that ext always starts with a period (escaped)
+  if (substr(ext, 1, 2) != "\\.") ext <- paste0("\\.", ext)
 
+  if (nzchar(suffix)) pattern <- paste0(pattern, suffix)
+  if (nzchar(ext)) pattern <- paste0(pattern, ext)
+  
   return(pattern)
 }
 
