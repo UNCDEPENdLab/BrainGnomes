@@ -101,10 +101,8 @@ rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_ro
   $cli_options & # all options setup by submit_fmriprep()
 cmd_pid=$!
 
-set +e
-wait $cmd_pid
-cmd_status=$?
-set -e
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 # fmriprep somehow decides to throw a non-zero exit status even when it completes successfully.
 # fall back to looking for success string in fmriprep log file

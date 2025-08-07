@@ -60,7 +60,7 @@ postprocess:
   ncores: 1
   cli_options: []
   sched_args: []
-  input_regex: .*space-MNI152NLin2009cAsym.*desc-preproc_bold.nii.gz$
+  input_regex: "regex: .*space-MNI152NLin2009cAsym.*desc-preproc_bold.nii.gz$"
   bids_desc: postproc
   keep_intermediates: no
   overwrite: no

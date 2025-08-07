@@ -66,10 +66,8 @@ rel $rel_flag $log_flag singularity run --cleanenv -B "$loc_bids_root" -B "$loc_
   $cli_options & # all options setup by submit_mriqc()
 cmd_pid=$!
 
-set +e
-wait $cmd_pid
-cmd_status=$?
-set -e
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 

@@ -70,19 +70,25 @@ optional brain mask file are also collected.
 ### Selecting BOLD files with `input_regex`
 
 The `input_regex` setting controls which preprocessed NIfTI files are
-included. It accepts any POSIX regular expression, allowing you to
-target a subset of your fMRIPrep directory. For example, to postprocess
-only resting‐state runs you might supply:
+included. Instead of writing a full regular expression, you may supply
+BIDS entity-value pairs that are converted to a regex at runtime. For
+example:
 
 ```r
-.*task-rest.*_desc-preproc_bold\.nii\.gz$
+desc:preproc task:ridl suffix:bold
 ```
 
-This pattern matches any file containing `task-rest` and ending in
-`_desc-preproc_bold.nii.gz`. You could create another configuration for
-task-based data using a different expression. The prompts in
-`setup_postprocess_globals()` provide additional guidance and examples
-for constructing these expressions.【F:R/setup_postprocess.R†L199-L211】
+selects any file containing `task-ridl` and `desc-preproc` with a `bold`
+suffix, producing `.*_task-ridl.*_desc-preproc_bold.nii(.gz)?$`.
+
+To provide a custom regular expression, prefix it with `regex:`:
+
+```r
+regex: .*task-rest.*preproc.*\.nii\.gz$
+```
+
+The prompts in `setup_postprocess_globals()` provide additional guidance
+and examples for constructing these expressions.【F:R/setup_postprocess.R†L199-L211】
 
 ### Output naming with `bids_desc`
 

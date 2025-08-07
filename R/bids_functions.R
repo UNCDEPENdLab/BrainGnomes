@@ -127,15 +127,22 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #' construct_bids_filename(df)
 #' # Returns: "sub-01_task-rest_space-MNI152NLin6Asym_res-2_desc-preproc_bold.nii.gz"
 #'
+#' @details Column names in `bids_df` may be provided either as full
+#'   BIDS entity names (e.g., `reconstruction`, `description`) or using
+#'   their abbreviated forms (`rec`, `desc`, etc.); abbreviated names are
+#'   normalized internally.
+#'
 #' @importFrom checkmate assert_data_frame test_list
 #' @export
 construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
   checkmate::assert_data_frame(bids_df)
+
   abbr_map <- c(sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
                 dir = "direction", rec = "reconstruction", hemi = "hemisphere",
                 res = "resolution", desc = "description", fmap = "fieldmap")
   names(bids_df) <- ifelse(names(bids_df) %in% names(abbr_map), abbr_map[names(bids_df)], names(bids_df))
+
   if (!"suffix" %in% names(bids_df)) stop("The input must include a 'suffix' column.")
   if (!"ext" %in% names(bids_df)) stop("The input must include an 'ext' column.")
 
@@ -203,12 +210,10 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 construct_bids_regex <- function(spec) {
   checkmate::assert_string(spec)
 
-  tokens <- strsplit(spec, "\\s+")[[1]]
+  spec <- trimws(spec)
+  if (grepl("^regex:", spec)) return(trimws(sub("^regex:", "", spec)))
 
-  regex_idx <- grep("^regex:", tokens)
-  if (length(regex_idx) > 0) {
-    return(sub("^regex:", "", tokens[regex_idx[1]]))
-  }
+  tokens <- strsplit(spec, "\\s+")[[1]]
 
   kv <- strsplit(tokens, ":")
   keys <- vapply(kv, `[`, character(1), 1)

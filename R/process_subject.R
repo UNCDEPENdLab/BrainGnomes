@@ -22,11 +22,12 @@ null_empty <- function(x) {
 #' @param steps A named logical vector indicating which steps to run
 #' @param postprocess_streams Optional character vector of postprocess configuration names to run. If NULL,
 #'   all available streams will be run.
+#' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
 #' @return A logical value indicating whether the preprocessing was successful
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, parent_ids = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -145,7 +146,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   n_inputs <- nrow(sub_cfg)
 
   # need unlist because NULL will be returned for jobs not submitted -- yielding a weird list of NULLs
-  bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx)))
+  bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx, parent_ids = parent_ids)))
   
   if (isTRUE(steps["bids_conversion"])) {  
     # Use expected directory as input to subsequent steps, anticipating that conversion completes
@@ -174,13 +175,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   # N.B. Everything after BIDS conversion depends on the BIDS directory existing
 
   ## Handle MRIQC
-  mriqc_id <- submit_step("mriqc", parent_ids = bids_conversion_ids)
+  mriqc_id <- submit_step("mriqc", parent_ids = c(parent_ids, bids_conversion_ids))
 
   ## Handle fmriprep
-  fmriprep_id <- submit_step("fmriprep", parent_ids = bids_conversion_ids)
+  fmriprep_id <- submit_step("fmriprep", parent_ids = c(parent_ids, bids_conversion_ids))
 
   ## Handle aroma
-  aroma_id <- submit_step("aroma", parent_ids = c(bids_conversion_ids, fmriprep_id))
+  aroma_id <- submit_step("aroma", parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id))
 
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
@@ -209,7 +210,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     # loop over inputs and processing streams
     postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
       unlist(lapply(postprocess_streams, function(pp_nm) {
-        submit_step("postprocess", row_idx = idx, parent_ids = c(bids_conversion_ids, fmriprep_id, aroma_id), pp_stream = pp_nm)
+        submit_step("postprocess", row_idx = idx, parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id, aroma_id), pp_stream = pp_nm)
       }))
     }))
 
@@ -422,6 +423,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   # pull the requested postprocessing stream from the broader list
   pp_cfg <- scfg$postprocess[[pp_stream]]
   pp_cfg$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
+  pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
   # drop postproc scheduling arguments from fields before converting to cli argument string for postprocess_cli.R
   pp_cfg$nhours <- pp_cfg$ncores <- pp_cfg$cli_options <- pp_cfg$sched_args <- NULL
   postprocess_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script

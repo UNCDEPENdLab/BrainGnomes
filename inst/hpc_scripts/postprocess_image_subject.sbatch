@@ -78,10 +78,8 @@ log_message INFO Starting postprocessing for image $input_file in $out_dir with 
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &
 cmd_pid=$!
 
-set +e
-wait $cmd_pid
-cmd_status=$?
-set -e
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 log_message INFO Finished postprocessing for image $input_file "(time elapsed: $(time_elapsed))"
 exit $cmd_status

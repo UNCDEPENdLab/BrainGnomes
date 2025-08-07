@@ -11,7 +11,9 @@ construct_bids_filename(bids_df, full.names = FALSE)
 Must include at least the columns \code{suffix} and \code{ext}, and optionally:
 \code{subject}, \code{session}, \code{task}, \code{acquisition}, \code{run}, \code{modality}, \code{echo},
 \code{direction}, \code{reconstruction}, \code{hemisphere}, \code{space}, \code{resolution},
-\code{description}, and \code{fieldmap}.}
+\code{description}, and \code{fieldmap}. Column names may be given using full
+entity names or their abbreviated forms (e.g., \code{rec}, \code{desc});
+abbreviations are normalized internally.}
 
 \item{full.names}{If TRUE, return the full path to the file using the \verb{$directory}
 field of \code{bids_df}.}
