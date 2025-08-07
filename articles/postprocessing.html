@@ -127,14 +127,17 @@ TR of your scans and an optional brain mask file are also collected.</p>
 <h4 id="selecting-bold-files-with-input_regex">Selecting BOLD files with <code>input_regex</code><a class="anchor" aria-label="anchor" href="#selecting-bold-files-with-input_regex"></a>
 </h4>
 <p>The <code>input_regex</code> setting controls which preprocessed
-NIfTI files are included. It accepts any POSIX regular expression,
-allowing you to target a subset of your fMRIPrep directory. For example,
-to postprocess only resting‐state runs you might supply:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>.<span class="sc">*</span>task<span class="sc">-</span>rest.<span class="sc">*</span>_desc<span class="sc">-</span>preproc_bold\.nii\.gz<span class="sc">$</span></span></code></pre></div>
-<p>This pattern matches any file containing <code>task-rest</code> and
-ending in <code>_desc-preproc_bold.nii.gz</code>. You could create
-another configuration for task-based data using a different expression.
-The prompts in <code>setup_postprocess_globals()</code> provide
+NIfTI files are included. Instead of writing a full regular expression,
+you may supply BIDS entity-value pairs that are converted to a regex at
+runtime. For example:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>desc<span class="sc">:</span>preproc task<span class="sc">:</span>ridl suffix<span class="sc">:</span>bold</span></code></pre></div>
+<p>selects any file containing <code>task-ridl</code> and
+<code>desc-preproc</code> with a <code>bold</code> suffix, producing
+<code>.*_task-ridl.*_desc-preproc_bold.nii(.gz)?$</code>.</p>
+<p>To provide a custom regular expression, prefix it with
+<code>regex:</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>regex<span class="sc">:</span> .<span class="sc">*</span>task<span class="sc">-</span>rest.<span class="sc">*</span>preproc.<span class="sc">*</span>\.nii\.gz<span class="sc">$</span></span></code></pre></div>
+<p>The prompts in <code>setup_postprocess_globals()</code> provide
 additional guidance and examples for constructing these
 expressions.【F:R/setup_postprocess.R†L199-L211】</p>
 </div>
@@ -164,7 +167,7 @@ enable it, and key options the setup functions will prompt for.</p>
 <p><code><a href="../reference/setup_apply_mask.html">setup_apply_mask()</a></code> controls whether to apply a binary
 brain mask to all BOLD runs. The prompt explains the rationale and lets
 you provide a mask file and output prefix.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># excerpt from setup_apply_mask()</span></span></code></pre></div>
 <pre><code>Applying a brain mask to your fMRI data ensures that only in-brain voxels are retained during analysis.
 This step is optional but often recommended for improving efficiency and accuracy in subsequent processing.
@@ -291,7 +294,7 @@ below.【F:R/setup_postprocess.R†L321-L358】</p>
 </h2>
 <p>After configuration, running <code><a href="../reference/run_project.html">run_project()</a></code> will execute
 the selected postprocessing steps for each subject.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The processing log for each subject is written to the project’s
 <code>logs</code> folder, and the final postprocessed NIfTIs receive the
