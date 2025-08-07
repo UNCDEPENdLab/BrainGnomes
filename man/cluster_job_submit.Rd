@@ -22,8 +22,9 @@ cluster_job_submit(
 )
 }
 \arguments{
-\item{script}{A script that should be executed by the scheduler. This can contain scheduler directives, but in the
-case of conflicts, the directives passed with \code{sched_args} will take precedence.}
+\item{script}{A path to a script that should be executed by the scheduler or a single command to be run. When
+\code{script} does not point to an existing file, it is treated as a one-line command to execute. In the case of
+conflicts, the directives passed with \code{sched_args} will take precedence.}
 
 \item{scheduler}{Which scheduler to use for job submission. Options are 'qsub', 'torque', 'sbatch', 'slurm', or 'sh'.
 The terms 'qsub' and 'torque' are aliases (where 'torque' submits via the qsub command). Likewise for 'sbatch'
@@ -77,6 +78,9 @@ The function returns the jobid of the scheduled job.
   cluster_job_submit('myscript.sbatch', scheduler="slurm",
      sched_args=c('-p general', '-N 1', '-n 12', '--mem=10g', '-t 02-00:00:00'),
      env_variables=c(RUN_INDEX=2, R_HOME=NA, JAVA_HOME=NA))
+
+  # submit a single command without a script file
+  cluster_job_submit('echo "hello"', scheduler="slurm")
 }
 
 }
