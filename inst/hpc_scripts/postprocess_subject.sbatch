@@ -126,7 +126,7 @@ while true; do
     echo "All child jobs completed."
     break
   fi
-  sleep 300 # poll every 5 minutes
+  sleep 180 # poll every 3 minutes
 done
 
 

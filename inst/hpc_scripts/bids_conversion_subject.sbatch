@@ -70,20 +70,17 @@ start_time=$(date +%s)
 
 log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
-singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_sub_dicoms' -B '$heuristic_dir' '$heudiconv_container'"
-
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 # we now use --files to specify the dicoms to convert rather than -d since we don't want to assume
 # the dicoms are in a specific directory structure (esp. in terms of level of nesting).
-rel $rel_flag $log_flag "$singularity_cmd" --files $loc_sub_dicoms -s $sub_id $ses_flag \
+rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_sub_dicoms" -B "$heuristic_dir" \
+ "$heudiconv_container" --files $loc_sub_dicoms -s $sub_id $ses_flag \
   -f $heudiconv_heuristic -c dcm2niix \
   -o $loc_bids_root --bids &
 cmd_pid=$!
 
-set +e
-wait $cmd_pid
-cmd_status=$?
-set -e
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 # write complete file if the command was successful and debug_pipeline is not set
 [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"

@@ -59,9 +59,6 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-singularity_cmd="singularity run --cleanenv -B '$loc_bids_root' -B '$loc_scratch' \
-  -B '$loc_mrproc_root' '$aroma_container'"
-
 mem=$((SLURM_MEM_PER_NODE / 1024))GB
 start_time=$(date +%s)
 
@@ -71,15 +68,14 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag $singularity_cmd \
-    "$loc_bids_root" "$loc_mrproc_root/" participant \
-    $cli_options & # all options setup by submit_aroma()
+rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_scratch" \
+  -B "$loc_mrproc_root" "$aroma_container" \
+  "$loc_bids_root" "$loc_mrproc_root/" participant \
+  $cli_options & # all options setup by submit_aroma()
 cmd_pid=$!
 
-set +e
-wait $cmd_pid
-cmd_status=$?
-set -e
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 # fmripost-aroma somehow decides to throw a non-zero exit status even when it completes successfully.
 # fall back to looking for success string in fmriprep log file
