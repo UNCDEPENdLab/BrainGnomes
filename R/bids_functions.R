@@ -132,6 +132,10 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
   checkmate::assert_data_frame(bids_df)
+  abbr_map <- c(sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
+                dir = "direction", rec = "reconstruction", hemi = "hemisphere",
+                res = "resolution", desc = "description", fmap = "fieldmap")
+  names(bids_df) <- ifelse(names(bids_df) %in% names(abbr_map), abbr_map[names(bids_df)], names(bids_df))
   if (!"suffix" %in% names(bids_df)) stop("The input must include a 'suffix' column.")
   if (!"ext" %in% names(bids_df)) stop("The input must include an 'ext' column.")
 
@@ -182,6 +186,53 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   }
 
   return(filenames)
+}
+
+#' Construct a regex pattern for BIDS filenames
+#'
+#' Given a set of BIDS entity specifications, this helper builds a regular
+#' expression that matches filenames containing those entities in order. Each
+#' entity in the regex is explicitly followed by an underscore before allowing
+#' `.*` to consume intermediate tokens, preventing partial matches (e.g.,
+#' "task-ridlye" will not match "task:ridl").
+#'
+#' @param spec A character string of key:value pairs separated by spaces
+#'   (e.g., "task:ridl desc:preproc suffix:bold").
+#' @return A character string containing the regex pattern.
+#' @keywords internal
+construct_bids_regex <- function(spec) {
+  checkmate::assert_string(spec)
+
+  tokens <- strsplit(spec, "\\s+")[[1]]
+
+  regex_idx <- grep("^regex:", tokens)
+  if (length(regex_idx) > 0) {
+    return(sub("^regex:", "", tokens[regex_idx[1]]))
+  }
+
+  kv <- strsplit(tokens, ":")
+  keys <- vapply(kv, `[`, character(1), 1)
+  vals <- vapply(kv, `[`, character(1), 2)
+
+  info <- as.list(vals)
+  names(info) <- keys
+  if (!"ext" %in% names(info)) info$ext <- ""
+
+  filename <- construct_bids_filename(info)
+  entities <- strsplit(filename, "_")[[1]]
+  entities <- entities[entities != ""]
+  suffix <- tail(entities, 1)
+  entities <- head(entities, -1)
+
+  pattern <- ".*"
+  if (length(entities) > 0) {
+    for (entity in entities) {
+      pattern <- paste0(pattern, "_", entity, "(_[^_]+)*")
+    }
+  }
+  pattern <- paste0(pattern, "_", suffix)
+
+  return(pattern)
 }
 
 #' Check for Existence of a BIDS-Formatted Output File with a given description
