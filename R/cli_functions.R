@@ -149,8 +149,10 @@ nested_list_to_args <- function(lst, sep = "/", collapse = FALSE) {
       if (is.list(val) && !is.null(names(val))) {
         args <- c(args, flatten(val, key))
       } else {
-        # quote argument with shQuote to prevent wildcard expansion and other oddities
-        val_str <- paste(shQuote(as.character(val)), collapse = " ")
+        # quote argument consistently across platforms (especially Windows)
+        # using single quotes via shQuote(..., type = "sh") to avoid wildcard
+        # expansion and other oddities
+        val_str <- paste(shQuote(as.character(val), type = "sh"), collapse = " ")
         args <- c(args, paste0("--", key, "=", val_str))
       }
     }
