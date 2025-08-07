@@ -127,11 +127,27 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #' construct_bids_filename(df)
 #' # Returns: "sub-01_task-rest_space-MNI152NLin6Asym_res-2_desc-preproc_bold.nii.gz"
 #'
+#' @details Column names in `bids_df` may be provided either as full
+#'   BIDS entity names (e.g., `reconstruction`, `description`) or using
+#'   their abbreviated forms (`rec`, `desc`, etc.); abbreviated names are
+#'   normalized internally.
+#'
 #' @importFrom checkmate assert_data_frame test_list
 #' @export
 construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
   checkmate::assert_data_frame(bids_df)
+
+  # allow abbreviated entity names (e.g., rec -> reconstruction)
+  abbr_map <- c(
+    sub = "subject", ses = "session", task = "task", acq = "acquisition",
+    run = "run", mod = "modality", echo = "echo", dir = "direction",
+    rec = "reconstruction", hemi = "hemisphere", space = "space",
+    res = "resolution", desc = "description", fmap = "fieldmap"
+  )
+  matches <- match(names(bids_df), names(abbr_map))
+  names(bids_df)[!is.na(matches)] <- abbr_map[matches[!is.na(matches)]]
+
   if (!"suffix" %in% names(bids_df)) stop("The input must include a 'suffix' column.")
   if (!"ext" %in% names(bids_df)) stop("The input must include an 'ext' column.")
 
@@ -182,6 +198,60 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   }
 
   return(filenames)
+}
+
+#' Construct a Regular Expression from BIDS Entities
+#'
+#' This helper interprets a whitespace-delimited string of BIDS key:value pairs
+#' (e.g., `"desc:preproc task:ridl suffix:bold"`) and converts it into a
+#' regular expression matching filenames containing those entities.  If the
+#' input begins with `"regex:"`, the remainder of the string is returned
+#' unchanged, allowing explicit regular expressions to be supplied.
+#'
+#' @param spec Character string containing either BIDS entities or a regular
+#'   expression prefixed with `"regex:"`.
+#' @return A character string representing a POSIX-style regular expression.
+#' @keywords internal
+construct_bids_regex <- function(spec) {
+  checkmate::assert_string(spec)
+
+  spec <- trimws(spec)
+  if (grepl("^regex:", spec)) {
+    return(trimws(sub("^regex:", "", spec)))
+  }
+
+  tokens <- strsplit(spec, "\\s+")[[1]]
+  kv <- strsplit(tokens, ":", fixed = TRUE)
+  kv <- Filter(function(x) length(x) == 2, kv)
+  if (length(kv) == 0) stop("No valid BIDS entities found in input_regex specification")
+
+  fields <- setNames(vapply(kv, `[`, "", 2), vapply(kv, `[`, "", 1))
+  fields <- as.list(fields)
+
+  suffix <- fields[["suffix"]]
+  if (is.null(suffix) || !nzchar(suffix)) stop("input_regex specification must include a 'suffix' entry")
+
+  if (is.null(fields$ext) || !nzchar(fields$ext)) fields$ext <- ".nii"
+
+  filename <- construct_bids_filename(fields)
+  parts <- strsplit(filename, "_")[[1]]
+  entities <- parts[-length(parts)]
+
+  pattern <- ".*"
+  if (length(entities) > 0) {
+    for (i in seq_along(entities)) {
+      pattern <- paste0(pattern, "_", entities[i])
+      if (i < length(entities)) pattern <- paste0(pattern, ".*")
+    }
+  }
+
+  pattern <- paste0(pattern, "_", suffix)
+
+  ext_base <- sub("\\.gz$", "", fields$ext)
+  ext_pattern <- gsub("\\.", "\\\\.", ext_base)
+  pattern <- paste0(pattern, ext_pattern, "(\\.gz)?$")
+
+  return(pattern)
 }
 
 #' Check for Existence of a BIDS-Formatted Output File with a given description

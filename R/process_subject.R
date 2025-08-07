@@ -422,6 +422,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   # pull the requested postprocessing stream from the broader list
   pp_cfg <- scfg$postprocess[[pp_stream]]
   pp_cfg$fsl_img <- scfg$compute_environment$aroma_container # always pass aroma container for running FSL commands in postprocessing
+  pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
   postprocess_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script
   
   env_variables <- c(

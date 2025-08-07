@@ -291,16 +291,15 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
   # global postprocessing settings
   if ("postprocess/input_regex" %in% fields) {
     ppcfg$input_regex <- prompt_input(
-      "What is the relevant file extension (or regular expression) for inputs?",
-      type = "character", len = 1L, default = ".*_desc-preproc_bold.nii.gz$",
+      "Which BIDS entries or regular expression identify the inputs?",
+      type = "character", len = 1L, default = "desc:preproc suffix:bold",
       instruct = glue("\n\n
       Postprocessing is typically only applied to BOLD data that have completed preprocessing in fmriprep.
       These files usually have a suffix like _desc-preproc_bold.nii.gz. However, you may have postprocessing settings
-      that only apply to certain outputs, such as for a particular experimental task or for resting state.
-
-      What is the file extension for functional data to be postprocessed? If, for example, you only want
-      files for a task called 'ridl', use a regular expression like, '.*_task-ridl.*_desc-preproc_bold.nii.gz$'. Note
-      that having the $ add the end of the regular expression ensures that the file ends with the specified suffix.\n
+      that only apply to certain outputs, such as for a particular experimental task or for resting state.\n\n
+      Provide BIDS entity pairs separated by spaces (e.g., 'task:ridl desc:preproc suffix:bold').
+      To supply an explicit regular expression instead, prefix it with 'regex:' such as
+      \"regex: .*_task-rest.*preproc.*\\.nii\\.gz$\".\n
       ")
     )
   }
