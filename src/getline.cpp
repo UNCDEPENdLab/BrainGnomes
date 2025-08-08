@@ -1,11 +1,23 @@
 #include <Rcpp.h>
-#include <unistd.h>    // isatty, STDIN_FILENO
-#include <termios.h>   // terminal control
-#include <csignal>     // signal handling
 #include <iostream>
 #include <string>
 
+
+#ifdef _WIN32
+  // Windows does not support termios or raw mode input
+  #define POSIX_TERMINAL_SUPPORT 0
+#else
+  #include <unistd.h>    // isatty, STDIN_FILENO
+  #include <termios.h>   // terminal control
+  #define POSIX_TERMINAL_SUPPORT 1
+#endif
+
+#include <unistd.h>
+#include <termios.h>   
+
+
 // RAII guard for restoring terminal settings
+#if POSIX_TERMINAL_SUPPORT
 class TermiosGuard {
   struct termios oldt;
   bool active;
@@ -31,6 +43,7 @@ class TermiosGuard {
     }
   }
 };
+#endif
 
 //' Read a Line of Input from the User in Both Interactive and Non-Interactive Sessions
 //'
@@ -77,6 +90,7 @@ SEXP getline(std::string prompt) {
     return Rcpp::wrap(result);
   }
   
+#if POSIX_TERMINAL_SUPPORT
   // Non-interactive Rscript session: ensure we're in a tty
   if (!isatty(STDIN_FILENO)) {
     Rcpp::Rcout << "(Not a TTY; cannot read input)\n";
@@ -99,6 +113,7 @@ SEXP getline(std::string prompt) {
       ch = getchar();
       
       if (ch == 27 || ch == EOF) {  // ESC or EOF
+        Rcpp::Rcout << std::endl;
         return R_NilValue;
       } else if (ch == '\n' || ch == '\r') {
         break;
@@ -113,8 +128,18 @@ SEXP getline(std::string prompt) {
       }
     }
   } catch (...) {
+    Rcpp::Rcout << std::endl;
     return R_NilValue;
   }
   
+  Rcpp::Rcout << std::endl; // make sure a newline is output prior to return
   return Rcpp::wrap(input);
+
+#else
+  // Windows fallback
+  Rcpp::Rcout << prompt << std::flush;
+  std::string input;
+  std::getline(std::cin, input);
+  return Rcpp::wrap(input);
+#endif
 }
