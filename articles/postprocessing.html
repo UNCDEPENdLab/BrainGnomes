@@ -58,8 +58,8 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>BrainGnomes Postprocessing Walkthrough</h1>
-                        <h4 data-toc-skip class="author">BrainGnomes
-Team</h4>
+                        <h4 data-toc-skip class="author">Michael
+Hallquist</h4>
             
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/vignettes/postprocessing.Rmd" class="external-link"><code>vignettes/postprocessing.Rmd</code></a></small>
@@ -134,9 +134,9 @@ TR of your scans and an optional brain mask file are also collected.</p>
 <h3 id="selecting-bold-files-with-input_regex">Selecting BOLD files with <code>input_regex</code><a class="anchor" aria-label="anchor" href="#selecting-bold-files-with-input_regex"></a>
 </h3>
 <p>The <code>input_regex</code> setting controls which preprocessed
-NIfTI files are included. Instead of writing a full regular expression,
-you may supply BIDS entity-value pairs that are converted to a regex at
-runtime. For example:</p>
+NIfTI files are entered into this postprocessing stream. Instead of
+writing a full regular expression, you may supply BIDS entity-value
+pairs that are converted to a regex at runtime. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>desc<span class="sc">:</span>preproc task<span class="sc">:</span>ridl suffix<span class="sc">:</span>bold</span></code></pre></div>
 <p>selects any file containing <code>task-ridl</code> and
 <code>desc-preproc</code> with a <code>bold</code> suffix, producing
@@ -196,6 +196,19 @@ millimeters (full width at half maximum, or FWHM). Common choices range
 from 4mm to 8mm. Smoothing is achieved using FSL’s susan command, which
 applies a nonlinear filtering algorithm that seeks to smooth together
 only voxels of similar intensities. Technical details are <a href="https://users.fmrib.ox.ac.uk/~steve/susan/susan/node18.html#SECTION00062000000000000000" class="external-link">here</a></p>
+<pre><code>-------------------------------------------------------------------------------------------
+Spatial smoothing applies a 3D Gaussian kernel to the BOLD fMRI data, which increases 
+the signal-to-noise ratio and improves overlap across subjects by reducing high-frequency
+spatial noise.
+
+You will be asked to specify the size of the smoothing kernel in millimeters
+(full width at half maximum, or FWHM). Common choices range from 4mm to 8mm.
+
+Do you want to apply spatial smoothing to the BOLD data as part of postprocessing?
+
+Apply spatial smoothing? (yes/no) &gt; y
+Spatial smoothing FWHM (mm) &gt; 5
+</code></pre>
 </div>
 <div class="section level3">
 <h3 id="icaaroma-denoising">ICA‑AROMA Denoising<a class="anchor" aria-label="anchor" href="#icaaroma-denoising"></a>
@@ -213,7 +226,80 @@ components as a postprocessing step. Building on the original papers
 removes the variance in ‘noise’ components that is not correlated with
 signal components (i.e., partial effects in multiple regression). As
 detailed below, if AROMA is applied to the fMRI data, the components
-will also be regressed out of any confounds.</p>
+will also be regressed out of any confounds. Note that as of 8Aug2025,
+only nonaggressive denoising is supported, regardless of how you respond
+to the prompts.</p>
+<pre><code>------------------------------------------------------------------------------------------------------------------------
+ICA-AROMA identifies motion-related independent components from the fMRI data and outputs
+noise regressors (e.g., *_desc-aroma_timeseries.tsv) that can be used to denoise the BOLD signal.
+The pipeline asks you decide about whether to run the data through ICA-AROMA, which generates various
+files, but does not make any changes to the fMRI data.
+
+Here, you can denoise the data using ICA-AROMA, which step applies the noise regressors
+to the data using voxelwise regression, either:
+  - nonaggressively (recommended), which removes *unique* variance from noise components only, or
+  - aggressively, which removes all variance associated with the noise components.
+
+Do you want to apply ICA-AROMA denoising during postprocessing?
+
+Apply AROMA denoising? (yes/no) &gt; y
+Use nonaggressive denoising? (yes/no; Press enter to accept default: yes) &gt; y</code></pre>
+</div>
+<div class="section level3">
+<h3 id="temporal-filtering">Temporal filtering<a class="anchor" aria-label="anchor" href="#temporal-filtering"></a>
+</h3>
+<p>Temporal filtering removes low- and/or high-frequency components from
+the fMRI time series. A high-pass filter (e.g., 0.008 Hz) is commonly
+used to remove slow scanner drift, while a low-pass filter can remove
+physiological noise such as respiratory or cardiac fluctuations.
+Temporal filtering is common in both task-based and resting-state fMRI
+analyses. In task fMRI, we often apply a gentle high-pass filter
+(e.g. .008 Hz) to remove low-frequency drift that can weaken GLM
+analyses that assume a constant baseline. In resting-state analyses,
+people often bandpass filter.</p>
+<p>We support both fslmaths -bptf and a Butterworth temporal filter. The
+former is more common for task-based fMRI and the latter with
+resting-state fMRI. If filtering is enabled, you will be asked to choose
+between these filtering methods.</p>
+<p>Per FSL’s documentation, -bptf uses a local fit of a straight line
+(Gaussian-weighted within the line to give a smooth response) to remove
+low frequency artifacts. This is preferable to sharp rolloff FIR-based
+filtering as it does not introduce autocorrelations into the data. These
+‘ringing artifacts’ can induce negative autocorrelations, which
+interfere with GLM software that correects for autocorrelation (e.g.,
+Tukey tapering in FSL feat). Low-pass temporal filtering reduces high
+frequency noise by Gaussian smoothing, but also reduces the strength of
+the signal of interest, particularly for single-event experiments.</p>
+<p>Butterworth filtering is a common temporal filtering technique used
+in fMRI postprocessing to attenuate low-frequency drifts and/or
+high-frequency noise while preserving the passband signal with minimal
+distortion. Unlike sharp cutoff filters, the Butterworth filter has a
+maximally flat frequency response in the passband, making it well-suited
+for applications requiring smooth transitions. In fMRI, it is typically
+applied as a band-pass or high-pass filter to remove slow scanner drifts
+and physiological noise outside the frequency range of interest (e.g.,
+0.01–0.1 Hz for resting-state analyses). To avoid phase distortion,
+BrainGnomes applies the filter bidirectionally (i.e., using forward and
+reverse passes). BrainGnomes also uses a second-order Butterworth
+filter, which has a good balance between frequency precision and smooth
+rolloff (higher orders give more precise frequency control at the edges,
+but have bigger risks of artifacts).</p>
+<p>One of the virtues of FSL’s Gaussian line smoothing approach is that
+it has a very gradual rolloff. That said, the frequency response is
+broad and not sharply defined, which can lead to partial attenuation of
+signals near cutoff (e.g., if your upper cutoff is .10 Hz, you might
+still see attenuation at .09 Hz). The Butterworth filter will have more
+precise control over the frequencies retained in the data but may have a
+slightly higher risk of messing up the autocorrelation structure (due to
+ringing).</p>
+<p>Here is the order of prompts with example responses. Note that if you
+skip one of the cutoffs (press enter at the prompt), then that side of
+the filter will not be applied. For example, if you only enter a
+low-pass cutoff</p>
+<p><code>Apply temporal filtering? &gt; yes</code>
+<code>Low-pass cutoff (Hz) (Press enter to skip) &gt; 0.009</code>
+<code>High-pass cutoff (Hz)  (Press enter to skip) &gt; 0.08</code>
+<code>Filtering method (fslmaths/butterworth) &gt; butterworth</code></p>
 </div>
 <div class="section level3">
 <h3 id="scrubbing-highmotion-volumes">Scrubbing High‑Motion Volumes<a class="anchor" aria-label="anchor" href="#scrubbing-highmotion-volumes"></a>
@@ -254,7 +340,7 @@ would remove/scrub these, but if your analysis requires intact
 timeseries (e.g., for a frequency-based analysis), perhaps you’d like to
 keep all timepoints.</p>
 <div class="section level4">
-<h4 id="setting-up-scrubbing">Setting up scrubbing<a class="anchor" aria-label="anchor" href="#setting-up-scrubbing"></a>
+<h4 id="defining-scrubbed-volumes">Defining scrubbed volumes<a class="anchor" aria-label="anchor" href="#defining-scrubbed-volumes"></a>
 </h4>
 <p>If you enable scrubbing, you will be asked to define what constitutes
 a ‘scrubbed’ volume. This should be a single logical expression in R
@@ -264,51 +350,58 @@ fmriprep. For example, if you wish to scrub any volume with more than
 <code>framewise_displacement &gt; 0.5</code>. You can have logical
 operators in the expression, too, allowing something like
 <code>framewise_displacement &gt; 0.5 | dvars &gt; 5</code>.</p>
+<p><code>Scrubbing expression(s) &gt; framewise_displacement &gt; 0.9</code></p>
 <p>In addition, your scrubbing expression can specify a range of volumes
 to scrub using a format like: ‘-1:1; dvars &gt; 1.5’. The part before
 the semicolon (-1:1) defines a temporal window around the bad timepoint.
 For example, ‘-1:0’ scrubs the bad timepoint and the volume before it.
 If omitted, only the bad timepoint (0) is scrubbed. The part after the
 semicolon (‘dvars &gt; 1.5’) defines the thresholding condition.</p>
-<p>Next, you will be asked whether you want any</p>
-<p><code><a href="../reference/setup_scrubbing.html">setup_scrubbing()</a></code> generates spike regressors and
-optional censoring of bad time points. The prompts describe how
-expressions such as <code>framewise_displacement &gt; 0.9</code> mark
-volumes for removal. You may also interpolate over these time points or
-drop them from the final NIfTI file. The following lines show part of
-the interactive help text.【F:R/setup_postprocess.R†L389-L475】 This
-interpolation mirrors the approach used in the xcp-d pipeline, where
-censored frames are replaced via cubic splines before further
-processing. Filtering and regression then operate on a contiguous time
-series, minimising edge artefacts.</p>
 </div>
+<div class="section level4">
+<h4 id="adding-scrubbing-spike-regressors-to-postprocessed-confounds">Adding scrubbing spike regressors to postprocessed confounds<a class="anchor" aria-label="anchor" href="#adding-scrubbing-spike-regressors-to-postprocessed-confounds"></a>
+</h4>
+<p>Next, you will be asked whether you want to add any volumes
+identified as ‘bad’ by the scrubbing expression to your postprocessed
+confounds.tsv file. This is only relevant if you enabled to the
+(preceding) confound calculate step. In this case, BrainGnomes will
+create spike regressors (1 at the bad timepoint, 0 elsewhere) for each
+volume flagged, adding them to the final confounds.tsv file. Note that
+if you ‘apply’ scrubbing – that is, remove the scrubbed timepoints – the
+spike regressors will <em>not</em> be added to the postprocessed
+confounds since they would just be all 0 anyhow.</p>
+<p>Adding these spike regressors to the confounds.tsv file is useful if
+you plan to include them as nuisance regressors in a larger (typically
+GLM) analysis, rather than deleting those volumes entirely during
+scrubbing.</p>
+<p><code>Add any spike regressors (bad volumes) to postprocessed confounds.tsv file?</code></p>
 </div>
-<div class="section level3">
-<h3 id="temporal-filtering">Temporal Filtering<a class="anchor" aria-label="anchor" href="#temporal-filtering"></a>
-</h3>
-<p>Temporal filtering is common in both task-based and resting-state
-fMRI analyses. In task fMRI, we often apply a gentle high-pass filter
-(e.g. .008 Hz) to remove low-frequency drift that can weaken GLM
-analyses that assume a constant baseline. In resting-state analyses,
-people often bandpass</p>
-<p>configures high‑pass and/or low‑pass cutoffs and the filtering method
-(FSL or a Butterworth implementation). Filtering removes unwanted
-frequency components such as slow drifts or fast physiological
-noise.</p>
-<p>The two methods behave slightly differently. The FSL approach calls
-<code>fslmaths -bptf</code>, which performs Gaussian weighted high‑ and
-low‑pass filtering by specifying the cutoffs in volumes (internally
-converted from Hz using a FWHM‑to‑sigma formula). This approach yields
-smooth roll‑off around the specified frequencies and minimises ringing
-at the expense of a somewhat broad transition band. The Butterworth
-option uses a digital IIR filter designed with the <code>signal</code>
-package and applied voxelwise via C++ code. Filtering is applied in a
-forward and reverse pass to preserve phase. The Butterworth design
-allows sharper cutoffs and explicit control of the filter order,
-producing a steeper response than the Gaussian implementation. The xcp-d
-developers favour Butterworth filtering for its zero-phase design and
-sharper transition bands, though the FSL option remains compatible with
-many existing workflows.</p>
+<div class="section level4">
+<h4 id="interpolation-of-scrubbed-volumes">Interpolation of scrubbed volumes<a class="anchor" aria-label="anchor" href="#interpolation-of-scrubbed-volumes"></a>
+</h4>
+<p>As noted above, temporal filtering can be problematic when there are
+large intensity changes, potentially causing ringing artifacts that
+spread motion-related contamination into adjacent volumes. One effective
+way to mitigate this risk is to interpolate the bad timepoints prior to
+temporal filtering. BrainGnomes achieves this using cubic natural spline
+interpolation. We recommend interpolation if you are substantially
+filtering your data (e.g., .009 – .08 Hz) and have evidence of strong
+intensity artifacts (e.g., on fMRIPrep’s carpet plots).</p>
+<p><code>Interpolate scrubbed values?</code></p>
+</div>
+<div class="section level4">
+<h4 id="removing-scrubbed-volumes">Removing scrubbed volumes<a class="anchor" aria-label="anchor" href="#removing-scrubbed-volumes"></a>
+</h4>
+<p>The term ‘scrubbing’ traditionally referred to removing bad
+(high-motion, high-fluctuation) timepoints from the fMRI timeseries
+prior to analysis, particularly of resting-state functional
+connectivity. This remains one of its most common uses.</p>
+<p>If you would like to remove bad timepoints (based on the scrubbing
+expression), say ‘yes’ to this question:</p>
+<p><code>Remove scrubbed timepoints?</code></p>
+<p>This will delete the bad volumes as well as corresponding rows in
+your postprocessed confounds file (if relevant).</p>
+</div>
 </div>
 <div class="section level3">
 <h3 id="intensity-normalisation">Intensity Normalisation<a class="anchor" aria-label="anchor" href="#intensity-normalisation"></a>
@@ -334,6 +427,31 @@ This expansion is implemented in
 such as <code>"6p"</code>, <code>"12p"</code>, <code>"24p"</code>, or
 <code>"36p"</code> to request common sets of motion parameters and their
 derivatives/squared terms.</p>
+<p>These shorthand specifications expand to the following:</p>
+<pre><code>6p  = { rot_x, rot_y, rot_z, trans_x, trans_y, trans_z }
+
+12p = { rot_x, rot_x_derivative1, rot_y, rot_y_derivative1,
+      rot_z, rot_z_derivative1, trans_x, trans_x_derivative1,
+      trans_y, trans_y_derivative1, trans_z, trans_z_derivative1 }
+      
+24p = { rot_x, rot_x_derivative1, rot_x_derivative1_power2, rot_x_power2,
+      rot_y, rot_y_derivative1, rot_y_derivative1_power2, rot_y_power2,
+      rot_z, rot_z_derivative1, rot_z_derivative1_power2, rot_z_power2,
+      trans_x, trans_x_derivative1, trans_x_derivative1_power2, trans_x_power2,
+      trans_y, trans_y_derivative1, trans_y_derivative1_power2, trans_y_power2,
+      trans_z, trans_z_derivative1, trans_z_derivative1_power2, trans_z_power2 }
+      
+36p = { csf, csf_derivative1, csf_derivative1_power2, csf_power2,
+      global_signal, global_signal_derivative1, global_signal_derivative1_power2,
+      global_signal_power2,
+      rot_x, rot_x_derivative1, rot_x_derivative1_power2, rot_x_power2,
+      rot_y, rot_y_derivative1, rot_y_derivative1_power2, rot_y_power2,
+      rot_z, rot_z_derivative1, rot_z_derivative1_power2, rot_z_power2,
+      trans_x, trans_x_derivative1, trans_x_derivative1_power2, trans_x_power2,
+      trans_y, trans_y_derivative1, trans_y_derivative1_power2, trans_y_power2,
+      trans_z, trans_z_derivative1, trans_z_derivative1_power2, trans_z_power2,
+      white_matter, white_matter_derivative1, white_matter_derivative1_power2,
+      white_matter_power2 }</code></pre>
 <p>Filtered confounds (listed in <code>columns</code>) undergo the same
 temporal filtering as the BOLD data, while unfiltered confounds (listed
 in <code>noproc_columns</code>) are appended without processing. Typical
@@ -353,33 +471,6 @@ are written to new NIfTI files with a chosen prefix. Because filtered
 confounds match the exact temporal treatment of the BOLD data, this
 regression step is safe from mismatch artifacts, similar to the strategy
 described in the xcp-d documentation.</p>
-<pre><code>"6p" = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
-"12p" = c(
-  "rot_x", "rot_x_derivative1", "rot_y", "rot_y_derivative1",
-  "rot_z", "rot_z_derivative1", "trans_x", "trans_x_derivative1",
-  "trans_y", "trans_y_derivative1", "trans_z", "trans_z_derivative1"
-),
-"24p" = c(
-  "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
-  "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
-  "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
-  "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
-  "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
-  "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2"
-),
-"36p" = c(
-  "csf", "csf_derivative1", "csf_derivative1_power2", "csf_power2",
-  "global_signal", "global_signal_derivative1", "global_signal_derivative1_power2",
-  "global_signal_power2",
-  "rot_x", "rot_x_derivative1", "rot_x_derivative1_power2", "rot_x_power2",
-  "rot_y", "rot_y_derivative1", "rot_y_derivative1_power2", "rot_y_power2",
-  "rot_z", "rot_z_derivative1", "rot_z_derivative1_power2", "rot_z_power2",
-  "trans_x", "trans_x_derivative1", "trans_x_derivative1_power2", "trans_x_power2",
-  "trans_y", "trans_y_derivative1", "trans_y_derivative1_power2", "trans_y_power2",
-  "trans_z", "trans_z_derivative1", "trans_z_derivative1_power2", "trans_z_power2",
-  "white_matter", "white_matter_derivative1", "white_matter_derivative1_power2",
-  "white_matter_power2"
-)</code></pre>
 </div>
 <div class="section level3">
 <h3 id="ordering-steps">Ordering Steps<a class="anchor" aria-label="anchor" href="#ordering-steps"></a>
@@ -397,7 +488,7 @@ below.【F:R/setup_postprocess.R†L321-L358】</p>
 </h2>
 <p>After configuration, running <code><a href="../reference/run_project.html">run_project()</a></code> will execute
 the selected postprocessing steps for each subject.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The processing log for each subject is written to the project’s
 <code>logs</code> folder, and the final postprocessed NIfTIs receive the
