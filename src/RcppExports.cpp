@@ -89,6 +89,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// menu_safe
+int menu_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title);
+RcppExport SEXP _BrainGnomes_menu_safe(SEXP choicesSEXP, SEXP titleSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::CharacterVector >::type choices(choicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<std::string> >::type title(titleSEXP);
+    rcpp_result_gen = Rcpp::wrap(menu_safe(choices, title));
+    return rcpp_result_gen;
+END_RCPP
+}
 // natural_spline_4d
 Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_interpolate, bool edge_nn, std::string outfile, bool internal);
 RcppExport SEXP _BrainGnomes_natural_spline_4d(SEXP infileSEXP, SEXP t_interpolateSEXP, SEXP edge_nnSEXP, SEXP outfileSEXP, SEXP internalSEXP) {
@@ -136,6 +148,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_getline", (DL_FUNC) &_BrainGnomes_getline, 1},
     {"_BrainGnomes_image_quantile", (DL_FUNC) &_BrainGnomes_image_quantile, 4},
     {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 8},
+    {"_BrainGnomes_menu_safe", (DL_FUNC) &_BrainGnomes_menu_safe, 2},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},
     {"_BrainGnomes_remove_nifti_volumes", (DL_FUNC) &_BrainGnomes_remove_nifti_volumes, 3},
