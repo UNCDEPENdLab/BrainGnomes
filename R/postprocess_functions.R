@@ -233,8 +233,8 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_desc=NULL,
 #'
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_desc The BIDS description field for the file output by this step
-#' @param low_pass_hz Low-pass filter cutoff in Hz. Use \code{0} to skip.
-#' @param high_pass_hz High-pass filter cutoff in Hz. Use \code{Inf} to skip.
+#' @param low_pass_hz Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.
+#' @param high_pass_hz Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use \code{Inf} to skip.
 #' @param tr Repetition time (TR) in seconds. Required to convert Hz to volumes.
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr object used for logging messages
@@ -269,7 +269,7 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Temporal filtering with low-pass: {low_pass_hz} Hz, high-pass: {high_pass_hz} Hz given TR: {tr}")
+  lg$info("Temporal filtering with low-frequency cutoff: {low_pass_hz} Hz, high-frequency cutoff: {high_pass_hz} Hz given TR: {tr}")
   lg$debug("in_file: {in_file}")
   
   # handle extant file
@@ -775,10 +775,13 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
   checkmate::assert_number(tr, lower=0.01, upper = 100)
   checkmate::assert_number(low_hz, null.ok = TRUE)
   checkmate::assert_number(high_hz, null.ok=TRUE)
-  checkmate::assert_integerish(order, len=1L, lower=1L, upper=50L)
+  checkmate::assert_integerish(order, len=1L, lower=2L, upper=50L)
   
   if (!requireNamespace("signal", quietly = TRUE)) stop("The 'signal' package must be installed.")
   
+  if (order %% 2 != 0) stop("filter order must be even because we use forward-reverse passes")
+  order <- order / 2 # If you design a 4th-order filter, filtfilt applies it forward and then again backward, resulting in an effective 8th-order magnitude response.
+
   fs <- 1 / tr  # sampling frequency in Hz
   nyq <- fs / 2
   
