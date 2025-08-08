@@ -123,7 +123,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
       # only add the spike regressors from scrubbing to the postprocessed confounds if we are not scrubbing out those
       # timepoints anyhow (since then the spike regressors would be all zero)
-      if (isTRUE(cfg$scrubbing$enable) !isTRUE(cfg$scrubbing$apply) && isTRUE(cfg$scrubbing$add_to_confounds) 
+      if (isTRUE(cfg$scrubbing$enable) && !isTRUE(cfg$scrubbing$apply) && isTRUE(cfg$scrubbing$add_to_confounds) 
         && exists("spike_mat") && !is.null(spike_mat)) {
         lg$debug("Adding spike_mat ({ncol(spike_mat) columns) from scrubbing calculation to confounds file")
         df <- cbind(df, spike_mat)

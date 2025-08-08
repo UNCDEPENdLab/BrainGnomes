@@ -42,7 +42,8 @@ test_that("butterworth_filter_4d matches signal::filtfilt and filtfilt_cpp", {
   result_data <- as.array(result)
   
   # Pull a few random voxels and compare to signal::filtfilt
-  b_a <- signal::butter(filt_order, c(low_hz, high_hz) / (fs / 2), type = "pass")
+  # divide filter order by 2, as happens inside the 4d function (due to forward/reverse)
+  b_a <- signal::butter(filt_order/2, c(low_hz, high_hz) / (fs / 2), type = "pass")
   
   set.seed(123)
   voxel_indices <- replicate(5, {
