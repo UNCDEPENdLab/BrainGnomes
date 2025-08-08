@@ -98,18 +98,18 @@ SEXP getline(std::string prompt) {
       
       ch = getchar();
       
-      if (ch == 27 || ch == EOF) {  // Ctrl+C, ESC, or EOF
+      if (ch == 27 || ch == EOF) {  // ESC or EOF
         return R_NilValue;
       } else if (ch == '\n' || ch == '\r') {
         break;
       } else if (ch == 127 || ch == 8) {  // Backspace
         if (!input.empty()) {
           input.pop_back();
-          std::cout << "\b \b" << std::flush;  // Erase character from screen
+          Rcpp::Rcout << "\b \b" << std::flush;  // Erase character from screen
         }
       } else {
         input += static_cast<char>(ch);
-        std::cout << static_cast<char>(ch) << std::flush;
+        Rcpp::Rcout << static_cast<char>(ch) << std::flush;
       }
     }
   } catch (...) {

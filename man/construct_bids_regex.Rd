@@ -2,22 +2,48 @@
 % Please edit documentation in R/bids_functions.R
 \name{construct_bids_regex}
 \alias{construct_bids_regex}
-\title{Construct a Regular Expression from BIDS Entities}
+\title{Construct a Regular Expression for Matching BIDS Filenames}
 \usage{
-construct_bids_regex(spec)
+construct_bids_regex(spec, add_niigz_ext = TRUE)
 }
 \arguments{
-\item{spec}{Character string containing either BIDS entities or a regular
-expression prefixed with \code{"regex:"}.}
+\item{spec}{A character string specifying BIDS entities as \code{key:value} pairs separated by spaces.
+For example: \code{"sub:01 task:rest desc:preproc suffix:bold"}. Abbreviated keys are supported.
+To pass a custom regex directly, prefix the input with \code{"regex:"} (e.g., \code{"regex:^sub-.*_bold\\\\.nii\\\\.gz$"}).}
+
+\item{add_niigz_ext}{Logical; if \code{TRUE} (default), automatically appends a regex that matches
+\code{.nii} or \code{.nii.gz} extensions (\verb{\\\\.nii(\\\\.gz)?$}) when no extension is explicitly provided.}
 }
 \value{
-A character string representing a POSIX-style regular expression.
+A character string containing a regular expression pattern that matches BIDS filenames
+containing the specified entities in order, allowing intermediate unspecified fields.
 }
 \description{
-This helper interprets a whitespace-delimited string of BIDS key:value pairs
-(e.g., \code{"desc:preproc task:ridl suffix:bold"}) and converts it into a
-regular expression matching filenames containing those entities.  If the
-input begins with \code{"regex:"}, the remainder of the string is returned
-unchanged, allowing explicit regular expressions to be supplied.
+This function constructs a regular expression to match BIDS-compatible filenames
+based on a set of entity-value pairs. The resulting pattern allows for intermediate
+unspecified entities between matched ones and ensures correct ordering based on
+the BIDS specification. It supports both full entity names and their common abbreviations
+(e.g., \code{sub}, \code{ses}, \code{task}, \code{desc}, etc.).
+}
+\details{
+\itemize{
+\item If no \code{suffix} is provided, the regex will match any suffix (e.g., \code{"bold"}, \code{"T1w"}, etc.).
+\item If no \code{ext} is provided and \code{add_niigz_ext = TRUE}, the pattern will match \code{.nii} or \code{.nii.gz}.
+\item Unescaped periods in user-supplied extensions are automatically escaped to avoid unintended matches.
+\item Intermediate fields (e.g., \verb{_acq-lowres_}) are allowed between specified components using the \verb{(_[^_]+)*_} pattern.
+}
+}
+\examples{
+\dontrun{
+  # Match a bold preprocessed run for subject 01 with any other intermediate fields allowed
+  construct_bids_regex("sub:01 task:rest desc:preproc suffix:bold")
+
+  # Match any file that ends in .nii or .nii.gz
+  construct_bids_regex("suffix:bold")
+
+  # Use an explicit regex pattern
+  construct_bids_regex("regex:^sub-[0-9]+_task-rest_.*\\\\.nii\\\\.gz$")
+}
+
 }
 \keyword{internal}
