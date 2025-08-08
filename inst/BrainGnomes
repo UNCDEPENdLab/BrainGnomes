@@ -24,12 +24,16 @@ cli_setup <- function(opts) {
   if (!is.null(project_name)) scfg$metadata$project_name <- project_name
   if (!is.null(project_dir)) scfg$metadata$project_directory <- project_dir
   class(scfg) <- "bg_project_cfg"
-  BrainGnomes::setup_project(scfg)
+  scfg <- BrainGnomes::setup_project(scfg)
+  cat(
+    "Saved project configuration to:",
+    file.path(scfg$metadata$project_directory, "project_config.yaml"), "\n"
+  )
 }
 
 cli_edit <- function(opts) {
   if (length(opts) < 1) stop("edit_project requires a project directory or YAML file")
-  BrainGnomes::edit_project(opts[1])
+  scfg <- BrainGnomes::edit_project(opts[1])
 }
 
 cli_run <- function(opts) {
@@ -44,7 +48,7 @@ cli_run <- function(opts) {
   if (!is.null(cli_args$debug)) debug <- isTRUE(cli_args$debug) || is.na(cli_args$debug)
   if (!is.null(cli_args$force)) force <- isTRUE(cli_args$force) || is.na(cli_args$force)
   scfg <- BrainGnomes::load_project(input)
-  BrainGnomes::cli_project(scfg, steps = steps, subject_filter = subject_filter,
+  ret <- BrainGnomes::run_project(scfg, steps = steps, subject_filter = subject_filter,
     postprocess_streams = postprocess_streams, debug = debug, force = force)
 }
 

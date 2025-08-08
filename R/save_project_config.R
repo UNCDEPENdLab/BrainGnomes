@@ -35,11 +35,7 @@ save_project_config <- function(scfg, file = NULL) {
       }
     }
 
-    overwrite <- if (interactive()) {
-      prompt_input(instruct = "Overwrite existing project_config.yaml?", type = "flag")
-    } else {
-      FALSE
-    }
+    overwrite <- prompt_input(instruct = "Overwrite existing project_config.yaml?", type = "flag")
   }
 
   if (overwrite) {

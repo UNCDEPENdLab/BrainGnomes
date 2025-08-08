@@ -109,7 +109,7 @@ SEXP getline(std::string prompt) {
       
       if (ch == 27 || ch == EOF) {  // ESC or EOF
         Rcpp::Rcout << std::endl;
-        return R_NilValue;
+        return Rcpp::wrap(""); // return empty string on esc
       } else if (ch == '\n' || ch == '\r') {
         break;
       } else if (ch == 127 || ch == 8) {  // Backspace
@@ -124,7 +124,7 @@ SEXP getline(std::string prompt) {
     }
   } catch (...) {
     Rcpp::Rcout << std::endl;
-    return R_NilValue;
+    return R_NilValue; // only null on some sort of failure
   }
   
   Rcpp::Rcout << std::endl; // make sure a newline is output prior to return
