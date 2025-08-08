@@ -142,7 +142,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // select_list_safe
-Rcpp::RObject select_list_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title, bool multiple);
+Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title, bool multiple);
 RcppExport SEXP _BrainGnomes_select_list_safe(SEXP choicesSEXP, SEXP titleSEXP, SEXP multipleSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;

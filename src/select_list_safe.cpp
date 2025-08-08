@@ -29,7 +29,7 @@
 //' @keywords internal
 
 // [[Rcpp::export]]
-Rcpp::RObject select_list_safe(Rcpp::CharacterVector choices,
+Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
                                Rcpp::Nullable<std::string> title = R_NilValue,
                                bool multiple = false) {
   if (choices.size() == 0) {
@@ -102,13 +102,9 @@ Rcpp::RObject select_list_safe(Rcpp::CharacterVector choices,
     Rcpp::Rcout << "Selection: " << std::flush;
   }
   
-  if (!multiple) {
-    return Rcpp::wrap(std::string(choices[indices[0]]));
-  }
+  // convert to IntegerVector to allow subsetting of named choices input
+  Rcpp::IntegerVector r_indices(indices.begin(), indices.end());
+  if (!multiple) r_indices = r_indices[0]; // only return the first selection
   
-  for (int idx : indices) {
-    selected.push_back(Rcpp::as<std::string>(choices[idx]));
-  }
-  
-  return Rcpp::wrap(selected);
+  return choices[r_indices];
 }
