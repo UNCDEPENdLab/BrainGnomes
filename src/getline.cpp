@@ -2,7 +2,6 @@
 #include <iostream>
 #include <string>
 
-
 #ifdef _WIN32
   // Windows does not support termios or raw mode input
   #define POSIX_TERMINAL_SUPPORT 0
@@ -11,10 +10,6 @@
   #include <termios.h>   // terminal control
   #define POSIX_TERMINAL_SUPPORT 1
 #endif
-
-#include <unistd.h>
-#include <termios.h>   
-
 
 // RAII guard for restoring terminal settings
 #if POSIX_TERMINAL_SUPPORT
