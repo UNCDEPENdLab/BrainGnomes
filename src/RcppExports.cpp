@@ -46,6 +46,17 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// getline
+SEXP getline(std::string prompt);
+RcppExport SEXP _BrainGnomes_getline(SEXP promptSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< std::string >::type prompt(promptSEXP);
+    rcpp_result_gen = Rcpp::wrap(getline(prompt));
+    return rcpp_result_gen;
+END_RCPP
+}
 // image_quantile
 NumericVector image_quantile(std::string in_file, Nullable<std::string> brain_mask, NumericVector quantiles, bool exclude_zero);
 RcppExport SEXP _BrainGnomes_image_quantile(SEXP in_fileSEXP, SEXP brain_maskSEXP, SEXP quantilesSEXP, SEXP exclude_zeroSEXP) {
@@ -122,6 +133,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
     {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 9},
+    {"_BrainGnomes_getline", (DL_FUNC) &_BrainGnomes_getline, 1},
     {"_BrainGnomes_image_quantile", (DL_FUNC) &_BrainGnomes_image_quantile, 4},
     {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 8},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},

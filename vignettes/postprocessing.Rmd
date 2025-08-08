@@ -85,7 +85,7 @@ desc:preproc task:ridl suffix:bold
 ```
 
 selects any file containing `task-ridl` and `desc-preproc` with a `bold`
-suffix, producing `.*_task-ridl.*_desc-preproc_bold.nii(.gz)?$`.
+suffix, producing `".*task-ridl(_[^_]+)*_desc-preproc(_[^_]+)*_bold\\.nii(\\.gz)?$"`.
 
 To provide a custom regular expression, prefix it with `regex:`:
 

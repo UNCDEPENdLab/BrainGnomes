@@ -139,22 +139,23 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 
 
 # function that allows line input in interactive session or Rscript with tty
-getline <- function(prompt = "") {
-  if (interactive()) {
-    out <- readline(prompt)
-  } else if (base::isatty(stdin())) {
-    cat(prompt)
-    out <- tryCatch(
-      scan(file = "stdin", what = "", nmax = 1, quiet = TRUE, sep = "\n", blank.lines.skip = FALSE),
-      error = function(e) ""
-    )
-    if (length(out) == 0) return("")
-  } else {
-    stop("getline requires an interactive session or a tty")
-  }
-  
-  return(out)
-}
+# this doesn't work as expected in the Rscript context -- shifted to Rcpp implementation
+# getline <- function(prompt = "") {
+#   if (interactive()) {
+#     out <- readline(prompt)
+#   } else if (base::isatty(stdin())) {
+#     cat(prompt)
+#     out <- tryCatch(
+#       scan(file = "stdin", what = "", nmax = 1, quiet = TRUE, sep = "\n", blank.lines.skip = FALSE),
+#       error = function(e) ""
+#     )
+#     if (length(out) == 0) return("")
+#   } else {
+#     stop("getline requires an interactive session or a tty")
+#   }
+#   
+#   return(out)
+# }
 
 #' Obtain user input from the console
 #' @param prompt The character string to display before the user input prompt (e.g., `"Enter location"`).

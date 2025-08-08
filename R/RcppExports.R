@@ -60,6 +60,41 @@ butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE,
     .Call(`_BrainGnomes_butterworth_filter_cpp`, infile, b, a, outfile, internal, padtype, padlen, use_zi, demean)
 }
 
+#' Read a Line of Input from the User in Both Interactive and Non-Interactive Sessions
+#'
+#' Provides a safe and portable way to prompt the user for input from the terminal,
+#' working seamlessly in both interactive R sessions and non-interactive `Rscript`
+#' sessions (when connected to a TTY).
+#'
+#' In an interactive session (e.g., RStudio or R console), this function delegates
+#' to base R's `readline()`. In non-interactive contexts where a TTY is available,
+#' it switches the terminal to non-canonical mode and performs low-level character-by-character
+#' input handling with support for echoing, backspace editing, and cancellation
+#' via Escape or EOF. Ctrl+C will terminate the process as usual.
+#'
+#' @param prompt A character string to display as the input prompt.
+#'
+#' @return A character string with the user's input, or `NULL` (`R_NilValue`) if input is cancelled
+#' via Escape (`ESC`, ASCII 27) or EOF (`Ctrl+D` or equivalent).
+#'
+#' @details
+#' - Supports visible typing and live editing with backspace.
+#' - Returns early with `NULL` if the user presses Escape or EOF.
+#' - Uses raw terminal input in non-interactive mode; requires that stdin is a TTY.
+#' - Does **not** intercept `Ctrl+C`; this will terminate the process as normal.
+#'
+#' @examples
+#' \dontrun{
+#'   # In Rscript or R console
+#'   input <- readline_safe("Enter your name: ")
+#'   if (!is.null(input)) cat("Hello,", input, "!\n")
+#' }
+#'
+#' @export
+getline <- function(prompt) {
+    .Call(`_BrainGnomes_getline`, prompt)
+}
+
 #' Compute Quantiles from a 3D or 4D NIfTI Image
 #'
 #' Computes one or more quantiles from a 3D or 4D NIfTI image. Optionally applies a 3D brain mask
