@@ -141,6 +141,19 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// select_list_safe
+Rcpp::RObject select_list_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title, bool multiple);
+RcppExport SEXP _BrainGnomes_select_list_safe(SEXP choicesSEXP, SEXP titleSEXP, SEXP multipleSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::CharacterVector >::type choices(choicesSEXP);
+    Rcpp::traits::input_parameter< Rcpp::Nullable<std::string> >::type title(titleSEXP);
+    Rcpp::traits::input_parameter< bool >::type multiple(multipleSEXP);
+    rcpp_result_gen = Rcpp::wrap(select_list_safe(choices, title, multiple));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
@@ -152,6 +165,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},
     {"_BrainGnomes_remove_nifti_volumes", (DL_FUNC) &_BrainGnomes_remove_nifti_volumes, 3},
+    {"_BrainGnomes_select_list_safe", (DL_FUNC) &_BrainGnomes_select_list_safe, 3},
     {NULL, NULL, 0}
 };
 

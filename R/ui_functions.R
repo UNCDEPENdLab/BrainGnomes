@@ -416,14 +416,14 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
     }
 
     cat("\nWhat would you like to do?\n")
-    choice <- menu(c("Add a space", "Delete a space", "Finish and return"), title = "Modify output spaces:")
+    choice <- menu_safe(c("Add a space", "Delete a space", "Finish and return"), title = "Modify output spaces:")
 
     if (choice == 1) {
       # Add a space
-      type_choice <- menu(c("Template space", "Other space (e.g., T1w, fsaverage)"), title = "Add space type:")
+      type_choice <- menu_safe(c("Template space", "Other space (e.g., T1w, fsaverage)"), title = "Add space type:")
       if (type_choice == 1) {
         # Select a template
-        selected_template <- utils::select.list(templates_available, multiple = FALSE, title = "Choose a template")
+        selected_template <- select_list_safe(templates_available, multiple = FALSE, title = "Choose a template")
         if (selected_template != "") {
           res_input <- getline(paste0("Enter resolution index for ", selected_template, " (or press ENTER to skip): "))
           space_string <- if (res_input == "") {
@@ -434,7 +434,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
           current_spaces <- unique(c(current_spaces, space_string))
         }
       } else if (type_choice == 2) {
-        selected_additional <- utils::select.list(additional_spaces, multiple = TRUE, title = "Choose additional space(s)")
+        selected_additional <- select_list_safe(additional_spaces, multiple = TRUE, title = "Choose additional space(s)")
         current_spaces <- unique(c(current_spaces, selected_additional))
       }
     } else if (choice == 2) {
@@ -442,7 +442,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
       if (length(current_spaces) == 0) {
         cat("No spaces to delete.\n")
       } else {
-        del_choice <- utils::select.list(current_spaces, multiple = TRUE, title = "Select space(s) to remove:")
+        del_choice <- select_list_safe(current_spaces, multiple = TRUE, title = "Select space(s) to remove:")
         current_spaces <- setdiff(current_spaces, del_choice)
       }
     } else if (choice == 3) {

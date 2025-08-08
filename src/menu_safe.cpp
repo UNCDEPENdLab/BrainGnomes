@@ -15,7 +15,8 @@
 //'
 //' The menu allows selection of an option by entering the corresponding number,
 //' with `0` used to cancel the selection (consistent with `menu()` behavior).
-//'
+//' 
+//' @name menu_safe
 //' @param choices A character vector of menu options to present to the user.
 //' @param title Optional character string to display as the menu title.
 //' @return An integer corresponding to the selected menu item (1-based index), or 0 if cancelled.

@@ -17,7 +17,7 @@ if (!requireNamespace("BrainGnomes", quietly = TRUE)) {
   stop("BrainGnomes package is required to run this script.")
 }
 
-run_setup <- function(opts) {
+cli_setup <- function(opts) {
   project_name <- if (length(opts) >= 1) opts[1] else NULL
   project_dir  <- if (length(opts) >= 2) opts[2] else NULL
   scfg <- list(metadata = list())
@@ -27,13 +27,13 @@ run_setup <- function(opts) {
   BrainGnomes::setup_project(scfg)
 }
 
-run_edit <- function(opts) {
+cli_edit <- function(opts) {
   if (length(opts) < 1) stop("edit_project requires a project directory or YAML file")
   BrainGnomes::edit_project(opts[1])
 }
 
-run_run <- function(opts) {
-  if (length(opts) < 1) stop("run_project requires a project directory or YAML file")
+cli_run <- function(opts) {
+  if (length(opts) < 1) stop("cli_project requires a project directory or YAML file")
   input <- opts[1]
   cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
   steps <- cli_args$steps
@@ -44,13 +44,13 @@ run_run <- function(opts) {
   if (!is.null(cli_args$debug)) debug <- isTRUE(cli_args$debug) || is.na(cli_args$debug)
   if (!is.null(cli_args$force)) force <- isTRUE(cli_args$force) || is.na(cli_args$force)
   scfg <- BrainGnomes::load_project(input)
-  BrainGnomes::run_project(scfg, steps = steps, subject_filter = subject_filter,
+  BrainGnomes::cli_project(scfg, steps = steps, subject_filter = subject_filter,
     postprocess_streams = postprocess_streams, debug = debug, force = force)
 }
 
 switch(cmd,
-  setup_project = run_setup(opts),
-  edit_project = run_edit(opts),
-  run_project = run_run(opts),
+  setup_project = cli_setup(opts),
+  edit_project = cli_edit(opts),
+  cli_project = cli_run(opts),
   stop(paste("Unknown command:", cmd))
 )

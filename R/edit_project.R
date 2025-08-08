@@ -55,7 +55,7 @@ edit_project <- function(input = NULL) {
 
   # Top-level menu loop
   repeat {
-    choice <- select.list(c(names(config_map), "Postprocessing", "Job settings", "Quit"), graphics = FALSE,
+    choice <- select_list_safe(c(names(config_map), "Postprocessing", "Job settings", "Quit"),
                           title = "Select a configuration area to edit:")
 
     if (choice == "Quit" || choice == "") {
@@ -67,7 +67,7 @@ edit_project <- function(input = NULL) {
       scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
     } else if (choice == "Job settings") {
       # Job settings logic
-      job <- utils::select.list(job_targets, title = "Select which job to configure:")
+      job <- select_list_safe(job_targets, title = "Select which job to configure:")
       if (length(job) == 0 || job == "") next
 
       if (job == "postprocess") {
@@ -77,7 +77,7 @@ edit_project <- function(input = NULL) {
           next
         }
 
-        stream <- if (length(streams) == 1L) streams else utils::select.list(streams, title = "Select postprocess stream:")
+        stream <- if (length(streams) == 1L) streams else select_list_safe(streams, title = "Select postprocess stream:")
         if (length(stream) == 0 || stream == "") next
 
         job_field_display <- sapply(job_fields, function(fld) {
@@ -85,7 +85,7 @@ edit_project <- function(input = NULL) {
           sprintf("%s [ %s ]", fld, show_val(val))
         })
 
-        selected_job_fields <- utils::select.list(job_field_display,
+        selected_job_fields <- select_list_safe(job_field_display,
           multiple = TRUE,
           title = glue::glue("Select fields to edit for postprocess stream '{stream}':")
         )
@@ -103,7 +103,7 @@ edit_project <- function(input = NULL) {
           sprintf("%s [ %s ]", fld, show_val(val))
         })
 
-        selected_job_fields <- utils::select.list(job_field_display,
+        selected_job_fields <- select_list_safe(job_field_display,
           multiple = TRUE,
           title = glue::glue("Select fields to edit for job '{job}':")
         )
@@ -130,7 +130,7 @@ edit_project <- function(input = NULL) {
         sprintf("%s [ %s ]", fld, show_val(val))
       })
 
-      selected <- utils::select.list(field_display,
+      selected <- select_list_safe(field_display,
         multiple = TRUE,
         title = glue::glue("Select fields to edit in {choice}:")
       )

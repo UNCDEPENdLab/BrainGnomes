@@ -192,7 +192,8 @@ lmfit_residuals_4d <- function(infile, X, include_rows, add_intercept = TRUE, ou
 #'
 #' The menu allows selection of an option by entering the corresponding number,
 #' with `0` used to cancel the selection (consistent with `menu()` behavior).
-#'
+#' 
+#' @name menu_safe
 #' @param choices A character vector of menu options to present to the user.
 #' @param title Optional character string to display as the menu title.
 #' @return An integer corresponding to the selected menu item (1-based index), or 0 if cancelled.
@@ -331,5 +332,33 @@ NULL
 
 remove_nifti_volumes <- function(infile, remove_tpts, outfile) {
     invisible(.Call(`_BrainGnomes_remove_nifti_volumes`, infile, remove_tpts, outfile))
+}
+
+#' A Safe Version of `select.list()` for Interactive and TTY Use
+#'
+#' Provides a cross-platform wrapper for R's [`select.list()`] that works both
+#' in interactive R sessions and in non-interactive `Rscript` sessions at a terminal (TTY).
+#' If running interactively, it calls `utils::select.list()`. If running in a non-interactive
+#' terminal, it displays a textual menu and captures numeric input from the user.
+#'
+#' This function is especially useful in command-line scripts that need user input
+#' in a controlled and fallback-compatible way.
+#' 
+#' @name select_list_safe
+#' @param choices A character vector of choices to present.
+#' @param title Optional title string to display above the menu (like in `select.list()`).
+#' @param multiple Logical; if `TRUE`, the user may select multiple items by entering space-separated numbers.
+#' @return A character string or character vector of selections. Returns an empty string (`""`) if the user cancels
+#'   by entering `0`. If `multiple = TRUE`, a character vector of selected items is returned.
+#' @examples
+#' \dontrun{
+#'   select_list_safe(c("Apples", "Oranges", "Bananas"), title = "Select fruit:")
+#' }
+#' @seealso [utils::select.list()]
+#' @keywords internal
+NULL
+
+select_list_safe <- function(choices, title = NULL, multiple = FALSE) {
+    .Call(`_BrainGnomes_select_list_safe`, choices, title, multiple)
 }
 

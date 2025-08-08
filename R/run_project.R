@@ -124,7 +124,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       if (length(all_streams) == 1L) {
         postprocess_streams <- all_streams # if we have only one stream, run it
       } else {
-        postprocess_streams <- select.list(
+        postprocess_streams <- select_list_safe(
           all_streams,
           multiple = TRUE,
           title = "Which postprocessing streams should be run? Press ENTER to select all."

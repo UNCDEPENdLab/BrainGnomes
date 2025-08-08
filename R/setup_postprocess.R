@@ -49,7 +49,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       cat("\n")
     }
 
-    choice <- menu(c("Add a stream", "Edit a stream", "Delete a stream",
+    choice <- menu_safe(c("Add a stream", "Edit a stream", "Delete a stream",
                      "Show stream settings", "Finish"),
                    title = "Modify postprocessing streams:")
 
@@ -61,14 +61,14 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
         next
       }
       # if we only have one stream, then default to editing it.
-      sel <- if (length(streams) == 1L) streams else utils::select.list(streams, multiple = FALSE, title = "Select stream to edit")
+      sel <- if (length(streams) == 1L) streams else select_list_safe(streams, multiple = FALSE, title = "Select stream to edit")
       if (sel == "") next
       rel_fields <- postprocess_field_list()
       field_display <- sapply(rel_fields, function(fld) {
         val <- get_nested_values(scfg, paste0("postprocess/", sel, "/", fld))
         sprintf("%s [ %s ]", fld, show_val(val))
       })
-      selected <- utils::select.list(field_display,
+      selected <- select_list_safe(field_display,
         multiple = TRUE,
         title = sprintf("Select fields to edit in %s:", sel)
       )
@@ -85,7 +85,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
         cat("No streams to delete.\n")
         next
       }
-      sel <- utils::select.list(streams, multiple = TRUE, title = "Select stream(s) to delete")
+      sel <- select_list_safe(streams, multiple = TRUE, title = "Select stream(s) to delete")
       if (length(sel) == 0) next
       scfg$postprocess[sel] <- NULL
     } else if (choice == 4) {
