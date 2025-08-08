@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5-1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5-2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -140,7 +140,7 @@ runtime. For example:</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>desc<span class="sc">:</span>preproc task<span class="sc">:</span>ridl suffix<span class="sc">:</span>bold</span></code></pre></div>
 <p>selects any file containing <code>task-ridl</code> and
 <code>desc-preproc</code> with a <code>bold</code> suffix, producing
-<code>.*_task-ridl.*_desc-preproc_bold.nii(.gz)?$</code>.</p>
+<code>".*task-ridl(_[^_]+)*_desc-preproc(_[^_]+)*_bold\\.nii(\\.gz)?$"</code>.</p>
 <p>To provide a custom regular expression, prefix it with
 <code>regex:</code>:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>regex<span class="sc">:</span> .<span class="sc">*</span>task<span class="sc">-</span>rest.<span class="sc">*</span>preproc.<span class="sc">*</span>\.nii\.gz<span class="sc">$</span></span></code></pre></div>
