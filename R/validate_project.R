@@ -46,7 +46,8 @@ validate_job_settings <- function(scfg, job_name = NULL) {
 validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
   # BIDS conversion validation -- only relevant if enabled
   if (!checkmate::test_flag(scfg$bids_conversion$enable)) {
-    attr(scfg, gaps) <- "bids_conversion/enable"
+    if (!quiet) message("Invalid bids_conversion/enable flag. You will be asked for this.")
+    attr(scfg, "gaps") <- "bids_conversion/enable"
     scfg$bids_conversion$enable <- NULL
     return(scfg)
   }
@@ -136,22 +137,40 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, "metadata/project_name")
   }
 
-  required_dirs <- c(
-    "metadata/project_directory", "metadata/fmriprep_directory", "metadata/mriqc_directory",
-    "metadata/log_directory", "metadata/scratch_directory", "metadata/templateflow_home"
+  # required directories not tied to a specific step
+  core_dirs <- c(
+    "metadata/project_directory", "metadata/log_directory",
+    "metadata/scratch_directory", "metadata/templateflow_home"
   )
-  for (rr in required_dirs) {
+  for (rr in core_dirs) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
       message("Config file is missing valid directory for ", rr, ".")
       gaps <- c(gaps, rr)
     }
   }
 
-  required_files <- c("compute_environment/fmriprep_container", "fmriprep/fs_license_file")
-  for (rr in required_files) {
-    if (!checkmate::test_file_exists(get_nested_values(scfg, rr))) {
-      message("Config file is missing valid ", rr, ". You will be asked for this.")
-      gaps <- c(gaps, rr)
+  # step-specific directories
+  if (any(isTRUE(c(scfg$fmriprep$enable, scfg$aroma$enable, scfg$postprocess$enable)))) {
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/fmriprep_directory"))) {
+      message("Config file is missing valid directory for metadata/fmriprep_directory.")
+      gaps <- c(gaps, "metadata/fmriprep_directory")
+    }
+  }
+
+  if (isTRUE(scfg$mriqc$enable)) {
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/mriqc_directory"))) {
+      message("Config file is missing valid directory for metadata/mriqc_directory.")
+      gaps <- c(gaps, "metadata/mriqc_directory")
+    }
+  }
+
+  # step-specific required files
+  if (isTRUE(scfg$fmriprep$enable)) {
+    for (rr in c("compute_environment/fmriprep_container", "fmriprep/fs_license_file")) {
+      if (!checkmate::test_file_exists(get_nested_values(scfg, rr))) {
+        message("Config file is missing valid ", rr, ". You will be asked for this.")
+        gaps <- c(gaps, rr)
+      }
     }
   }
 
@@ -160,18 +179,6 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     message("Cannot find bids_validator at ", scfg$compute_environment$bids_validator, ". You will be asked for this.")
     gaps <- c(gaps, "compute_environment/bids_validator")
     scfg$compute_environment$bids_validator <- NULL
-  }
-
-  if (!is.null(scfg$compute_environment$mriqc_container) && !checkmate::test_file_exists(scfg$compute_environment$mriqc_container)) {
-    message("Cannot find MRIQC container at ", scfg$compute_environment$mriqc_container, ". You will be asked for this.")
-    gaps <- c(gaps, "compute_environment/mriqc_container")
-    scfg$compute_environment$mriqc_container <- NULL
-  }
-
-  if (!is.null(scfg$compute_environment$aroma_container) && !checkmate::test_file_exists(scfg$compute_environment$aroma_container)) {
-    message("Cannot find AROMA container at ", scfg$compute_environment$aroma_container, ". You will be asked for this.")
-    gaps <- c(gaps, "compute_environment/aroma_container")
-    scfg$compute_environment$aroma_container <- NULL
   }
 
   if (!checkmate::test_subset(scfg$compute_environment$scheduler, c("slurm", "torque"), empty.ok = FALSE)) {
@@ -195,10 +202,18 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, "compute_environment/bids_validator")
   }
 
-  # validate job settings
+  # validate job settings only for enabled steps
   for (job in c("fmriprep", "mriqc", "aroma")) {
-    scfg <- validate_job_settings(scfg, job)
-    gaps <- c(gaps, attr(scfg, "gaps"))
+    if (!checkmate::test_flag(scfg[[job]]$enable)) {
+      message("Invalid enable flag in ", job, ". You will be asked for this.")
+      gaps <- c(gaps, paste0(job, "/enable"))
+      scfg[[job]]$enable <- NULL
+      next
+    }
+    if (isTRUE(scfg[[job]]$enable)) {
+      scfg <- validate_job_settings(scfg, job)
+      gaps <- c(gaps, attr(scfg, "gaps"))
+    }
   }
 
   # validate bids conversion
@@ -207,9 +222,15 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 
 
   # Postprocessing settings validation (function in setup_postproc.R)
-  postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)
-  scfg$postprocess <- postprocess_result$postprocess
-  gaps <- c(gaps, postprocess_result$gaps)
+  if (!checkmate::test_flag(scfg$postprocess$enable)) {
+    message("Invalid postprocess/enable flag. You will be asked for this.")
+    gaps <- c(gaps, "postprocess/enable")
+    scfg$postprocess$enable <- NULL
+  } else if (isTRUE(scfg$postprocess$enable)) {
+    postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)
+    scfg$postprocess <- postprocess_result$postprocess
+    gaps <- c(gaps, postprocess_result$gaps)
+  }
 
   attr(scfg, "gaps") <- gaps
 
