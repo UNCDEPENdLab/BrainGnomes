@@ -150,7 +150,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   # step-specific directories
-  if (any(isTRUE(c(scfg$fmriprep$enable, scfg$aroma$enable, scfg$postprocess$enable)))) {
+  if (any(scfg$fmriprep$enable, scfg$aroma$enable, scfg$postprocess$enable, na.rm = TRUE)) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/fmriprep_directory"))) {
       message("Config file is missing valid directory for metadata/fmriprep_directory.")
       gaps <- c(gaps, "metadata/fmriprep_directory")
@@ -161,6 +161,11 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/mriqc_directory"))) {
       message("Config file is missing valid directory for metadata/mriqc_directory.")
       gaps <- c(gaps, "metadata/mriqc_directory")
+    }
+
+    if (!checkmate::test_file_exists(scfg$compute_environment$mriqc_container)) {
+      message("MRIQC is enabled but mriqc_container is missing. You will be asked for this.")
+      gaps <- c(gaps, "compute_environment/mriqc_container")
     }
   }
 
@@ -185,11 +190,6 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     message("Invalid scheduler setting. You will be asked for this.")
     gaps <- c(gaps, "compute_environment/scheduler")
     scfg$compute_environment$scheduler <- NULL
-  }
-
-  if (isTRUE(scfg$mriqc$enable) && !checkmate::test_file_exists(scfg$compute_environment$mriqc_container)) {
-    message("MRIQC is enabled but mriqc_container is missing. You will be asked for this.")
-    gaps <- c(gaps, "compute_environment/mriqc_container")
   }
 
   if (isTRUE(scfg$aroma$enable) && !checkmate::test_file_exists(scfg$compute_environment$aroma_container)) {
