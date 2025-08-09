@@ -39,9 +39,83 @@ validate_job_settings <- function(scfg, job_name = NULL) {
   return(scfg)
 }
 
+#' Validate the structure of a project configuration object
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
+#' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
+#' @keywords internal
+validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
+  # BIDS conversion validation -- only relevant if enabled
+  if (!checkmate::test_flag(scfg$bids_conversion$enable)) {
+    attr(scfg, gaps) <- "bids_conversion/enable"
+    scfg$bids_conversion$enable <- NULL
+    return(scfg)
+  }
 
-#' Validate the structure of a study configuration object
-#' @param scfg a study configuration file as produced by `load_project` or `setup_project`
+  if (isFALSE(scfg$bids_conversion$enable)) return(scfg) # no validation
+
+  gaps <- c()
+
+  scfg <- validate_job_settings(scfg, "bids_conversion")
+  gaps <- c(gaps, attr(scfg, "gaps"))
+
+  for (rr in c("metadata/dicom_directory", "metadata/bids_directory")) {
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
+      message("Config file is missing valid directory for ", rr, ".")
+      gaps <- c(gaps, rr)
+    }
+  }
+
+  for (rr in c("compute_environment/heudiconv_container", "bids_conversion/heuristic_file")) {
+    if (!checkmate::test_file_exists(get_nested_values(scfg, rr))) {
+      message("Config file is missing valid ", rr, ". You will be asked for this.")
+      gaps <- c(gaps, rr)
+    }
+  }
+
+  # validate BIDS conversion sub_regex
+  if (!checkmate::test_string(scfg$bids_conversion$sub_regex)) {
+    message("Missing sub_regex in $bids_conversion You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/sub_regex")
+    scfg$bids_conversion$sub_regex <- NULL
+  }
+
+  # validate bids_conversion sub_id_match
+  if (!checkmate::test_string(scfg$bids_conversion$sub_id_match)) {
+    message("Missing sub_id_match in $bids_conversion You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/sub_id_match")
+    scfg$bids_conversion$sub_id_match <- NULL
+  }
+
+  if (!checkmate::test_string(scfg$bids_conversion$ses_regex, na.ok = TRUE)) {
+    message("Invalid ses_regex in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/ses_regex")
+    scfg$bids_conversion$ses_regex <- NULL
+  }
+
+  if (!checkmate::test_string(scfg$bids_conversion$ses_id_match, na.ok = TRUE)) {
+    message("Invalid ses_id_match in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/ses_id_match")
+    scfg$bids_conversion$ses_id_match <- NULL
+  }
+
+  if (!checkmate::test_flag(scfg$bids_conversion$overwrite)) {
+    message("Invalid overwrite flag in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/overwrite")
+    scfg$bids_conversion$overwrite <- NULL
+  }
+
+  if (!checkmate::test_flag(scfg$bids_conversion$clear_cache)) {
+    message("Invalid clear_cache flag in $bids_conversion. You will be asked for this.")
+    gaps <- c(gaps, "bids_conversion/clear_cache")
+    scfg$bids_conversion$clear_cache <- NULL
+  }
+
+  attr(scfg, "gaps") <- gaps
+  return(scfg)
+}
+
+#' Validate the structure of a project configuration object
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
 validate_project <- function(scfg = list(), quiet = FALSE) {
@@ -63,9 +137,8 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   required_dirs <- c(
-    "metadata/project_directory", "metadata/dicom_directory", "metadata/bids_directory",
-    "metadata/fmriprep_directory", "metadata/mriqc_directory", "metadata/log_directory",
-    "metadata/scratch_directory", "metadata/templateflow_home"
+    "metadata/project_directory", "metadata/fmriprep_directory", "metadata/mriqc_directory",
+    "metadata/log_directory", "metadata/scratch_directory", "metadata/templateflow_home"
   )
   for (rr in required_dirs) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
@@ -74,7 +147,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
-  required_files <- c("compute_environment/fmriprep_container", "compute_environment/heudiconv_container", "bids_conversion/heuristic_file", "fmriprep/fs_license_file")
+  required_files <- c("compute_environment/fmriprep_container", "fmriprep/fs_license_file")
   for (rr in required_files) {
     if (!checkmate::test_file_exists(get_nested_values(scfg, rr))) {
       message("Config file is missing valid ", rr, ". You will be asked for this.")
@@ -123,48 +196,15 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   # validate job settings
-  for (job in c("bids_conversion", "fmriprep", "mriqc", "aroma")) {
+  for (job in c("fmriprep", "mriqc", "aroma")) {
     scfg <- validate_job_settings(scfg, job)
     gaps <- c(gaps, attr(scfg, "gaps"))
   }
 
-  # validate BIDS conversion sub_regex
-  if (!checkmate::test_string(scfg$bids_conversion$sub_regex)) {
-    message("Missing sub_regex in $bids_conversion You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/sub_regex")
-    scfg$bids_conversion$sub_regex <- NULL
-  }
+  # validate bids conversion
+  scfg <- validate_bids_conversion(scfg, quiet = quiet)
+  gaps <- c(gaps, attr(scfg, "gaps"))
 
-  # validate bids_conversion sub_id_match
-  if (!checkmate::test_string(scfg$bids_conversion$sub_id_match)) {
-    message("Missing sub_id_match in $bids_conversion You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/sub_id_match")
-    scfg$bids_conversion$sub_id_match <- NULL
-  }
-
-  if (!checkmate::test_string(scfg$bids_conversion$ses_regex, na.ok = TRUE)) {
-    message("Invalid ses_regex in $bids_conversion. You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/ses_regex")
-    scfg$bids_conversion$ses_regex <- NULL
-  }
-
-  if (!checkmate::test_string(scfg$bids_conversion$ses_id_match, na.ok = TRUE)) {
-    message("Invalid ses_id_match in $bids_conversion. You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/ses_id_match")
-    scfg$bids_conversion$ses_id_match <- NULL
-  }
-
-  if (!checkmate::test_flag(scfg$bids_conversion$overwrite)) {
-    message("Invalid overwrite flag in $bids_conversion. You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/overwrite")
-    scfg$bids_conversion$overwrite <- NULL
-  }
-
-  if (!checkmate::test_flag(scfg$bids_conversion$clear_cache)) {
-    message("Invalid clear_cache flag in $bids_conversion. You will be asked for this.")
-    gaps <- c(gaps, "bids_conversion/clear_cache")
-    scfg$bids_conversion$clear_cache <- NULL
-  }
 
   # Postprocessing settings validation (function in setup_postproc.R)
   postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)

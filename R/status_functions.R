@@ -17,7 +17,7 @@ parse_complete_time <- function(file) {
 
 #' Get processing status for a single subject
 #'
-#' @param scfg Study configuration list.
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param sub_id Subject identifier.
 #' @param ses_id Optional session identifier. When `NULL`, all sessions found in the
 #'   subject's directory are returned.
@@ -85,7 +85,7 @@ get_subject_status <- function(scfg, sub_id, ses_id = NULL) {
 
 #' Get processing status for all subjects
 #'
-#' @param scfg Study configuration list.
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @return data.frame with one row per subject/session containing completion status columns.
 #' @export
 #' @importFrom checkmate assert_class

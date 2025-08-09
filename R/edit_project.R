@@ -1,5 +1,5 @@
 
-#' Interactively edit a study configuration by field (field-guided)
+#' Interactively edit a project configuration by field (field-guided)
 #'
 #' Allows the user to interactively browse and edit individual fields within the
 #' configuration object, grouped by domain. Field paths are defined within the function

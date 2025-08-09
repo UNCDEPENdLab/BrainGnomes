@@ -2,7 +2,7 @@
 
 
 #' Get the HPC job script for a given job name
-#' @param scfg A list of configuration settings
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
 #' @return The path to the job script
 #' @importFrom glue glue
@@ -21,7 +21,7 @@ get_job_script <- function(scfg = NULL, job_name) {
   return(script)
 }
 #' Convert scheduler arguments into a scheduler-specific string
-#' @param scfg A list of configuration settings
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
 #' @return A character string of scheduler arguments
 #' @importFrom glue glue
@@ -126,7 +126,7 @@ pretty_arg <- function(x, width = 80) {
 
 
 #' This function returns an lgr object corresponding to logging for a single subject directory
-#' @param scfg The study configuration object
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param sub_id The id of the subject whose logger we wish to access
 #' @return a configured lgr object for logging subject processing messages
 #' @importFrom lgr get_logger_glue
@@ -186,7 +186,7 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #' Determines if the expected output directory and `.complete` marker
 #' are present for a given subject/session and processing step.
 #'
-#' @param scfg Study configuration list
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param sub_id Subject identifier
 #' @param ses_id Optional session identifier
 #' @param step_name Name of the processing step

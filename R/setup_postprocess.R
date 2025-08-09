@@ -4,7 +4,7 @@
 #' Presents options to add, edit, delete, show, or finish editing postprocessing
 #' streams. Used by both `setup_postprocess_streams()` and `edit_project()`.
 #'
-#' @param scfg A study configuration object, as produced by `setup_project()`.
+#' @param scfg A project configuration object, as produced by `setup_project()`.
 #' @param allow_empty Logical indicating whether finishing with zero streams is
 #'   permitted without confirmation.
 #' @return Modified `scfg` with updated postprocessing streams
@@ -118,7 +118,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
 #' The function interactively prompts the user (or selectively prompts based on `fields`)
 #' to specify whether postprocessing should be performed, and if so, how each step should be configured.
 #'
-#' @param scfg A study configuration object, as produced by `setup_project()`.
+#' @param scfg A project configuration object, as produced by `setup_project()`.
 #' @param fields A character vector of field names to prompt for. If `NULL`, all postprocessing fields will be prompted.
 #'
 #' @return A modified version of `scfg` with the `$postprocess` field populated.
@@ -364,7 +364,7 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
 #' Specify the postprocessing steps for a study
 #'
 #' This function determines the sequence of postprocessing steps to be applied after fMRIPrep.
-#' Steps are included based on whether the corresponding `$enable` field is `TRUE` in the study configuration.
+#' Steps are included based on whether the corresponding `$enable` field is `TRUE` in the project configuration.
 #' If the user opts to override the default order, they may manually specify a custom sequence.
 #'
 #' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)

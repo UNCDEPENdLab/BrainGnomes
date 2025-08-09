@@ -1,7 +1,7 @@
-#' Load a study configuration from a file
+#' Load a project configuration from a file
 #' @param input A path to a YAML file, or a project directory containing \code{project_config.yaml}.
 #' @param validate Logical indicating whether to validate the configuration after loading. Default: TRUE
-#' @return A list representing the study configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
+#' @return A list representing the project configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
 #'   the returned object is validated (missing fields may be set to NULL and noted).
 #' @importFrom yaml read_yaml
 #' @export
@@ -20,11 +20,11 @@ load_project <- function(input = NULL, validate = TRUE) {
   return(scfg)
 }
 
-#' summary method for study configuration object
-#' @param object The study configuration object (`bg_project_cfg`) to summarize.
+#' summary method for project configuration object
+#' @param object The project configuration object (`bg_project_cfg`) to summarize.
 #' @param ... additional parameters to summary (not used)
 #' @return Invisibly returns `x` after printing its contents. This function is called 
-#'   for its side effect of printing a formatted summary of the study configuration.
+#'   for its side effect of printing a formatted summary of the project configuration.
 #' @export
 summary.bg_project_cfg <- function(object, ...) {
   pretty_print_list(object, indent=2)
@@ -66,7 +66,7 @@ get_scfg_from_input <- function(input = NULL) {
 #'   a warning. For \code{setup_project} only, this argument may also be
 #'   \code{NULL} to create a new configuration from scratch.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
-#' @return A `bg_project_cfg` list containing the study configuration. New fields are added based on user input,
+#' @return A `bg_project_cfg` list containing the project configuration. New fields are added based on user input,
 #'   and missing entries are filled with defaults. The configuration is written
 #'   to `project_config.yaml` in the project directory unless the user declines
 #'   to overwrite an existing file.
@@ -105,7 +105,7 @@ setup_project <- function(input = NULL, fields = NULL) {
 #' The function is designed to be used during initial study setup, but can also be used later to fill in
 #' missing metadata or revise selected fields. If specific `fields` are provided, only those fields will be prompted.
 #'
-#' @param scfg A study configuration object created by `setup_project()`.
+#' @param scfg A project configuration object created by `setup_project()`.
 #' @param fields A character vector of metadata fields to prompt for (e.g., `"metadata/project_name"`).
 #'   If `NULL`, all missing or unset fields will be prompted.
 #'
@@ -205,9 +205,9 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 #' This function sets up fMRIPrep job configuration, including scheduling and resource parameters,
 #' output specifications, and the location of required files such as the FreeSurfer license.
 #' It prompts the user interactively (or selectively if `fields` is supplied) and modifies the
-#' study configuration list (`scfg`) to include settings for running fMRIPrep.
+#' project configuration list (`scfg`) to include settings for running fMRIPrep.
 #'
-#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all fMRIPrep fields will be prompted for.
 #'
 #' @return A modified version of `scfg` with the `$fmriprep` entry populated.
@@ -296,7 +296,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 }
 
 #' Specify the BIDS validation settings
-#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all BIDS validation fields will be prompted for.
 #' @return A modified version of `scfg` with the `$bids_validation` entry populated.
 #' @keywords internal
@@ -357,7 +357,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 }
 
 #' Specify the MRIQC settings
-#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of fields to be prompted for. If `NULL`, all MRIQC fields will be prompted for.
 #' @return A modified version of `scfg` with the `$mriqc` entry populated.
 #' @keywords internal
@@ -410,7 +410,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
 }
 
 #' Specify the BIDS conversion settings
-#' @param scfg a study configuration object, as produced by `load_project` or `setup_project`
+#' @param scfg a project configuration object, as produced by `load_project` or `setup_project`
 #' @param fields a character vector of fields to be prompted for. If `NULL`, all fields will be prompted for.
 #' @return a modified version of `scfg` with `$bids_conversion` populated
 #' @keywords internal
@@ -570,7 +570,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 #' step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
 #' AROMA-based denoising to BOLD fMRI data using FSL's `fsl_regfilt` or an equivalent wrapper.
 #'
-#' @param scfg A study configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of field names to prompt for. If `NULL`, all fields related to AROMA will be prompted.
 #'
 #' @return A modified version of the `scfg` list with the `$aroma` entry added or updated.
@@ -670,7 +670,7 @@ get_compute_environment_from_file <- function(scfg) {
 }
 
 #' Setup the compute environment for a study
-#' @param scfg a study configuration object, as produced by `load_project` or `setup_project`
+#' @param scfg a project configuration object, as produced by `load_project` or `setup_project`
 #' @return a modified version of `scfg` with `$compute_environment` populated
 #' @keywords internal
 #' @importFrom checkmate assert_list

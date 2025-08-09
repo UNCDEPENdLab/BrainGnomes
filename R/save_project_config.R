@@ -1,4 +1,4 @@
-#' Save a study configuration to YAML
+#' Save a project configuration to YAML
 #'
 #' Writes the configuration to a file named `project_config.yaml` inside
 #' the project's root directory. If a configuration file already exists,

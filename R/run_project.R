@@ -1,6 +1,6 @@
 
 #' Run the processing pipeline
-#' @param scfg A list containing the study configuration.
+#' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
 #'   Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
 #'   If `NULL`, the user will be prompted for which steps to run.
@@ -20,7 +20,7 @@
 #' @export
 #' @examples
 #'   \dontrun{
-#'     # Assuming you have a valid study configuration list named `study_config`
+#'     # Assuming you have a valid project configuration list named `study_config`
 #'     run_project(study_config, prompt = TRUE, force = FALSE)
 #'   }
 #' @importFrom glue glue
