@@ -23,16 +23,56 @@ BrainGnomes is an R package that streamlines the preprocessing and analysis of f
 
 Along the way, we assume you have the required Singularity container images for each tool and a working HPC environment. Additional information about setting up the compute environment is provided in [BrainGnomes Singularity container setup](building_containers.html). This vignette provides example R code snippets, explains expected inputs/outputs, and offers troubleshooting tips for common issues. By the end of demo, a new user should understand how to configure a study and launch the BrainGnomes pipeline from start to finish.
 
-## Things to include here
-
-1. subject filter
-
+This package is designed to run on HPC clusters that use SLURm or TORQUE. It not designed to run on a standard computer.
 
 ## Basic process flow of BrainGnomes
 
 BrainGnomes identifies data for all subjects (and sessions) in your DICOM and BIDS folders, then determines which subjects need to be processed. It processes data by looping over subjects, submitting jobs for each subject and processing step to the HPC scheduler. This ensures that each subject is processed fully (unless a crash occurs).
 
 ![BrainGnomes flow](braingnomes_flow.png){#id .class width=70%}
+
+
+## Running a subset of subject or a subset of processing steps
+
+As detailed below, the `run_project` function submits fMRI processing jobs to the scheduler. Although BrainGnomes
+is broadly intended to run all processing steps and all subjects, you can also run a subset of subjects. In the
+intractive mode of `run_project`, you can enter a set of subject IDs to run in case you don't want to run all of them.
+
+As detailed below, a BrainGnomes project can be configured to only run some steps (e.g., fmriprep and postprocessing). In this
+case, you will only be asked about these steps in `run_project`. Even if you have enabled a step, however, you can choose
+not to run it in `run_project`.
+
+For example, if you only wish to run postprocessing stream "postproc1" on subject 540311, you might respond to the prompts like this:
+
+```
+Enter subject IDs to process, separated by spaces. Press enter to process all subjects. 
+
+ (Press enter to skip) > 540311
+
+Please select which steps to run:
+Run MRIQC? 
+ (yes/no) > n
+Run fmriprep? 
+ (yes/no) > n
+Run ICA-AROMA? 
+ (yes/no) > n
+Run postprocessing? 
+ (yes/no) > y
+Which postprocessing streams should be run? Press ENTER to select all.
+
+1:   postproc1
+2:   rest
+
+Enter one or more numbers separated by spaces and then ENTER, or 0 to cancel
+1: 1
+```
+
+You can achieve the same thing by passing in arguments for `steps`, `postprocess_streams`, and `subject_filter`, which
+will schedule the jobs without prompting you.
+
+```
+run_project(scfg, steps="postprocess", postprocess_streams="postproc1", subject_filter="540311")
+```
 
 # Prerequisites and Setup
 
