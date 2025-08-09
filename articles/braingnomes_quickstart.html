@@ -102,13 +102,8 @@ expected inputs/outputs, and offers troubleshooting tips for common
 issues. By the end of demo, a new user should understand how to
 configure a study and launch the BrainGnomes pipeline from start to
 finish.</p>
-<div class="section level3">
-<h3 id="things-to-include-here">Things to include here<a class="anchor" aria-label="anchor" href="#things-to-include-here"></a>
-</h3>
-<ol style="list-style-type: decimal">
-<li>subject filter</li>
-</ol>
-</div>
+<p>This package is designed to run on HPC clusters that use SLURm or
+TORQUE. It not designed to run on a standard computer.</p>
 <div class="section level3">
 <h3 id="basic-process-flow-of-braingnomes">Basic process flow of BrainGnomes<a class="anchor" aria-label="anchor" href="#basic-process-flow-of-braingnomes"></a>
 </h3>
@@ -120,6 +115,49 @@ that each subject is processed fully (unless a crash occurs).</p>
 <div class="float" id="id">
 <img src="braingnomes_flow.png" class="class" style="width:70.0%" alt="BrainGnomes flow"><div class="figcaption">BrainGnomes flow</div>
 </div>
+</div>
+<div class="section level3">
+<h3 id="running-a-subset-of-subject-or-a-subset-of-processing-steps">Running a subset of subject or a subset of processing steps<a class="anchor" aria-label="anchor" href="#running-a-subset-of-subject-or-a-subset-of-processing-steps"></a>
+</h3>
+<p>As detailed below, the <code>run_project</code> function submits fMRI
+processing jobs to the scheduler. Although BrainGnomes is broadly
+intended to run all processing steps and all subjects, you can also run
+a subset of subjects. In the intractive mode of
+<code>run_project</code>, you can enter a set of subject IDs to run in
+case you don’t want to run all of them.</p>
+<p>As detailed below, a BrainGnomes project can be configured to only
+run some steps (e.g., fmriprep and postprocessing). In this case, you
+will only be asked about these steps in <code>run_project</code>. Even
+if you have enabled a step, however, you can choose not to run it in
+<code>run_project</code>.</p>
+<p>For example, if you only wish to run postprocessing stream
+“postproc1” on subject 540311, you might respond to the prompts like
+this:</p>
+<pre><code>Enter subject IDs to process, separated by spaces. Press enter to process all subjects. 
+
+ (Press enter to skip) &gt; 540311
+
+Please select which steps to run:
+Run MRIQC? 
+ (yes/no) &gt; n
+Run fmriprep? 
+ (yes/no) &gt; n
+Run ICA-AROMA? 
+ (yes/no) &gt; n
+Run postprocessing? 
+ (yes/no) &gt; y
+Which postprocessing streams should be run? Press ENTER to select all.
+
+1:   postproc1
+2:   rest
+
+Enter one or more numbers separated by spaces and then ENTER, or 0 to cancel
+1: 1</code></pre>
+<p>You can achieve the same thing by passing in arguments for
+<code>steps</code>, <code>postprocess_streams</code>, and
+<code>subject_filter</code>, which will schedule the jobs without
+prompting you.</p>
+<pre><code><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps<span class="op">=</span><span class="st">"postprocess"</span>, postprocess_streams<span class="op">=</span><span class="st">"postproc1"</span>, subject_filter<span class="op">=</span><span class="st">"540311"</span><span class="op">)</span></span></code></pre>
 </div>
 </div>
 <div class="section level2">
@@ -140,7 +178,7 @@ prerequisites:</p>
 on CRAN (yet), so for now, you must install from GitHub. Then load it in
 your R session:</li>
 </ol>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install (if needed) and load BrainGnomes</span></span>
 <span><span class="co"># devtools::install_github("UNCDEPENdLab/BrainGnomes")</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
@@ -208,7 +246,7 @@ directory (<code>$metadata$project_directory</code>) called
 <code>"project_config.yaml"</code>. If you later</p>
 <p>Let’s run <code><a href="../reference/setup_project.html">setup_project()</a></code> to initialize a new study
 config:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Start an interactive setup for a new fMRI study</span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This function function will ask a series of questions in the R
@@ -460,7 +498,7 @@ from an existing configuration.</p>
 </h3>
 <p>Use <code><a href="../reference/setup_project.html">setup_project()</a></code> to interactively complete or correct
 configuration entries:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This will say a <code>project_config.yaml</code> file in your project
 directory.</p>
@@ -474,7 +512,7 @@ directory.</p>
 great for now, but if you quit R and come back later, you probably want
 to pick up from where you left off. You can use
 <code><a href="../reference/load_project.html">load_project()</a></code> to load an existing configuration:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -482,7 +520,7 @@ to pick up from where you left off. You can use
 </h2>
 <p>Use <code><a href="../reference/edit_project.html">edit_project()</a></code> for a menu-driven interface to modify
 parts of the study configuration.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/edit_project.html">edit_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>Follow the prompts to choose what to edit. This is useful if you want
 to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI
@@ -492,20 +530,20 @@ options for specific pipeline steps.</p>
 <h2 id="step-4-run-the-study">Step 4: Run the Study<a class="anchor" aria-label="anchor" href="#step-4-run-the-study"></a>
 </h2>
 <p>Once your configuration is complete, you can run the pipeline.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>By default, this will prompt you whether to run all steps in your
 pipeline. It will also process all available subjects and sessions
 defined in the BIDS directory.</p>
 <p>If you want to run only a subset of subjects, you can use the
 <code>subject_filter</code> argument like:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Likewise, if you want to skip the menu prompts for which step to run,
 you can use the <code>steps</code> argument. For example, to run only
 postprocessing on these subjects:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span>, steps<span class="op">=</span><span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The available <code>steps</code> are
