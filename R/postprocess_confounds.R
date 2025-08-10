@@ -361,6 +361,6 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
   }))
 
   if (is.null(spikes)) return(NULL)
-  spikes <- spikes[, !duplicated(spikes, MARGIN = 2)]
+  spikes <- spikes[, !duplicated(spikes, MARGIN = 2), drop = FALSE]
   spikes
 }
