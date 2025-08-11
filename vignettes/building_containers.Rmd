@@ -53,6 +53,18 @@ singularity build /proj/hng/software/containers/aroma-latest.simg docker://nipre
 
 Details: https://github.com/nipreps/fmripost-aroma?tab=readme-ov-file#installation
 
+# FSL
+
+Used in postprocessing. NeuroDesk has a number of pre-built containers that work well, whereas
+building FSL from a container file (e.g., https://www.repronim.org/neurodocker/user_guide/examples.html)
+was throwing tricky errors on the UNC HPC.
+
+## Image for FSL 6.0.7.16
+
+```
+curl -X GET https://neurocontainers.neurodesk.org/fsl_6.0.7.16_20250131.simg -O
+```
+
 # AFNI
 
 Not currently used, but if you want it!
@@ -60,6 +72,7 @@ Not currently used, but if you want it!
 ```
 singularity build /proj/hng/software/containers/afni-latest.simg  docker://afni/afni_make_build
 ```
+
 
 # BIDS-validator
 
