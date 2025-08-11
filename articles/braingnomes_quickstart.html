@@ -226,7 +226,7 @@ non-default location for TemplateFlow data (standard brain templates).
 If unsure, you can specify an empty or new directory and fMRIPrep will
 manage downloading templates there.</li>
 </ul>
-<p>With these in place, we can proceed to create a study
+<p>With these in place, we can proceed to create a project
 configuration.</p>
 </div>
 <div class="section level2">
@@ -244,13 +244,13 @@ required information. The function returns an object with your settings,
 and it saves a a YAML configuration file to the root of the project
 directory (<code>$metadata$project_directory</code>) called
 <code>"project_config.yaml"</code>. If you later</p>
-<p>Let’s run <code><a href="../reference/setup_project.html">setup_project()</a></code> to initialize a new study
+<p>Let’s run <code><a href="../reference/setup_project.html">setup_project()</a></code> to initialize a new project
 config:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Start an interactive setup for a new fMRI study</span></span>
+<code class="sourceCode R"><span><span class="co"># Start an interactive setup for a new fMRI project</span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This function function will ask a series of questions in the R
-console to gather information about your study. Below we outline the
+console to gather information about your project. Below we outline the
 typical prompts and how to respond:</p>
 <ul>
 <li>Project Name – A short name for your project (used for labeling and
@@ -342,7 +342,7 @@ folders. For example, if you have a folder like:
 <code>subject-([0-9]+)</code> as your subject ID match regex and
 <code>ses-([0-9]+)</code> as your session match regex.</p></li>
 <li><p>Heuristic File: Path to the heudiconv heuristic Python script for
-your study. For example:
+your project. For example:
 <code>"/proj/Longleaf/MyStudy2025/heuristic.py"</code>. This script
 defines the naming scheme for converting DICOMs to BIDS format. Details
 for preparing such files can be found here: <a href="https://heudiconv.readthedocs.io/en/latest/heuristics.html" class="external-link uri">https://heudiconv.readthedocs.io/en/latest/heuristics.html</a>.</p></li>
@@ -483,18 +483,18 @@ for details.</li>
 <div class="section level3">
 <h3 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
 </h3>
-<p>After <code>setup_study</code> completes, it will write a file called
-<code>project_config.yaml</code> into your project directory (if one
-exists, you will be prompted whether to overwrite it). This will contain
-all of your settings and can be used in future to load a project into R
-from an existing configuration.</p>
+<p>After <code>setup_project</code> completes, it will write a file
+called <code>project_config.yaml</code> into your project directory (if
+one exists, you will be prompted whether to overwrite it). This will
+contain all of your settings and can be used in future to load a project
+into R from an existing configuration.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="braingnomes-workflow-in-a-nutshell">BrainGnomes workflow in a nutshell<a class="anchor" aria-label="anchor" href="#braingnomes-workflow-in-a-nutshell"></a>
 </h2>
 <div class="section level3">
-<h3 id="step-1-setup-your-study">Step 1: Setup your study<a class="anchor" aria-label="anchor" href="#step-1-setup-your-study"></a>
+<h3 id="step-1-setup-your-project">Step 1: Setup your project<a class="anchor" aria-label="anchor" href="#step-1-setup-your-project"></a>
 </h3>
 <p>Use <code><a href="../reference/setup_project.html">setup_project()</a></code> to interactively complete or correct
 configuration entries:</p>
@@ -503,10 +503,9 @@ configuration entries:</p>
 <p>This will say a <code>project_config.yaml</code> file in your project
 directory.</p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="step-2-load-your-configuration">Step 2: Load Your Configuration<a class="anchor" aria-label="anchor" href="#step-2-load-your-configuration"></a>
-</h2>
+<div class="section level3">
+<h3 id="step-2-load-your-configuration">Step 2: Load your configuration<a class="anchor" aria-label="anchor" href="#step-2-load-your-configuration"></a>
+</h3>
 <p>The step above results in an object in your R workspace called
 <code>scfg</code> that contains all of your project settings. This is
 great for now, but if you quit R and come back later, you probably want
@@ -515,20 +514,20 @@ to pick up from where you left off. You can use
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span></code></pre></div>
 </div>
-<div class="section level2">
-<h2 id="step-3-edit-configuration">Step 3: Edit Configuration<a class="anchor" aria-label="anchor" href="#step-3-edit-configuration"></a>
-</h2>
+<div class="section level3">
+<h3 id="step-3-edit-configuration">Step 3: Edit configuration<a class="anchor" aria-label="anchor" href="#step-3-edit-configuration"></a>
+</h3>
 <p>Use <code><a href="../reference/edit_project.html">edit_project()</a></code> for a menu-driven interface to modify
-parts of the study configuration.</p>
+parts of the project configuration.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/edit_project.html">edit_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>Follow the prompts to choose what to edit. This is useful if you want
 to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI
 options for specific pipeline steps.</p>
 </div>
-<div class="section level2">
-<h2 id="step-4-run-the-study">Step 4: Run the Study<a class="anchor" aria-label="anchor" href="#step-4-run-the-study"></a>
-</h2>
+<div class="section level3">
+<h3 id="step-4-run-the-project">Step 4: Run the project<a class="anchor" aria-label="anchor" href="#step-4-run-the-project"></a>
+</h3>
 <p>Once your configuration is complete, you can run the pipeline.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
@@ -550,6 +549,39 @@ postprocessing on these subjects:</p>
 <code>"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"</code>.
 Note that if you request a step in <code>run_project</code> that was
 never configured it will result in an error.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="running-braingnomes-on-the-command-line">Running BrainGnomes on the command line<a class="anchor" aria-label="anchor" href="#running-braingnomes-on-the-command-line"></a>
+</h2>
+<p>As of August 2025, this is a work in progress. That said, there is
+basic support for using BrainGnomes on the Linux command line. This is
+helpful if you prefer not to start an R session or you just want to
+perform basic operations such as editing a study configuration or
+running a processing step.</p>
+<p>To get BrainGnomes on the command line, you need to add the location
+of the package to your Linux path. If you don’t know where it is
+installed, run this in an R session.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/find.package.html" class="external-link">find.package</a></span><span class="op">(</span><span class="st">"BrainGnomes"</span><span class="op">)</span></span></code></pre></div>
+<p>You then need this in your path when a terminal starts. If you use
+bash, the easiest route is often to add a line like this to your
+<code>~/.bashrc</code>.</p>
+<pre><code>export PATH="/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library/BrainGnomes:$PATH"</code></pre>
+<p>This will enable you to type <code>BrainGnomes</code> at the terminal
+prompt:</p>
+<pre><code>&gt; /BrainGnomes
+Usage: BrainGnomes &lt;command&gt; [options]
+Commands:
+  setup_project [project_name] [project_directory]
+  edit_project &lt;project_directory|config.yaml&gt;
+  run_project &lt;project_directory|config.yaml&gt; -steps &lt;steps&gt; -subject_filter &lt;ids&gt; -postprocess_streams &lt;streams&gt; [-debug] [-force]</code></pre>
+<p>As seen above, the CLI supports <code>setup_project</code>,
+<code>edit_project</code>, and <code>run_project</code>. The basics of
+these commands have already been described above. On the CLI, the only
+difference is that objects such as <code>scfg</code> are not persisted
+in a session. Rather, changes are made to the
+<code>project_config.yaml</code> script in the project directory.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
