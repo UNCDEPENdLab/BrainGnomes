@@ -103,20 +103,20 @@ Make note of the filesystem paths to each of these container files or executable
   - A FreeSurfer license file (e.g., license.txt or FreeSurferLicense.txt). fMRIPrep requires a valid FreeSurfer license to run. You can obtain one for free from the FreeSurfer website. Save the license file path for the configuration.
   - Optionally, a TemplateFlow directory if you want to use a non-default location for TemplateFlow data (standard brain templates). If unsure, you can specify an empty or new directory and fMRIPrep will manage downloading templates there.
 
-With these in place, we can proceed to create a study configuration.
+With these in place, we can proceed to create a project configuration.
 
 # Creating a Project Configuration with `setup_project()`
 
 The first step in using `BrainGnomes` is to create a project configuration, which is essentially a structured list containing all the parameters and paths needed for your pipeline. This configuration can be created interactively using the `setup_project()` function. In typical use, you will call `setup_project()` with no arguments to start a new configuration from scratch, and it will interactively prompt you for all required information. The function returns an object with your settings, and it saves a a YAML configuration file to the root of the project directory (`$metadata$project_directory`) called `"project_config.yaml"`. If you later 
 
- Let's run `setup_project()` to initialize a new study config:
+ Let's run `setup_project()` to initialize a new project config:
 
 ```{r, eval = FALSE}
-# Start an interactive setup for a new fMRI study
+# Start an interactive setup for a new fMRI project
 scfg <- setup_project()
 ```
 
-This function function will ask a series of questions in the R console to gather information about your study. Below we outline the typical prompts and how to respond:
+This function function will ask a series of questions in the R console to gather information about your project. Below we outline the typical prompts and how to respond:
 
 - Project Name – A short name for your project (used for labeling and logging). Example: "MyStudy2025".
 - Project Directory – The root directory where all project outputs will be stored. You can provide a path (absolute or relative). If the directory does not exist, BrainGnomes will offer to create it for you. For example: "/proj/Longleaf/MyStudy2025" (this will contain subfolders for BIDS data, fMRIPrep outputs, logs, etc.).
@@ -146,7 +146,7 @@ You will be prompted for whether you want to include BIDS conversion: `Run BIDS 
 
 4. Session Match Regex: This follows the same logic as the Subject ID Match Regex, but applies to session folders nested within subject folders. For example, if you have a folder like: `subject-12/ses-1`, you would specify `subject-([0-9]+)` as your subject ID match regex and `ses-([0-9]+)` as your session match regex.
 
-5. Heuristic File: Path to the heudiconv heuristic Python script for your study. For example: `"/proj/Longleaf/MyStudy2025/heuristic.py"`. This script defines the naming scheme for converting DICOMs to BIDS format. Details for preparing such files can be found here: https://heudiconv.readthedocs.io/en/latest/heuristics.html.
+5. Heuristic File: Path to the heudiconv heuristic Python script for your project. For example: `"/proj/Longleaf/MyStudy2025/heuristic.py"`. This script defines the naming scheme for converting DICOMs to BIDS format. Details for preparing such files can be found here: https://heudiconv.readthedocs.io/en/latest/heuristics.html.
 
 6. Overwrite and Clear Cache: Boolean flags (overwrite and clear_cache) that determine if heudiconv should overwrite existing converted data and clear any caching between runs. Usually, you can accept defaults (FALSE) unless you are re-running conversion and want to start fresh.
 
@@ -228,11 +228,11 @@ As an optional part of the pipeline, bids-validator can be run on the BIDS direc
 
 ## Conclusion
 
-After `setup_study` completes, it will write a file called `project_config.yaml` into your project directory (if one exists, you will be prompted whether to overwrite it). This will contain all of your settings and can be used in future to load a project into R from an existing configuration.
+After `setup_project` completes, it will write a file called `project_config.yaml` into your project directory (if one exists, you will be prompted whether to overwrite it). This will contain all of your settings and can be used in future to load a project into R from an existing configuration.
 
 # BrainGnomes workflow in a nutshell
 
-## Step 1: Setup your study
+## Step 1: Setup your project
 
 Use `setup_project()` to interactively complete or correct configuration entries:
 
@@ -242,7 +242,7 @@ scfg <- setup_project()
 
 This will say a `project_config.yaml` file in your project directory.
 
-# Step 2: Load Your Configuration
+## Step 2: Load your configuration
 
 The step above results in an object in your R workspace called `scfg` that contains all of your project settings. This is great for now, but if you quit R and come back later, you probably want to pick up from where you left off. You can use `load_project()` to load an existing configuration:
 
@@ -250,9 +250,9 @@ The step above results in an object in your R workspace called `scfg` that conta
 scfg <- load_project("/path/to/my/project")
 ```
 
-# Step 3: Edit Configuration
+## Step 3: Edit configuration
 
-Use `edit_project()` for a menu-driven interface to modify parts of the study configuration.
+Use `edit_project()` for a menu-driven interface to modify parts of the project configuration.
 
 ```{r eval = FALSE}
 scfg <- edit_project(scfg)
@@ -260,7 +260,7 @@ scfg <- edit_project(scfg)
 
 Follow the prompts to choose what to edit. This is useful if you want to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI options for specific pipeline steps.
 
-# Step 4: Run the Study
+## Step 4: Run the project
 
 Once your configuration is complete, you can run the pipeline.
 
@@ -285,3 +285,38 @@ run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
 ```
 
 The available `steps` are `"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"`. Note that if you request a step in `run_project` that was never configured it will result in an error.
+
+# Running BrainGnomes on the command line
+
+As of August 2025, this is a work in progress. That said, there is basic support for using BrainGnomes on the Linux command line. This is helpful if you prefer not to start an R session or you just want to perform basic operations such as
+editing a study configuration or running a processing step.
+
+To get BrainGnomes on the command line, you need to add the location of the package to your Linux path. If you don't know
+where it is installed, run this in an R session.
+
+
+```{r eval = FALSE}
+find.package("BrainGnomes")
+```
+
+You then need this in your path when a terminal starts. If you use bash, the easiest route is often to add a line
+like this to your `~/.bashrc`.
+
+```
+export PATH="/Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/library/BrainGnomes:$PATH"
+```
+
+This will enable you to type `BrainGnomes` at the terminal prompt:
+
+```
+> /BrainGnomes
+Usage: BrainGnomes <command> [options]
+Commands:
+  setup_project [project_name] [project_directory]
+  edit_project <project_directory|config.yaml>
+  run_project <project_directory|config.yaml> -steps <steps> -subject_filter <ids> -postprocess_streams <streams> [-debug] [-force]
+```
+
+As seen above, the CLI supports `setup_project`, `edit_project`, and `run_project`. The basics of these commands have already
+been described above. On the CLI, the only difference is that objects such as `scfg` are not persisted in a session. Rather, 
+changes are made to the `project_config.yaml` script in the project directory.
