@@ -104,6 +104,19 @@ containers needed for BrainGnomes</p>
 <p>Details: <a href="https://github.com/nipreps/fmripost-aroma?tab=readme-ov-file#installation" class="external-link uri">https://github.com/nipreps/fmripost-aroma?tab=readme-ov-file#installation</a></p>
 </div>
 <div class="section level2">
+<h2 id="fsl">FSL<a class="anchor" aria-label="anchor" href="#fsl"></a>
+</h2>
+<p>Used in postprocessing. NeuroDesk has a number of pre-built
+containers that work well, whereas building FSL from a container file
+(e.g., <a href="https://www.repronim.org/neurodocker/user_guide/examples.html" class="external-link uri">https://www.repronim.org/neurodocker/user_guide/examples.html</a>)
+was throwing tricky errors on the UNC HPC.</p>
+<div class="section level3">
+<h3 id="image-for-fsl-6-0-7-16">Image for FSL 6.0.7.16<a class="anchor" aria-label="anchor" href="#image-for-fsl-6-0-7-16"></a>
+</h3>
+<pre><code>curl -X GET https://neurocontainers.neurodesk.org/fsl_6.0.7.16_20250131.simg -O</code></pre>
+</div>
+</div>
+<div class="section level2">
 <h2 id="afni">AFNI<a class="anchor" aria-label="anchor" href="#afni"></a>
 </h2>
 <p>Not currently used, but if you want it!</p>
