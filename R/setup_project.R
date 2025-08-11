@@ -689,6 +689,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     if (isTRUE(scfg$bids_validation$enable) && !validate_exists(scfg$compute_environment$bids_validator)) fields <- c(fields, "compute_environment/bids_validator")
     if (isTRUE(scfg$mriqc$enable) && !validate_exists(scfg$compute_environment$mriqc_container)) fields <- c(fields, "compute_environment/mriqc_container")
     if (isTRUE(scfg$aroma$enable) && !validate_exists(scfg$compute_environment$aroma_container)) fields <- c(fields, "compute_environment/aroma_container")
+    if (isTRUE(scfg$postprocess$enable) && !validate_exists(scfg$compute_environment$fsl_container)) fields <- c(fields, "compute_environment/fsl_container")
   }
 
   if ("compute_environment/scheduler" %in% fields) {
@@ -770,6 +771,18 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       "),
       prompt = "Location of ICA-AROMA container: ",
       type = "file", default = scfg$compute_environment$aroma_container
+    ) |> normalizePath(mustWork = TRUE)
+  }
+
+  # location of ICA-AROMA fMRIprep container
+  if ("compute_environment/fsl_container" %in% fields) {
+    scfg$compute_environment$fsl_container <- prompt_input(
+      instruct = glue("\n
+      Postprocessing uses FSL for a number of processing steps, including spatial smoothing and temporal filtering.
+      If you plan to use postprocessing, you need to provide a Singularity image for FSL here.\n
+      "),
+      prompt = "Location of FSL container: ",
+      type = "file", default = scfg$compute_environment$fsl_container
     ) |> normalizePath(mustWork = TRUE)
   }
 
