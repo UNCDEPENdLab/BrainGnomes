@@ -87,6 +87,7 @@ setup_project <- function(input = NULL, fields = NULL) {
   scfg <- setup_mriqc(scfg, fields)
   scfg <- setup_aroma(scfg, fields)
   scfg <- setup_postprocess_streams(scfg, fields)
+  scfg <- setup_extract_streams(scfg, fields)
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
@@ -196,6 +197,12 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
   if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
+
+  # location for ROI timeseries and connectivity data
+  scfg$metadata$roi_directory <- file.path(scfg$metadata$project_directory, "data_rois")
+  if (!checkmate::test_directory_exists(scfg$metadata$roi_directory)) {
+    dir.create(scfg$metadata$roi_directory, recursive = TRUE)
+  }
 
   return(scfg)
 }
