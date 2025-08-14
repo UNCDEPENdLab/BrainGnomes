@@ -155,7 +155,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   )
 
   if (isTRUE(steps["bids_conversion"])) {
-    subject_dicom_dirs <- get_subject_dirs(scfg$metadata$dicom_directory, sub_regex = scfg$bids_conversion$sub_regex, ses_regex = scfg$bids_conversion$ses_regex, full.names = TRUE)
+    subject_dicom_dirs <- get_subject_dirs(
+      scfg$metadata$dicom_directory,
+      sub_regex = scfg$bids_conversion$sub_regex,
+      sub_id_match = scfg$bids_conversion$sub_id_match,
+      ses_regex = scfg$bids_conversion$ses_regex,
+      ses_id_match = scfg$bids_conversion$ses_id_match,
+      full.names = TRUE
+    )
 
     if (nrow(subject_dicom_dirs) == 0L) {
       warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))
