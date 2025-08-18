@@ -1,9 +1,7 @@
 #' @keywords internal
 manage_extract_streams <- function(scfg, allow_empty = FALSE) {
   extract_field_list <- function() {
-    c(
-      "postprocess_streams", "atlases", "roi_reduce", "correlation/method"
-    )
+    c("input_streams", "atlases", "roi_reduce", "correlation/method", "rtoz")
   }
 
   show_val <- function(val) {
@@ -90,18 +88,14 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
     scfg$extract$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = FALSE)
   }
 
-  if (!isTRUE(scfg$extract$enable)) {
-    return(scfg)
-  }
+  if (!isTRUE(scfg$extract$enable)) return(scfg)
 
   scfg <- manage_extract_streams(scfg, allow_empty = TRUE)
   return(scfg)
 }
 
 get_extract_stream_names <- function(scfg) {
-  if (is.null(scfg$extract)) {
-    return(character())
-  }
+  if (is.null(scfg$extract)) return(character())
   setdiff(names(scfg$extract), "enable")
 }
 
@@ -111,16 +105,16 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
     stream_name <- prompt_input("Name of extraction stream:", type = "character")
   }
 
-  if (is.null(fields)) fields <- c("extract/postprocess_streams", "extract/atlases",
-                                   "extract/roi_reduce", "extract/correlation/method")
+  if (is.null(fields)) fields <- c("extract/input_streams", "extract/atlases",
+                                   "extract/roi_reduce", "extract/correlation/method", "extract/rtoz")
 
-  if ("extract/postprocess_streams" %in% fields) {
+  if ("extract/input_streams" %in% fields) {
     all_streams <- get_postprocess_stream_names(scfg)
     if (length(all_streams) == 0) {
       stop("No postprocess streams available to attach to extraction stream")
     }
     sel <- select_list_safe(all_streams, multiple = TRUE, title = "Select postprocess stream(s) to use")
-    scfg$extract[[stream_name]]$postprocess_streams <- sel
+    scfg$extract[[stream_name]]$input_streams <- sel
   }
 
   if ("extract/atlases" %in% fields) {
@@ -139,6 +133,10 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
     method <- select_list_safe(c("pearson", "spearman", "kendall", "cor.shrink", "none"),
                                multiple = TRUE, title = "Correlation method(s)")
     scfg$extract[[stream_name]]$correlation$method <- method
+  }
+
+  if ("extract/rtoz" %in% fields) {
+    scfg$extract[[stream_name]]$rtoz <- prompt_input("Perform (Fisher) r-to-z transformation on correlations?", type = "flag")
   }
 
   return(scfg)

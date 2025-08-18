@@ -37,6 +37,7 @@ edit_project <- function(input = NULL) {
     "fMRIPrep" = list(setup_fn = setup_fmriprep, prefix = "fmriprep/", fields = c(
       "output_spaces", "fs_license_file"
     ))
+
     # At present, MRIQC and ICA-AROMA don't have any additional specific settings, just job settings
     # "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
     # "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0))
@@ -55,7 +56,7 @@ edit_project <- function(input = NULL) {
 
   # Top-level menu loop
   repeat {
-    choice <- select_list_safe(c(names(config_map), "Postprocessing", "Job settings", "Quit"),
+    choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit"),
                           title = "Select a configuration area to edit:")
 
     if (choice == "Quit" || choice == "") {
@@ -65,6 +66,8 @@ edit_project <- function(input = NULL) {
 
     if (choice == "Postprocessing") {
       scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
+    } else if (choice == "ROI extraction") {
+      scfg <- manage_extract_streams(scfg)
     } else if (choice == "Job settings") {
       # Job settings logic
       job <- select_list_safe(job_targets, title = "Select which job to configure:")

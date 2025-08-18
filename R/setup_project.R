@@ -268,8 +268,9 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE)
   }
 
-  # prompt for fmriprep container at this step
-  if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
+  # prompt for fmriprep container at this step, but only if it is not already in fields
+  # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
+  if (!validate_exists(scfg$compute_environment$fmriprep_container) && !"compute_environment/fmriprep_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
   }
 
@@ -338,8 +339,8 @@ setup_bids_validation <- function(scfg, fields=NULL) {
 
   if (isFALSE(scfg$bids_validation$enable)) return(scfg)
 
-  # prompt for BIDS validator at this point
-  if (!validate_exists(scfg$compute_environment$bids_validator)) {
+  # prompt for BIDS validator at this point if not already in fields
+  if (!validate_exists(scfg$compute_environment$bids_validator) && !"compute_environment/bids_validator" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/bids_validator")
   }
 
@@ -407,7 +408,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
   }
 
   # prompt for mriqc container at this step
-  if (!validate_exists(scfg$compute_environment$mriqc_container)) {
+  if (!validate_exists(scfg$compute_environment$mriqc_container) && !"compute_environment/mriqc_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/mriqc_container")
   }
 
@@ -480,7 +481,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
   if (isFALSE(scfg$bids_conversion$enable)) return(scfg)
 
   # prompt for heudiconv container at this step
-  if (!validate_exists(scfg$compute_environment$heudiconv_container)) {
+  if (!validate_exists(scfg$compute_environment$heudiconv_container) && !"compute_environment/heudiconv_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/heudiconv_container")
   }
 
@@ -631,8 +632,8 @@ setup_aroma <- function(scfg, fields = NULL) {
 
   if (isFALSE(scfg$aroma$enable)) return(scfg)
   
-  # prompt for aroma container at this step
-  if (!validate_exists(scfg$compute_environment$aroma_container)) {
+  # prompt for aroma container at this step if not already in fields
+  if (!validate_exists(scfg$compute_environment$aroma_container) && !"compute_environment/aroma_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/aroma_container")
   }
 

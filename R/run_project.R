@@ -15,6 +15,9 @@
 #' @param postprocess_streams Optional character vector specifying which postprocessing streams should be run. If
 #'   `"postprocess"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all postprocess
 #'   streams will be run.
+#' @param extract_streams Optional character vector specifying which ROI extraction streams should be run. If
+#'   `"extract"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
+#'   streams will be run.
 #' 
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
@@ -26,8 +29,8 @@
 #' @importFrom glue glue
 #' @importFrom checkmate assert_list assert_flag assert_directory_exists
 #' @importFrom lgr get_logger_glue
-run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL,
-    debug = FALSE, force = FALSE) {
+run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
+  extract_streams = NULL, debug = FALSE, force = FALSE) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_character(steps, null.ok = TRUE)
@@ -47,7 +50,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
 
-  all_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
+  all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
+  all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
   cat(glue("
     \nRunning processing pipeline for: {scfg$metadata$project_name}
@@ -91,8 +95,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-      if (length(all_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
-      if (is.null(postprocess_streams)) postprocess_streams <- all_streams # run all streams if no specifics were requested
+      if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
+      if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
+    }
+
+    if ("extract" %in% steps) {
+      if (!isTRUE(scfg$extract$enable)) stop("extract was requested, but it is disabled in the configuration.")
+      if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract configuration.")
+      if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
     nm <- steps
@@ -116,20 +126,33 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
     steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
 
-    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(all_streams) > 0L,
+    steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(all_pp_streams) > 0L,
       prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE
     )
 
     if (isTRUE(steps["postprocess"])) {
-      if (length(all_streams) == 1L) {
-        postprocess_streams <- all_streams # if we have only one stream, run it
+      if (length(all_pp_streams) == 1L) {
+        postprocess_streams <- all_pp_streams # if we have only one stream, run it
       } else {
-        postprocess_streams <- select_list_safe(
-          all_streams,
-          multiple = TRUE,
+        postprocess_streams <- select_list_safe(all_pp_streams, multiple = TRUE,
           title = "Which postprocessing streams should be run? Press ENTER to select all."
         )
-        if (length(postprocess_streams) == 0L) postprocess_streams <- all_streams # if user presses enter, run all
+        if (length(postprocess_streams) == 0L) postprocess_streams <- all_pp_streams # if user presses enter, run all
+      }
+    }
+
+    steps["extract"] <- ifelse(isTRUE(scfg$extract$enable) && length(all_ex_streams) > 0L,
+      prompt_input(instruct = "Run ROI extraction?", type = "flag"), FALSE
+    )
+
+    if (isTRUE(steps["extract"])) {
+      if (length(all_ex_streams) == 1L) {
+        extract_streams <- all_ex_streams # if we have only one stream, run it
+      } else {
+        extract_streams <- select_list_safe(all_ex_streams, multiple = TRUE,
+          title = "Which extraction streams should be run? Press ENTER to select all."
+        )
+        if (length(extract_streams) == 0L) extract_streams <- all_ex_streams # if user presses enter, run all
       }
     }
 
@@ -203,7 +226,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
 
     for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_streams = postprocess_streams, parent_ids = fsaverage_id)
+      process_subject(scfg, subject_dirs[[ss]], steps,
+        postprocess_streams = postprocess_streams, extract_streams = extract_streams, parent_ids = fsaverage_id
+      )
     }
   }
 }

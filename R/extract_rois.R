@@ -26,15 +26,16 @@
 #'   matrix (\code{correlation}, or \code{NULL} if not computed).
 #' @export
 extract_rois <- function(bold_file, atlas_files, out_dir,
-                         cor_method = c("pearson", "spearman", "kendall",
-                                        "cor.shrink", "none"),
-                         roi_reduce = c("mean", "median", "pca", "huber"),
-                         brain_mask = NULL) {
+                         cor_method = c("pearson", "spearman", "kendall", "cor.shrink", "none"),
+                         roi_reduce = c("mean", "median", "pca", "huber"), brain_mask = NULL, min_vox_per_roi = 5) {
   checkmate::assert_file_exists(bold_file)
   checkmate::assert_character(atlas_files, any.missing = FALSE, min.len = 1)
   checkmate::assert_directory_exists(out_dir, access = "w")
   cor_method <- match.arg(cor_method, several.ok = TRUE)
   roi_reduce <- match.arg(roi_reduce)
+  checkmate::assert_integerish(min_vox_per_roi, len = 1L, lower = 1L)
+
+  lg <- lgr::get_logger_glue("extract")
 
   bold_img <- RNifti::readNifti(bold_file)
   dim_img <- dim(bold_img)
@@ -62,24 +63,26 @@ extract_rois <- function(bold_file, atlas_files, out_dir,
 
     ts_mat <- sapply(roi_vals, function(lbl) {
       vox <- which(atlas_vec == lbl & brain_mask_vec)
-      if (length(vox) < 5) {
+      if (length(vox) < min_vox_per_roi) {
+        lg$info("Fewer than {min_vox_per_roi} voxels in ROI {lbl}. Dropping")
         rep(NA_real_, n_time)
       } else {
         vals <- mat[vox, , drop = FALSE]
         bad <- apply(vals, 1, function(ts) any(is.na(ts)) || all(ts == 0) || stats::var(ts) == 0)
-        if (sum(!bad) < 5) {
+        if (sum(!bad) < min_vox_per_roi) {
+          lg$info("Fewer than {min_vox_per_roi} good time series in ROI {lbl}. Dropping")
           rep(NA_real_, n_time)
         } else {
           roivox <- t(vals[!bad, , drop = FALSE]) # time x voxels
           if (roi_reduce == "pca") {
             pc <- stats::prcomp(roivox, scale. = TRUE)$x[, 1]
-            mn <- rowMeans(roivox)
+            mn <- rowMeans(roivox) # because direction of eigenvector is arbitrary, ensure it scales positively with the mean
             if (stats::cor(pc, mn) < 0) pc <- -pc
             pc
           } else if (roi_reduce == "median") {
             apply(roivox, 1, median)
           } else if (roi_reduce == "huber") {
-            apply(roivox, 1, function(x) MASS::huber(x)$mu)
+            apply(roivox, 1, function(x) huber(x)$mu)
           } else {
             rowMeans(roivox)
           }
@@ -122,4 +125,20 @@ extract_rois <- function(bold_file, atlas_files, out_dir,
   }
 
   return(outputs)
+}
+
+# borrowed from MASS package to avoid additional dependency
+huber <- function(y, k = 1.5, tol = 1.0e-6) {
+  y <- y[!is.na(y)]
+  n <- length(y)
+  mu <- median(y)
+  s <- mad(y)
+  if (s == 0) stop("cannot estimate scale: MAD is zero for this sample")
+  repeat{
+    yy <- pmin(pmax(mu - k * s, y), mu + k * s)
+    mu1 <- sum(yy) / n
+    if (abs(mu - mu1) < tol * s) break
+    mu <- mu1
+  }
+  list(mu = mu, s = s)
 }

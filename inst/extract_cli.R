@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-## simple script to handle post-fmriprep processing
+## simple script to handle ROI extraction
 
 #read in command line arguments.
 args <- commandArgs(trailingOnly = FALSE)
@@ -13,7 +13,7 @@ if (length(argpos) > 0L) {
 }
 
 if (is.null(args) || length(args) < 2L) {
-  message("Minimal usage: postprocess_cli.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--fsl_img=<fsl_singularity_image>]")
+  message("Minimal usage: extract_cli.R --input=<input_file> --config_yaml=<config_yaml.yaml> --extract_streams=<stream names>")
   quit(save="no", 1, FALSE)
 }
 
@@ -22,16 +22,14 @@ pkg_dir <- Sys.getenv("pkg_dir") # location of BrainGnomes installation at time 
 if (pkg_dir != "") {
   lib_dir <- dirname(pkg_dir)
 
-  if (!(lib_dir %in% .libPaths())) {
-    .libPaths(c(lib_dir, .libPaths()))
-  }
+  if (!(lib_dir %in% .libPaths())) .libPaths(c(lib_dir, .libPaths()))
 }
 
 if (!suppressMessages(require("BrainGnomes", character.only=TRUE))) {
   stop("This script must be run in an R environment with BrainGnomes installed.")
 }
 
-# handle package dependencies -- though these should really be handled when BrainGnomes is installed
+# handle package dependencies
 for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
   if (!suppressMessages(require(pkg, character.only = TRUE))) {
     message("Installing missing package dependency: ", pkg)
@@ -39,18 +37,6 @@ for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
     suppressMessages(require(pkg, character.only = TRUE))
   }
 }
-
-# for debugging and testing
-# args <- paste(c(
-#   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask='TRUE' --brain_mask='NA'",
-#   "--processing_steps='spatial_smooth' 'apply_aroma' 'temporal_filter' 'intensity_normalize' --spatial_smooth/fwhm_mm='5'",
-#   "--spatial_smooth/prefix='s' --apply_aroma/nonaggressive='TRUE' --apply_aroma/prefix='a' --temporal_filter/low_pass_hz='0'",
-#   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --intensity_normalize/global_median='10000' --intensity_normalize/prefix='n'",
-#   "--confound_calculate/columns='filt*' --confound_calculate/noproc_columns='nofilt*' --confound_calculate/demean='TRUE'",
-#   "--force_processing_order='FALSE'",
-#   "--input='/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294'",
-#   "--fsl_img='/proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg'"
-# ), collapse = " ")
 
 # parse CLI inputs into a nested list, if relevant
 cli_args <- BrainGnomes::parse_cli_args(args)
@@ -88,7 +74,20 @@ if (length(input_files) == 0L) {
 # cat("About to postprocess the following files: ")
 # print(input_files)
 
+log_file <- Sys.getenv("log_file")
+if (log_file == "") {
+  warning("log_file variable not set. ")
+}
 
-out_files <- sapply(input_files, function(ii) BrainGnomes::postprocess_subject(ii, cfg), USE.NAMES = FALSE)
+atlases <- cfg$atlases
+a_exists <- checkmate::test_file_exists(atlases)
+if (any(!a_exists)) {
+  warning()
+}
+output_files <- c()
+for (ii in input_files) {
+  
+}
+out_files <- sapply(input_files, function(ii) BrainGnomes::extract_rois(ii, cfg), USE.NAMES = FALSE)
 # cat("Processing completed. Output files: \n")
 # print(out_files)

@@ -232,6 +232,16 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, postprocess_result$gaps)
   }
 
+  if (!checkmate::test_flag(scfg$extract$enable)) {
+    message("Invalid extract/enable flag. You will be asked for this.")
+    gaps <- c(gaps, "extract/enable")
+    scfg$extract$enable <- NULL
+  } else if (isTRUE(scfg$extract$enable)) {
+    extract_result <- validate_extract_configs(scfg$extract, quiet)
+    scfg$extract <- extract_result$extract
+    gaps <- c(gaps, extract_result$gaps)
+  }
+
   attr(scfg, "gaps") <- gaps
 
   return(scfg)
@@ -242,6 +252,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 #' @param ppcfg a postprocess configuration block
 #' @param quiet a flag indicating whether to suppress messages
 #' @keywords internal
+#' @noRd
 validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = FALSE) {
   gaps <- c()
 
@@ -477,4 +488,57 @@ validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
     gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
   }
   return(list(postprocess = ppcfg, gaps = gaps))
+}
+
+validate_extract_configs <- function(ecfg, quiet = FALSE) {
+  reserved <- c("enable")
+  cfg_names <- setdiff(names(ecfg), reserved)
+  gaps <- c()
+  for (nm in cfg_names) {
+    # validate stream job settings
+    ecfg <- validate_job_settings(ecfg, nm)
+    if (!is.null(attr(ecfg, "gaps"))) gaps <- c(gaps, paste0("extract/", attr(ecfg, "gaps")))
+
+    res <- validate_extract_config_single(ecfg[[nm]], nm, quiet)
+    ecfg[[nm]] <- res$extract
+
+    # rename gaps by config, like extract/ecfg1/correlation
+    gaps <- c(gaps, paste0("extract/", nm, "/", sub("^extract/", "", res$gaps)))
+  }
+  return(list(extract = ecfg, gaps = gaps))
+}
+
+validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE) {
+  gaps <- c()
+
+  if (!"input_streams" %in% names(ecfg)) {
+    gaps <- c(gaps, "extract/input_streams")
+  } else if (!checkmate::test_character(ecfg$input_streams)) {
+    if (!quiet) message(glue("Invalid input_streams in $extract${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract/input_streams")
+    ecfg$input_streams <- NULL
+  }
+
+  if (!"atlases" %in% names(ecfg)) {
+    gaps <- c(gaps, "extract/atlases")
+  } else {
+    atlas_exists <- sapply(ecfg$atlases, validate_exists)
+    if (any(!atlas_exists)) {
+      which_bad <- ecfg$atlases[!atlas_exists]
+      message(glue("Invalid atlases in $extract${cfg_name}. You will be asked for these: {paste(which_bad, collapse=', ')}"))
+      gaps <- c(gaps, "extract/atlases") # would be nice to have more fine-grained control
+    }
+  }
+
+  if (!"roi_reduce" %in% names(ecfg)) {
+    gaps <- c(gaps, "extract/roi_reduce")
+  } else if (!checkmate::test_string(ecfg$roi_reduce) ||
+    !checkmate::test_subset(ecfg$roi_reduce, c("mean", "median", "pca", "huber"))) {
+
+    message(glue("Invalid roir_reduce method in $extract${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract/roi_reduce")
+  }
+
+  
+
 }
