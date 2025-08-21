@@ -2,7 +2,7 @@
 #' Run the processing pipeline
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
-#'   Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
+#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
 #'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
@@ -61,6 +61,11 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   prompt <- is.null(steps)
 
   if (isFALSE(prompt)) {
+    if ("flywheel_sync" %in% steps) {
+      if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
+      if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
+      if (is.null(scfg$flywheel_sync$dropoff_directory)) stop("Cannot run flywheel_sync without a dropoff_directory.")
+    }
     if ("bids_conversion" %in% steps) {
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
@@ -114,6 +119,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
     steps <- c()
     cat("\nPlease select which steps to run:\n")
+    steps["flywheel_sync"] <- ifelse(isTRUE(scfg$flywheel_sync$enable), prompt_input(instruct = "Run Flywheel sync?", type = "flag"), FALSE)
     steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
     steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
     steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
@@ -145,6 +151,11 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     #   instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
     #   type = "character", among=c("INFO", "ERROR", "DEBUG")
     # )
+  }
+
+  flywheel_id <- NULL
+  if (isTRUE(steps["flywheel_sync"])) {
+    flywheel_id <- submit_flywheel_sync(scfg)
   }
 
   # look for subject directories in the DICOM directory
@@ -213,9 +224,46 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
 
     for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps, postprocess_streams = postprocess_streams, parent_ids = fsaverage_id)
+      process_subject(
+        scfg,
+        subject_dirs[[ss]],
+        steps,
+        postprocess_streams = postprocess_streams,
+        parent_ids = c(flywheel_id, fsaverage_id)
+      )
     }
   }
+}
+
+# submit Flywheel sync job
+submit_flywheel_sync <- function(scfg, lg = NULL) {
+  checkmate::assert_list(scfg)
+
+  if (is.null(lg)) {
+    lg <- lgr::get_logger_glue("flywheel_sync")
+    if (!"flywheel" %in% names(lg$appenders)) {
+      lg$add_appender(
+        lgr::AppenderFile$new(file.path(scfg$metadata$log_directory, "flywheel_sync_log.txt")),
+        name = "flywheel"
+      )
+    }
+  }
+
+  sched_args <- c(
+    get_job_sched_args(scfg, "flywheel_sync"),
+    glue::glue("--output={scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  )
+
+  cmd <- glue::glue(
+    "fw sync --include dicom --tmp-path '{scfg$flywheel_sync$temp_directory}' {scfg$flywheel_sync$cli_options} {scfg$flywheel_sync$source_url} {scfg$flywheel_sync$dropoff_directory}"
+  )
+
+  job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+
+  lg$info("Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
+  lg$debug("Full command: {attr(job_id, 'cmd')}")
+
+  return(job_id)
 }
 
 # helper for avoiding race condition in setting up fsaverage folder in data_fmriprep

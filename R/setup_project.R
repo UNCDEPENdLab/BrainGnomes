@@ -82,6 +82,7 @@ setup_project <- function(input = NULL, fields = NULL) {
 
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)
+  scfg <- setup_flywheel_sync(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
@@ -405,6 +406,78 @@ setup_mriqc <- function(scfg, fields = NULL) {
   }
 
   scfg <- setup_job(scfg, "mriqc", defaults, fields)
+
+  return(scfg)
+}
+
+#' Configure flywheel sync settings
+#'
+#' Sets up synchronization from a Flywheel instance prior to BIDS conversion.
+#' Prompts for the Flywheel project URL, drop-off directory for downloaded DICOMs,
+#' and a temporary directory used during transfer. Standard job settings are also
+#' collected through `setup_job`.
+#'
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all Flywheel fields will be prompted for.
+#' @return A modified version of `scfg` with the `$flywheel_sync` entry populated.
+#' @keywords internal
+setup_flywheel_sync <- function(scfg, fields = NULL) {
+  defaults <- list(
+    memgb = 8,
+    nhours = 2,
+    ncores = 1,
+    cli_options = "",
+    sched_args = ""
+  )
+
+  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields)))) {
+    scfg$flywheel_sync$enable <- prompt_input(
+      instruct = glue("\n\n      -----------------------------------------------------------------------------------------------------------------
+      Flywheel sync will download DICOM files from a Flywheel project using the
+      'fw sync' command-line interface. This step should be run prior to BIDS
+      conversion to ensure all data are available locally.\n\n"),
+      prompt = "Run Flywheel sync?",
+      type = "flag",
+      default = FALSE
+    )
+  }
+
+  if (isFALSE(scfg$flywheel_sync$enable)) return(scfg)
+
+  if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
+    scfg$flywheel_sync$source_url <- prompt_input(
+      instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
+      type = "character"
+    )
+  }
+
+  # drop-off directory defaults to metadata$dicom_directory
+  if (is.null(scfg$flywheel_sync$dropoff_directory)) {
+    if (is.null(scfg$metadata$dicom_directory)) {
+      scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
+    }
+    scfg$flywheel_sync$dropoff_directory <- scfg$metadata$dicom_directory
+  }
+  if ("flywheel_sync/dropoff_directory" %in% fields) {
+    scfg$flywheel_sync$dropoff_directory <- prompt_input(
+      instruct = "Where should Flywheel place downloaded DICOM files?",
+      type = "character",
+      default = scfg$flywheel_sync$dropoff_directory
+    )
+  }
+
+  if (is.null(scfg$flywheel_sync$temp_directory)) {
+    scfg$flywheel_sync$temp_directory <- file.path(scfg$metadata$project_directory, "flywheel_tmp")
+  }
+  if ("flywheel_sync/temp_directory" %in% fields) {
+    scfg$flywheel_sync$temp_directory <- prompt_input(
+      instruct = "Specify a temporary directory for Flywheel sync operations:",
+      type = "character",
+      default = scfg$flywheel_sync$temp_directory
+    )
+  }
+
+  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
 
   return(scfg)
 }

@@ -169,6 +169,23 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
+  if (isTRUE(scfg$flywheel_sync$enable)) {
+    if (is.null(scfg$flywheel_sync$source_url)) {
+      message("Config file is missing Flywheel source_url. You will be asked for this.")
+      gaps <- c(gaps, "flywheel_sync/source_url")
+    }
+
+    if (!checkmate::test_directory_exists(scfg$flywheel_sync$dropoff_directory)) {
+      message("Config file is missing valid directory for flywheel_sync/dropoff_directory.")
+      gaps <- c(gaps, "flywheel_sync/dropoff_directory")
+    }
+
+    if (!checkmate::test_directory_exists(scfg$flywheel_sync$temp_directory)) {
+      message("Config file is missing valid directory for flywheel_sync/temp_directory.")
+      gaps <- c(gaps, "flywheel_sync/temp_directory")
+    }
+  }
+
   # step-specific required files
   if (isTRUE(scfg$fmriprep$enable)) {
     for (rr in c("compute_environment/fmriprep_container", "fmriprep/fs_license_file")) {
