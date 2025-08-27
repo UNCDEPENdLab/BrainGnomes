@@ -7,7 +7,7 @@
 manage_postprocess_streams(scfg, allow_empty = FALSE)
 }
 \arguments{
-\item{scfg}{A study configuration object, as produced by \code{setup_project()}.}
+\item{scfg}{A project configuration object, as produced by \code{setup_project()}.}
 
 \item{allow_empty}{Logical indicating whether finishing with zero streams is
 permitted without confirmation.}

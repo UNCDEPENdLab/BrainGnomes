@@ -7,7 +7,7 @@
 setup_project_metadata(scfg = NULL, fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object created by \code{setup_project()}.}
+\item{scfg}{A project configuration object created by \code{setup_project()}.}
 
 \item{fields}{A character vector of metadata fields to prompt for (e.g., \code{"metadata/project_name"}).
 If \code{NULL}, all missing or unset fields will be prompted.}

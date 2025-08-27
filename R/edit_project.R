@@ -1,4 +1,3 @@
-
 #' Interactively edit a project configuration by field (field-guided)
 #'
 #' Allows the user to interactively browse and edit individual fields within the
@@ -18,7 +17,7 @@ edit_project <- function(input = NULL) {
   scfg <- get_scfg_from_input(input)
   # a valid list must be returned for editing
   if (length(scfg) == 0L) stop("input must be a bg_project_cfg object, YAML file, or project directory")
-  
+
   # Define editable fields per setup function
   config_map <- list(
     "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
@@ -43,21 +42,28 @@ edit_project <- function(input = NULL) {
     # "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0))
   )
 
-  job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess")
+  job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")
   job_fields <- c("memgb", "nhours", "ncores", "cli_options", "sched_args")
 
   show_val <- function(val) {
-    if (is.null(val)) "NULL"
-    else if (length(val) == 0L || all(is.na(val))) "None"
-    else if (is.logical(val)) toupper(as.character(val))
-    else if (is.character(val) && length(val) > 1) paste(val, collapse = ", ")
-    else as.character(val)
+    if (is.null(val)) {
+      "NULL"
+    } else if (length(val) == 0L || all(is.na(val))) {
+      "None"
+    } else if (is.logical(val)) {
+      toupper(as.character(val))
+    } else if (is.character(val) && length(val) > 1) {
+      paste(val, collapse = ", ")
+    } else {
+      as.character(val)
+    }
   }
 
   # Top-level menu loop
   repeat {
     choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit"),
-                          title = "Select a configuration area to edit:")
+      title = "Select a configuration area to edit:"
+    )
 
     if (choice == "Quit" || choice == "") {
       message("Exiting configuration editor.")
@@ -99,6 +105,33 @@ edit_project <- function(input = NULL) {
           scfg,
           stream_name = stream,
           fields = paste0("postprocess/", stream, "/", names(selected_job_fields))
+        )
+      } else if (job == "extract_rois") {
+        streams <- get_extract_stream_names(scfg)
+        if (length(streams) == 0) {
+          message("No ROI extraction streams defined.")
+          next
+        }
+
+        stream <- if (length(streams) == 1L) streams else select_list_safe(streams, title = "Select ROI extraction stream:")
+        if (length(stream) == 0 || stream == "") next
+
+        job_field_display <- sapply(job_fields, function(fld) {
+          val <- get_nested_values(scfg, paste0("extract_rois/", stream, "/", fld))
+          sprintf("%s [ %s ]", fld, show_val(val))
+        })
+
+        selected_job_fields <- select_list_safe(job_field_display,
+          multiple = TRUE,
+          title = glue::glue("Select fields to edit for extract stream '{stream}':")
+        )
+
+        if (length(selected_job_fields) == 0) next
+
+        scfg <- setup_extract_stream(
+          scfg,
+          stream_name = stream,
+          fields = paste0("extract_rois/", stream, "/", names(selected_job_fields))
         )
       } else {
         job_field_display <- sapply(job_fields, function(fld) {

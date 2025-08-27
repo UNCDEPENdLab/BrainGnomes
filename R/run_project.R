@@ -16,7 +16,7 @@
 #'   `"postprocess"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all postprocess
 #'   streams will be run.
 #' @param extract_streams Optional character vector specifying which ROI extraction streams should be run. If
-#'   `"extract"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
+#'   `"extract_rois"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
 #'   streams will be run.
 #' 
 #' @return A logical value indicating whether the processing pipeline was successfully run.
@@ -99,9 +99,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 
-    if ("extract" %in% steps) {
-      if (!isTRUE(scfg$extract$enable)) stop("extract was requested, but it is disabled in the configuration.")
-      if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract configuration.")
+    if ("extract_rois" %in% steps) {
+      if (!isTRUE(scfg$extract_rois$enable)) stop("extract_rois was requested, but it is disabled in the configuration.")
+      if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract_rois configuration.")
       if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
@@ -141,11 +141,11 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       }
     }
 
-    steps["extract"] <- ifelse(isTRUE(scfg$extract$enable) && length(all_ex_streams) > 0L,
+    steps["extract_rois"] <- ifelse(isTRUE(scfg$extract_rois$enable) && length(all_ex_streams) > 0L,
       prompt_input(instruct = "Run ROI extraction?", type = "flag"), FALSE
     )
 
-    if (isTRUE(steps["extract"])) {
+    if (isTRUE(steps["extract_rois"])) {
       if (length(all_ex_streams) == 1L) {
         extract_streams <- all_ex_streams # if we have only one stream, run it
       } else {

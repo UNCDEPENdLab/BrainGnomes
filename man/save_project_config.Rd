@@ -2,7 +2,7 @@
 % Please edit documentation in R/save_project_config.R
 \name{save_project_config}
 \alias{save_project_config}
-\title{Save a study configuration to YAML}
+\title{Save a project configuration to YAML}
 \usage{
 save_project_config(scfg, file = NULL)
 }

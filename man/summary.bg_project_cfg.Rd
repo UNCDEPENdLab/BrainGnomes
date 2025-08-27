@@ -2,19 +2,19 @@
 % Please edit documentation in R/setup_project.R
 \name{summary.bg_project_cfg}
 \alias{summary.bg_project_cfg}
-\title{summary method for study configuration object}
+\title{summary method for project configuration object}
 \usage{
 \method{summary}{bg_project_cfg}(object, ...)
 }
 \arguments{
-\item{object}{The study configuration object (\code{bg_project_cfg}) to summarize.}
+\item{object}{The project configuration object (\code{bg_project_cfg}) to summarize.}
 
 \item{...}{additional parameters to summary (not used)}
 }
 \value{
 Invisibly returns \code{x} after printing its contents. This function is called
-for its side effect of printing a formatted summary of the study configuration.
+for its side effect of printing a formatted summary of the project configuration.
 }
 \description{
-summary method for study configuration object
+summary method for project configuration object
 }

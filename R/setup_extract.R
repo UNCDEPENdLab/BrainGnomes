@@ -37,7 +37,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       if (sel == "") next
       rel_fields <- extract_field_list()
       field_display <- sapply(rel_fields, function(fld) {
-        val <- get_nested_values(scfg, paste0("extract/", sel, "/", fld))
+        val <- get_nested_values(scfg, paste0("extract_rois/", sel, "/", fld))
         sprintf("%s [ %s ]", fld, show_val(val))
       })
       selected <- select_list_safe(field_display,
@@ -48,7 +48,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       selected_fields <- names(field_display)[field_display %in% selected]
       scfg <- setup_extract_stream(
         scfg,
-        fields = paste0("extract/", sel, "/", selected_fields),
+        fields = paste0("extract_rois/", sel, "/", selected_fields),
         stream_name = sel
       )
     } else if (choice == 3) {
@@ -58,7 +58,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       }
       sel <- select_list_safe(streams, multiple = TRUE, title = "Select stream(s) to delete")
       if (length(sel) == 0) next
-      scfg$extract[sel] <- NULL
+      scfg$extract_rois[sel] <- NULL
     } else if (choice == 4) {
       if (length(streams) == 0) {
         cat("No streams defined.\n")
@@ -66,7 +66,7 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       }
       for (nm in streams) {
         cat(sprintf("\nStream: %s\n", nm))
-        cat(yaml::as.yaml(scfg$extract[[nm]]))
+        cat(yaml::as.yaml(scfg$extract_rois[[nm]]))
       }
     } else if (choice == 5) {
       if (!allow_empty && length(streams) == 0L) {
@@ -84,60 +84,131 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
 setup_extract_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
-  if (is.null(scfg$extract$enable) || (isFALSE(scfg$extract$enable) && any(grepl("extract/", fields)))) {
-    scfg$extract$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = FALSE)
+  if (is.null(scfg$extract_rois$enable) || (isFALSE(scfg$extract_rois$enable) && any(grepl("extract_rois/", fields)))) {
+    scfg$extract_rois$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = FALSE)
   }
 
-  if (!isTRUE(scfg$extract$enable)) return(scfg)
+  if (!isTRUE(scfg$extract_rois$enable)) return(scfg)
+
+  # if fields are present, prompt only for those that are present
+  if (!is.null(fields) && any(grepl("^extract_rois/", fields))) {
+    extract_fields <- grep("^extract_rois/", fields, value = TRUE)
+
+    # extract_rois stream and setting using sub()
+    stream_split <- strsplit(extract_fields, "/", fixed = TRUE)
+
+    # Build a named list of settings by stream
+    stream_list <- split(
+      extract_fields,
+      vapply(stream_split, function(parts) parts[[2]], character(1))
+    )
+
+    for (ss in seq_along(stream_list)) {
+      scfg <- setup_extract_stream(scfg, fields = stream_list[[ss]], stream_name = names(stream_list)[ss])
+    }
+
+    return(scfg) # skip out before menu system when fields are passed
+  }
 
   scfg <- manage_extract_streams(scfg, allow_empty = TRUE)
   return(scfg)
 }
 
 get_extract_stream_names <- function(scfg) {
-  if (is.null(scfg$extract)) return(character())
-  setdiff(names(scfg$extract), "enable")
+  if (is.null(scfg$extract_rois)) return(character())
+  setdiff(names(scfg$extract_rois), "enable")
 }
 
 setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
-  if (is.null(scfg$extract)) scfg$extract <- list(enable = TRUE)
-  if (is.null(stream_name)) {
-    stream_name <- prompt_input("Name of extraction stream:", type = "character")
+  checkmate::assert_string(stream_name, null.ok = TRUE)
+
+  if (!checkmate::test_class(scfg, "bg_project_cfg")) {
+    stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
-  if (is.null(fields)) fields <- c("extract/input_streams", "extract/atlases",
-                                   "extract/roi_reduce", "extract/correlation/method", "extract/rtoz")
+  defaults <- list(
+    memgb = 32L,
+    nhours = 2L,
+    ncores = 1L,
+    cli_options = "",
+    sched_args = ""
+  )
+  
+  # enable should be set by setup_postprocess_streams -- if it's FALSE, don't even think about specific streams
+  if (isFALSE(scfg$extract_rois$enable)) return(scfg)
 
-  if ("extract/input_streams" %in% fields) {
+  # convert fields from extract_rois/<stream_name>/field to extract_rois/field for simplicity in subordinate setup functions
+  if (!is.null(fields)) fields <- sub(paste0("^extract_rois/", stream_name, "/"), "extract_rois/", fields)
+
+  existing_cfg <- TRUE
+  if (is.null(stream_name) || !stream_name %in% names(scfg$extract_rois)) {
+    excfg <- list()
+    existing_cfg <- FALSE
+  } else {
+    excfg <- scfg$extract_rois[[stream_name]]
+  }
+
+  prompt_name <- !existing_cfg
+  if (existing_cfg && "extract_rois/name" %in% fields) {
+    prompt_name <- prompt_input(
+      instruct=glue("This configuration is called {stream_name}."),
+      prompt="Change name?", type = "flag")
+  }
+
+  stream_names <- get_extract_stream_names(scfg)
+  if (prompt_name) {
+    name_valid <- FALSE
+    while (!name_valid) {
+      stream_name <- prompt_input(prompt = "Name for this ROI extraction configuration", type = "character")
+      if (stream_name %in% stream_names) {
+        message("Configuration name must be unique. Existing names are: ", paste(stream_names, collapse = ", "))
+      } else if (stream_name == "enable") {
+        message("Stream name cannot be 'enable'.")
+      } else {
+        name_valid <- TRUE
+      }
+    }
+  }
+  
+  # setup_job requires the top-level list for extract_rois -- spoof this for handling nested field names
+  spoof <- list(extract_rois = excfg)
+  spoof <- setup_job(spoof, "extract_rois", defaults, fields)
+  excfg <- spoof$extract_rois
+
+  if (is.null(fields)) fields <- c("extract_rois/input_streams", "extract_rois/atlases",
+                                   "extract_rois/roi_reduce", "extract_rois/correlation/method", "extract_rois/rtoz")
+
+  if ("extract_rois/input_streams" %in% fields) {
     all_streams <- get_postprocess_stream_names(scfg)
     if (length(all_streams) == 0) {
       stop("No postprocess streams available to attach to extraction stream")
     }
     sel <- select_list_safe(all_streams, multiple = TRUE, title = "Select postprocess stream(s) to use")
-    scfg$extract[[stream_name]]$input_streams <- sel
+    excfg$input_streams <- sel
   }
 
-  if ("extract/atlases" %in% fields) {
+  if ("extract_rois/atlases" %in% fields) {
     atlas <- prompt_input("Atlas NIfTI file(s) (comma separated):", type = "character")
     atlas <- trimws(strsplit(atlas, ",")[[1]])
-    scfg$extract[[stream_name]]$atlases <- atlas
+    excfg$atlases <- atlas
   }
 
-  if ("extract/roi_reduce" %in% fields) {
+  if ("extract_rois/roi_reduce" %in% fields) {
     reduce <- select_list_safe(c("mean", "median", "pca", "huber"),
                                multiple = FALSE, title = "ROI reduction method")
-    scfg$extract[[stream_name]]$roi_reduce <- reduce
+    excfg$roi_reduce <- reduce
   }
 
-  if ("extract/correlation/method" %in% fields) {
+  if ("extract_rois/correlation/method" %in% fields) {
     method <- select_list_safe(c("pearson", "spearman", "kendall", "cor.shrink", "none"),
                                multiple = TRUE, title = "Correlation method(s)")
-    scfg$extract[[stream_name]]$correlation$method <- method
+    excfg$correlation$method <- method
   }
 
-  if ("extract/rtoz" %in% fields) {
-    scfg$extract[[stream_name]]$rtoz <- prompt_input("Perform (Fisher) r-to-z transformation on correlations?", type = "flag")
+  if ("extract_rois/rtoz" %in% fields) {
+    excfg$rtoz <- prompt_input("Perform (Fisher) r-to-z transformation on correlations?", type = "flag")
   }
 
+  scfg$extract_rois[[stream_name]] <- excfg
   return(scfg)
 }

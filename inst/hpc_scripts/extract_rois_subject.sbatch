@@ -14,11 +14,11 @@ set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 source "${pkg_dir}/shell_functions"
 
 # Set trap for common termination signals
-trap 'trap_job_failure extract SIGTERM' SIGTERM
-trap 'trap_job_failure extract SIGINT' SIGINT
-trap 'trap_job_failure extract SIGHUP' SIGHUP
-trap 'trap_job_failure extract SIGQUIT' SIGQUIT
-trap 'traperror extract $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+trap 'trap_job_failure extract_rois SIGTERM' SIGTERM
+trap 'trap_job_failure extract_rois SIGINT' SIGINT
+trap 'trap_job_failure extract_rois SIGHUP' SIGHUP
+trap 'trap_job_failure extract_rois SIGQUIT' SIGQUIT
+trap 'traperror extract_rois $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
 ncores=$SLURM_NTASKS
 
@@ -31,9 +31,6 @@ ncores=$SLURM_NTASKS
 [ -z "$extract_rscript" ] && echo "extract_rscript not set. Exiting." && exit 1
 [ ! -f "$extract_rscript" ] && echo "extract_rscript $extract_rscript not found. Exiting" && exit 1
 [ ! -r "$extract_rscript" ] && echo "extract_rscript $extract_rscript not readable. Exiting" && exit 1
-[ -z "$input_dir" ] && echo "input_dir is not set. Exiting" && exit 1
-[ ! -d "$input_dir" ] && echo "input_dir $input_dir cannot be found. Exiting" && exit 1
-[ -z "$input_regex" ] && echo "input_regex is not set. Exiting" && exit 1
 [ -z "$log_file" ] && echo "log_file not set. Exiting" && exit 1
 [ -z "$R_HOME" ] && echo "R_HOME not set. Exiting" && exit 1
 
@@ -72,7 +69,7 @@ start_time=$(date +%s)
 
 log_message INFO Starting ROI extraction for subject $sub_id in $out_dir with mem: $mem
 
-rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" --input="$input_file" $extract_cli &
+rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" $extract_cli &
 cmd_pid=$!
 
 cmd_status=0

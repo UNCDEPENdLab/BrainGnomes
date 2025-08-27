@@ -16,7 +16,7 @@ a modified version of \code{ppcfg} with the \verb{$postprocess$processing_steps}
 }
 \description{
 This function determines the sequence of postprocessing steps to be applied after fMRIPrep.
-Steps are included based on whether the corresponding \verb{$enable} field is \code{TRUE} in the study configuration.
+Steps are included based on whether the corresponding \verb{$enable} field is \code{TRUE} in the project configuration.
 If the user opts to override the default order, they may manually specify a custom sequence.
 }
 \details{

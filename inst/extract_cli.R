@@ -54,18 +54,16 @@ cfg <- modifyList(cfg, cli_args)
 
 if (!checkmate::test_string(cfg$input)) stop("A valid --input must be provided pointing either to a folder with data to postprocess or to a single 4D NIfTI file")
 
-# accept an input directory and input regex, or a single input file
-input_regex <- cfg$input_regex
-if (checkmate::test_directory(cfg$input)) {
-  # input is a directory -- find all relevant nifti files to postprocess
-  if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
-  input_regex <- BrainGnomes:::construct_bids_regex(input_regex)
-  input_files <- list.files(path = cfg$input, pattern = input_regex, recursive = TRUE, full.names = TRUE)
-} else if (!checkmate::test_file_exists(cfg$input)) {
-  stop("A valid 4D NIfTI file to process must be passed in as --input=<4d file>")
-} else {
-  input_files <- cfg$input # single file input
+# Require
+# --input_regex: the regular expression used for files that entered the relevant postprocess stream
+# --postproc_bids_desc: the BIDS desc field for output files from the stream
+# --input: the directory in which to look for files
+
+if (!checkmate::test_directory(cfg$input)) {
+  stop("No valid directory provided as --input")
 }
+
+input_files <- get_postproc_stream_outputs(cfg$input, cfg$input_regex, cfg$bids_desc)
 
 if (length(input_files) == 0L) {
   stop("Cannot find files to postprocess with --input: ", cfg$input)
@@ -75,19 +73,29 @@ if (length(input_files) == 0L) {
 # print(input_files)
 
 log_file <- Sys.getenv("log_file")
-if (log_file == "") {
-  warning("log_file variable not set. ")
-}
+if (log_file == "") warning("log_file variable not set. ")
 
 atlases <- cfg$atlases
 a_exists <- checkmate::test_file_exists(atlases)
 if (any(!a_exists)) {
-  warning()
+  warning("Cannot find atlas: ", paste(atlases[!a_exists], collapse = ","))
+  atlases <- atlases[a_exists]
 }
-output_files <- c()
-for (ii in input_files) {
-  
+
+arg_list <- list(
+  atlas_files = atlases, # extract_rois loops over these
+  out_dir = cfg$out_dir,
+  cor_method = cfg$cor_method,
+  roi_reduce = cfg$roi_reduce,
+  brain_mask = cfg$brain_mask,
+  min_vox_per_roi = cfg$min_vox_per_roi,
+  rtoz = cfg$rtoz
+)
+
+for (i in input_files) {
+  arg_list$bold_file <- i
+  do.call(BrainGnomes::extract_rois, arg_list)
 }
-out_files <- sapply(input_files, function(ii) BrainGnomes::extract_rois(ii, cfg), USE.NAMES = FALSE)
+
 # cat("Processing completed. Output files: \n")
 # print(out_files)

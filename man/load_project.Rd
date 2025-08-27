@@ -2,7 +2,7 @@
 % Please edit documentation in R/setup_project.R
 \name{load_project}
 \alias{load_project}
-\title{Load a study configuration from a file}
+\title{Load a project configuration from a file}
 \usage{
 load_project(input = NULL, validate = TRUE)
 }
@@ -12,9 +12,9 @@ load_project(input = NULL, validate = TRUE)
 \item{validate}{Logical indicating whether to validate the configuration after loading. Default: TRUE}
 }
 \value{
-A list representing the study configuration (class \code{"bg_project_cfg"}). If \code{validate} is TRUE,
+A list representing the project configuration (class \code{"bg_project_cfg"}). If \code{validate} is TRUE,
 the returned object is validated (missing fields may be set to NULL and noted).
 }
 \description{
-Load a study configuration from a file
+Load a project configuration from a file
 }

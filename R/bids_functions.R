@@ -237,13 +237,50 @@ construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   checkmate::assert_flag(add_niigz_ext)
   
   spec <- trimws(spec)
-  if (grepl("^regex:", spec)) return(trimws(sub("^regex:", "", spec)))
+
+  # Support full regular expression with regex: syntax
+  if (grepl("^regex:", spec)) {
+    rx <- trimws(sub("^regex\\s*:", "", spec))
+    if (!nzchar(rx)) stop("regex: was provided but no regular expression followed it.")
+    return(rx)
+  }
+  
+  # Fail on input that lacks a colon (e.g., a raw regex)
+  if (!grepl(":", spec, fixed = TRUE)) {
+    stop(
+      "Unrecognized spec (no key:value pairs found). ",
+      "If you intend a raw regular expression, prefix it with `regex:`.\n",
+      "Examples:\n",
+      "  regex: \".*task-ridl.*space-MNI152NLin2009cAsym.*_desc-preproc_bold\\\\.nii(\\\\.gz)?$\"\n",
+      "  task:ridl space:MNI152NLin2009cAsym desc:preproc suffix:bold ext:nii.gz"
+    )
+  }
   
   # Parse key-value pairs from spec
   tokens <- strsplit(spec, "\\s+")[[1]]
-  kv <- strsplit(tokens, ":")
-  keys <- vapply(kv, `[`, character(1), 1)
-  vals <- vapply(kv, `[`, character(1), 2)
+  
+  # Each token must be key:value with a non-empty key; value may be any string (possibly empty -> we disallow)
+  m <- regexec("^([A-Za-z]+):(.*)$", tokens)
+  parts <- regmatches(tokens, m)
+
+  if (any(lengths(parts) != 3L)) {
+    bad <- tokens[lengths(parts) != 3L]
+    stop(
+      "Every token must be of the form key:value. Offending token(s): ",
+      paste(shQuote(bad), collapse = ", ")
+    )
+  }
+
+  keys <- tolower(vapply(parts, `[`, "", 2L))
+  vals <- vapply(parts, `[`, "", 3L)
+
+  if (any(!nzchar(vals))) {
+    bad <- tokens[!nzchar(vals)]
+    stop(
+      "Empty value in key:value token(s): ",
+      paste(shQuote(bad), collapse = ", ")
+    )
+  }
   
   # Expand abbreviated keys
   abbr_map <- c(

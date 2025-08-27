@@ -27,7 +27,8 @@
 #' @export
 extract_rois <- function(bold_file, atlas_files, out_dir,
                          cor_method = c("pearson", "spearman", "kendall", "cor.shrink", "none"),
-                         roi_reduce = c("mean", "median", "pca", "huber"), brain_mask = NULL, min_vox_per_roi = 5) {
+                         roi_reduce = c("mean", "median", "pca", "huber"), 
+                         brain_mask = NULL, min_vox_per_roi = 5, rtoz = FALSE) {
   checkmate::assert_file_exists(bold_file)
   checkmate::assert_character(atlas_files, any.missing = FALSE, min.len = 1)
   checkmate::assert_directory_exists(out_dir, access = "w")
@@ -35,7 +36,7 @@ extract_rois <- function(bold_file, atlas_files, out_dir,
   roi_reduce <- match.arg(roi_reduce)
   checkmate::assert_integerish(min_vox_per_roi, len = 1L, lower = 1L)
 
-  lg <- lgr::get_logger_glue("extract")
+  lg <- lgr::get_logger_glue("extract_rois")
 
   bold_img <- RNifti::readNifti(bold_file)
   dim_img <- dim(bold_img)
@@ -112,6 +113,13 @@ extract_rois <- function(bold_file, atlas_files, out_dir,
         } else {
           stats::cor(ts_mat, method = cmeth, use = "pairwise.complete.obs")
         }
+
+        if (isTRUE(rtoz)) {
+          message("Applying the Fisher z transformation to correlation coefficients.")
+          cmat <- atanh(cmat)
+          diag(cmat) <- 15 # avoid Inf in output by a large value. tanh(15) is ~1
+        }
+        
         cor_bids <- modifyList(bids_info, list(description = paste0(desc, "_cor-", cmeth),
                                                suffix = "connectivity", ext = ".tsv"))
         cor_file <- file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))

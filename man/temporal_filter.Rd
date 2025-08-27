@@ -21,9 +21,9 @@ temporal_filter(
 
 \item{out_desc}{The BIDS description field for the file output by this step}
 
-\item{low_pass_hz}{Low-pass filter cutoff in Hz. Use \code{0} to skip.}
+\item{low_pass_hz}{Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.}
 
-\item{high_pass_hz}{High-pass filter cutoff in Hz. Use \code{Inf} to skip.}
+\item{high_pass_hz}{Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use \code{Inf} to skip.}
 
 \item{tr}{Repetition time (TR) in seconds. Required to convert Hz to volumes.}
 
