@@ -546,6 +546,13 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
     gaps <- c(gaps, "extract_rois/rtoz")
   }
 
+  if (!"min_vox_per_roi" %in% names(ecfg)) {
+    gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+  } else if (!checkmate::test_integerish(ecfg$min_vox_per_roi, len=1L, lower=1L)) {
+    message(glue("Invalid min_vox_per_roi in $extract_rois${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+  }
+
   return(list(extract_rois = ecfg, gaps = gaps))
 
 }

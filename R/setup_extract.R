@@ -175,8 +175,12 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   spoof <- setup_job(spoof, "extract_rois", defaults, fields)
   excfg <- spoof$extract_rois
 
-  if (is.null(fields)) fields <- c("extract_rois/input_streams", "extract_rois/atlases",
-                                   "extract_rois/roi_reduce", "extract_rois/correlation/method", "extract_rois/rtoz")
+  if (is.null(fields)) {
+    fields <- c(
+      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/roi_reduce",
+      "extract_rois/correlation/method", "extract_rois/rtoz", "extract_rois/min_vox_per_roi"
+    )
+  }
 
   if ("extract_rois/input_streams" %in% fields) {
     all_streams <- get_postprocess_stream_names(scfg)
@@ -207,6 +211,17 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
 
   if ("extract_rois/rtoz" %in% fields) {
     excfg$rtoz <- prompt_input("Perform (Fisher) r-to-z transformation on correlations?", type = "flag")
+  }
+
+  if ("extract_rois/min_vox_per_roi" %in% fields) {
+    excfg$min_vox_per_roi <- BrainGnomes:::prompt_input(instruct = glue("
+      Sometimes smaller ROIs, especially near the edge of the brain, may not have enough voxels to yield
+      a reasonable average time series. In this case, it's often best to exclude these ROIs, rather than
+      include a noisy estimate. How many voxels must an ROI have to be extracted (and entered into correlation)?
+      Note that ROIs less than this number will be set to NA in the output, but will still be labeled correctly rather
+      than being dropped altogether."),
+
+    "Enter the minimum number of voxels for valid ROIs:", type = "integer", lower = 1L, default=5L)
   }
 
   scfg$extract_rois[[stream_name]] <- excfg
