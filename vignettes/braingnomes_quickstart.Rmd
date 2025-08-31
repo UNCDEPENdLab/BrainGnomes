@@ -286,6 +286,15 @@ run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
 
 The available `steps` are `"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"`. Note that if you request a step in `run_project` that was never configured it will result in an error.
 
+# Step 5: Extract ROI time series
+
+If ROI extraction was enabled during project setup, BrainGnomes can summarise
+atlas-defined regions and, optionally, compute ROI-to-ROI connectivity. The
+`extract_rois()` function loops over configured atlases and writes out ROI time
+series and correlation matrices to the project’s `data_rois` directory using
+BIDS-style filenames. For more details about ROI reduction choices and
+correlation options, see the [Extracting ROIs vignette](extract_rois.html).
+
 # Running BrainGnomes on the command line
 
 As of August 2025, this is a work in progress. That said, there is basic support for using BrainGnomes on the Linux command line. This is helpful if you prefer not to start an R session or you just want to perform basic operations such as

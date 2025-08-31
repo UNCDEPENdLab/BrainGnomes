@@ -1,0 +1,81 @@
+---
+title: "Extracting ROI Timeseries and Connectivity"
+author: "Michael Hallquist"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Extracting ROIs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Overview
+
+The `extract_rois()` function summarises postprocessed BOLD data within
+atlas‑defined regions and can also compute ROI‑to‑ROI connectivity matrices.
+It is typically run after postprocessing completes and writes its outputs to
+the project’s `data_rois` directory.
+
+# Configuring extraction
+
+ROI extraction is enabled during `setup_project()` or `edit_project()`. Once
+configured, `run_project()` will schedule extraction jobs or you can call
+`extract_rois()` directly:
+
+```{r eval = FALSE}
+library(BrainGnomes)
+extract_rois(
+  bold_file = "sub-01_task-rest_desc-clean_bold.nii.gz",
+  atlas_files = "Schaefer400.nii.gz",
+  out_dir = "data_rois",
+  roi_reduce = "mean",
+  cor_method = c("pearson", "cor.shrink")
+)
+```
+
+# ROI reduction methods
+
+Each atlas region contains many voxels. The `roi_reduce` argument controls how
+those voxel time series are combined into a single ROI signal:
+
+* **mean** – averages all voxels (default).
+* **median** – takes the median to reduce sensitivity to outliers.
+* **pca** – extracts the first principal component and aligns its sign with the
+  mean, capturing the dominant pattern of variation.
+* **huber** – applies a Huber M‑estimator for a robust trimmed mean.
+
+# Choosing correlation methods
+
+Connectivity matrices are optional and are governed by the `cor_method`
+argument. Multiple methods may be supplied. Supported options include:
+
+* **pearson** – standard product–moment correlation.
+* **spearman** – rank‑based correlation that is robust to non‑linear but
+  monotonic relationships.
+* **kendall** – Kendall’s \tau for ordinal or small sample data.
+* **cor.shrink** – shrinkage estimator from the `corpcor` package, useful when
+  the number of ROIs is large relative to the number of time points.
+
+The `rtoz` flag applies Fisher’s \(z\) transform to correlations, producing
+unbounded values better suited for group analysis.
+
+# Output files and naming
+
+Outputs are organised by atlas within `data_rois/<atlas_name>/`.  Filenames use
+extended BIDS entities: the atlas appears as `rois-<Atlas>` and correlation
+methods are labelled `cor-<method>`. For example:
+
+```
+sub-01_task-rest_desc-clean_rois-Schaefer400_timeseries.tsv
+sub-01_task-rest_desc-clean_rois-Schaefer400_cor-pearson_connectivity.tsv
+```
+
+These naming conventions ensure that time‑series and connectivity files can be
+matched to their originating runs and analysis choices.
+
+# Summary
+
+`extract_rois()` provides a flexible way to derive ROI signals and functional
+connectivity from postprocessed fMRI data. By selecting appropriate reduction
+and correlation methods, you can tailor ROI analyses to the needs of your
+study.
+
