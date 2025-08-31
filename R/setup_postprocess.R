@@ -149,14 +149,15 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
     scfg$postprocess$enable <- prompt_input(
       instruct = glue("\n\n
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
-                These steps may include:
-                  - Applying a brain mask
-                  - Spatial smoothing
-                  - Denoising using ICA-AROMA
-                  - 'Scrubbing' of high-motion/high-artifact timepoints
-                  - Temporal filtering (e.g., high-pass filtering)
-                  - Intensity normalization
-                  - Confound calculation and regression
+
+        These steps may include:
+          - Applying a brain mask
+          - Spatial smoothing
+          - Denoising using ICA-AROMA
+          - 'Scrubbing' of high-motion/high-artifact timepoints
+          - Temporal filtering (e.g., high-pass filtering)
+          - Intensity normalization
+          - Confound calculation and regression
 
         Do you want to enable postprocessing of the BOLD data?\n"
       ),
@@ -167,6 +168,11 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   }
 
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
+
+  # prompt for fsl container at this step
+  if (!validate_exists(scfg$compute_environment$fsl_container)) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/fsl_container")
+  }
 
   # if fields are present, prompt only for those that are present
   if (!is.null(fields) && any(grepl("^postprocess/", fields))) {

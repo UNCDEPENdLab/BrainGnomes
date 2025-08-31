@@ -227,6 +227,11 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, "postprocess/enable")
     scfg$postprocess$enable <- NULL
   } else if (isTRUE(scfg$postprocess$enable)) {
+    # enforce presence of fsl container
+    if (!checkmate::test_file_exists(scfg$compute_environment$fsl_container)) {
+      message("Postprocessing is enabled but fsl_container is missing. You will be asked for this.")
+      gaps <- c(gaps, "compute_environment/fsl_container")
+    }
     postprocess_result <- validate_postprocess_configs(scfg$postprocess, quiet)
     scfg$postprocess <- postprocess_result$postprocess
     gaps <- c(gaps, postprocess_result$gaps)

@@ -96,6 +96,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
       if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
+      if (!validate_exists(scfg$compute_environment$fsl_container)) stop("Cannot run postprocessing without a valid FSL container.")
       if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 
@@ -175,7 +176,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   )
 
   if (isTRUE(steps["bids_conversion"])) {
-    subject_dicom_dirs <- get_subject_dirs(scfg$metadata$dicom_directory, sub_regex = scfg$bids_conversion$sub_regex, ses_regex = scfg$bids_conversion$ses_regex, full.names = TRUE)
+    subject_dicom_dirs <- get_subject_dirs(
+      scfg$metadata$dicom_directory,
+      sub_regex = scfg$bids_conversion$sub_regex,
+      sub_id_match = scfg$bids_conversion$sub_id_match,
+      ses_regex = scfg$bids_conversion$ses_regex,
+      ses_id_match = scfg$bids_conversion$ses_id_match,
+      full.names = TRUE
+    )
 
     if (nrow(subject_dicom_dirs) == 0L) {
       warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))

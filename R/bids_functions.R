@@ -26,8 +26,8 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 
   # Define regex patterns for each BIDS entity
   patterns <- list(
-    subject = "sub-(\\d+)",
-    session = "ses-(\\d+)",
+    subject = "sub-([0-9A-Za-z]+)",
+    session = "ses-([0-9A-Za-z]+)",
     task = "task-([a-zA-Z0-9]+)",
     acquisition = "acq-([a-zA-Z0-9]+)",
     reconstruction = "rec-([a-zA-Z0-9]+)",
@@ -440,7 +440,7 @@ get_fmriprep_outputs <- function(in_file) {
   # Extract core identifier (everything up to desc-*)
   # prefix <- sub("_desc-preproc_bold$", "", base)
 
-  prefix <- glue("sub-{f_info$subject}_task-{f_info$task}")
+  prefix <- glue("sub-{f_info$subject}{if (!is.na(f_info$session)) paste0('_ses-', f_info$session)}_task-{f_info$task}")
   if (!is.na(f_info$run)) prefix <- glue("{prefix}_run-{f_info$run}")
 
   # Possible base path (prefix may include space/acq/etc)

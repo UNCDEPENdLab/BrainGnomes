@@ -24,7 +24,7 @@ edit_project <- function(input = NULL) {
       "project_name", "project_directory", "dicom_directory", "bids_directory", "scratch_directory", "templateflow_home"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
-      "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container"
+      "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container"
     )),
     "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
       "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
