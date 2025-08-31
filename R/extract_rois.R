@@ -12,6 +12,7 @@
 #' @param atlas_files Character vector of atlas NIfTI files with integer
 #'   ROI labels.
 #' @param out_dir Directory where output files should be written.
+#' @param log_file If not `NULL`, the log file to which details should be written.
 #' @param cor_method Correlation method(s) to use when computing functional
 #'   connectivity. Supported options include "pearson", "spearman",
 #'   "kendall", and "cor.shrink". Use "none" to skip correlation
@@ -29,6 +30,7 @@
 #' @param rtoz If `TRUE`, using Fisher's z (aka atanh) transformation on correlations to make them
 #'   continuous and unbounded, rather than `[0,1]`. The diagonal of the correlation matrices beccomes
 #'   15 to approximate the 1.0 correlation, rather than making it `Inf`.
+#' @param overwrite If `TRUE`, overwrite existing timeseries.tsv or connectivity.tsv files.
 #' 
 #' @return A named list. Each element corresponds to an atlas and contains
 #'   paths to the written timeseries (\code{timeseries}) and correlation
@@ -37,7 +39,8 @@
 extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
                          cor_method = c("pearson", "spearman", "kendall", "cor.shrink"),
                          roi_reduce = c("mean", "median", "pca", "huber"),
-                         brain_mask = NULL, min_vox_per_roi = 5, save_ts = TRUE, rtoz = FALSE) {
+                         brain_mask = NULL, min_vox_per_roi = 5, save_ts = TRUE, rtoz = FALSE,
+                         overwrite = FALSE) {
   checkmate::assert_file_exists(bold_file)
   checkmate::assert_character(atlas_files, any.missing = FALSE, min.len = 1)
   checkmate::assert_directory_exists(out_dir, access = "w")
@@ -70,6 +73,7 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
     to_log(lg, "fatal", "brain_mask must be a valid NIfTI file or NULL")
   }
 
+  compute_correlation <- !is.null(cor_method) && length(cor_method) > 0L
   bids_info <- as.list(extract_bids_info(bold_file))
   sub_id <- bids_info$subject
   outputs <- list()
@@ -78,6 +82,14 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
   for (atlas in atlas_files) {
     checkmate::assert_file_exists(atlas)
     atlas_img <- RNifti::readNifti(atlas)
+
+    atlas_name <- sub("\\.nii(\\.gz)?$", "", basename(atlas))
+    out_dir_atlas <- file.path(out_dir, atlas_name)
+    if (!dir.exists(out_dir_atlas)) dir.create(out_dir_atlas, recursive = TRUE)
+    
+    # expected timeseries file
+    ts_bids <- modifyList(bids_info, list(rois = bids_camelcase(atlas_name), suffix = "timeseries", ext = ".tsv"))
+    ts_file <- file.path(out_dir_atlas, construct_bids_filename(ts_bids, full.names = FALSE))
 
     # compare dimensions of atlas and image
     if (!identical(dim(atlas_img)[1:3], dim_img[1:3])) {
@@ -137,21 +149,29 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
       }
     }
 
-    atlas_name <- sub("\\.nii(\\.gz)?$", "", basename(atlas))
-    out_dir_atlas <- file.path(out_dir, atlas_name)
-    if (!dir.exists(out_dir_atlas)) dir.create(out_dir_atlas, recursive = TRUE)
-
     if (isTRUE(save_ts)) {
-      ts_bids <- modifyList(bids_info, list(rois = bids_camelcase(atlas_name), suffix = "timeseries", ext = ".tsv"))
-      ts_file <- file.path(out_dir_atlas, construct_bids_filename(ts_bids, full.names = FALSE))
-      to_log(lg, "info", "Writing subject {sub_id} extracted time series to {ts_file}")
-      data.table::fwrite(ts_df, ts_file, sep = "\t")
+      if (file.exists(ts_file) && isFALSE(overwrite)) {
+        to_log(lg, "info", "Not overwriting existing time series file {ts_file}")
+      } else {
+        if (file.exists(ts_file)) {
+          to_log(lg, "info", "Overwriting subject {sub_id} extracted time series: {ts_file}")
+        } else {
+          to_log(lg, "info", "Writing subject {sub_id} extracted time series to {ts_file}")
+        }
+        data.table::fwrite(ts_df, ts_file, sep = "\t")
+      }
     } else {
       ts_file <- NULL
     }
+    
+    enough_timepoints <- TRUE
+    if (nrow(ts_mat) < 20L) {
+      to_log(lg, "warn", "Only {nrow(ts_mat)} timepoints in timeseries. Cannot compute valid correlations")
+      enough_timepoints <- FALSE
+    }
 
     cor_files <- NULL
-    if (!is.null(cor_method) && length(cor_method) > 0L) {
+    if (enough_timepoints && compute_correlation) {
       cor_files <- lapply(cor_method, function(cmeth) {
         cmat <- if (cmeth == "cor.shrink") {
           corpcor::cor.shrink(ts_mat)
