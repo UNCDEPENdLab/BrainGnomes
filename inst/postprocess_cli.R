@@ -53,7 +53,7 @@ for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
 # ), collapse = " ")
 
 # parse CLI inputs into a nested list, if relevant
-cli_args <- BrainGnomes::parse_cli_args(args)
+cli_args <- parse_cli_args(args)
 
 if (!is.null(cli_args$config_yaml)) {
   checkmate::assert_file_exists(cli_args$config_yaml)
@@ -73,7 +73,7 @@ input_regex <- cfg$input_regex
 if (checkmate::test_directory(cfg$input)) {
   # input is a directory -- find all relevant nifti files to postprocess
   if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
-  input_regex <- BrainGnomes:::construct_bids_regex(input_regex)
+  input_regex <- construct_bids_regex(input_regex)
   input_files <- list.files(path = cfg$input, pattern = input_regex, recursive = TRUE, full.names = TRUE)
 } else if (!checkmate::test_file_exists(cfg$input)) {
   stop("A valid 4D NIfTI file to process must be passed in as --input=<4d file>")
@@ -89,6 +89,6 @@ if (length(input_files) == 0L) {
 # print(input_files)
 
 
-out_files <- sapply(input_files, function(ii) BrainGnomes::postprocess_subject(ii, cfg), USE.NAMES = FALSE)
+out_files <- sapply(input_files, function(ii) postprocess_subject(ii, cfg), USE.NAMES = FALSE)
 # cat("Processing completed. Output files: \n")
 # print(out_files)

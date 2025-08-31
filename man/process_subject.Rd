@@ -20,7 +20,10 @@ process_subject(
 
 \item{steps}{A named logical vector indicating which steps to run}
 
-\item{postprocess_streams}{Optional character vector of ROI extraction configuration names to run. If NULL,
+\item{postprocess_streams}{Optional character vector of postprocess configuration names to run. If NULL,
+all available postprocessing streams will be run.}
+
+\item{extract_streams}{Optional character vector of ROI extraction configuration names to run. If NULL,
 all available extraction streams will be run.}
 
 \item{parent_ids}{An optional character vector of HPC job ids that must complete before this subject is run.}

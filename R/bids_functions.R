@@ -236,7 +236,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 #'   construct_bids_regex("regex:^sub-[0-9]+_task-rest_.*\\.nii\\.gz$")
 #' }
 #'
-#' @keywords internal
+#' @export
 construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   checkmate::assert_string(spec)
   checkmate::assert_flag(add_niigz_ext)
@@ -578,9 +578,12 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
 #' @return A character string in camelCase form.
 #' @keywords internal
 #' @examples
-#' bids_camelcase("task-ridl_name")
-#' bids_camelcase("echo_time-series")
-#' bids_camelcase("space-mni152nlin2009casym")
+#' \dontrun{
+#'   bids_camelcase("task-ridl_name")
+#'   bids_camelcase("echo_time-series")
+#'   bids_camelcase("space-mni152nlin2009casym")
+#' }
+#' 
 bids_camelcase <- function(x) {
   stopifnot(is.character(x), length(x) == 1)
   

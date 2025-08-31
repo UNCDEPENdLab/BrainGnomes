@@ -22,7 +22,7 @@ null_empty <- function(x) {
 #' @param steps A named logical vector indicating which steps to run
 #' @param postprocess_streams Optional character vector of postprocess configuration names to run. If NULL,
 #'   all available postprocessing streams will be run.
-#' @param postprocess_streams Optional character vector of ROI extraction configuration names to run. If NULL,
+#' @param extract_streams Optional character vector of ROI extraction configuration names to run. If NULL,
 #'   all available extraction streams will be run.
 #' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
 #' @return A logical value indicating whether the preprocessing was successful

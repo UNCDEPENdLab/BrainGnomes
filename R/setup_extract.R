@@ -244,7 +244,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/min_vox_per_roi" %in% fields) {
-    excfg$min_vox_per_roi <- BrainGnomes:::prompt_input(instruct = glue("
+    excfg$min_vox_per_roi <- prompt_input(instruct = glue("
       Sometimes smaller ROIs, especially near the edge of the brain, may not have enough voxels to yield
       a reasonable average time series. In this case, it's often best to exclude these ROIs, rather than
       include a noisy estimate. How many voxels must an ROI have to be extracted (and entered into correlation)?

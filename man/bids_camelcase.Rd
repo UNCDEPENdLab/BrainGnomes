@@ -17,8 +17,11 @@ Removes hyphens/underscores and capitalizes the letter following them.
 E.g., "task-ridl_name" -> "taskRidlName".
 }
 \examples{
-bids_camelcase("task-ridl_name")
-bids_camelcase("echo_time-series")
-bids_camelcase("space-mni152nlin2009casym")
+\dontrun{
+  bids_camelcase("task-ridl_name")
+  bids_camelcase("echo_time-series")
+  bids_camelcase("space-mni152nlin2009casym")
+}
+
 }
 \keyword{internal}

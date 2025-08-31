@@ -217,7 +217,50 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
   return(outputs)
 }
 
-# borrowed from MASS package to avoid additional dependency
+#' Huber M-estimator of Location and Scale
+#' Borrowed from the `MASS` package to avoid dependency
+#'
+#' Computes a robust estimate of the mean (`mu`) and scale (`s`) of a numeric
+#' vector using Huber's Proposal 2 (Huber, 1964). The estimator iteratively
+#' down-weights values that are further than \eqn{k} times the median absolute
+#' deviation (MAD) from the current location estimate, yielding resistance to
+#' outliers.
+#'
+#' @param y A numeric vector of observations. Missing values (`NA`) are removed.
+#' @param k Positive numeric tuning constant controlling the amount of
+#'   winsorization. Larger values of \code{k} make the estimate closer to the
+#'   arithmetic mean, while smaller values increase robustness.
+#'   The default is \code{1.5}.
+#' @param tol Numeric convergence tolerance for the iterative updates, expressed
+#'   relative to the MAD. Defaults to \code{1e-6}.
+#'
+#' @return A list with two elements:
+#'   \describe{
+#'     \item{mu}{The robust location estimate (Huber M-estimator of mean).}
+#'     \item{s}{The robust scale estimate, given by the MAD of the input sample.}
+#'   }
+#'
+#' @details
+#' The algorithm starts from the sample median and the MAD, then iteratively
+#' updates the location by winsorizing values outside the interval
+#' \eqn{[mu - k s, mu + k s]} until convergence within \code{tol}.
+#' If the MAD is zero, the function stops with an error since a scale estimate
+#' cannot be computed.
+#'
+#' @references
+#' Huber, P. J. (1964). Robust Estimation of a Location Parameter.
+#' \emph{Annals of Mathematical Statistics}, 35(1), 73–101.
+#'
+#' @examples
+#' set.seed(123)
+#' x <- c(rnorm(100), 10)  # outlier
+#' huber(x)
+#'
+#' @seealso [stats::median], [stats::mad]
+#'
+#' @keywords internal
+#' @noRd
+#' @importFrom stats mad median
 huber <- function(y, k = 1.5, tol = 1.0e-6) {
   y <- y[!is.na(y)]
   n <- length(y)

@@ -46,4 +46,3 @@ the BIDS specification. It supports both full entity names and their common abbr
 }
 
 }
-\keyword{internal}
