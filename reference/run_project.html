@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5-3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,6 +49,7 @@
 <span>  steps <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  subject_filter <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  postprocess_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  force <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -59,7 +60,7 @@
 
 
 <dl><dt id="arg-scfg">scfg<a class="anchor" aria-label="anchor" href="#arg-scfg"></a></dt>
-<dd><p>A list containing the study configuration.</p></dd>
+<dd><p>a project configuration object as produced by <code>load_project</code> or <code>setup_project</code></p></dd>
 
 
 <dt id="arg-steps">steps<a class="anchor" aria-label="anchor" href="#arg-steps"></a></dt>
@@ -83,6 +84,12 @@ on specific subject/session combinations.</p></dd>
 streams will be run.</p></dd>
 
 
+<dt id="arg-extract-streams">extract_streams<a class="anchor" aria-label="anchor" href="#arg-extract-streams"></a></dt>
+<dd><p>Optional character vector specifying which ROI extraction streams should be run. If
+<code>"extract_rois"`` is included in </code>steps`, then this setting lets the user choose streams. If NULL, all extraction
+streams will be run.</p></dd>
+
+
 <dt id="arg-debug">debug<a class="anchor" aria-label="anchor" href="#arg-debug"></a></dt>
 <dd><p>A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).</p></dd>
 
@@ -99,7 +106,7 @@ streams will be run.</p></dd>
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span>  <span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
-<span class="r-in"><span>    <span class="co"># Assuming you have a valid study configuration list named `study_config`</span></span></span>
+<span class="r-in"><span>    <span class="co"># Assuming you have a valid project configuration list named `study_config`</span></span></span>
 <span class="r-in"><span>    <span class="fu">run_project</span><span class="op">(</span><span class="va">study_config</span>, prompt <span class="op">=</span> <span class="cn">TRUE</span>, force <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>

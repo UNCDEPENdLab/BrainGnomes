@@ -11,6 +11,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/apply_aroma.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/apply_mask.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/args_to_df.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/bids_camelcase.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/build_cli_args.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_4d.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_cpp.html</loc></url>
@@ -25,10 +26,12 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/edit_project.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_capturing_groups.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_rois.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/file_sans_ext.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_nested_values.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_stream_outputs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_subject_dirs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_subject_logger.html</loc></url>
@@ -99,8 +102,8 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/summary.bg_status_df.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/temporal_filter.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_bids_conversion.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_exists.html</loc></url>
-<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_postprocess_config_single.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_project.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/wait_for_job.html</loc></url>
 </urlset>
