@@ -1116,3 +1116,53 @@ setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
   return(ppcfg)
 }
 
+
+
+#' Determine expected output files for a postprocessing stream
+#'
+#' Given a directory of candidate input files and a specification for
+#' matching those inputs, this function returns the full paths to the
+#' corresponding postprocessed NIfTI files. The output filenames are
+#' derived by replacing the `desc` entity in each input file with the
+#' stream's `bids_desc` value.
+#'
+#' @param input_dir Directory containing the input NIfTI files to be
+#'   postprocessed.
+#' @param input_regex Specification used to match the input files. This may be
+#'   a space-separated set of BIDS entities (e.g., "desc:preproc suffix:bold")
+#'   or a regular expression prefixed with "regex:".
+#' @param bids_desc The `desc` value to use for the output filenames.
+#'
+#' @return A character vector of full paths to the expected postprocessed
+#'   NIfTI files. The vector is named with the corresponding input file.
+#' @export
+#' @examples
+#' \dontrun{
+#' get_postproc_stream_outputs(
+#'   input_dir = "/path/to/subject",
+#'   input_regex = "desc:preproc suffix:bold",
+#'   bids_desc = "clean"
+#' )
+#' }
+#' @importFrom checkmate assert_directory_exists assert_string
+get_postproc_stream_outputs <- function(input_dir, input_regex, bids_desc) {
+  checkmate::assert_directory_exists(input_dir)
+  if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
+  checkmate::assert_string(input_regex)
+  checkmate::assert_string(bids_desc)
+
+  pattern <- construct_bids_regex(input_regex)
+  in_files <- list.files(path = input_dir, pattern = pattern, recursive = TRUE, full.names = TRUE)
+
+  if (length(in_files) == 0L) return(character(0))
+
+  out_files <- vapply(in_files, function(f) {
+    info <- as.list(extract_bids_info(f))
+    info$description <- bids_desc
+    construct_bids_filename(info, full.names = TRUE)
+  }, character(1))
+
+  # leave as unnamed for now (don't need to remember input file)
+  # names(out_files) <- in_files
+  out_files
+}

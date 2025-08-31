@@ -7,7 +7,7 @@
 get_project_status(scfg)
 }
 \arguments{
-\item{scfg}{Study configuration list.}
+\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 }
 \value{
 data.frame with one row per subject/session containing completion status columns.

@@ -7,7 +7,7 @@
 setup_postprocess_streams(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object, as produced by \code{setup_project()}.}
+\item{scfg}{A project configuration object, as produced by \code{setup_project()}.}
 
 \item{fields}{A character vector of field names to prompt for. If \code{NULL}, all postprocessing fields will be prompted.}
 }

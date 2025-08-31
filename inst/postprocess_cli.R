@@ -31,8 +31,8 @@ if (!suppressMessages(require("BrainGnomes", character.only=TRUE))) {
   stop("This script must be run in an R environment with BrainGnomes installed.")
 }
 
-# handle package dependencies
-for (pkg in c("glue", "oro.nifti", "checkmate", "data.table", "yaml")) {
+# handle package dependencies -- though these should really be handled when BrainGnomes is installed
+for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
   if (!suppressMessages(require(pkg, character.only = TRUE))) {
     message("Installing missing package dependency: ", pkg)
     install.packages(pkg)
@@ -87,6 +87,7 @@ if (length(input_files) == 0L) {
 
 # cat("About to postprocess the following files: ")
 # print(input_files)
+
 
 out_files <- sapply(input_files, function(ii) BrainGnomes::postprocess_subject(ii, cfg), USE.NAMES = FALSE)
 # cat("Processing completed. Output files: \n")

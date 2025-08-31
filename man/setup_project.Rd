@@ -16,7 +16,7 @@ a warning. For \code{setup_project} only, this argument may also be
 \item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fields will be prompted for.}
 }
 \value{
-A \code{bg_project_cfg} list containing the study configuration. New fields are added based on user input,
+A \code{bg_project_cfg} list containing the project configuration. New fields are added based on user input,
 and missing entries are filled with defaults. The configuration is written
 to \code{project_config.yaml} in the project directory unless the user declines
 to overwrite an existing file.
