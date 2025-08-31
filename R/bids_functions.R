@@ -138,9 +138,12 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
   checkmate::assert_data_frame(bids_df)
 
-  abbr_map <- c(sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
-                dir = "direction", rec = "reconstruction", hemi = "hemisphere",
-                res = "resolution", desc = "description", fmap = "fieldmap")
+  abbr_map <- c(
+    sub = "subject", ses = "session", acq = "acquisition", mod = "modality",
+    dir = "direction", rec = "reconstruction", hemi = "hemisphere",
+    res = "resolution", desc = "description", fmap = "fieldmap",
+    cor = "correlation"  # custom for extract_rois
+  )
   names(bids_df) <- ifelse(names(bids_df) %in% names(abbr_map), abbr_map[names(bids_df)], names(bids_df))
 
   if (!"suffix" %in% names(bids_df)) stop("The input must include a 'suffix' column.")
@@ -150,7 +153,8 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   entity_order <- c(
     "subject", "session", "task", "acquisition", "reconstruction", 
     "direction", "run", "modality", "echo",  "hemisphere", "space",
-    "resolution", "description", "fieldmap"
+    "resolution", "description", "fieldmap",
+    "rois", "cor" # custom entities for extract_rois
   )
   
   # BIDS entity prefixes
@@ -158,7 +162,8 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
     subject = "sub", session = "ses", task = "task", acquisition = "acq", reconstruction = "rec", 
     direction = "dir", run = "run", modality = "mod", echo = "echo",
     hemisphere = "hemi", space = "space",
-    resolution = "res", description = "desc", fieldmap = "fmap"
+    resolution = "res", description = "desc", fieldmap = "fmap",
+    rois = "rois", correlation = "cor"
   )
   
   # only attempt to reconstruct entities present in the input data
@@ -563,3 +568,22 @@ get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "
   return(do.call(rbind.data.frame, result))
 }
 
+
+#' Convert a string to BIDS-compatible camelCase
+#'
+#' Removes hyphens/underscores and capitalizes the letter following them.
+#' E.g., "task-ridl_name" -> "taskRidlName".
+#'
+#' @param x A character string.
+#' @return A character string in camelCase form.
+#' @keywords internal
+#' @examples
+#' bids_camelcase("task-ridl_name")
+#' bids_camelcase("echo_time-series")
+#' bids_camelcase("space-mni152nlin2009casym")
+bids_camelcase <- function(x) {
+  stopifnot(is.character(x), length(x) == 1)
+  
+  # Replace hyphen/underscore + letter with uppercase letter
+  gsub("[-_]+([a-zA-Z0-9\\.])", "\\U\\1", x, perl = TRUE)
+}

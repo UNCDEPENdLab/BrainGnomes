@@ -177,7 +177,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
 
   if (is.null(fields)) {
     fields <- c(
-      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/roi_reduce",
+      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/roi_reduce", "extract_rois/save_ts",
       "extract_rois/correlation/method", "extract_rois/rtoz", "extract_rois/min_vox_per_roi"
     )
   }
@@ -204,9 +204,39 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/correlation/method" %in% fields) {
-    method <- select_list_safe(c("pearson", "spearman", "kendall", "cor.shrink", "none"),
-                               multiple = TRUE, title = "Correlation method(s)")
+    cat(glue("
+      BrainGnomes supports several methods for computing correlations among ROI time series.
+      You may choose one or more of these, which will produce files ending _cor-<method>_connectivity.tsv.
+      If you choose 'none', then no such files will be produced, but the ROI time series will
+      be output to files ending _timeseries.tsv.
+    "))
+    repeat {
+      method <- select_list_safe(c("pearson", "spearman", "kendall", "cor.shrink", "none"),
+        multiple = TRUE, title = "Correlation method(s)"
+      )
+      if (any(method == "none")) {
+        if (length(method) > 1L) {
+          cat("You may not choose correlation methods if you choose 'none.'\n")
+        } else {
+          excfg$save_ts <- TRUE # if they say none, then they must intend to extract the timeseries (otherwise, nothing would happen!)
+          fields <- fields[fields != "extract_rois/save_ts"]
+          break
+        }
+      } else {
+        break
+      }
+    }
     excfg$correlation$method <- method
+  }
+
+  if ("extract_rois/save_ts" %in% fields) {
+    excfg$save_ts <- prompt_input(
+      instruct = glue("
+        BrainGnomes can export the time series from each ROI (aggregating voxels in the region)
+        to a .tsv file that is volumes x rois in size. This can be helpful if you want to run
+        external analyses on ROI time series."),
+      prompt = "Output ROI time series?", type = "flag"
+    )
   }
 
   if ("extract_rois/rtoz" %in% fields) {

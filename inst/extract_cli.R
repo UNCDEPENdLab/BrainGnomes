@@ -73,7 +73,10 @@ if (length(input_files) == 0L) {
 # print(input_files)
 
 log_file <- Sys.getenv("log_file")
-if (log_file == "") warning("log_file variable not set. ")
+if (log_file == "") {
+  log_file <- NULL
+  warning("log_file variable not set.")
+}
 
 atlases <- cfg$atlases
 a_exists <- checkmate::test_file_exists(atlases)
@@ -89,7 +92,8 @@ arg_list <- list(
   roi_reduce = cfg$roi_reduce,
   brain_mask = cfg$brain_mask,
   min_vox_per_roi = cfg$min_vox_per_roi,
-  rtoz = cfg$rtoz
+  rtoz = cfg$rtoz,
+  log_file = log_file
 )
 
 for (i in input_files) {
