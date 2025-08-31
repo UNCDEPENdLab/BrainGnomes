@@ -173,16 +173,30 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
     cor_files <- NULL
     if (enough_timepoints && compute_correlation) {
       cor_files <- lapply(cor_method, function(cmeth) {
-        cmat <- if (cmeth == "cor.shrink") {
-          corpcor::cor.shrink(ts_mat)
-        } else {
-          stats::cor(ts_mat, method = cmeth, use = "pairwise.complete.obs")
-        }
+        nacols <- which(apply(ts_mat, 2, function(col) all(is.na(col))))
+        ts_use <- if (length(nacols) > 0L) ts_mat[, -nacols, drop = FALSE] else ts_mat
 
-        if (isTRUE(rtoz)) {
-          to_log(lg, "debug", "Applying the Fisher z transformation to correlation coefficients.")
-          cmat <- atanh(cmat)
-          diag(cmat) <- NA_real_ # avoid confusing Inf on diagonal since atanh(1) is Inf
+        if (ncol(ts_use) == 0L) {
+          cmat <- matrix(NA_real_, 0, 0)
+        } else {
+          cmat <- if (cmeth == "cor.shrink") {
+            corpcor::cor.shrink(ts_use)
+          } else {
+            stats::cor(ts_use, method = cmeth, use = "pairwise.complete.obs")
+          }
+
+          if (isTRUE(rtoz)) {
+            to_log(lg, "debug", "Applying the Fisher z transformation to correlation coefficients.")
+            cmat <- atanh(cmat)
+            diag(cmat) <- NA_real_ # avoid confusing Inf on diagonal since atanh(1) is Inf
+          }
+
+          if (length(nacols) > 0L) {
+            full <- matrix(NA_real_, ncol(ts_mat), ncol(ts_mat))
+            keep <- setdiff(seq_len(ncol(ts_mat)), nacols)
+            full[keep, keep] <- cmat
+            cmat <- full
+          }
         }
 
         cor_bids <- modifyList(bids_info, list(
