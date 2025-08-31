@@ -35,6 +35,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="../articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a></li>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -550,6 +551,18 @@ postprocessing on these subjects:</p>
 Note that if you request a step in <code>run_project</code> that was
 never configured it will result in an error.</p>
 </div>
+</div>
+<div class="section level2">
+<h2 id="step-5-extract-roi-time-series">Step 5: Extract ROI time series<a class="anchor" aria-label="anchor" href="#step-5-extract-roi-time-series"></a>
+</h2>
+<p>If ROI extraction was enabled during project setup, BrainGnomes can
+summarise atlas-defined regions and, optionally, compute ROI-to-ROI
+connectivity. The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function loops over
+configured atlases and writes out ROI time series and correlation
+matrices to the project’s <code>data_rois</code> directory using
+BIDS-style filenames. For more details about ROI reduction choices and
+correlation options, see the <a href="extract_rois.html">Extracting ROIs
+vignette</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="running-braingnomes-on-the-command-line">Running BrainGnomes on the command line<a class="anchor" aria-label="anchor" href="#running-braingnomes-on-the-command-line"></a>

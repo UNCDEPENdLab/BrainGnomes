@@ -4,8 +4,9 @@ pkgdown_sha: ~
 articles:
   braingnomes_quickstart: braingnomes_quickstart.html
   building_containers: building_containers.html
+  extract_rois: extract_rois.html
   postprocessing: postprocessing.html
-last_built: 2025-08-31T19:22Z
+last_built: 2025-08-31T19:30Z
 urls:
   reference: https://uncdependlab.github.io/BrainGnomes/reference
   article: https://uncdependlab.github.io/BrainGnomes/articles
