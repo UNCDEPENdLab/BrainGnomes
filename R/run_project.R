@@ -53,6 +53,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
   all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
+  scfg <- setup_project_directories(scfg)
+
   cat(glue("
     \nRunning processing pipeline for: {scfg$metadata$project_name}
       Project directory:   {pretty_arg(scfg$metadata$project_directory)}

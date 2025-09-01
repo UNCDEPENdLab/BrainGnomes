@@ -132,33 +132,23 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
   if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
-  }
-
-  if (!checkmate::test_directory_exists(scfg$metadata$project_directory, "r")) {
-    warning(glue("You seem not to have read permission to: {scfg$metadata$project_directory}. This could cause problems in trying to run anything!"))
+    create <- prompt_input(
+      instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"),
+      type = "flag"
+    )
+    if (create) {
+      dir.create(scfg$metadata$project_directory, recursive = TRUE)
+    }
   }
 
   # location of DICOMs
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
-
-    if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
-      create <- prompt_input(instruct = glue("The directory {scfg$metadata$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-      if (create) dir.create(scfg$metadata$dicom_directory, recursive = TRUE)
-    }
   }
 
 
   # location of BIDS data -- enforce that this must be within the project directory with a fixed name
   scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
-  if (!checkmate::test_directory_exists(scfg$metadata$bids_directory)) {
-    # default to creating the directory
-    # create <- prompt_input(instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    create <- TRUE
-    if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE) # should probably force this to happen
-  }
 
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
@@ -170,10 +160,6 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       "), type = "character"
     )
 
-    if (!checkmate::test_directory_exists(scfg$metadata$scratch_directory)) {
-      create <- prompt_input(instruct = glue("The directory {scfg$metadata$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-      if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
-    }
   }
 
 
@@ -187,22 +173,13 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     )
   }
 
-  if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$templateflow_home, recursive = TRUE)
-  }
-
   # singularity bind paths are unhappy with symbolic links and ~/ notation
-  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home)
+  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
-  if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
 
   # location for ROI timeseries and connectivity data
   scfg$metadata$roi_directory <- file.path(scfg$metadata$project_directory, "data_rois")
-  if (!checkmate::test_directory_exists(scfg$metadata$roi_directory)) {
-    dir.create(scfg$metadata$roi_directory, recursive = TRUE)
-  }
 
   return(scfg)
 }
@@ -264,9 +241,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   # location of fmriprep outputs -- enforce that this must be within the project directory
   scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
-  if (!checkmate::test_directory_exists(scfg$metadata$fmriprep_directory)) {
-    dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE)
-  }
 
   # prompt for fmriprep container at this step, but only if it is not already in fields
   # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
@@ -403,9 +377,6 @@ setup_mriqc <- function(scfg, fields = NULL) {
 
   # location of mriqc reports -- enforce that this must be within the project directory
   scfg$metadata$mriqc_directory <- file.path(scfg$metadata$project_directory, "mriqc_reports")
-  if (!checkmate::test_directory_exists(scfg$metadata$mriqc_directory)) {
-    dir.create(scfg$metadata$mriqc_directory, recursive = TRUE)
-  }
 
   # prompt for mriqc container at this step
   if (!validate_exists(scfg$compute_environment$mriqc_container) && !"compute_environment/mriqc_container" %in% fields) {
