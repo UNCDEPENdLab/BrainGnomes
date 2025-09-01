@@ -178,7 +178,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #' 
 #' @note This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
 #' @importFrom glue glue
-#' @importFrom checkmate test_string assert_string assert_subset assert_number
+#' @importFrom checkmate test_string assert_string assert_choice assert_number
 #' @importFrom utils type.convert
 #' @keywords internal
 prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
@@ -197,7 +197,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   checkmate::assert_string(prompt)
   checkmate::assert_string(prompt_eol)
   checkmate::assert_string(instruct, null.ok = TRUE)
-  checkmate::assert_subset(type, c("numeric", "integer", "character", "file", "flag"))
+  checkmate::assert_choice(type, c("numeric", "integer", "character", "file", "flag"))
   checkmate::assert_number(lower)
   checkmate::assert_number(upper)
   checkmate::assert_number(len, lower = 1L, null.ok = TRUE)

@@ -52,7 +52,7 @@
 #'
 #' @author Michael Hallquist
 #' @importFrom tools file_path_sans_ext
-#' @importFrom checkmate assert_character assert_subset
+#' @importFrom checkmate assert_character assert_subset assert_logical
 #' @export
 cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
                            env_variables=NULL, export_all=FALSE, echo=TRUE, fail_on_error=FALSE, 
@@ -62,7 +62,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   checkmate::assert_string(script)
   script_exists <- file.exists(script)
   checkmate::assert_string(scheduler)
-  checkmate::assert_subset(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh", "local"))
+  checkmate::assert_choice(scheduler, c("qsub", "torque", "sbatch", "slurm", "sh", "local"))
   checkmate::assert_logical(export_all, max.len = 1L)
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
@@ -262,6 +262,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 #' }
 #'
 #' @author Michael Hallquist
+#' @importFrom checkmate assert_number assert_subset
 #' @export
 wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 24,
                          scheduler = "local", quiet = TRUE, stop_on_timeout = TRUE) {

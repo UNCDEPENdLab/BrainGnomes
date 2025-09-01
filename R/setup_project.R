@@ -82,6 +82,7 @@ setup_project <- function(input = NULL, fields = NULL) {
 
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)
+  scfg <- setup_flywheel_sync(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
   scfg <- setup_mriqc(scfg, fields)
@@ -133,24 +134,19 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
   if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
-  }
-
-  if (!checkmate::test_directory_exists(scfg$metadata$project_directory, "r")) {
-    warning(glue("You seem not to have read permission to: {scfg$metadata$project_directory}. This could cause problems in trying to run anything!"))
+    create <- prompt_input(
+      instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"),
+      type = "flag"
+    )
+    if (create) {
+      dir.create(scfg$metadata$project_directory, recursive = TRUE)
+    }
   }
 
   # location of DICOMs
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
-
-    if (!checkmate::test_directory_exists(scfg$metadata$dicom_directory)) {
-      create <- prompt_input(instruct = glue("The directory {scfg$metadata$dicom_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-      if (create) dir.create(scfg$metadata$dicom_directory, recursive = TRUE)
-    }
   }
-
 
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
@@ -163,14 +159,6 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
   }
 
-  if (!checkmate::test_directory_exists(scfg$metadata$bids_directory)) {
-    create <- prompt_input(
-      instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"),
-      type = "flag"
-    )
-    if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE)
-  }
-
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
       instruct = glue("\n\n
@@ -181,10 +169,6 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       "), type = "character"
     )
 
-    if (!checkmate::test_directory_exists(scfg$metadata$scratch_directory)) {
-      create <- prompt_input(instruct = glue("The directory {scfg$metadata$scratch_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-      if (create) dir.create(scfg$metadata$scratch_directory, recursive = TRUE)
-    }
   }
 
 
@@ -198,22 +182,13 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     )
   }
 
-  if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
-    create <- prompt_input(instruct = glue("The directory {scfg$metadata$templateflow_home} does not exist. Would you like me to create it?\n"), type = "flag")
-    if (create) dir.create(scfg$metadata$templateflow_home, recursive = TRUE)
-  }
-
   # singularity bind paths are unhappy with symbolic links and ~/ notation
-  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home)
+  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
-  if (!checkmate::test_directory_exists(scfg$metadata$log_directory)) dir.create(scfg$metadata$log_directory, recursive = TRUE)
 
   # location for ROI timeseries and connectivity data
   scfg$metadata$roi_directory <- file.path(scfg$metadata$project_directory, "data_rois")
-  if (!checkmate::test_directory_exists(scfg$metadata$roi_directory)) {
-    dir.create(scfg$metadata$roi_directory, recursive = TRUE)
-  }
 
   return(scfg)
 }
@@ -275,9 +250,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   # location of fmriprep outputs -- enforce that this must be within the project directory
   scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
-  if (!checkmate::test_directory_exists(scfg$metadata$fmriprep_directory)) {
-    dir.create(scfg$metadata$fmriprep_directory, recursive = TRUE)
-  }
 
   # prompt for fmriprep container at this step, but only if it is not already in fields
   # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
@@ -414,9 +386,6 @@ setup_mriqc <- function(scfg, fields = NULL) {
 
   # location of mriqc reports -- enforce that this must be within the project directory
   scfg$metadata$mriqc_directory <- file.path(scfg$metadata$project_directory, "mriqc_reports")
-  if (!checkmate::test_directory_exists(scfg$metadata$mriqc_directory)) {
-    dir.create(scfg$metadata$mriqc_directory, recursive = TRUE)
-  }
 
   # prompt for mriqc container at this step
   if (!validate_exists(scfg$compute_environment$mriqc_container) && !"compute_environment/mriqc_container" %in% fields) {
@@ -424,6 +393,78 @@ setup_mriqc <- function(scfg, fields = NULL) {
   }
 
   scfg <- setup_job(scfg, "mriqc", defaults, fields)
+
+  return(scfg)
+}
+
+#' Configure flywheel sync settings
+#'
+#' Sets up synchronization from a Flywheel instance prior to BIDS conversion.
+#' Prompts for the Flywheel project URL, drop-off directory for downloaded DICOMs,
+#' and a temporary directory used during transfer. Standard job settings are also
+#' collected through `setup_job`.
+#'
+#' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
+#' @param fields A character vector of fields to be prompted for. If `NULL`, all Flywheel fields will be prompted for.
+#' @return A modified version of `scfg` with the `$flywheel_sync` entry populated.
+#' @keywords internal
+setup_flywheel_sync <- function(scfg, fields = NULL) {
+  defaults <- list(
+    memgb = 8,
+    nhours = 2,
+    ncores = 1,
+    cli_options = "",
+    sched_args = ""
+  )
+
+  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields)))) {
+    scfg$flywheel_sync$enable <- prompt_input(
+      instruct = glue("\n\n      -----------------------------------------------------------------------------------------------------------------
+      Flywheel sync will download DICOM files from a Flywheel project using the
+      'fw sync' command-line interface. This step should be run prior to BIDS
+      conversion to ensure all data are available locally.\n\n"),
+      prompt = "Run Flywheel sync?",
+      type = "flag",
+      default = FALSE
+    )
+  }
+
+  if (isFALSE(scfg$flywheel_sync$enable)) return(scfg)
+
+  if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
+    scfg$flywheel_sync$source_url <- prompt_input(
+      instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
+      type = "character"
+    )
+  }
+
+  # drop-off directory defaults to metadata$dicom_directory
+  if (is.null(scfg$flywheel_sync$dropoff_directory)) {
+    if (is.null(scfg$metadata$dicom_directory)) {
+      scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
+    }
+    scfg$flywheel_sync$dropoff_directory <- scfg$metadata$dicom_directory
+  }
+  if ("flywheel_sync/dropoff_directory" %in% fields) {
+    scfg$flywheel_sync$dropoff_directory <- prompt_input(
+      instruct = "Where should Flywheel place downloaded DICOM files?",
+      type = "character",
+      default = scfg$flywheel_sync$dropoff_directory
+    )
+  }
+
+  if (is.null(scfg$flywheel_sync$temp_directory)) {
+    scfg$flywheel_sync$temp_directory <- file.path(scfg$metadata$project_directory, "flywheel_tmp")
+  }
+  if ("flywheel_sync/temp_directory" %in% fields) {
+    scfg$flywheel_sync$temp_directory <- prompt_input(
+      instruct = "Specify a temporary directory for Flywheel sync operations:",
+      type = "character",
+      default = scfg$flywheel_sync$temp_directory
+    )
+  }
+
+  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
 
   return(scfg)
 }

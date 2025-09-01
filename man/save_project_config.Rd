@@ -17,8 +17,9 @@ Invisibly returns \code{scfg}.
 }
 \description{
 Writes the configuration to a file named \code{project_config.yaml} inside
-the project's root directory. If a configuration file already exists,
-the user is shown a summary of differences and asked whether to
-overwrite the file.
+the project's root directory. The function checks that the destination
+directory exists, offering to create it or to save to an alternate
+location. If a configuration file already exists, the user is shown a
+summary of differences and asked whether to overwrite the file.
 }
 \keyword{internal}
