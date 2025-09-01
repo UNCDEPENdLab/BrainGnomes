@@ -119,6 +119,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     if (is.null(scfg$metadata$project_name)) fields <- c(fields, "metadata/project_name")
     if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
     # if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory") # defer to setup_bids_conversion
+    if (is.null(scfg$metadata$bids_directory)) fields <- c(fields, "metadata/bids_directory")
     if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
     if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
@@ -151,13 +152,23 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
 
-  # location of BIDS data -- enforce that this must be within the project directory with a fixed name
-  scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
+  # location of BIDS data -- default within project directory, but allow external paths
+  if ("metadata/bids_directory" %in% fields) {
+    scfg$metadata$bids_directory <- prompt_input(
+      "Where is your BIDS directory located?",
+      type = "character",
+      default = file.path(scfg$metadata$project_directory, "data_bids")
+    )
+  } else if (is.null(scfg$metadata$bids_directory)) {
+    scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
+  }
+
   if (!checkmate::test_directory_exists(scfg$metadata$bids_directory)) {
-    # default to creating the directory
-    # create <- prompt_input(instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"), type = "flag")
-    create <- TRUE
-    if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE) # should probably force this to happen
+    create <- prompt_input(
+      instruct = glue("The directory {scfg$metadata$bids_directory} does not exist. Would you like me to create it?\n"),
+      type = "flag"
+    )
+    if (create) dir.create(scfg$metadata$bids_directory, recursive = TRUE)
   }
 
   if ("metadata/scratch_directory" %in% fields) {
