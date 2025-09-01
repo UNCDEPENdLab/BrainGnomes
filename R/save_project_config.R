@@ -1,9 +1,11 @@
 #' Save a project configuration to YAML
 #'
 #' Writes the configuration to a file named `project_config.yaml` inside
-#' the project's root directory. If a configuration file already exists,
-#' the user is shown a summary of differences and asked whether to
-#' overwrite the file.
+#' the project's root directory. The function verifies that the output
+#' directory exists, offering to create it or allowing the user to select
+#' an alternate location. If a configuration file already exists, the
+#' user is shown a summary of differences and asked whether to overwrite
+#' the file.
 #'
 #' @param scfg A `bg_project_cfg` object.
 #' @param file Optional path for the YAML output. Defaults to
@@ -19,6 +21,48 @@ save_project_config <- function(scfg, file = NULL) {
       stop("Cannot determine project directory from scfg")
     }
     file <- file.path(scfg$metadata$project_directory, "project_config.yaml")
+  }
+
+  dir <- dirname(file)
+  if (!dir.exists(dir)) {
+    create <- prompt_input(
+      instruct = sprintf("The directory %s does not exist. Create it?", dir),
+      type = "flag"
+    )
+    if (create) {
+      dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+      if (!dir.exists(dir)) {
+        message("Configuration not saved: failed to create directory.")
+        return(invisible(scfg))
+      }
+    } else {
+      new_dir <- prompt_input(
+        instruct = "Specify an alternative directory for project_config.yaml (or press Enter to cancel):",
+        type = "character", required = FALSE
+      )
+      if (length(new_dir) == 0L) {
+        message("Configuration not saved: no valid directory provided.")
+        return(invisible(scfg))
+      }
+      dir <- path.expand(new_dir)
+      if (!dir.exists(dir)) {
+        create <- prompt_input(
+          instruct = sprintf("The directory %s does not exist. Create it?", dir),
+          type = "flag"
+        )
+        if (create) {
+          dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+          if (!dir.exists(dir)) {
+            message("Configuration not saved: failed to create directory.")
+            return(invisible(scfg))
+          }
+        } else {
+          message("Configuration not saved: no valid directory provided.")
+          return(invisible(scfg))
+        }
+      }
+      file <- file.path(dir, basename(file))
+    }
   }
 
   overwrite <- TRUE
