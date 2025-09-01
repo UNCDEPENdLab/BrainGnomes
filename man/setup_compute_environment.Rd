@@ -7,7 +7,7 @@
 setup_compute_environment(scfg = list(), fields = NULL)
 }
 \arguments{
-\item{scfg}{a study configuration object, as produced by \code{load_project} or \code{setup_project}}
+\item{scfg}{a project configuration object, as produced by \code{load_project} or \code{setup_project}}
 }
 \value{
 a modified version of \code{scfg} with \verb{$compute_environment} populated

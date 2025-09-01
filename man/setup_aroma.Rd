@@ -7,7 +7,7 @@
 setup_aroma(scfg, fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
+\item{scfg}{A project configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
 
 \item{fields}{A character vector of field names to prompt for. If \code{NULL}, all fields related to AROMA will be prompted.}
 }

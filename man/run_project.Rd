@@ -9,12 +9,13 @@ run_project(
   steps = NULL,
   subject_filter = NULL,
   postprocess_streams = NULL,
+  extract_streams = NULL,
   debug = FALSE,
   force = FALSE
 )
 }
 \arguments{
-\item{scfg}{A list containing the study configuration.}
+\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 
 \item{steps}{Character vector of pipeline steps to execute (or \code{"all"} to run all steps).
 Options are c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
@@ -31,6 +32,10 @@ on specific subject/session combinations.}
 \verb{"postprocess"`` is included in }steps`, then this setting lets the user choose streams. If NULL, all postprocess
 streams will be run.}
 
+\item{extract_streams}{Optional character vector specifying which ROI extraction streams should be run. If
+\verb{"extract_rois"`` is included in }steps`, then this setting lets the user choose streams. If NULL, all extraction
+streams will be run.}
+
 \item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
 
 \item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
@@ -43,7 +48,7 @@ Run the processing pipeline
 }
 \examples{
   \dontrun{
-    # Assuming you have a valid study configuration list named `study_config`
+    # Assuming you have a valid project configuration list named `study_config`
     run_project(study_config, prompt = TRUE, force = FALSE)
   }
 }

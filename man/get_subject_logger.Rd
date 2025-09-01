@@ -7,7 +7,7 @@
 get_subject_logger(scfg, sub_id)
 }
 \arguments{
-\item{scfg}{The study configuration object}
+\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 
 \item{sub_id}{The id of the subject whose logger we wish to access}
 }

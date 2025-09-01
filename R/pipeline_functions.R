@@ -693,3 +693,29 @@ get_pipeline_status <- function(scfg) {
   #      }
   #   }
 }
+
+to_log <- function(logger, condition = "info", msg, ...) {
+  if (checkmate::test_string(logger)) {
+    logger <- lgr::get_logger_glue(logger)
+  } else {
+    checkmate::assert_class(logger, "LoggerGlue")
+  }
+
+  checkmate::assert_string(msg)
+  checkmate::assert_string(condition)
+  checkmate::assert_subset(condition, c("fatal", "error", "warn", "info", "debug", "trace"))
+  logger[[condition]](msg, .envir = parent.frame()) # emit log message
+
+  # pass through glue explicitly and combine into one string
+  msg <- paste(glue::glue(msg, ..., .envir = parent.frame()), collapse = "\n")
+
+  if (condition == "fatal") { # only fatal stops execution
+    stop(msg, call. = FALSE)
+  } else if (condition %in% c("warn", "error")) {
+    warning(msg, call. = FALSE, immediate. = TRUE)
+  } else if (condition == "info") {
+    message(msg)
+  }
+
+  return(invisible(NULL))
+}

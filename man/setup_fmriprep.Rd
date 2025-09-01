@@ -7,7 +7,7 @@
 setup_fmriprep(scfg = NULL, fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
+\item{scfg}{A project configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
 
 \item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all fMRIPrep fields will be prompted for.}
 }
@@ -18,7 +18,7 @@ A modified version of \code{scfg} with the \verb{$fmriprep} entry populated.
 This function sets up fMRIPrep job configuration, including scheduling and resource parameters,
 output specifications, and the location of required files such as the FreeSurfer license.
 It prompts the user interactively (or selectively if \code{fields} is supplied) and modifies the
-study configuration list (\code{scfg}) to include settings for running fMRIPrep.
+project configuration list (\code{scfg}) to include settings for running fMRIPrep.
 }
 \details{
 fMRIPrep is a robust and standardized preprocessing pipeline for BOLD and structural MRI data

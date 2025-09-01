@@ -7,7 +7,7 @@
 is_step_complete(scfg, sub_id, ses_id = NULL, step_name, pp_stream = NULL)
 }
 \arguments{
-\item{scfg}{Study configuration list}
+\item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 
 \item{sub_id}{Subject identifier}
 

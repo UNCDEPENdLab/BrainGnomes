@@ -7,7 +7,7 @@
 setup_bids_validation(scfg, fields = NULL)
 }
 \arguments{
-\item{scfg}{A study configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
+\item{scfg}{A project configuration object, as produced by \code{load_project()} or \code{setup_project()}.}
 
 \item{fields}{A character vector of fields to be prompted for. If \code{NULL}, all BIDS validation fields will be prompted for.}
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/edit_project.R
 \name{edit_project}
 \alias{edit_project}
-\title{Interactively edit a study configuration by field (field-guided)}
+\title{Interactively edit a project configuration by field (field-guided)}
 \usage{
 edit_project(input = NULL)
 }
