@@ -131,15 +131,12 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   if ("metadata/project_directory" %in% fields) {
     scfg$metadata$project_directory <- prompt_input("What is the root directory where project files will be stored?", type = "character")
-  }
-
-  if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
-    create <- prompt_input(
-      instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"),
-      type = "flag"
-    )
-    if (create) {
-      dir.create(scfg$metadata$project_directory, recursive = TRUE)
+    if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
+      create <- prompt_input(
+        instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"),
+        type = "flag"
+      )
+      if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
     }
   }
 
@@ -151,8 +148,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
     scfg$metadata$bids_directory <- prompt_input(
-      "Where is your BIDS directory located?",
-      type = "character",
+      "Where is your BIDS directory located?", type = "character",
       default = file.path(scfg$metadata$project_directory, "data_bids")
     )
   } else if (is.null(scfg$metadata$bids_directory)) {
@@ -168,9 +164,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       file should be written.\n
       "), type = "character"
     )
-
   }
-
 
   if ("metadata/templateflow_home" %in% fields) {
     scfg$metadata$templateflow_home <- prompt_input("Templateflow directory: ",
@@ -419,7 +413,8 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields)))) {
     scfg$flywheel_sync$enable <- prompt_input(
-      instruct = glue("\n\n      -----------------------------------------------------------------------------------------------------------------
+      instruct = glue("\n\n
+      -----------------------------------------------------------------------------------------------------------------
       Flywheel sync will download DICOM files from a Flywheel project using the
       'fw sync' command-line interface. This step should be run prior to BIDS
       conversion to ensure all data are available locally.\n\n"),
@@ -440,11 +435,10 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   # drop-off directory defaults to metadata$dicom_directory
   if (is.null(scfg$flywheel_sync$dropoff_directory)) {
-    if (is.null(scfg$metadata$dicom_directory)) {
-      scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
-    }
+    if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
     scfg$flywheel_sync$dropoff_directory <- scfg$metadata$dicom_directory
   }
+
   if ("flywheel_sync/dropoff_directory" %in% fields) {
     scfg$flywheel_sync$dropoff_directory <- prompt_input(
       instruct = "Where should Flywheel place downloaded DICOM files?",
@@ -456,6 +450,7 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   if (is.null(scfg$flywheel_sync$temp_directory)) {
     scfg$flywheel_sync$temp_directory <- file.path(scfg$metadata$project_directory, "flywheel_tmp")
   }
+
   if ("flywheel_sync/temp_directory" %in% fields) {
     scfg$flywheel_sync$temp_directory <- prompt_input(
       instruct = "Specify a temporary directory for Flywheel sync operations:",
