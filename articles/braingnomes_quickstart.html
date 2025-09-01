@@ -62,7 +62,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">29 Jul 2025</h4>
+            <h4 data-toc-skip class="date">31 Aug 2025</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
@@ -463,6 +463,22 @@ Modify postprocessing streams:
 <p>For additional details about postprocessing, see (in progress) <a href="postprocessing.html">Postprocessing vignette</a>.</p>
 </div>
 <div class="section level3">
+<h3 id="roi-time-series-extraction-and-functional-connectivity-calculation">ROI time series extraction and functional connectivity
+calculation<a class="anchor" aria-label="anchor" href="#roi-time-series-extraction-and-functional-connectivity-calculation"></a>
+</h3>
+<p>Finally, you will be asked whether to include ROI extraction and
+functional connectivity calculation in the pipeline. This step allows
+you extract average time series from regions of interest (ROIs) in one
+or more atlases/ROI masks. You can also ask BrainGnomes to compute
+correlations among the ROI timeseries for functional connectivity
+analyses.</p>
+<p>The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function – called using
+<code>run_project</code> – loops over configured atlases and writes out
+ROI time series and correlation matrices to the project’s
+<code>data_rois</code> directory using BIDS-style filenames. For more
+details about ROI reduction choices and correlation options, see the <a href="extract_rois.html">Extracting ROIs vignette</a>.</p>
+</div>
+<div class="section level3">
 <h3 id="bids-validation-setup">BIDS validation setup<a class="anchor" aria-label="anchor" href="#bids-validation-setup"></a>
 </h3>
 <p>As an optional part of the pipeline, bids-validator can be run on the
@@ -547,22 +563,10 @@ postprocessing on these subjects:</p>
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span>, steps<span class="op">=</span><span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The available <code>steps</code> are
-<code>"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"</code>.
+<code>"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"</code>.
 Note that if you request a step in <code>run_project</code> that was
 never configured it will result in an error.</p>
 </div>
-</div>
-<div class="section level2">
-<h2 id="step-5-extract-roi-time-series">Step 5: Extract ROI time series<a class="anchor" aria-label="anchor" href="#step-5-extract-roi-time-series"></a>
-</h2>
-<p>If ROI extraction was enabled during project setup, BrainGnomes can
-summarise atlas-defined regions and, optionally, compute ROI-to-ROI
-connectivity. The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function loops over
-configured atlases and writes out ROI time series and correlation
-matrices to the project’s <code>data_rois</code> directory using
-BIDS-style filenames. For more details about ROI reduction choices and
-correlation options, see the <a href="extract_rois.html">Extracting ROIs
-vignette</a>.</p>
 </div>
 <div class="section level2">
 <h2 id="running-braingnomes-on-the-command-line">Running BrainGnomes on the command line<a class="anchor" aria-label="anchor" href="#running-braingnomes-on-the-command-line"></a>

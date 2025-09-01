@@ -62,6 +62,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
+            <h4 data-toc-skip class="date">31 Aug 2025</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/vignettes/extract_rois.Rmd" class="external-link"><code>vignettes/extract_rois.Rmd</code></a></small>
       <div class="d-none name"><code>extract_rois.Rmd</code></div>
@@ -72,28 +73,36 @@ Hallquist</h4>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function summarises postprocessed
-BOLD data within atlas‑defined regions and can also compute ROI‑to‑ROI
-connectivity matrices. It is typically run after postprocessing
-completes and writes its outputs to the project’s <code>data_rois</code>
-directory.</p>
+<p>The <code><a href="../reference/extract_rois.html">extract_rois()</a></code> function – called via
+<code>run_project</code> – summarizes postprocessed BOLD data within
+atlas‑defined regions and can also compute ROI‑to‑ROI connectivity
+matrices. It is run after postprocessing completes and writes its
+outputs to the project’s <code>data_rois</code> directory. At present,
+ROI extraction requires that postprocessing be included in the pipeline
+because postprocessed files serve as the inputs to ROI extraction.</p>
+<p>ROI extraction is enabled during <code><a href="../reference/setup_project.html">setup_project()</a></code> or
+<code><a href="../reference/edit_project.html">edit_project()</a></code>. During the setup, you will be asked about
+how to reduce voxels within ROIs to an aggregated time series and how to
+compute correlations among them. Once configured,
+<code><a href="../reference/run_project.html">run_project()</a></code> will schedule extraction jobs.</p>
 </div>
 <div class="section level2">
-<h2 id="configuring-extraction">Configuring extraction<a class="anchor" aria-label="anchor" href="#configuring-extraction"></a>
+<h2 id="roi-extraction-setup">ROI extraction setup<a class="anchor" aria-label="anchor" href="#roi-extraction-setup"></a>
 </h2>
-<p>ROI extraction is enabled during <code><a href="../reference/setup_project.html">setup_project()</a></code> or
-<code><a href="../reference/edit_project.html">edit_project()</a></code>. Once configured, <code><a href="../reference/run_project.html">run_project()</a></code>
-will schedule extraction jobs or you can call
-<code><a href="../reference/extract_rois.html">extract_rois()</a></code> directly:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/extract_rois.html">extract_rois</a></span><span class="op">(</span></span>
-<span>  bold_file <span class="op">=</span> <span class="st">"sub-01_task-rest_desc-clean_bold.nii.gz"</span>,</span>
-<span>  atlas_files <span class="op">=</span> <span class="st">"Schaefer400.nii.gz"</span>,</span>
-<span>  out_dir <span class="op">=</span> <span class="st">"data_rois"</span>,</span>
-<span>  roi_reduce <span class="op">=</span> <span class="st">"mean"</span>,</span>
-<span>  cor_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pearson"</span>, <span class="st">"cor.shrink"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+<p>During <code>setup_project</code>, if you enable ROI extraction, you
+will be asked to create one or more extraction streams. These consist of
+a name (for identifying the stream), the postprocess streams that should
+serve as inputs to extraction (i.e., what files from postprocessing
+should be used), and which atlases or ROI masks should be used for
+extraction.</p>
+<p>Note that multiple postprocessing streams can serve as inputs for an
+extraction stream.</p>
+<p>Also, multiple atlases/ROI masks can be included in a single
+extraction stream. As detailed belwo, the output files are named
+according to the mask name. All atlas/ROI mask files should be
+integer-valued NIfTI files having the same stereotaxic space and spatial
+resolution as the postprocessed data. BrainGnomes performs simple checks
+on these files, but please check these yourself, too!</p>
 </div>
 <div class="section level2">
 <h2 id="roi-reduction-methods">ROI reduction methods<a class="anchor" aria-label="anchor" href="#roi-reduction-methods"></a>
@@ -115,13 +124,29 @@ variation.</li>
 <strong>huber</strong> – applies a Huber M‑estimator for a robust
 trimmed mean.</li>
 </ul>
+<div class="section level3">
+<h3 id="removal-of-missing-voxels">Removal of missing voxels<a class="anchor" aria-label="anchor" href="#removal-of-missing-voxels"></a>
+</h3>
+<p>Note that ROI extraction removes any constant voxels (e.g., all zero)
+prior to calculating the aggregated time series.</p>
+</div>
+<div class="section level3">
+<h3 id="removal-of-scrubbed-timepoints">Removal of scrubbed timepoints<a class="anchor" aria-label="anchor" href="#removal-of-scrubbed-timepoints"></a>
+</h3>
+<p>If scrubbing was enabled for the relevant postprocessing stream, ROI
+extraction will then use the <code>_censor.1D</code> file corresponding
+to each NIfTI. More specifically, any timepoints identified by the
+scrubbing expression will be dropped from the timeseries outputs and
+functional connectivity calculations.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="choosing-correlation-methods">Choosing correlation methods<a class="anchor" aria-label="anchor" href="#choosing-correlation-methods"></a>
 </h2>
 <p>Connectivity matrices are optional and are governed by the
-<code>cor_method</code> argument. Multiple methods may be supplied.
-Supported options include:</p>
+<code>cor_method</code> argument. Multiple methods may be supplied. If
+you choose <code>'none'</code>, then no connectivity calculations will
+be done. Supported options include:</p>
 <ul>
 <li>
 <strong>pearson</strong> – standard product–moment correlation.</li>
@@ -129,17 +154,32 @@ Supported options include:</p>
 <strong>spearman</strong> – rank‑based correlation that is robust to
 non‑linear but monotonic relationships.</li>
 <li>
-<strong>kendall</strong> – Kendall’s for ordinal or small sample
-data.</li>
+<strong>kendall</strong> – Kendall’s
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>τ</mi><annotation encoding="application/x-tex">\tau</annotation></semantics></math>
+for ordinal or small sample data.</li>
 <li>
 <strong>cor.shrink</strong> – shrinkage estimator from the
 <code>corpcor</code> package, useful when the number of ROIs is large
 relative to the number of time points.</li>
 </ul>
+</div>
+<div class="section level2">
+<h2 id="other-settings">Other settings<a class="anchor" aria-label="anchor" href="#other-settings"></a>
+</h2>
+<p>BrainGnomes can export the time series from each ROI (aggregating
+voxels in the region) to a .tsv file that is volumes x rois in size.
+This can be helpful if you want to run external analyses on ROI time
+series. If you answer “yes” to <code>Output ROI time series?</code>,
+then BrainGnomes will output timeseries files ending in
+<code>_timeseries.tsv</code>.</p>
 <p>The <code>rtoz</code> flag applies Fisher’s
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>z</mi><annotation encoding="application/x-tex">z</annotation></semantics></math>
-transform to correlations, producing unbounded values better suited for
-group analysis.</p>
+(aka <code>atanh</code>) transform to correlations, producing unbounded
+values better suited for group analysis.</p>
+<p>You can also specify the minimum number of voxels that must be
+present for an ROI to be considered valid. The default is 5. If an ROI
+has fewer voxels, then it will be set to NA in the timeseries and
+connectivity output files.</p>
 </div>
 <div class="section level2">
 <h2 id="output-files-and-naming">Output files and naming<a class="anchor" aria-label="anchor" href="#output-files-and-naming"></a>
@@ -153,6 +193,49 @@ example:</p>
 sub-01_task-rest_desc-clean_rois-Schaefer400_cor-pearson_connectivity.tsv</code></pre>
 <p>These naming conventions ensure that time‑series and connectivity
 files can be matched to their originating runs and analysis choices.</p>
+<div class="section level3">
+<h3 id="note-about-atlas-naming">Note about atlas naming<a class="anchor" aria-label="anchor" href="#note-about-atlas-naming"></a>
+</h3>
+<p>For a BIDS ‘entity’ to be valid, it must not contain underscores or
+hyphens since these serve as field delimiters in BIDS. Consequently, if
+your atlas/ROI file contains hyphens or underscores, these will be
+removed and the next character will be capitalized (i.e., camel
+case).</p>
+<p>For example, an atlas <code>schaefer_444_resampled.nii.gz</code> will
+become <code>rois-schaefer444Resampled</code> in ROI outputs.</p>
+</div>
+<div class="section level3">
+<h3 id="timeseries-tsv-format">timeseries TSV format<a class="anchor" aria-label="anchor" href="#timeseries-tsv-format"></a>
+</h3>
+<p>Columns in timeseries files are tab-separated. A header row is
+included, and <code>volume</code> is one of the variables. The other
+variables are named <code>roi&lt;xx&gt;</code> according to their
+integer value in the ROI mask. Here is a short example of such a
+file:</p>
+<pre><code>volume  roi1  roi2  roi3
+     1  10.2  15.2    NA
+     2  10.5  15.1    NA
+     3  11.1  15.0    NA
+     6  10.4  15.1    NA
+     7  10.2  15.5    NA</code></pre>
+<p>Note how volume skips from 3 to 6. This reflects that volumes 4 and 5
+were scrubbed from the output. <code>roi3</code> is all NA because it
+had fewer than the minimum number of valid voxel time series (default:
+5).</p>
+</div>
+<div class="section level3">
+<h3 id="connectivity-tsv-format">connectivity TSV format<a class="anchor" aria-label="anchor" href="#connectivity-tsv-format"></a>
+</h3>
+<p>Connectivity matrices are output as tab-separated files. They contain
+a square correlation matrix with a header row denoting the corresponding
+integer value in the ROI mask. Here is a short example:</p>
+<pre><code>roi1   roi2   roi3
+   1    0.7     NA
+ 0.7      1     NA
+  NA     NA      1</code></pre>
+<p>Here, the correlations of <code>roi3</code> with the other ROIs are
+NA because the time series was NA.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
@@ -161,6 +244,19 @@ files can be matched to their originating runs and analysis choices.</p>
 signals and functional connectivity from postprocessed fMRI data. By
 selecting appropriate reduction and correlation methods, you can tailor
 ROI analyses to the needs of your study.</p>
+<p><em>Note</em>: You can technically call <code><a href="../reference/extract_rois.html">extract_rois()</a></code>
+directly, but this is recommended only for testing because it runs the
+compute directly within the R session, rather than scheduling jobs on
+the HPC.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/extract_rois.html">extract_rois</a></span><span class="op">(</span></span>
+<span>  bold_file <span class="op">=</span> <span class="st">"sub-01_task-rest_desc-clean_bold.nii.gz"</span>,</span>
+<span>  atlas_files <span class="op">=</span> <span class="st">"Schaefer400.nii.gz"</span>,</span>
+<span>  out_dir <span class="op">=</span> <span class="st">"data_rois"</span>,</span>
+<span>  roi_reduce <span class="op">=</span> <span class="st">"mean"</span>,</span>
+<span>  cor_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"pearson"</span>, <span class="st">"cor.shrink"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
