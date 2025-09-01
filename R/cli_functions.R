@@ -62,6 +62,7 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
 #' @return A nested list with the specified keys and values.
 #' @importFrom utils modifyList
 #' @importFrom stats setNames
+#' @importFrom checkmate assert_string assert_flag assert_list
 #' @keywords internal
 set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
   checkmate::assert_string(sep)
@@ -133,6 +134,7 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
 #'    nested_list_to_args(list(a = list(b = c(10, 11, 12)), c = 25))
 #' }
 #'
+#' @importFrom checkmate assert_list assert_string assert_flag
 #' @keywords internal
 nested_list_to_args <- function(lst, sep = "/", collapse = FALSE) {
   checkmate::assert_list(lst)
@@ -181,6 +183,7 @@ nested_list_to_args <- function(lst, sep = "/", collapse = FALSE) {
 #'
 #' @return A nested list of parsed CLI arguments.
 #'
+#' @importFrom checkmate assert_character
 #' @export
 parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
   checkmate::assert_character(args)

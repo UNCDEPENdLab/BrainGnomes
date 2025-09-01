@@ -11,7 +11,7 @@
 #' @noRd
 get_job_script <- function(scfg = NULL, job_name) {
   checkmate::assert_string(job_name)
-  
+
   ext <- ifelse(scfg$compute_environment$scheduler == "torque", "pbs", "sbatch")
   expect_file <- glue("hpc_scripts/{job_name}_subject.{ext}")
   script <- system.file(expect_file, package = "BrainGnomes")
@@ -20,6 +20,7 @@ get_job_script <- function(scfg = NULL, job_name) {
   }
   return(script)
 }
+
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
@@ -129,7 +130,8 @@ pretty_arg <- function(x, width = 80) {
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param sub_id The id of the subject whose logger we wish to access
 #' @return a configured lgr object for logging subject processing messages
-#' @importFrom lgr get_logger_glue
+#' @importFrom lgr get_logger_glue AppenderFile
+#' @importFrom checkmate assert_directory_exists test_directory_exists
 #' @keywords internal
 get_subject_logger <- function(scfg, sub_id) {
   checkmate::assert_directory_exists(scfg$metadata$project_directory)
@@ -194,7 +196,7 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #'   "postprocess"
 #' @return List containing `complete` (logical), `dir`, and
 #'   `complete_file`
-#' @importFrom checkmate assert_choice
+#' @importFrom checkmate assert_choice assert_string
 #' @keywords internal
 is_step_complete <- function(scfg, sub_id, ses_id = NULL,
                              step_name, pp_stream = NULL) {
@@ -387,6 +389,7 @@ truncate_str <- function(x, max_chars = 100, continuation = "...") {
 #' }
 #'
 #' @importFrom lgr AppenderConsole AppenderFile get_logger
+#' @importFrom checkmate assert_string assert_character assert_flag assert_directory_exists assert_file_exists
 #' @export
 run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE, stop_on_fail=TRUE, log_file=NULL, use_lgr=TRUE, fsl_img=NULL, bind_paths=NULL) {
   checkmate::assert_character(args)
@@ -703,7 +706,7 @@ to_log <- function(logger, condition = "info", msg, ...) {
 
   checkmate::assert_string(msg)
   checkmate::assert_string(condition)
-  checkmate::assert_subset(condition, c("fatal", "error", "warn", "info", "debug", "trace"))
+  checkmate::assert_choice(condition, c("fatal", "error", "warn", "info", "debug", "trace"))
   logger[[condition]](msg, .envir = parent.frame()) # emit log message
 
   # pass through glue explicitly and combine into one string

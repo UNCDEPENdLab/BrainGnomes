@@ -4,6 +4,7 @@
 #' @param sqlite_db Path to SQLite database used for tracking
 #' @param params List of parameters/arguments to be used in query
 #' @importFrom DBI dbExistsTable
+#' @importFrom checkmate assert_string
 #'
 #' @keywords internal
 submit_tracking_query = function(str, sqlite_db, params = NULL) {

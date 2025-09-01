@@ -18,6 +18,7 @@
 #' )
 #' extract_bids_info(filenames)
 #' @importFrom utils tail
+#' @importFrom checkmate assert_character
 #' @export
 extract_bids_info <- function(filenames, drop_unused=FALSE) {
   checkmate::assert_character(filenames)
@@ -132,7 +133,7 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #'   their abbreviated forms (`rec`, `desc`, etc.); abbreviated names are
 #'   normalized internally.
 #'
-#' @importFrom checkmate assert_data_frame test_list
+#' @importFrom checkmate assert_data_frame test_list test_string
 #' @export
 construct_bids_filename <- function(bids_df, full.names = FALSE) {
   if (checkmate::test_list(bids_df)) bids_df <- as.data.frame(bids_df, stringsAsFactors = FALSE)
@@ -236,6 +237,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
 #'   construct_bids_regex("regex:^sub-[0-9]+_task-rest_.*\\.nii\\.gz$")
 #' }
 #'
+#' @importFrom checkmate assert_string assert_flag
 #' @export
 construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   checkmate::assert_string(spec)
@@ -424,6 +426,7 @@ out_file_exists <- function(in_file, description, overwrite = TRUE) {
 #' }
 #'
 #' @importFrom utils modifyList read.table
+#' @importFrom checkmate assert_file_exists
 #' @export
 get_fmriprep_outputs <- function(in_file) {
   checkmate::assert_file_exists(in_file)
@@ -512,7 +515,7 @@ get_fmriprep_outputs <- function(in_file) {
 #' }
 #' 
 #' @keywords internal
-#' @importFrom checkmate assert_directory_exists assert_flag
+#' @importFrom checkmate assert_directory_exists assert_flag assert_string
 get_subject_dirs <- function(root = NULL, sub_regex = "[0-9]+", sub_id_match = "([0-9]+)", 
   ses_regex = NULL, ses_id_match = "([0-9]+)", full.names = FALSE) {
   

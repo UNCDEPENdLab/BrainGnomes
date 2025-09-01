@@ -35,6 +35,7 @@
 #' @return A named list. Each element corresponds to an atlas and contains
 #'   paths to the written timeseries (\code{timeseries}) and correlation
 #'   matrix (\code{correlation}, or \code{NULL} if not computed).
+#' @importFrom checkmate assert_file_exists assert_character assert_directory_exists assert_integerish assert_flag
 #' @export
 extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
                          cor_method = c("pearson", "spearman", "kendall", "cor.shrink"),
