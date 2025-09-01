@@ -6,9 +6,10 @@ BrainGnomes streamlines preprocessing and analysis of fMRI data on high performa
 
 Documentation is provided as several vignettes found in the `vignettes/` folder:
 
-- **BrainGnomes Quickstart** – an end to end introduction to setting up and running a study [`vignettes/braingnomes_quickstart.Rmd`](vignettes/braingnomes_quickstart.Rmd).
-- **Building Singularity containers for BrainGnomes** – instructions on creating the container images used by the pipeline [`vignettes/building_containers.Rmd`](vignettes/building_containers.Rmd).
-- **BrainGnomes Postprocessing Walkthrough** – details the optional post‑processing utilities such as smoothing, scrubbing and denoising [`vignettes/postprocessing.Rmd`](vignettes/postprocessing.Rmd).
+- **BrainGnomes Quickstart** – an end to end introduction to setting up and running a study [`vignettes/braingnomes_quickstart.html`](vignettes/braingnomes_quickstart.html).
+- **Building Singularity containers for BrainGnomes** – instructions on creating the container images used by the pipeline [`vignettes/building_containers.html`](vignettes/building_containers.html).
+- **BrainGnomes Postprocessing Walkthrough** – details the optional post‑processing utilities such as smoothing, scrubbing and denoising [`vignettes/postprocessing.html`](vignettes/postprocessing.html).
+- **ROI extraction and connectivity calculation** – details the optional step of extracting ROIs from a mask/atlas and computing correlations among them [`vignettes/extract_rois.html`](vignettes/extract_rois.html).
 
 ## Key source files
 

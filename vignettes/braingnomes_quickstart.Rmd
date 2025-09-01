@@ -1,7 +1,7 @@
 ---
 title: "BrainGnomes Quickstart"
 author: "Michael Hallquist"
-date: "29 Jul 2025"
+date: "31 Aug 2025"
 output: 
   rmarkdown::html_vignette:
     toc: true
@@ -217,6 +217,18 @@ Modify postprocessing streams:
 
 For additional details about postprocessing, see (in progress) [Postprocessing vignette](postprocessing.html).
 
+## ROI time series extraction and functional connectivity calculation
+
+Finally, you will be asked whether to include ROI extraction and functional connectivity calculation
+in the pipeline. This step allows you extract average time series from regions of interest (ROIs) in
+one or more atlases/ROI masks. You can also ask BrainGnomes to compute correlations among the ROI timeseries
+for functional connectivity analyses.
+
+The `extract_rois()` function -- called using `run_project` -- loops over configured atlases and
+writes out ROI time series and correlation matrices to the project’s `data_rois` directory using
+BIDS-style filenames. For more details about ROI reduction choices and
+correlation options, see the [Extracting ROIs vignette](extract_rois.html).
+
 ## BIDS validation setup
 
 As an optional part of the pipeline, bids-validator can be run on the BIDS directory (once BIDS conversion has completed). This is accomplished by `run_bids_validation()`, which can be run as needed. Here, saying yes to the prompt `Enable BIDS validation? (yes/no; Press enter to accept default: yes)` will setup the bids-validator step for later use. You will be asked for:
@@ -284,16 +296,8 @@ Likewise, if you want to skip the menu prompts for which step to run, you can us
 run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
 ```
 
-The available `steps` are `"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"`. Note that if you request a step in `run_project` that was never configured it will result in an error.
-
-# Step 5: Extract ROI time series
-
-If ROI extraction was enabled during project setup, BrainGnomes can summarise
-atlas-defined regions and, optionally, compute ROI-to-ROI connectivity. The
-`extract_rois()` function loops over configured atlases and writes out ROI time
-series and correlation matrices to the project’s `data_rois` directory using
-BIDS-style filenames. For more details about ROI reduction choices and
-correlation options, see the [Extracting ROIs vignette](extract_rois.html).
+The available `steps` are `"bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"`. 
+Note that if you request a step in `run_project` that was never configured it will result in an error.
 
 # Running BrainGnomes on the command line
 

@@ -340,7 +340,7 @@ set_cli_options <- function(args = NULL, new_values = NULL, collapse=FALSE) {
     return(base_df)
   }
 
-  if (is.null(args)) {
+  if (is.null(args) || args[1L] == "") {
     args <- new_values
   } else {
     args_df <- args_to_df(args)
