@@ -26,6 +26,9 @@ edit_project <- function(input = NULL) {
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container"
     )),
+    "Flywheel Sync" = list(setup_fn = setup_flywheel_sync, prefix = "flywheel_sync/", fields = c(
+      "source_url", "dropoff_directory", "temp_directory"
+    )),
     "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
       "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
       "heuristic_file", "overwrite", "clear_cache"
@@ -42,7 +45,7 @@ edit_project <- function(input = NULL) {
     # "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0))
   )
 
-  job_targets <- c("bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")
+  job_targets <- c("flywheel_sync", "bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")
   job_fields <- c("memgb", "nhours", "ncores", "cli_options", "sched_args")
 
   show_val <- function(val) {

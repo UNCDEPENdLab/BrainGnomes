@@ -8,6 +8,16 @@ metadata:
   scratch_directory: /work/users/m/n/mnhallq
   templateflow_home: /nas/longleaf/home/mnhallq/.cache/templateflow
   log_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/logs
+flywheel_sync:
+  enable: no
+  memgb: 8.0
+  nhours: 2.0
+  ncores: 1.0
+  cli_options: []
+  sched_args: []
+  source_url: .na.character
+  dropoff_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms
+  temp_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/flywheel_tmp
 bids_conversion:
   enable: yes
   memgb: 16.0
