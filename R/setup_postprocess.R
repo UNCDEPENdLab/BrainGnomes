@@ -168,8 +168,18 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   }
 
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
+  
+  # if fmiprep directory is not yet defined, ask the user for it (use case: postproc-only with extant fmriprep directory)
+  if (is.null(scfg$metadata$fmriprep_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/fmriprep_directory")
+  }
 
-  # prompt for fmriprep container at this step, but only if it is not already in fields
+  # ensure valid postproc directory
+  if (is.null(scfg$metadata$postproc_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/postproc_directory")
+  }
+
+  # prompt for fsl container at this step, but only if it is not already in fields
   if (!validate_exists(scfg$compute_environment$fsl_container) && !"compute_environment/fsl_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/fsl_container")
   }

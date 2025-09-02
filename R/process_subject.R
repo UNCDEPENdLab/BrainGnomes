@@ -526,7 +526,7 @@ submit_extract_rois <- function(
   # drop extraction scheduling arguments from fields before converting to cli argument string for extract_cli.R
   ex_cfg$nhours <- ex_cfg$ncores <- ex_cfg$cli_options <- ex_cfg$sched_args <- ex_cfg$memgb <- NULL
   ex_cfg$input <- input_dir
-  ex_cfg$out_dir <- scfg$metadata$roi_directory
+  ex_cfg$out_dir <- scfg$metadata$rois_directory
   extract_cli <- nested_list_to_args(ex_cfg, collapse = TRUE) # create command line for calling extraction R script
 
   env_variables <- c(

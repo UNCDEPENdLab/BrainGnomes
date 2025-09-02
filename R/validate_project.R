@@ -140,8 +140,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   # required directories not tied to a specific step
   core_dirs <- c(
     "metadata/project_directory", "metadata/log_directory",
-    "metadata/bids_directory", "metadata/scratch_directory",
-    "metadata/templateflow_home"
+    "metadata/scratch_directory", "metadata/templateflow_home"
   )
   for (rr in core_dirs) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
@@ -202,6 +201,12 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
         message("Config file is missing valid ", rr, ". You will be asked for this.")
         gaps <- c(gaps, rr)
       }
+    }
+
+    # BIDS directory required for fmriprep
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/bids_directory"))) {
+      message("Config file is missing valid directory for metadata/bids_directory.")
+      gaps <- c(gaps, "metadata/bids_directory")
     }
   }
 

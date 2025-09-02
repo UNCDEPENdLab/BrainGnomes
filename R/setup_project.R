@@ -115,13 +115,11 @@ setup_project <- function(input = NULL, fields = NULL) {
 #' @keywords internal
 setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
+  # For dicom_directory, bids_directory, and fmriprep_directory, only prompt if relevant parts of the pipeline are enabled (e.g., DICOMs for BIDS conversion)
   if (is.null(fields)) {
     fields <- c()
     if (is.null(scfg$metadata$project_name)) fields <- c(fields, "metadata/project_name")
     if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
-    # if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory") # defer to setup_bids_conversion
-    if (is.null(scfg$metadata$bids_directory)) fields <- c(fields, "metadata/bids_directory")
-    if (is.null(scfg$metadata$fmriprep_directory)) fields <- c(fields, "metadata/fmriprep_directory")
     if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
     if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
@@ -141,35 +139,33 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     }
   }
 
-  # location of DICOMs
+  # location of DICOMs -- only needed if BIDS conversion enabled
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
   }
 
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
-    scfg$metadata$bids_directory <- prompt_input(
-      "Where is your BIDS directory located?", type = "character",
-      default = file.path(scfg$metadata$project_directory, "data_bids")
-    )
-  } else if (is.null(scfg$metadata$bids_directory)) {
-    scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
+    default <- if (is.null(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
+    scfg$metadata$bids_directory <- normalizePath(prompt_input(
+      "Where is your BIDS directory located?",
+      type = "character", default = default
+    ), mustWork = FALSE)
   }
 
-  # location of fMRIPrep outputs -- default within project directory, but allow external paths
+  # location of fMRIPrep outputs -- default within project directory, but allow external paths. Only prompt if fmriprep enabled
   if ("metadata/fmriprep_directory" %in% fields) {
-    scfg$metadata$fmriprep_directory <- prompt_input(
-      "Where should fMRIPrep outputs be written?", type = "character",
-      default = file.path(scfg$metadata$project_directory, "data_fmriprep")
-    )
+    default <- if (is.null(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
+    scfg$metadata$fmriprep_directory <- normalizePath(prompt_input(
+      instruct = glue("
+        We recommend that fmriprep outputs be placed in data_fmriprep within the BrainGnomes project directory.
+        You can specify a different location if you wish. Also, if you're working from extant fmriprep files, you
+        can point to an existing directory containing the results of fmriprep."),
+      "Specify the directory for fmriprep files",
+      type = "character", default = default
+    ), mustWork = FALSE)
   }
-  if (is.null(scfg$metadata$fmriprep_directory)) {
-    scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
-  }
-  scfg$metadata$fmriprep_directory <- normalizePath(
-    scfg$metadata$fmriprep_directory, mustWork = FALSE
-  )
-
+  
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
       instruct = glue("\n\n
@@ -196,11 +192,15 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
 
-  # location for ROI timeseries and connectivity data
-  scfg$metadata$roi_directory <- file.path(scfg$metadata$project_directory, "data_rois")
+  # location of postproc outputs -- currently forcing to be within BG project
+  if ("metadata/postproc_directory" %in% fields) {
+    scfg$metadata$postproc_directory <- file.path(scfg$metadata$project_directory, "data_postproc")
+  }
 
-  # location for postprocessed data
-  scfg$metadata$postproc_directory <- file.path(scfg$metadata$project_directory, "data_postproc")
+  # location for ROI timeseries and connectivity data -- currently forcing to be within BG project
+  if ("metadata/rois_directory" %in% fields) {
+    scfg$metadata$rois_directory <- file.path(scfg$metadata$project_directory, "data_rois")
+  }
 
   return(scfg)
 }
@@ -260,13 +260,15 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
 
-  # location of fMRIPrep outputs -- default to project directory if unset
-  if (is.null(scfg$metadata$fmriprep_directory)) {
-    scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  # prompt for BIDS directory -- input to fmriprep
+  if (is.null(scfg$metadata$bids_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/bids_directory")
   }
-  scfg$metadata$fmriprep_directory <- normalizePath(
-    scfg$metadata$fmriprep_directory, mustWork = FALSE
-  )
+
+  # prompt for fmriprep directory -- outputs of fmriprep
+  if (is.null(scfg$metadata$fmriprep_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/fmriprep_directory")
+  }
 
   # prompt for fmriprep container at this step, but only if it is not already in fields
   # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
