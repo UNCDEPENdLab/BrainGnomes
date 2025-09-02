@@ -3,7 +3,7 @@ test_that("submit_fmriprep binds external BIDS directory", {
   dir.create(proj_dir)
   bids_dir <- tempfile("bids_")
   dir.create(file.path(bids_dir, "sub-01"), recursive = TRUE)
-  fmriprep_dir <- file.path(proj_dir, "fmriprep")
+  fmriprep_dir <- tempfile("fmriprep_")
   dir.create(fmriprep_dir)
   scratch_dir <- file.path(proj_dir, "scratch")
   dir.create(scratch_dir)

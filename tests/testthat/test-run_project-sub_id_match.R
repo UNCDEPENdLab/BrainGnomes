@@ -4,7 +4,7 @@ test_that("run_project uses custom sub_id_match for dicom dirs", {
   dir.create(tmp)
   dicom_dir <- file.path(tmp, "dicoms"); dir.create(dicom_dir)
   bids_dir <- tempfile("bids_"); dir.create(bids_dir)
-  fmriprep_dir <- file.path(tmp, "fmriprep"); dir.create(fmriprep_dir)
+  fmriprep_dir <- tempfile("fmriprep_"); dir.create(fmriprep_dir)
   postproc_dir <- file.path(tmp, "postproc"); dir.create(postproc_dir)
   mriqc_dir <- file.path(tmp, "mriqc"); dir.create(mriqc_dir)
   log_dir <- file.path(tmp, "logs"); dir.create(log_dir)

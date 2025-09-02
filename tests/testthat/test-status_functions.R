@@ -2,7 +2,7 @@ test_that("get_project_status reports completion", {
   root <- tempdir()
   log_dir <- file.path(root, "logs"); dir.create(log_dir)
   bids_dir <- file.path(root, "bids"); dir.create(bids_dir)
-  fmriprep_dir <- file.path(root, "fmriprep"); dir.create(fmriprep_dir)
+  fmriprep_dir <- tempfile("fmriprep_"); dir.create(fmriprep_dir)
   postproc_dir <- file.path(root, "postproc"); dir.create(postproc_dir)
   mriqc_dir <- file.path(root, "mriqc"); dir.create(mriqc_dir)
 
