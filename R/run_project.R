@@ -76,30 +76,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
       if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
-      if (is.null(scfg$compute_environment$heudiconv_container)) stop("Cannot run BIDS conversion without a heudiconv container.")
     }
 
-    if ("mriqc" %in% steps) {
-      if (!isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
-      if (!validate_exists(scfg$compute_environment$mriqc_container)) {
-        stop("Cannot run MRIQC without a valid MRIQC container.")
-      }
-    }
+    if ("mriqc" %in% steps && !isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
 
-    if ("fmriprep" %in% steps) {
-      if (!isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
-      if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
-        stop("Cannot run fmriprep without a valid fmriprep container.")
-      }
-    }
+    if ("fmriprep" %in% steps && !isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
 
-    if ("aroma" %in% steps) {
-      if (!isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
-      if (!validate_exists(scfg$compute_environment$aroma_container)) {
-        stop("Cannot run AROMA without a valid AROMA container.")
-      }
-    }
-
+    if ("aroma" %in% steps && !isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
+    
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
       if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
@@ -130,10 +114,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     steps <- c()
     cat("\nPlease select which steps to run:\n")
     steps["flywheel_sync"] <- ifelse(isTRUE(scfg$flywheel_sync$enable), prompt_input(instruct = "Run Flywheel sync?", type = "flag"), FALSE)
-    steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable) && !is.null(scfg$compute_environment$heudiconv_container), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
-    steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable) && !is.null(scfg$compute_environment$mriqc_container), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
-    steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable) && !is.null(scfg$compute_environment$fmriprep_container), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
-    steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable) && !is.null(scfg$compute_environment$aroma_container), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
+    steps["bids_conversion"] <- ifelse(isTRUE(scfg$bids_conversion$enable), prompt_input(instruct = "Run BIDS conversion?", type = "flag"), FALSE)
+    steps["mriqc"] <- ifelse(isTRUE(scfg$mriqc$enable), prompt_input(instruct = "Run MRIQC?", type = "flag"), FALSE)
+    steps["fmriprep"] <- ifelse(isTRUE(scfg$fmriprep$enable), prompt_input(instruct = "Run fmriprep?", type = "flag"), FALSE)
+    steps["aroma"] <- ifelse(isTRUE(scfg$aroma$enable), prompt_input(instruct = "Run ICA-AROMA?", type = "flag"), FALSE)
 
     steps["postprocess"] <- ifelse(isTRUE(scfg$postprocess$enable) && length(all_pp_streams) > 0L,
       prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE
@@ -174,6 +158,27 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     #   instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
     #   type = "character", among=c("INFO", "ERROR", "DEBUG")
     # )
+  }
+
+  # check that required containers are present for any requested step
+  if ("bids_conversion" %in% steps && !validate_exists(scfg$compute_environment$heudiconv_container)) {
+    stop("Cannot run BIDS conversion without a heudiconv container.")
+  }
+
+  if ("mriqc" %in% steps && !validate_exists(scfg$compute_environment$mriqc_container)) {
+    stop("Cannot run MRIQC without a valid MRIQC container.")
+  }
+
+  if ("fmriprep" %in% steps && !validate_exists(scfg$compute_environment$fmriprep_container)) {
+    stop("Cannot run fmriprep without a valid fmriprep container.")
+  }
+
+  if ("aroma" %in% steps && !validate_exists(scfg$compute_environment$aroma_container)) {
+    stop("Cannot run AROMA without a valid AROMA container.")
+  }
+
+  if ("postprocess" %in% steps && !validate_exists(scfg$compute_environment$fsl_container)) {
+    stop("Cannot run postprocessing without a valid FSL container.")
   }
 
   flywheel_id <- NULL
