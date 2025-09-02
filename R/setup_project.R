@@ -199,6 +199,9 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # location for ROI timeseries and connectivity data
   scfg$metadata$roi_directory <- file.path(scfg$metadata$project_directory, "data_rois")
 
+  # location for postprocessed data
+  scfg$metadata$postproc_directory <- file.path(scfg$metadata$project_directory, "data_postproc")
+
   return(scfg)
 }
 

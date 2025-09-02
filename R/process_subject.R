@@ -26,6 +26,12 @@ null_empty <- function(x) {
 #'   all available extraction streams will be run.
 #' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
 #' @return A logical value indicating whether the preprocessing was successful
+#' @details
+#' When postprocessing is requested without running `fmriprep`, the function verifies
+#' that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
+#' outside the project directory, only the existence of the subject's directory is
+#' required. For fMRIPrep directories inside the project directory, a `.complete`
+#' file in the project's log directory is still necessary.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
@@ -198,10 +204,20 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   if (isTRUE(steps["postprocess"])) {
     ## If postprocessing is requested without running fmriprep, validate that the expected fmriprep outputs exist before scheduling jobs
     if (!isTRUE(steps["fmriprep"])) {
-      chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
-      if (!chk$complete) {
-        lg$warn("Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
-        return(TRUE)
+      if (is_external_path(scfg$metadata$fmriprep_directory,
+        scfg$metadata$project_directory)) {
+        fp_dir <- file.path(scfg$metadata$fmriprep_directory,
+          glue("sub-{sub_id}"))
+        if (!checkmate::test_directory_exists(fp_dir)) {
+          lg$warn("Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
+          return(TRUE)
+        }
+      } else {
+        chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
+        if (!chk$complete) {
+          lg$warn("Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
+          return(TRUE)
+        }
       }
     }
 
@@ -459,7 +475,7 @@ submit_postprocess <- function(
 
   env_variables <- c(
     env_variables,
-    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_postproc_root = scfg$metadata$postproc_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     postprocess_cli = postprocess_cli,
@@ -493,7 +509,7 @@ submit_extract_rois <- function(
   extract_rscript <- system.file("extract_cli.R", package = "BrainGnomes")
   extract_sched_script <- get_job_script(scfg, "extract_rois")
 
-  input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
+  input_dir <- file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
 
   # pull the requested extraction stream from the broader list
@@ -515,7 +531,7 @@ submit_extract_rois <- function(
 
   env_variables <- c(
     env_variables,
-    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_postproc_root = scfg$metadata$postproc_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     extract_cli = extract_cli,
