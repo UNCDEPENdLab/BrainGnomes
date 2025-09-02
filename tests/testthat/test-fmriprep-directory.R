@@ -3,8 +3,8 @@ test_that("is_external_path identifies directories", {
   dir.create(proj)
   inside <- file.path(proj, "data_fmriprep")
   outside <- tempfile("fmriprep_")
-  expect_false(BrainGnomes:::is_external_path(inside, proj))
-  expect_true(BrainGnomes:::is_external_path(outside, proj))
+  expect_false(is_external_path(inside, proj))
+  expect_true(is_external_path(outside, proj))
 })
 
 test_that("process_subject checks complete file for internal fmriprep", {
@@ -25,6 +25,7 @@ test_that("process_subject checks complete file for internal fmriprep", {
   sub_cfg <- data.frame(sub_id = "01", ses_id = NA_character_, dicom_sub_dir = NA_character_,
                         dicom_ses_dir = NA_character_, bids_sub_dir = file.path(bids_dir, "sub-01"),
                         bids_ses_dir = NA_character_, stringsAsFactors = FALSE)
+  if (!dir.exists(sub_cfg$bids_sub_dir[1L])) dir.create(sub_cfg$bids_sub_dir[1L])
   is_called <- FALSE
   ns <- asNamespace("BrainGnomes")
   orig <- get("is_step_complete", envir = ns)

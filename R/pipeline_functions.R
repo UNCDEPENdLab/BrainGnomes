@@ -730,12 +730,18 @@ to_log <- function(logger, condition = "info", msg, ...) {
 #' @return `TRUE` if `path` is not within `project_dir`, otherwise `FALSE`.
 #' @keywords internal
 is_external_path <- function(path, project_dir) {
-  checkmate::assert_string(path)
-  checkmate::assert_string(project_dir)
-  path_norm <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  proj_norm <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
-  path_norm <- sub("/+$", "", path_norm)
-  proj_norm <- sub("/+$", "", proj_norm)
-  inside <- startsWith(path_norm, paste0(proj_norm, "/")) || path_norm == proj_norm
+  # not sure this will ever be useful, but convert paths to forward slash no matter what
+  path <- gsub("\\\\", "/", path)
+  project_dir <- gsub("\\\\", "/", project_dir)
+  
+  # only normalize if the directories both exist.
+  # otherwise, we get odd /var -> /private/var expansion when TRUE, but not when FALSE on MacOS
+  if (dir.exists(path) && dir.exists(project_dir)) {
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    project_dir <- normalizePath(project_dir, winslash = "/", mustWork = FALSE)
+  }
+  
+  proj_slash <- paste0(project_dir, "/")
+  inside <- identical(path, project_dir) || startsWith(path, proj_slash)
   !inside
 }
