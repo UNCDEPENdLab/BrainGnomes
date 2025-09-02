@@ -88,7 +88,6 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     if ("postprocess" %in% steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
       if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
-      if (!validate_exists(scfg$compute_environment$fsl_container)) stop("Cannot run postprocessing without a valid FSL container.")
       if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 

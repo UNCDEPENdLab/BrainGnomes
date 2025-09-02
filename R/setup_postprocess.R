@@ -169,8 +169,8 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
 
   if (isFALSE(scfg$postprocess$enable)) return(scfg)
 
-  # prompt for fsl container at this step
-  if (!validate_exists(scfg$compute_environment$fsl_container)) {
+  # prompt for fmriprep container at this step, but only if it is not already in fields
+  if (!validate_exists(scfg$compute_environment$fsl_container) && !"compute_environment/fsl_container" %in% fields) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/fsl_container")
   }
 
