@@ -71,8 +71,15 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg <- lgr::get_logger_glue(c("postprocess", input_bids_info$sub))
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
+  # determine output directory for postprocessed files
+  if (is.null(cfg$output_dir)) {
+    cfg$output_dir <- input_bids_info$directory
+  }
+  cfg$output_dir <- normalizePath(cfg$output_dir, mustWork = FALSE)
+  if (!dir.exists(cfg$output_dir)) dir.create(cfg$output_dir, recursive = TRUE)
+
   # Reconstruct expected output file
-  output_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc)) # set desc to new postproc/output description
+  output_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc, directory = cfg$output_dir))
   final_filename <- construct_bids_filename(output_bids_info, full.names = TRUE)
 
   # determine if final output file already exists
@@ -86,6 +93,16 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       lg$info("Skipping postprocessing for {in_file} because postprocessed file already exists")
       return(final_filename)
     }
+  }
+
+  # symlink the input file into the output directory to ensure subsequent files are written there
+  if (dirname(proc_files$bold) != cfg$output_dir) {
+    new_bold <- file.path(cfg$output_dir, basename(proc_files$bold))
+    if (!file.exists(new_bold) || isTRUE(cfg$overwrite)) {
+      if (file.exists(new_bold)) file.remove(new_bold)
+      file.symlink(normalizePath(proc_files$bold), new_bold)
+    }
+    proc_files$bold <- new_bold
   }
 
   # location of FSL singularity container

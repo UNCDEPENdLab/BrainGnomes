@@ -464,18 +464,20 @@ submit_postprocess <- function(
   # postprocessing
   input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
+  out_dir <- file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"))
+  if (!is.null(ses_id) && !is.na(ses_id)) out_dir <- file.path(out_dir, glue("ses-{ses_id}"))
 
   # pull the requested postprocessing stream from the broader list
   pp_cfg <- scfg$postprocess[[pp_stream]]
   pp_cfg$fsl_img <- scfg$compute_environment$fsl_container
   pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
+  pp_cfg$output_dir <- out_dir
   # drop postproc scheduling arguments from fields before converting to cli argument string for postprocess_cli.R
   pp_cfg$nhours <- pp_cfg$ncores <- pp_cfg$cli_options <- pp_cfg$sched_args <- pp_cfg$sched_args <- NULL
   postprocess_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script
 
   env_variables <- c(
     env_variables,
-    loc_postproc_root = scfg$metadata$postproc_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     postprocess_cli = postprocess_cli,
@@ -484,7 +486,8 @@ submit_postprocess <- function(
     input_regex = pp_cfg$input_regex,
     postprocess_image_sched_script = postprocess_image_sched_script,
     sched_args = sched_args, # pass through to child processes
-    stream_name = pp_stream
+    stream_name = pp_stream,
+    out_dir = out_dir
   )
 
   job_id <- cluster_job_submit(sched_script,

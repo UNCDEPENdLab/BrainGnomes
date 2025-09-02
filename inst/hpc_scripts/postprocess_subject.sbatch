@@ -25,8 +25,7 @@ ncores=$SLURM_NTASKS
 
 ####
 #verify required arguments
-[ -z "$loc_postproc_root" ] && echo "loc_postproc_root not set. Exiting." && exit 1
-[ ! -r "$loc_postproc_root" ] && echo "loc_postproc_root $loc_postproc_root not readable. Exiting" && exit 1
+[ -z "$out_dir" ] && echo "out_dir not set. Exiting." && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [ -z "$postprocess_cli" ] && echo "postprocess_cli not set. Exiting." && exit 1
@@ -57,17 +56,14 @@ fi
 stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
 stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
-###
-# handle multi-session setup
+
+ses_str=""
 if [ -n "$ses_id" ]; then
-  out_dir=${loc_postproc_root}/sub-${sub_id}/ses-${ses_id}
   ses_str="session $ses_id"
-else
-  out_dir=${loc_postproc_root}/sub-${sub_id}
-  ses_str=""
 fi
 mkdir -p "$out_dir"
-cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
+cd "$out_dir" || { echo "Failed to change directory to $out_dir"; exit 1; }
+export out_dir
 
 ####
 log_flag=""
