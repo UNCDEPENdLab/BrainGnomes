@@ -95,15 +95,9 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
   }
 
-  # symlink the input file into the output directory to ensure subsequent files are written there
-  if (dirname(proc_files$bold) != cfg$output_dir) {
-    new_bold <- file.path(cfg$output_dir, basename(proc_files$bold))
-    if (!file.exists(new_bold) || isTRUE(cfg$overwrite)) {
-      if (file.exists(new_bold)) file.remove(new_bold)
-      file.symlink(normalizePath(proc_files$bold), new_bold)
-    }
-    proc_files$bold <- new_bold
-  }
+  # The initial fMRIPrep output may reside outside of cfg$output_dir.
+  # We'll operate on the original file and ensure later steps move
+  # outputs into the requested directory.
 
   # location of FSL singularity container
   fsl_img <- cfg$fsl_img
@@ -268,6 +262,14 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       file_set <- c(file_set, cur_file)
     } else {
       stop("Unknown step: ", step)
+    }
+
+    # Ensure intermediate files reside in the configured output directory
+    if (dirname(cur_file) != cfg$output_dir) {
+      new_file <- file.path(cfg$output_dir, basename(cur_file))
+      file.rename(cur_file, new_file)
+      cur_file <- new_file
+      file_set[length(file_set)] <- cur_file
     }
   }
 
