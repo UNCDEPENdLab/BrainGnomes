@@ -158,6 +158,13 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
+  if (any(scfg$postprocess$enable, scfg$extract_rois$enable, na.rm = TRUE)) {
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/postproc_directory"))) {
+      message("Config file is missing valid directory for metadata/postproc_directory.")
+      gaps <- c(gaps, "metadata/postproc_directory")
+    }
+  }
+
   if (isTRUE(scfg$mriqc$enable)) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/mriqc_directory"))) {
       message("Config file is missing valid directory for metadata/mriqc_directory.")

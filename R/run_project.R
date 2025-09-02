@@ -27,7 +27,7 @@
 #'     run_project(study_config, prompt = TRUE, force = FALSE)
 #'   }
 #' @importFrom glue glue
-#' @importFrom checkmate assert_list assert_flag assert_directory_exists
+#' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
 run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
   extract_streams = NULL, debug = FALSE, force = FALSE) {
@@ -60,7 +60,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       Project directory:   {pretty_arg(scfg$metadata$project_directory)}
       DICOM directory:     {pretty_arg(scfg$metadata$dicom_directory)}
       BIDS directory:      {pretty_arg(scfg$metadata$bids_directory)}
-      fmriprep directory:  {pretty_arg(scfg$metadata$fmriprep_directory)}\n
+      fmriprep directory:  {pretty_arg(scfg$metadata$fmriprep_directory)}
+      Postprocess directory: {pretty_arg(scfg$metadata$postproc_directory)}\n
       "))
 
   # by passing steps, user is asking for unattended execution

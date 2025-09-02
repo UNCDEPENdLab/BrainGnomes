@@ -25,8 +25,8 @@ ncores=$SLURM_NTASKS
 
 ####
 #verify required arguments
-[ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
-[ ! -r "$loc_mrproc_root" ] && echo "loc_mrproc_root $loc_mrproc_root not readable. Exiting" && exit 1
+[ -z "$loc_postproc_root" ] && echo "loc_postproc_root not set. Exiting." && exit 1
+[ ! -r "$loc_postproc_root" ] && echo "loc_postproc_root $loc_postproc_root not readable. Exiting" && exit 1
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 [ -z "$postprocess_cli" ] && echo "postprocess_cli not set. Exiting." && exit 1
@@ -60,10 +60,10 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 ###
 # handle multi-session setup
 if [ -n "$ses_id" ]; then
-  out_dir=${loc_mrproc_root}/sub-${sub_id}/ses-${ses_id}
+  out_dir=${loc_postproc_root}/sub-${sub_id}/ses-${ses_id}
   ses_str="session $ses_id"
 else
-  out_dir=${loc_mrproc_root}/sub-${sub_id}
+  out_dir=${loc_postproc_root}/sub-${sub_id}
   ses_str=""
 fi
 mkdir -p "$out_dir"
