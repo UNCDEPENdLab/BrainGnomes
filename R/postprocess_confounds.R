@@ -81,7 +81,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   # Regress out AROMA components, if requested (overwrites file in place)
   if ("apply_aroma" %in% processing_sequence) {
     lg$info("Removing AROMA noise components from confounds")
-    confound_nii <- apply_aroma(confound_nii, out_desc = cfg$bids_desc,
+    confound_nii <- apply_aroma(confound_nii, out_file = confound_nii,
       mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
       overwrite = TRUE, lg = lg, use_R = TRUE, fsl_img = fsl_img
     )
@@ -91,7 +91,8 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   if ("temporal_filter" %in% processing_sequence) {
     lg$info("Temporally filtering confounds")
     confound_nii <- temporal_filter(confound_nii,
-      tr = cfg$tr, out_desc = cfg$bids_desc,
+      out_file = confound_nii,
+      tr = cfg$tr,
       low_pass_hz = cfg$temporal_filter$low_pass_hz,
       high_pass_hz = cfg$temporal_filter$high_pass_hz,
       overwrite = TRUE, lg = lg, fsl_img = fsl_img,
