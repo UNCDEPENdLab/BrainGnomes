@@ -426,7 +426,7 @@ out_file_exists <- function(in_file, description, overwrite = TRUE) {
 #' }
 #'
 #' @importFrom utils modifyList read.table
-#' @importFrom checkmate assert_file_exists
+#' @importFrom checkmate assert_file_exists test_file_exists
 #' @export
 get_fmriprep_outputs <- function(in_file) {
   checkmate::assert_file_exists(in_file)
@@ -463,7 +463,7 @@ get_fmriprep_outputs <- function(in_file) {
   # need to read the aroma metrics file and figure it out.
   aroma_metrics <- file.path(dir_path, glue("{prefix}_desc-aroma_metrics.tsv"))
 
-  if (file.exists(aroma_metrics)) {
+  if (test_file_exists(aroma_metrics)) {
     adat <- read.table(aroma_metrics, header = TRUE, sep = "\t")
     noise_ics <- which(adat$classification == "rejected")
   } else {
@@ -472,11 +472,11 @@ get_fmriprep_outputs <- function(in_file) {
 
   # Assemble output
   output <- list(
-    bold = if (file.exists(bold)) bold else NULL,
-    brain_mask = if (file.exists(brain_mask)) brain_mask else NULL,
+    bold = if (test_file_exists(bold)) bold else NULL,
+    brain_mask = if (test_file_exists(brain_mask)) brain_mask else NULL,
     confounds = if (!is.na(confounds)) confounds else NULL,
-    melodic_mix = if (file.exists(melodic_mix)) melodic_mix else NULL,
-    aroma_metrics = if (file.exists(aroma_metrics)) aroma_metrics else NULL,
+    melodic_mix = if (test_file_exists(melodic_mix)) melodic_mix else NULL,
+    aroma_metrics = if (test_file_exists(aroma_metrics)) aroma_metrics else NULL,
     noise_ics = noise_ics,
     prefix = prefix
   )
