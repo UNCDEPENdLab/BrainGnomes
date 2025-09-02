@@ -3,7 +3,7 @@ metadata:
   project_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data
   dicom_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms
   bids_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_bids
-  fmriprep_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep
+  fmriprep_directory: /external/fmriprep_outputs
   mriqc_directory: /proj/mnhallqlab/projects/preproc_pipeline_test_data/mriqc_reports
   scratch_directory: /work/users/m/n/mnhallq
   templateflow_home: /nas/longleaf/home/mnhallq/.cache/templateflow

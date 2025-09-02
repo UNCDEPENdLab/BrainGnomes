@@ -152,7 +152,8 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
 
   # step-specific directories
   if (any(scfg$fmriprep$enable, scfg$aroma$enable, scfg$postprocess$enable, na.rm = TRUE)) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/fmriprep_directory"))) {
+    fmriprep_dir <- get_nested_values(scfg, "metadata/fmriprep_directory")
+    if (is.null(fmriprep_dir) || !nzchar(fmriprep_dir) || !checkmate::test_directory_exists(fmriprep_dir)) {
       message("Config file is missing valid directory for metadata/fmriprep_directory.")
       gaps <- c(gaps, "metadata/fmriprep_directory")
     }

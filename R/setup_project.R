@@ -121,6 +121,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
     # if (is.null(scfg$metadata$dicom_directory)) fields <- c(fields, "metadata/dicom_directory") # defer to setup_bids_conversion
     if (is.null(scfg$metadata$bids_directory)) fields <- c(fields, "metadata/bids_directory")
+    if (is.null(scfg$metadata$fmriprep_directory)) fields <- c(fields, "metadata/fmriprep_directory")
     if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
     if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
@@ -154,6 +155,20 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   } else if (is.null(scfg$metadata$bids_directory)) {
     scfg$metadata$bids_directory <- file.path(scfg$metadata$project_directory, "data_bids")
   }
+
+  # location of fMRIPrep outputs -- default within project directory, but allow external paths
+  if ("metadata/fmriprep_directory" %in% fields) {
+    scfg$metadata$fmriprep_directory <- prompt_input(
+      "Where should fMRIPrep outputs be written?", type = "character",
+      default = file.path(scfg$metadata$project_directory, "data_fmriprep")
+    )
+  }
+  if (is.null(scfg$metadata$fmriprep_directory)) {
+    scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  }
+  scfg$metadata$fmriprep_directory <- normalizePath(
+    scfg$metadata$fmriprep_directory, mustWork = FALSE
+  )
 
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
@@ -242,8 +257,13 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
 
-  # location of fmriprep outputs -- enforce that this must be within the project directory
-  scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  # location of fMRIPrep outputs -- default to project directory if unset
+  if (is.null(scfg$metadata$fmriprep_directory)) {
+    scfg$metadata$fmriprep_directory <- file.path(scfg$metadata$project_directory, "data_fmriprep")
+  }
+  scfg$metadata$fmriprep_directory <- normalizePath(
+    scfg$metadata$fmriprep_directory, mustWork = FALSE
+  )
 
   # prompt for fmriprep container at this step, but only if it is not already in fields
   # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
