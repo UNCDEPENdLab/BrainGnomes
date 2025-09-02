@@ -13,7 +13,7 @@ if (length(argpos) > 0L) {
 }
 
 if (is.null(args) || length(args) < 2L) {
-  message("Minimal usage: postprocess_cli.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--fsl_img=<fsl_singularity_image>]")
+  message("Minimal usage: postprocess_cli.R --input=<input_file> --config_yaml=<config_yaml.yaml> [--output_dir=<output_dir>] [--fsl_img=<fsl_singularity_image>]")
   quit(save="no", 1, FALSE)
 }
 
