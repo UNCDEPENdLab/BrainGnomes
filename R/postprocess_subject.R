@@ -185,6 +185,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # output files use camelCase, with desc on the end, like desc-ismPostproc1, where ism are the steps that have been applied
   prefix_chain <- "" # used for accumulating prefixes with each step
   base_desc <- paste0(toupper(substr(cfg$bids_desc, 1, 1)), substr(cfg$bids_desc, 2, nchar(cfg$bids_desc)))
+  first_file <- FALSE
 
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
@@ -205,72 +206,86 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     prefix_chain <- paste0(step_prefix, prefix_chain)
     out_desc <- paste0(prefix_chain, base_desc)
 
+    # determine output file path in postprocessing directory
+    bids_info <- as.list(extract_bids_info(cur_file))
+    bids_info$description <- out_desc
+    if (!first_file && dirname(cur_file) != cfg$output_dir) {
+      bids_info$directory <- cfg$output_dir
+    } else {
+      bids_info$directory <- dirname(cur_file)
+    }
+    out_file <- construct_bids_filename(bids_info, full.names = TRUE)
+
+    # handle extant output
+    if (file.exists(out_file) && !isTRUE(cfg$overwrite)) {
+      lg$info("Skipping {step}; output exists: {out_file}")
+      cur_file <- out_file
+      file_set <- c(file_set, cur_file)
+      first_file <- TRUE
+      next
+    }
+
     if (step == "apply_mask") {
       lg$info("Masking fMRI data using file: {brain_mask}")
-      cur_file <- apply_mask(cur_file, out_desc = out_desc,
+      cur_file <- apply_mask(cur_file,
         mask_file = brain_mask,
+        out_file = out_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "spatial_smooth") {
-      cur_file <- spatial_smooth(cur_file, out_desc = out_desc, 
-        brain_mask = brain_mask, fwhm_mm = cfg$spatial_smooth$fwhm_mm, 
+      cur_file <- spatial_smooth(cur_file,
+        out_file = out_file,
+        brain_mask = brain_mask, fwhm_mm = cfg$spatial_smooth$fwhm_mm,
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "apply_aroma") {
       lg$info("Removing AROMA noise components from fMRI data")
-      cur_file <- apply_aroma(cur_file, out_desc = out_desc,
+      cur_file <- apply_aroma(cur_file,
+        out_file = out_file,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "scrub_interpolate") {
-      cur_file <- scrub_interpolate(cur_file, out_desc = out_desc,
+      cur_file <- scrub_interpolate(cur_file,
+        out_file = out_file,
         censor_file = censor_file, confound_files = to_regress,
         overwrite=cfg$overwrite, lg=lg
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "temporal_filter") {
-      cur_file <- temporal_filter(cur_file, out_desc = out_desc,
+      cur_file <- temporal_filter(cur_file,
+        out_file = out_file,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz,
         high_pass_hz = cfg$temporal_filter$high_pass_hz,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img,
         method = cfg$temporal_filter$method
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "confound_regression") {
       lg$info("Removing confound regressors from fMRI data using file: {to_regress}")
-      cur_file <- confound_regression(cur_file, out_desc = out_desc,
+      cur_file <- confound_regression(cur_file,
+        out_file = out_file,
         to_regress = to_regress, censor_file = censor_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "scrub_timepoints") {
-      cur_file <- scrub_timepoints(cur_file, out_desc = out_desc,
+      cur_file <- scrub_timepoints(cur_file,
+        out_file = out_file,
         censor_file = censor_file,
         overwrite = cfg$overwrite, lg = lg
       )
-      file_set <- c(file_set, cur_file)
     } else if (step == "intensity_normalize") {
-      cur_file <- intensity_normalize(cur_file, out_desc = out_desc,
+      cur_file <- intensity_normalize(cur_file,
+        out_file = out_file,
         brain_mask = brain_mask,
         global_median = cfg$intensity_normalize$global_median,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
-      file_set <- c(file_set, cur_file)
     } else {
       stop("Unknown step: ", step)
     }
 
-    # Ensure intermediate files reside in the configured output directory
-    if (dirname(cur_file) != cfg$output_dir) {
-      new_file <- file.path(cfg$output_dir, basename(cur_file))
-      file.rename(cur_file, new_file)
-      cur_file <- new_file
-      file_set[length(file_set)] <- cur_file
-    }
+    file_set <- c(file_set, cur_file)
+    first_file <- TRUE
   }
 
   # clean up intermediate NIfTIs

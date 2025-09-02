@@ -9,7 +9,7 @@
 #'
 #' @param in_file Path to the input 4D NIfTI image.
 #' @param mask_file Path to a binary mask NIfTI file (same dimensions as \code{in_file}).
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param overwrite Logical; whether to overwrite the output file if it already exists.
 #' @param lg Optional lgr object used for logging messages
 #' @param fsl_img Optional path to a Singularity image to execute the command in a container.
@@ -19,22 +19,15 @@
 #' @keywords internal
 #' @importFrom checkmate assert_file_exists assert_string
 #' @importFrom glue glue
-apply_mask <- function(in_file, mask_file, out_desc=NULL, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+apply_mask <- function(in_file, mask_file, out_file, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   checkmate::assert_file_exists(mask_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
 
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
-  }
-
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
   }
 
   lg$info("Apply mask {mask_file} to {in_file}")
@@ -53,7 +46,7 @@ apply_mask <- function(in_file, mask_file, out_desc=NULL, overwrite=FALSE, lg=NU
 #' @param in_file Path to the input 4D NIfTI image file.
 #' @param censor_file Path to a 1D censor file (e.g., from fMRI preprocessing) 
 #'   containing a binary vector of `1`s (keep) and `0`s (scrub) for each timepoint.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param confound_files Optional character vector of confound or regressor
 #'   files to update alongside the fMRI data. Rows corresponding to interpolated
 #'   volumes are filled in using natural splines with nearest-neighbor
@@ -78,11 +71,11 @@ apply_mask <- function(in_file, mask_file, out_desc=NULL, overwrite=FALSE, lg=NU
 #' @importFrom stats splinefun
 #' @importFrom data.table fread
 #' @keywords internal
-scrub_interpolate <- function(in_file, censor_file, out_desc = NULL,
+scrub_interpolate <- function(in_file, censor_file, out_file,
                              confound_files = NULL, overwrite=FALSE, lg=NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_file_exists(censor_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_flag(overwrite)
   checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
   
@@ -97,14 +90,6 @@ scrub_interpolate <- function(in_file, censor_file, out_desc = NULL,
   lg$debug("in_file: {in_file}")
   lg$debug("censor_file: {censor_file}")
 
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else  {
-    out_file <- res$out_file
-  }
-  
   censor <- as.integer(readLines(censor_file))
   t_interpolate <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
@@ -153,7 +138,7 @@ scrub_interpolate <- function(in_file, censor_file, out_desc = NULL,
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param censor_file Path to the 1D censor vector used to identify volumes to
 #'   remove.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param confound_files Optional character vector of confound or regressor
 #'   files to update alongside the fMRI data.
 #'
@@ -162,11 +147,11 @@ scrub_interpolate <- function(in_file, censor_file, out_desc = NULL,
 #'
 #' @return The path to the scrubbed NIfTI image.
 #' @keywords internal
-scrub_timepoints <- function(in_file, censor_file = NULL, out_desc=NULL,
+scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
                              confound_files = NULL,
                              overwrite=FALSE, lg=NULL) {
   #checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_flag(overwrite)
   checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
   
@@ -181,14 +166,6 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_desc=NULL,
     msg <- glue("In scrub_timepoints, cannot locate censor file: {censor_file}")
     lg$error(msg)
     stop(msg)
-  }
-  
-  # handle extant output file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else  {
-    out_file <- res$out_file
   }
   
   censor <- as.integer(readLines(censor_file))
@@ -232,7 +209,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_desc=NULL,
 #' to sigma values in volumes using a standard FWHM-to-sigma transformation.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param low_pass_hz Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.
 #' @param high_pass_hz Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use \code{Inf} to skip.
 #' @param tr Repetition time (TR) in seconds. Required to convert Hz to volumes.
@@ -250,12 +227,12 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_desc=NULL,
 #' @importFrom glue glue
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_string assert_number assert_flag
-temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_hz=1/120, tr=NULL,
+temporal_filter <- function(in_file, out_file, low_pass_hz=0, high_pass_hz=1/120, tr=NULL,
                             overwrite=FALSE, lg=NULL, fsl_img = NULL,
                             method=c("fslmaths","butterworth")) {
   method <- match.arg(method)
   #checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_number(low_pass_hz)
   checkmate::assert_number(high_pass_hz)
   stopifnot(low_pass_hz < high_pass_hz)
@@ -272,14 +249,6 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
   lg$info("Temporal filtering with low-frequency cutoff: {low_pass_hz} Hz, high-frequency cutoff: {high_pass_hz} Hz given TR: {tr}")
   lg$debug("in_file: {in_file}")
   
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
-  }
-
   if (method == "fslmaths") {
     # bptf specifies its filter cutoffs in terms of volumes, not frequencies
     fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
@@ -310,7 +279,7 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
 #' if the standard FSL command fails due to dimensionality issues.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param mixing_file Path to the MELODIC mixing matrix (e.g., \code{*_desc-MELODIC_mixing.tsv}).
 #' @param noise_ics Vector of ICA components to regress out (usually pulled from relevant aroma_timeseries.tsv file).
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
@@ -323,9 +292,9 @@ temporal_filter <- function(in_file, out_desc = NULL, low_pass_hz=0, high_pass_h
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string test_file_exists
-apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwrite = FALSE, lg = NULL, use_R = FALSE, fsl_img = NULL) {
+apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = FALSE, lg = NULL, use_R = FALSE, fsl_img = NULL) {
   # checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_flag(overwrite)
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
@@ -345,14 +314,6 @@ apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwr
   if (isFALSE(checkmate::test_integerish(noise_ics, lower=1))) {
     warning(glue("noise_ics must be a vector of integers identifying components to regress out. Skipping AROMA regression"))
     return(in_file)
-  }
-
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
   }
 
   # just read in the comma-separated noise ICs
@@ -381,7 +342,7 @@ apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwr
 #' and the extents mask is re-applied post-smoothing to constrain the result to original data extents.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param fwhm_mm Full-width at half-maximum (FWHM) of the Gaussian kernel in millimeters.
 #' @param brain_mask Optional brain mask to guide intensity thresholding. If \code{NULL}, the whole image is used.
 #' @param overwrite Logical; whether to overwrite the output file if it already exists.
@@ -396,9 +357,9 @@ apply_aroma <- function(in_file, out_desc = NULL, mixing_file, noise_ics, overwr
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string assert_number assert_file_exists
-spatial_smooth <- function(in_file, out_desc = NULL, fwhm_mm = 6, brain_mask = NULL, overwrite = FALSE, lg = NULL, fsl_img=NULL) {
+spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, overwrite = FALSE, lg = NULL, fsl_img=NULL) {
   # checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_number(fwhm_mm, lower = 0.1)
 
   if (!checkmate::test_class(lg, "Logger")) {
@@ -410,14 +371,6 @@ spatial_smooth <- function(in_file, out_desc = NULL, fwhm_mm = 6, brain_mask = N
 
   lg$info("Spatial smoothing with FHWM {fwhm_mm}mm kernel")
   lg$debug("in_file: {in_file}")
-
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
-  }
 
   fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
   sigma <- fwhm_mm / fwhm_to_sigma
@@ -450,7 +403,7 @@ spatial_smooth <- function(in_file, out_desc = NULL, fwhm_mm = 6, brain_mask = N
 #' matches a specified global target. This operation is commonly used to standardize signal across runs or subjects.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param brain_mask Optional path to a brain mask NIfTI file. If \code{NULL}, the entire image is used.
 #' @param global_median Target median intensity value to normalize to (default is 10000).
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
@@ -465,9 +418,9 @@ spatial_smooth <- function(in_file, out_desc = NULL, fwhm_mm = 6, brain_mask = N
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string assert_number
-intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_median=10000, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+intensity_normalize <- function(in_file, out_file, brain_mask=NULL, global_median=10000, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   #checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
   checkmate::assert_number(global_median)
 
   if (!checkmate::test_class(lg, "Logger")) {
@@ -478,14 +431,6 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
   }
 
   lg$info("Intensity normalizing fMRI data to global median: {global_median}")
-
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
-  }
 
   median_intensity <- image_quantile(in_file, brain_mask, .5)
 
@@ -506,7 +451,7 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
 #'
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param to_regress Path to a text file containing nuisance regressors (one column per regressor).
-#' @param out_desc The BIDS description field for the file output by this step
+#' @param out_file The full path for the file output by this step
 #' @param censor_file An optional censor file (1s indicate volumes to keep) that is used to 
 #' @param overwrite Logical; whether to overwrite the output file if it already exists.
 #' @param lg Optional lgr object used for logging messages
@@ -521,24 +466,16 @@ intensity_normalize <- function(in_file, out_desc=NULL, brain_mask=NULL, global_
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_file_exists assert_string
-confound_regression <- function(in_file, out_desc = NULL, to_regress=NULL, censor_file = NULL, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file = NULL, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_file_exists(to_regress)
-  checkmate::assert_string(out_desc)
+  checkmate::assert_string(out_file)
 
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
   } else {
     log_file <- lg$appenders$postprocess_log$destination
-  }
-
-  # handle extant file
-  res <- out_file_exists(in_file, out_desc, overwrite)
-  if (isTRUE(res$skip)) {
-    return(res$out_file) # skip existing file
-  } else {
-    out_file <- res$out_file
   }
 
   method <- "lmfit" # default -- supports fitting coefficients to good timepoints
