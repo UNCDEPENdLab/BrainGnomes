@@ -17,6 +17,7 @@ setup_project_directories <- function(scfg) {
     scfg$metadata$bids_directory,
     scfg$metadata$log_directory,
     scfg$metadata$roi_directory,
+    scfg$metadata$postproc_directory,
     scfg$metadata$fmriprep_directory,
     scfg$metadata$mriqc_directory,
     scfg$metadata$scratch_directory,

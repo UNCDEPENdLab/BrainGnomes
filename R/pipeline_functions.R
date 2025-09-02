@@ -248,10 +248,10 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
         file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
       },
     postprocess = if (!is.null(ses_id)) {
-        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"),
+        file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"),
                   glue("ses-{ses_id}"))
       } else {
-        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+        file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"))
       }
   )
 

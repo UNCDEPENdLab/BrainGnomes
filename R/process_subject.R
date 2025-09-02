@@ -459,7 +459,7 @@ submit_postprocess <- function(
 
   env_variables <- c(
     env_variables,
-    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_postproc_root = scfg$metadata$postproc_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     postprocess_cli = postprocess_cli,
@@ -493,7 +493,7 @@ submit_extract_rois <- function(
   extract_rscript <- system.file("extract_cli.R", package = "BrainGnomes")
   extract_sched_script <- get_job_script(scfg, "extract_rois")
 
-  input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
+  input_dir <- file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
   if (!is.null(ses_id) && !is.na(ses_id)) input_dir <- file.path(input_dir, glue("ses-{ses_id}")) # add session subdir if relevant
 
   # pull the requested extraction stream from the broader list
@@ -515,7 +515,7 @@ submit_extract_rois <- function(
 
   env_variables <- c(
     env_variables,
-    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    loc_postproc_root = scfg$metadata$postproc_directory,
     sub_id = sub_id,
     ses_id = ses_id,
     extract_cli = extract_cli,
