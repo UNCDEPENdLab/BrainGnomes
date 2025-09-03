@@ -43,6 +43,9 @@ else
   debug_pipeline=0
 fi
 
+# default to no cleanup if variable not provided
+[ -z "$aroma_cleanup" ] && aroma_cleanup=0
+
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
 [ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
@@ -85,9 +88,14 @@ log_message DEBUG "Exit status of fmripost-aroma is $cmd_status, success is $suc
 
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_aroma.html"
 [ -f "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" "${loc_mrproc_root}/sub-${sub_id}.html"
-
 # [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+if [[ $success -eq 0 ]]; then
+  if [[ "$aroma_cleanup" == "TRUE" || "$aroma_cleanup" -eq 1 ]]; then
+    log_message INFO "Removing unneeded AROMA NIfTI/JSON files"
+    rel $rel_flag $log_flag find "$out_dir" -type f -name "*space-MNI152NLin6Asym_res-2*" -delete
+  fi
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+fi
 
 log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
 exit $success

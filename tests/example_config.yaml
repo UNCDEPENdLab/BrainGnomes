@@ -64,6 +64,7 @@ aroma:
   ncores: 1.0
   cli_options: []
   sched_args: []
+  cleanup: yes
 postprocess:
   enable: yes
   memgb: 48.0
