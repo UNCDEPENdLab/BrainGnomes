@@ -307,12 +307,12 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
   lg$debug("mixing_file: {mixing_file}")
 
   if (isFALSE(checkmate::test_file_exists(mixing_file))) {
-    warning(glue("Cannot find mixing file corresponding to {in_file}. Skipping AROMA regression"))
+    to_log(lg, "warn", "Cannot find mixing file corresponding to {in_file}. Skipping AROMA regression")
     return(in_file)
   }
 
   if (isFALSE(checkmate::test_integerish(noise_ics, lower=1))) {
-    warning(glue("noise_ics must be a vector of integers identifying components to regress out. Skipping AROMA regression"))
+    to_log(lg, "warn", "noise_ics must be a vector of integers identifying components to regress out. Skipping AROMA regression")
     return(in_file)
   }
 
@@ -326,7 +326,7 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
     if (!file.exists(regfilt_rscript)) stop("Cannot find fsl_regfilt.R script in the BrainGnomes installation folder")
 
     cmd <- glue("{Sys.getenv('R_HOME')}/bin/Rscript --vanilla {regfilt_rscript} --input={in_file} --melodic_mix={mixing_file} --filter={noise_ics} --njobs=1 --output={out_file}")
-    lg$info("Running fsl_regfilt.R: {cmd}")
+    to_log(lg, "info", "Running fsl_regfilt.R: {cmd}")
     system(cmd)
   } else {
     cmd <- glue("fsl_regfilt -i {file_sans_ext(in_file)} -o {file_sans_ext(out_file)} -d {mixing_file} -f {noise_ics}")

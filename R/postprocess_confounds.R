@@ -89,7 +89,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
   # Temporally filter confounds, if requested (overwrites file in place)
   if ("temporal_filter" %in% processing_sequence) {
-    lg$info("Temporally filtering confounds")
+    lg$info("Temporally filtering confounds with low-pass cutoff {cfg$temporal_filter$low_pass_hz}, high-pass cutoff {cfg$temporal_filter$high_pass_hz}, method {cfg$temporal_filter$method}")
     confound_nii <- temporal_filter(confound_nii,
       out_file = confound_nii,
       tr = cfg$tr,
@@ -115,10 +115,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
 
       if (length(missing_cols) > 0L) {
-        lg$warn(
-          "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: ",
-          paste(missing_cols, collapse = ", ")
-        )
+        to_log(lg, "warn", "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: {paste(missing_cols, collapse = ', ')}")
       }
 
       if (length(present_cols) > 0L) {
@@ -179,9 +176,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     df <- cbind(1, df) # add intercept
 
     data.table::fwrite(df, file = to_regress, sep = "\t", col.names = FALSE)
+  } else {
+    to_regress <- NULL
   }
 
-  to_regress
+  return(to_regress)
 }
 
 #' Expand confound column patterns

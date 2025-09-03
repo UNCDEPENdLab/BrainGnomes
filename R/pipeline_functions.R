@@ -715,7 +715,7 @@ to_log <- function(logger, condition = "info", msg, ...) {
   if (condition == "fatal") { # only fatal stops execution
     stop(msg, call. = FALSE)
   } else if (condition %in% c("warn", "error")) {
-    warning(msg, call. = FALSE, immediate. = TRUE)
+    warning(msg, call. = FALSE, immediate. = FALSE)
   } else if (condition == "info") {
     message(msg)
   }

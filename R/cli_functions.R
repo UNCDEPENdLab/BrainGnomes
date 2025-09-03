@@ -86,7 +86,7 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
       keys <- strsplit(key_str, sep, fixed = TRUE)[[1]]
 
       value <- scan(text = val_str, what = character(), quote = "'\"", quiet = TRUE)
-      if (type_values) value <- type.convert(value, as.is = TRUE)
+      if (type_values) value <- if (!is.na(value[1L]) && value[1L] == "NULL") NULL else type.convert(value, as.is = TRUE) # type.convert won't convert NULL
 
       nested <- value
       for (key in rev(keys)) {

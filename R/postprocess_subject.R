@@ -72,9 +72,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # determine output directory for postprocessed files
-  if (is.null(cfg$output_dir)) {
-    cfg$output_dir <- input_bids_info$directory
-  }
+  if (is.null(cfg$output_dir)) cfg$output_dir <- input_bids_info$directory
   cfg$output_dir <- normalizePath(cfg$output_dir, mustWork = FALSE)
   if (!dir.exists(cfg$output_dir)) dir.create(cfg$output_dir, recursive = TRUE)
 
@@ -209,11 +207,9 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     # determine output file path in postprocessing directory
     bids_info <- as.list(extract_bids_info(cur_file))
     bids_info$description <- out_desc
-    if (!first_file && dirname(cur_file) != cfg$output_dir) {
-      bids_info$directory <- cfg$output_dir
-    } else {
-      bids_info$directory <- dirname(cur_file)
-    }
+
+    # if cur_file input exists outside of output_dir, ensure that its result goes into output_dir
+    if (dirname(cur_file) != cfg$output_dir) bids_info$directory <- cfg$output_dir
     out_file <- construct_bids_filename(bids_info, full.names = TRUE)
 
     # handle extant output
@@ -309,8 +305,12 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   }
 
   # move the final file into a BIDS-friendly file name with a desc field
-  lg$debug("Renaming last file in stream: {cur_file} to postprocessed file name: {final_filename}")
-  file.rename(cur_file, final_filename)
+  if (cur_file != proc_files$bold) {
+    lg$debug("Renaming last file in stream: {cur_file} to postprocessed file name: {final_filename}")
+    file.rename(cur_file, final_filename)
+  } else {
+    to_log(lg, "warn", "Not renaming last postprocessed file to {final_filename} because it is the same as the input file {proc_files$bold}")
+  }
   
   end_time <- Sys.time()
   lg$info("Final postprocessed is: {final_filename}")

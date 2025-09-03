@@ -42,14 +42,17 @@ for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
 
 # for debugging and testing
 # args <- paste(c(
-#   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask='TRUE' --brain_mask='NA'",
-#   "--processing_steps='spatial_smooth' 'apply_aroma' 'temporal_filter' 'intensity_normalize' --spatial_smooth/fwhm_mm='5'",
-#   "--spatial_smooth/prefix='s' --apply_aroma/nonaggressive='TRUE' --apply_aroma/prefix='a' --temporal_filter/low_pass_hz='0'",
-#   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --intensity_normalize/global_median='10000' --intensity_normalize/prefix='n'",
-#   "--confound_calculate/columns='filt*' --confound_calculate/noproc_columns='nofilt*' --confound_calculate/demean='TRUE'",
+#   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask/enable='FALSE' --brain_mask='NA'",
+#   "--processing_steps='spatial_smooth' 'apply_aroma' 'temporal_filter' 'intensity_normalize' --spatial_smooth/enable='TRUE' --spatial_smooth/fwhm_mm='5'",
+#   "--spatial_smooth/prefix='s' --apply_aroma/enable='TRUE' --apply_aroma/nonaggressive='TRUE' --apply_aroma/prefix='a' --temporal_filter/low_pass_hz='0'",
+#   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --temporal_filter/enable='TRUE' --intensity_normalize/global_median='10000' --intensity_normalize/prefix='n'",
+#   "--intensity_normalize/enable='TRUE", "--confound_calculate/enable='TRUE'",
+#   "--confound_calculate/columns='csf.*' --confound_calculate/noproc_columns='NULL' --confound_calculate/demean='TRUE'",
 #   "--force_processing_order='FALSE'",
-#   "--input='/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294'",
-#   "--fsl_img='/proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/fmriprep-25.0.0.simg'"
+#   "--input='/proj/mnhallqlab/projects/preproc_pipeline_test_data/data_fmriprep/sub-540294/func/sub-540294_task-ridl_run-04_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz'",
+#   "--output_dir='/proj/mnhallqlab/projects/preproc_pipeline_test_data_2Sep2025/data_postproc/sub-540294'",
+#   "--fsl_img='/proj/hng/software/containers/fsl-6.0.7.16.simg'",
+#   "--bids_desc='postproc'"
 # ), collapse = " ")
 
 # parse CLI inputs into a nested list, if relevant
