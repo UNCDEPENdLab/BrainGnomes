@@ -59,7 +59,7 @@ to sigma values in volumes using a standard FWHM-to-sigma transformation.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">temporal_filter</span><span class="op">(</span></span>
 <span>  <span class="va">in_file</span>,</span>
-<span>  out_desc <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">out_file</span>,</span>
 <span>  low_pass_hz <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  high_pass_hz <span class="op">=</span> <span class="fl">1</span><span class="op">/</span><span class="fl">120</span>,</span>
 <span>  tr <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -78,8 +78,8 @@ to sigma values in volumes using a standard FWHM-to-sigma transformation.</p>
 <dd><p>Path to the input 4D NIfTI file.</p></dd>
 
 
-<dt id="arg-out-desc">out_desc<a class="anchor" aria-label="anchor" href="#arg-out-desc"></a></dt>
-<dd><p>The BIDS description field for the file output by this step</p></dd>
+<dt id="arg-out-file">out_file<a class="anchor" aria-label="anchor" href="#arg-out-file"></a></dt>
+<dd><p>The full path for the file output by this step</p></dd>
 
 
 <dt id="arg-low-pass-hz">low_pass_hz<a class="anchor" aria-label="anchor" href="#arg-low-pass-hz"></a></dt>

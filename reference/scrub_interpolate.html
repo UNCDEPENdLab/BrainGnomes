@@ -57,7 +57,7 @@ splines, with nearest-neighbor extrapolation at the edges.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scrub_interpolate</span><span class="op">(</span></span>
 <span>  <span class="va">in_file</span>,</span>
 <span>  <span class="va">censor_file</span>,</span>
-<span>  out_desc <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">out_file</span>,</span>
 <span>  confound_files <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  lg <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -77,8 +77,8 @@ splines, with nearest-neighbor extrapolation at the edges.</p>
 containing a binary vector of <code>1</code>s (keep) and <code>0</code>s (scrub) for each timepoint.</p></dd>
 
 
-<dt id="arg-out-desc">out_desc<a class="anchor" aria-label="anchor" href="#arg-out-desc"></a></dt>
-<dd><p>The BIDS description field for the file output by this step</p></dd>
+<dt id="arg-out-file">out_file<a class="anchor" aria-label="anchor" href="#arg-out-file"></a></dt>
+<dd><p>The full path for the file output by this step</p></dd>
 
 
 <dt id="arg-confound-files">confound_files<a class="anchor" aria-label="anchor" href="#arg-confound-files"></a></dt>

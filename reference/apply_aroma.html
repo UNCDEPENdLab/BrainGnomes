@@ -53,7 +53,7 @@ if the standard FSL command fails due to dimensionality issues.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">apply_aroma</span><span class="op">(</span></span>
 <span>  <span class="va">in_file</span>,</span>
-<span>  out_desc <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">out_file</span>,</span>
 <span>  <span class="va">mixing_file</span>,</span>
 <span>  <span class="va">noise_ics</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -71,8 +71,8 @@ if the standard FSL command fails due to dimensionality issues.</p>
 <dd><p>Path to the input 4D NIfTI file.</p></dd>
 
 
-<dt id="arg-out-desc">out_desc<a class="anchor" aria-label="anchor" href="#arg-out-desc"></a></dt>
-<dd><p>The BIDS description field for the file output by this step</p></dd>
+<dt id="arg-out-file">out_file<a class="anchor" aria-label="anchor" href="#arg-out-file"></a></dt>
+<dd><p>The full path for the file output by this step</p></dd>
 
 
 <dt id="arg-mixing-file">mixing_file<a class="anchor" aria-label="anchor" href="#arg-mixing-file"></a></dt>
