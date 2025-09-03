@@ -668,6 +668,13 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 #' - `cli_options`: "" (any extra command-line flags for the wrapper)
 #' - `sched_args`: "" (additional job scheduler directives)
 #'
+#' Users may also opt to remove large intermediate AROMA outputs after
+#' completion. These NIfTI/JSON files are not required for applying AROMA
+#' during postprocessing and can be deleted to save disk space. Cleanup is only
+#' available when fMRIPrep output spaces do not include
+#' `MNI152NLin6Asym:res-2`; if that space is later added, cleanup will be
+#' skipped.
+#' 
 #' @keywords internal
 setup_aroma <- function(scfg, fields = NULL) {
   defaults <- list(
@@ -710,6 +717,27 @@ setup_aroma <- function(scfg, fields = NULL) {
   }
 
   scfg <- setup_job(scfg, "aroma", defaults, fields)
+
+  cleanup_possible <- is.null(scfg$fmriprep$output_spaces) ||
+    !grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE)
+
+  if (cleanup_possible) {
+    if (is.null(scfg$aroma$cleanup) || "aroma/cleanup" %in% fields) {
+      scfg$aroma$cleanup <- prompt_input(
+        instruct = glue(
+          "\n      After running AROMA, large intermediate NIfTI and JSON files are produced.\n",
+          "      These are not required for applying AROMA during postprocessing and can\n",
+          "      be removed to save disk space while keeping the melodic outputs.\n",
+          "      Cleanup will not occur if 'MNI152NLin6Asym:res-2' is included in fmriprep output spaces.\n"
+        ),
+        prompt = "Remove unnecessary AROMA outputs after completion?",
+        type = "flag",
+        default = TRUE
+      )
+    }
+  } else {
+    scfg$aroma$cleanup <- FALSE
+  }
 
   return(scfg)
 }

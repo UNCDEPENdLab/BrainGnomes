@@ -429,6 +429,14 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     glue("--derivatives fmriprep={scfg$metadata$fmriprep_directory}")
   ), collapse = TRUE)
 
+  cleanup <- isTRUE(scfg$aroma$cleanup)
+  if (cleanup && !is.null(scfg$fmriprep$output_spaces) &&
+      grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE)) {
+    msg <- "AROMA cleanup requested but will not occur because MNI152NLin6Asym:res-2 is in fmriprep --output-spaces."
+    if (!is.null(lg)) lg$warn(msg) else warning(msg)
+    cleanup <- FALSE
+  }
+
   env_variables <- c(
     env_variables,
     aroma_container = scfg$compute_environment$aroma_container,
@@ -437,7 +445,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     loc_bids_root = scfg$metadata$bids_directory,
     loc_mrproc_root = scfg$metadata$fmriprep_directory,
     loc_scratch = scfg$metadata$scratch_directory,
-    cli_options = cli_options
+    cli_options = cli_options,
+    aroma_cleanup = as.integer(cleanup)
   )
 
   job_id <- cluster_job_submit(sched_script,
