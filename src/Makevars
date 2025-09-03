@@ -1,5 +1,3 @@
-PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS)
+# turn off debug messages in RNifti with -DNDEBUG
+PKG_CXXFLAGS = $(SHLIB_OPENMP_CXXFLAGS) -DNDEBUG
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS)
-
-# turn off debug messages in RNifti
-PKG_CXXFLAGS += -DNDEBUG

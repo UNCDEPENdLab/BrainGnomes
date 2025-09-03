@@ -34,9 +34,11 @@ By default, this function sets:
 \item \code{sched_args}: "" (additional job scheduler directives)
 }
 
-Users may also opt to remove large intermediate AROMA NIfTI/JSON outputs after the job completes.
-These files are not required for applying AROMA during postprocessing and can be deleted to save disk space.
-Cleanup is only performed when fMRIPrep's output spaces do not include
-\code{MNI152NLin6Asym:res-2}; if that space is present, the files are retained.
+Users may also opt to remove large intermediate AROMA outputs after
+completion. These NIfTI/JSON files are not required for applying AROMA
+during postprocessing and can be deleted to save disk space. Cleanup is only
+available when fMRIPrep output spaces do not include
+\code{MNI152NLin6Asym:res-2}; if that space is later added, cleanup will be
+skipped.
 }
 \keyword{internal}

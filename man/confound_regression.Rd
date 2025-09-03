@@ -6,7 +6,7 @@
 \usage{
 confound_regression(
   in_file,
-  out_desc = NULL,
+  out_file,
   to_regress = NULL,
   censor_file = NULL,
   overwrite = FALSE,
@@ -17,7 +17,7 @@ confound_regression(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{out_desc}{The BIDS description field for the file output by this step}
+\item{out_file}{The full path for the file output by this step}
 
 \item{to_regress}{Path to a text file containing nuisance regressors (one column per regressor).}
 

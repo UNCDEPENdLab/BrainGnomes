@@ -6,7 +6,7 @@
 \usage{
 spatial_smooth(
   in_file,
-  out_desc = NULL,
+  out_file,
   fwhm_mm = 6,
   brain_mask = NULL,
   overwrite = FALSE,
@@ -17,7 +17,7 @@ spatial_smooth(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{out_desc}{The BIDS description field for the file output by this step}
+\item{out_file}{The full path for the file output by this step}
 
 \item{fwhm_mm}{Full-width at half-maximum (FWHM) of the Gaussian kernel in millimeters.}
 

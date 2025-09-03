@@ -6,7 +6,7 @@
 \usage{
 temporal_filter(
   in_file,
-  out_desc = NULL,
+  out_file,
   low_pass_hz = 0,
   high_pass_hz = 1/120,
   tr = NULL,
@@ -19,7 +19,7 @@ temporal_filter(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{out_desc}{The BIDS description field for the file output by this step}
+\item{out_file}{The full path for the file output by this step}
 
 \item{low_pass_hz}{Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.}
 
