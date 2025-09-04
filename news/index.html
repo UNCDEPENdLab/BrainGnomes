@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,8 +40,14 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6-1" id="braingnomes-06-1">BrainGnomes 0.6-1<a class="anchor" aria-label="anchor" href="#braingnomes-06-1"></a></h2>
+<ul><li>Added Rcpp automask function, mimicking AFNI 3dAutomask.</li>
+<li>Use automask to get approximate whole-brain mask for image quantiles in postprocessing (spatial_smooth, intensity_normalize)</li>
+<li>Use the user-specific mask file in apply_mask, if relevant</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6" id="braingnomes-06">BrainGnomes 0.6<a class="anchor" aria-label="anchor" href="#braingnomes-06"></a></h2>
-<p>Released 2025-08-12</p>
+<p>Released 2025-08-30</p>
 <ul><li>Added ROI extraction workflow (<code>extract_rois</code>) with correlation options and a dedicated vignette.</li>
 <li>Introduced a Flywheel synchronization step for retrieving data.</li>
 <li>Added support for external BIDS and fMRIPrep directories, including an <code>is_external_path</code> helper, path normalization, and configurable <code>postproc_directory</code>.</li>
@@ -49,7 +55,8 @@
 <li>Refined project setup and validation by verifying directories before saving, prompting for required containers, and allowing projects to run without a postprocessing directory.</li>
 <li>Documentation and test improvements, including an expanded quickstart guide and instructions for building the FSL container.</li>
 </ul></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
