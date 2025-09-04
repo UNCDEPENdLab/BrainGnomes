@@ -77,7 +77,6 @@ postprocess:
   keep_intermediates: no
   overwrite: no
   tr: 0.6
-  brain_mask: .na.character
   spatial_smooth:
     enable: yes
     fwhm_mm: 5

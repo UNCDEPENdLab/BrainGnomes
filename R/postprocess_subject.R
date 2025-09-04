@@ -12,7 +12,8 @@
 #'
 #' @param in_file Path to a subject-level BOLD NIfTI file output by fMRIPrep.
 #' @param cfg A list containing configuration options, including TR (`cfg$tr`), enabled processing steps (`cfg$<step>$enable`),
-#'   logging (`cfg$log_file`), and paths to resources such as brain masks or singularity images (`cfg$fsl_img`, `cfg$brain_mask`).
+#'   logging (`cfg$log_file`), and paths to resources such as singularity images (`cfg$fsl_img`). A whole-brain mask is
+#'   automatically generated using `automask()` and used for relevant processing steps.
 #'
 #' @return The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
 #'   and logging to a subject-level log file.
@@ -110,29 +111,24 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   start_time <- Sys.time()
   lg$info("Start preprocessing: {as.character(start_time)}")
   
-  # determine brain mask to be used for computing intensity thresholds for susan and normalization
-  # Consider user-specified brain mask
-  brain_mask <- NULL
-  if (checkmate::test_string(cfg$brain_mask)) {
-    if (cfg$brain_mask == "template") {
-      brain_mask <- resample_template_to_img(in_file) # call Python helper for TemplateFlow
-    } else if (checkmate::test_file_exists(cfg$brain_mask)) {
-      brain_mask <- cfg$brain_mask
-    } else {
-      lg$warn("Cannot find brain_mask: ", cfg$brain_mask, ". Will try to find an alternative.")
-    }
-  }
+  # compute a data-driven whole-brain mask using automask
+  brain_mask <- tempfile(fileext = ".nii.gz")
+  automask(in_file, outfile = brain_mask, clfrac = 0.5, NN = 1L,
+           SIhh = 0, peels = 1L, fill_holes = TRUE, dilate_steps = 1L)
 
-  # Handle fallback cases (if user mask input was invalid or unspecified)
-  if (is.null(brain_mask)) {
-    if (native_space) {
-      if (!is.null(proc_files$brain_mask)) {
-        brain_mask <- proc_files$brain_mask
-      } else {
-        brain_mask <- compute_brain_mask(in_file, log_file)
+  # if apply_mask is enabled, determine which mask file to apply
+  apply_mask_file <- NULL
+  if (isTRUE(cfg$apply_mask$enable)) {
+    apply_mask_file <- cfg$apply_mask$mask_file
+    if (checkmate::test_string(apply_mask_file) && !is.na(apply_mask_file)) {
+      if (apply_mask_file == "template") {
+        apply_mask_file <- resample_template_to_img(in_file)
+      } else if (!checkmate::test_file_exists(apply_mask_file)) {
+        lg$warn("Cannot find apply_mask mask_file: {apply_mask_file}. Using computed brain mask.")
+        apply_mask_file <- brain_mask
       }
     } else {
-      brain_mask <- resample_template_to_img(in_file) # call Python helper for TemplateFlow
+      apply_mask_file <- brain_mask
     }
   }
 
@@ -222,9 +218,9 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
 
     if (step == "apply_mask") {
-      lg$info("Masking fMRI data using file: {brain_mask}")
+      lg$info("Masking fMRI data using file: {apply_mask_file}")
       cur_file <- apply_mask(cur_file,
-        mask_file = brain_mask,
+        mask_file = apply_mask_file,
         out_file = out_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
       )

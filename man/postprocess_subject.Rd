@@ -10,7 +10,8 @@ postprocess_subject(in_file, cfg = NULL)
 \item{in_file}{Path to a subject-level BOLD NIfTI file output by fMRIPrep.}
 
 \item{cfg}{A list containing configuration options, including TR (\code{cfg$tr}), enabled processing steps (\verb{cfg$<step>$enable}),
-logging (\code{cfg$log_file}), and paths to resources such as brain masks or singularity images (\code{cfg$fsl_img}, \code{cfg$brain_mask}).}
+logging (\code{cfg$log_file}), and paths to resources such as singularity images (\code{cfg$fsl_img}). A whole-brain mask is
+automatically generated using \code{automask()} for relevant processing steps.}
 }
 \value{
 The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),

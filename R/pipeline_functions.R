@@ -589,7 +589,7 @@ nii_to_mat <- function(ni_in) {
 
 # Jun 2024: brain mask is required for calculating image quantiles for 2nd and 50th percentiles -- smoothing and intensity normalization
 # Given that it is used only for these quantiles, the fmriprep mask should be fine for this purpose
-# apply_mask is now considered an additional step that is optional and uses the brain_mask in the cfg
+# apply_mask is now considered an additional step that can use a user-specified mask file
 
 #' convert a number of hours to a days, hours, minutes, seconds format
 #'
