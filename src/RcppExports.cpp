@@ -11,6 +11,25 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// automask
+Rcpp::RObject automask(SEXP img, std::string outfile, float clfrac, int NN, int erode_steps, int dilate_steps, float SIhh, int peels, bool fill_holes);
+RcppExport SEXP _BrainGnomes_automask(SEXP imgSEXP, SEXP outfileSEXP, SEXP clfracSEXP, SEXP NNSEXP, SEXP erode_stepsSEXP, SEXP dilate_stepsSEXP, SEXP SIhhSEXP, SEXP peelsSEXP, SEXP fill_holesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type img(imgSEXP);
+    Rcpp::traits::input_parameter< std::string >::type outfile(outfileSEXP);
+    Rcpp::traits::input_parameter< float >::type clfrac(clfracSEXP);
+    Rcpp::traits::input_parameter< int >::type NN(NNSEXP);
+    Rcpp::traits::input_parameter< int >::type erode_steps(erode_stepsSEXP);
+    Rcpp::traits::input_parameter< int >::type dilate_steps(dilate_stepsSEXP);
+    Rcpp::traits::input_parameter< float >::type SIhh(SIhhSEXP);
+    Rcpp::traits::input_parameter< int >::type peels(peelsSEXP);
+    Rcpp::traits::input_parameter< bool >::type fill_holes(fill_holesSEXP);
+    rcpp_result_gen = Rcpp::wrap(automask(img, outfile, clfrac, NN, erode_steps, dilate_steps, SIhh, peels, fill_holes));
+    return rcpp_result_gen;
+END_RCPP
+}
 // filtfilt_cpp
 NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a, int padlen, std::string padtype, bool use_zi);
 RcppExport SEXP _BrainGnomes_filtfilt_cpp(SEXP xSEXP, SEXP bSEXP, SEXP aSEXP, SEXP padlenSEXP, SEXP padtypeSEXP, SEXP use_ziSEXP) {
@@ -156,6 +175,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_BrainGnomes_automask", (DL_FUNC) &_BrainGnomes_automask, 9},
     {"_BrainGnomes_filtfilt_cpp", (DL_FUNC) &_BrainGnomes_filtfilt_cpp, 6},
     {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 9},
     {"_BrainGnomes_getline", (DL_FUNC) &_BrainGnomes_getline, 1},

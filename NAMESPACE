@@ -3,6 +3,7 @@
 S3method(summary,bg_project_cfg)
 S3method(summary,bg_status_df)
 export(add_tracked_job_parent)
+export(automask)
 export(butterworth_filter_4d)
 export(cluster_job_submit)
 export(construct_bids_filename)
