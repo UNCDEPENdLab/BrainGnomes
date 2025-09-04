@@ -13,7 +13,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
   postprocess_field_list <- function() {
     c(
       "input_regex", "bids_desc", "keep_intermediates", "overwrite",
-      "tr", "brain_mask",
+      "tr",
       "apply_mask/mask_file", "apply_mask/prefix",
       "spatial_smooth/fwhm_mm", "spatial_smooth/prefix",
       "apply_aroma/nonaggressive", "apply_aroma/prefix",
@@ -301,7 +301,6 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
     if (is.null(ppcfg$overwrite)) fields <- c(fields, "postprocess/overwrite")
     if (is.null(ppcfg$tr)) fields <- c(fields, "postprocess/tr")
     if (is.null(ppcfg$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
-    if (is.null(ppcfg$brain_mask)) fields <- c(fields, "postprocess/brain_mask")
   }
 
   # global postprocessing settings
@@ -351,27 +350,7 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
     ppcfg$tr <- prompt_input("Repetition time (in seconds) of the scan sequence", type = "numeric", lower = 0.01, upper = 100, len = 1)
   }
 
-  if ("postprocess/brain_mask" %in% fields) {
-    ppcfg$brain_mask <- prompt_input("Brain mask to be used in postprocessing",
-      instruct = glue("
-      \nHere, you can specify a single file (e.g., the brain mask provided by MNI) that can be used
-      across datasets. This is especially desirable if you will *apply* that mask to the data, an optional step, as
-      having a common high-quality mask is important to ensure comparability across subjects.
-
-      If you provide a mask here, please make sure that it matches the resolution and orientation of the data to which
-      it will be applied, as the pipeline will not check this for you. If you have a mask that is correct in the same
-      stereotaxic space as the data, but has a different resolution, I recommend using AFNI's 3dresample like so:
-        3dresample -input <current_mask> -master <a_preproc_nifti_file_from_study> -prefix <resampled_mask> -rmode NN
-
-      If you do not provide a brain mask, the pipeline will first try to obtain a mask in the template space of the image.
-      For example, if the file has 'space-MNI152NLin2009cAsym' in its name, the pipeline will download the brain mask
-      from TemplateFlow for this space and resample it to the the data.
-
-      If this is not possible (e.g., if the data is in native space), the pipeline will look for the mask calculated by fmriprep ('_desc-brain_mask')
-      and if this is not available, the pipeline will calculate a mask using FSL's 98/2 method used in its preprocessing stream.\n"),
-      type = "file", len = 1L, required = FALSE
-    )
-  }
+  # user-specified brain masks are no longer supported; an automask-derived mask will be computed during postprocessing
 
   return(ppcfg)
 
