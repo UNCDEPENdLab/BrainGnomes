@@ -68,7 +68,8 @@ a filtered confounds file for downstream analyses.</p>
 
 <dt id="arg-cfg">cfg<a class="anchor" aria-label="anchor" href="#arg-cfg"></a></dt>
 <dd><p>A list containing configuration options, including TR (<code>cfg$tr</code>), enabled processing steps (<code>cfg$&lt;step&gt;$enable</code>),
-logging (<code>cfg$log_file</code>), and paths to resources such as brain masks or singularity images (<code>cfg$fsl_img</code>, <code>cfg$brain_mask</code>).</p></dd>
+logging (<code>cfg$log_file</code>), and paths to resources such as singularity images (<code>cfg$fsl_img</code>). A whole-brain mask is
+automatically generated using <code><a href="automask.html">automask()</a></code> for relevant processing steps.</p></dd>
 
 </dl></div>
     <div class="section level2">
