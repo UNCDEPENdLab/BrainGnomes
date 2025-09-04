@@ -1,6 +1,7 @@
 // #include "BrainGnomes.h"
 #define RNIFTI_NIFTILIB_VERSION 2
 #include <Rcpp.h>
+#include <array>
 #include <vector>
 #include <queue>
 #include <algorithm>
@@ -11,6 +12,7 @@
 using namespace Rcpp;
 using namespace RNifti;
 typedef int64_t dim_t;
+typedef double pixdim_t;
 
 /**
  * @brief Generate 3D neighbor offsets according to AFNI/voxel connectivity convention.
@@ -50,7 +52,7 @@ static std::vector<std::array<int,3>> get_neighbors(int NN) {
         // NN=2: 6 faces + 12 edges = 18 neighbors (manhattan <= 2)
         // NN=3: all 26 possible neighbors
         if ((NN == 1 && manhattan == 1) || (NN == 2 && manhattan <= 2) || NN == 3)
-          offsets.push_back({dx, dy, dz});
+          offsets.push_back(std::array<int,3>{{dx, dy, dz}});
       }
     }
   }
@@ -496,7 +498,7 @@ Rcpp::RObject automask(SEXP img,
   if (SIhh > 0.0f) {
     // RNifti::NiftiImage::pixdim() gives voxel spacing (size) for each dimension.
     // Here index 2 corresponds to the z-axis spacing (dz, in mm).
-    std::vector pix = image.pixdim();
+    std::vector<pixdim_t> pix = image.pixdim();
     float dz = 1.0f;
     if (pix.size() >= 3) dz = std::fabs(static_cast<float>(pix[2]));
     
