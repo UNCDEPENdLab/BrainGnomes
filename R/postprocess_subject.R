@@ -124,11 +124,11 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       if (apply_mask_file == "template") {
         apply_mask_file <- resample_template_to_img(in_file)
       } else if (!checkmate::test_file_exists(apply_mask_file)) {
-        lg$warn("Cannot find apply_mask mask_file: {apply_mask_file}. Using computed brain mask.")
-        apply_mask_file <- brain_mask
+        lg$warn("Cannot find apply_mask mask_file: {apply_mask_file}. This step will be skipped!")
+        apply_mask_file <- NULL
       }
     } else {
-      apply_mask_file <- brain_mask
+      apply_mask_file <- NULL # not a string or is NA?
     }
   }
 
@@ -180,6 +180,11 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   prefix_chain <- "" # used for accumulating prefixes with each step
   base_desc <- paste0(toupper(substr(cfg$bids_desc, 1, 1)), substr(cfg$bids_desc, 2, nchar(cfg$bids_desc)))
   first_file <- FALSE
+
+  if (is.null(apply_mask_file)) { # skip apply_mask if we lack a valid mask file
+    processing_sequence <- processing_sequence[processing_sequence != "apply_mask"]
+  }
+  
 
   #### Loop over fMRI processing steps in sequence
   for (step in processing_sequence) {
