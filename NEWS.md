@@ -1,6 +1,12 @@
+# BrainGnomes 0.6-1
+
+* Added Rcpp automask function, mimicking AFNI 3dAutomask.
+* Use automask to get approximate whole-brain mask for image quantiles in postprocessing (spatial_smooth, intensity_normalize)
+* Use the user-specific mask file in apply_mask, if relevant
+
 # BrainGnomes 0.6
 
-Released 2025-08-12
+Released 2025-08-30
 
 * Added ROI extraction workflow (`extract_rois`) with correlation options and a dedicated vignette.
 * Introduced a Flywheel synchronization step for retrieving data.
