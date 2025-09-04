@@ -161,23 +161,23 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   }
 
   # check that required containers are present for any requested step
-  if ("bids_conversion" %in% steps && !validate_exists(scfg$compute_environment$heudiconv_container)) {
+  if (steps["bids_conversion"] && !validate_exists(scfg$compute_environment$heudiconv_container)) {
     stop("Cannot run BIDS conversion without a heudiconv container.")
   }
 
-  if ("mriqc" %in% steps && !validate_exists(scfg$compute_environment$mriqc_container)) {
+  if (steps["mriqc"] && !validate_exists(scfg$compute_environment$mriqc_container)) {
     stop("Cannot run MRIQC without a valid MRIQC container.")
   }
 
-  if ("fmriprep" %in% steps && !validate_exists(scfg$compute_environment$fmriprep_container)) {
+  if (steps["fmriprep"] && !validate_exists(scfg$compute_environment$fmriprep_container)) {
     stop("Cannot run fmriprep without a valid fmriprep container.")
   }
 
-  if ("aroma" %in% steps && !validate_exists(scfg$compute_environment$aroma_container)) {
+  if (steps["aroma"] && !validate_exists(scfg$compute_environment$aroma_container)) {
     stop("Cannot run AROMA without a valid AROMA container.")
   }
 
-  if ("postprocess" %in% steps && !validate_exists(scfg$compute_environment$fsl_container)) {
+  if (steps["postprocess"] && !validate_exists(scfg$compute_environment$fsl_container)) {
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
