@@ -27,22 +27,24 @@ edit_project <- function(input = NULL) {
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container"
     )),
     "Flywheel Sync" = list(setup_fn = setup_flywheel_sync, prefix = "flywheel_sync/", fields = c(
-      "source_url", "dropoff_directory", "temp_directory"
+      "enable", "source_url", "dropoff_directory", "temp_directory"
     )),
     "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
-      "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
+      "enable", "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",
       "heuristic_file", "overwrite", "clear_cache"
     )),
     "BIDS Validation" = list(setup_fn = setup_bids_validation, prefix = "bids_validation/", fields = c(
-      "outfile"
+      "enable", "outfile"
     )),
     "fMRIPrep" = list(setup_fn = setup_fmriprep, prefix = "fmriprep/", fields = c(
-      "output_spaces", "fs_license_file"
+      "enable", "output_spaces", "fs_license_file"
+    )),
+    "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = c(
+      "enable"
+    )),
+    "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = c(
+      "enable", "cleanup"
     ))
-
-    # At present, MRIQC and ICA-AROMA don't have any additional specific settings, just job settings
-    # "MRIQC" = list(setup_fn = setup_mriqc, prefix = "mriqc/", fields = character(0)),
-    # "ICA-AROMA" = list(setup_fn = setup_aroma, prefix = "aroma/", fields = character(0))
   )
 
   job_targets <- c("flywheel_sync", "bids_conversion", "bids_validation", "fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")
@@ -74,9 +76,9 @@ edit_project <- function(input = NULL) {
     }
 
     if (choice == "Postprocessing") {
-      scfg <- manage_postprocess_streams(scfg, allow_empty = TRUE)
+      scfg <- setup_postprocess_streams(scfg)
     } else if (choice == "ROI extraction") {
-      scfg <- manage_extract_streams(scfg)
+      scfg <- setup_extract_streams(scfg)
     } else if (choice == "Job settings") {
       # Job settings logic
       job <- select_list_safe(job_targets, title = "Select which job to configure:")
