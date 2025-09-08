@@ -669,7 +669,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 #' - `sched_args`: "" (additional job scheduler directives)
 #'
 #' Users may also opt to remove large intermediate AROMA outputs after
-#' completion. These NIfTI/JSON files are not required for applying AROMA
+#' completion via the `cleanup` flag. These NIfTI/JSON files are not required for applying AROMA
 #' during postprocessing and can be deleted to save disk space. Cleanup is only
 #' available when fMRIPrep output spaces do not include
 #' `MNI152NLin6Asym:res-2`; if that space is later added, cleanup will be

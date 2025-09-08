@@ -247,6 +247,12 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
+  if (isTRUE(scfg$aroma$enable) && !checkmate::test_flag(scfg$aroma$cleanup)) {
+    message("Invalid cleanup flag in aroma. You will be asked for this.")
+    gaps <- c(gaps, "aroma/cleanup")
+    scfg$aroma$cleanup <- NULL
+  }
+
   # validate bids conversion
   scfg <- validate_bids_conversion(scfg, quiet = quiet)
   gaps <- c(gaps, attr(scfg, "gaps"))
