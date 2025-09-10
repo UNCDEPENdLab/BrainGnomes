@@ -2,7 +2,7 @@
 #' Run the processing pipeline
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
-#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
+#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
 #'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
@@ -39,11 +39,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     checkmate::check_data_frame(subject_filter, null.ok = TRUE)
   )
   checkmate::assert_character(postprocess_streams, null.ok = TRUE)
-  checkmate::assert_subset(
-    postprocess_streams,
-    choices = c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"),
-    empty.ok = TRUE
-  )
+  checkmate::assert_character(extract_streams, null.ok = TRUE)
+  
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
   
@@ -53,6 +50,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
   all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
+  checkmate::assert_subset(postprocess_streams, choices = all_pp_streams, empty.ok = TRUE)
+  checkmate::assert_subset(extract_streams, choices = all_ex_streams, empty.ok = TRUE)
+  
   scfg <- setup_project_directories(scfg)
 
   cat(glue("
@@ -68,6 +68,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   prompt <- is.null(steps)
 
   if (isFALSE(prompt)) {
+    
+    
     if ("flywheel_sync" %in% steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
       if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
@@ -97,10 +99,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
-    nm <- steps
-    steps <- rep(TRUE, length(steps))
-    names(steps) <- nm
-
+    # convert steps to logicals to match downstream expectations (e.g., in process_subject)
+    user_steps <- steps # copy user character vector to populate logical vector
+    steps <- rep(FALSE, 7)
+    names(steps) <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
+    for (s in user_steps) steps[s] <- TRUE
+    
     # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
