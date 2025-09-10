@@ -3,6 +3,7 @@
 * Added Rcpp automask function, mimicking AFNI 3dAutomask.
 * Use automask to get approximate whole-brain mask for image quantiles in postprocessing (spatial_smooth, intensity_normalize)
 * Use the user-specific mask file in apply_mask, if relevant
+* Added prompt_directory, which asks for confirmation when user specifies a non-existent directory
 
 # BrainGnomes 0.6
 

@@ -136,44 +136,44 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
         type = "flag"
       )
       if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
+    } else if (!checkmate::test_directory_exists(scfg$metadata$project_directory, access="r")) {
+      stop("Project directory exists, but is not readable by you. Fix read permissions on: ", scfg$metadata$project_directory, call. = FALSE)
+    } else if (!checkmate::test_directory_exists(scfg$metadata$project_directory, access="w")) {
+      stop("Project directory exists, but is not writable by you. Fix write permissions on: ", scfg$metadata$project_directory, call. = FALSE)
     }
   }
 
   # location of DICOMs -- only needed if BIDS conversion enabled
   if ("metadata/dicom_directory" %in% fields) {
-    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
+    scfg$metadata$dicom_directory <- prompt_directory(prompt="Where is your DICOM directory?", default = scfg$metadata$dicom_directory, check_readable = TRUE)
   }
 
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
     default <- if (is.null(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
-    scfg$metadata$bids_directory <- normalizePath(prompt_input(
-      "Where is your BIDS directory located?",
-      type = "character", default = default
-    ), mustWork = FALSE)
+    scfg$metadata$bids_directory <- prompt_directory(prompt="Where is your BIDS directory?", default = default, check_readable = TRUE)
   }
 
   # location of fMRIPrep outputs -- default within project directory, but allow external paths. Only prompt if fmriprep enabled
   if ("metadata/fmriprep_directory" %in% fields) {
     default <- if (is.null(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
-    scfg$metadata$fmriprep_directory <- normalizePath(prompt_input(
-      instruct = glue("
+    scfg$metadata$fmriprep_directory <- prompt_directory(
+      instruct = glue("\n\n
         We recommend that fmriprep outputs be placed in data_fmriprep within the BrainGnomes project directory.
         You can specify a different location if you wish. Also, if you're working from extant fmriprep files, you
         can point to an existing directory containing the results of fmriprep."),
-      "Specify the directory for fmriprep files",
-      type = "character", default = default
-    ), mustWork = FALSE)
+      prompt = "Specify the directory for fmriprep files", default = default
+    )
   }
   
   if ("metadata/scratch_directory" %in% fields) {
-    scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
+    scfg$metadata$scratch_directory <- prompt_directory(prompt = "Where is your work directory?",
       instruct = glue("\n\n
-      fmriprep uses a lot of disk space for processing intermediate files. It's best if these
-      are written to a scratch/temporary directory that is cleared regularly so that you don't
+      Some BrainGnomes tools (especially fmriprep) use a lot of disk space for processing intermediate files. 
+      It's best if these are written to a scratch/temporary directory that is cleared regularly so that you don't
       use up precious disk space for unnecessary files. Please indicate where these intermediate
-      file should be written.\n
-      "), type = "character"
+      files should be written.\n
+      ")
     )
   }
 
@@ -465,10 +465,9 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   }
 
   if ("flywheel_sync/dropoff_directory" %in% fields) {
-    scfg$flywheel_sync$dropoff_directory <- prompt_input(
+    scfg$flywheel_sync$dropoff_directory <- prompt_directory(
       instruct = "Where should Flywheel place downloaded DICOM files?",
-      type = "character",
-      default = scfg$flywheel_sync$dropoff_directory
+      default = scfg$flywheel_sync$dropoff_directory, check_readable = TRUE
     )
   }
 
@@ -477,10 +476,9 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   }
 
   if ("flywheel_sync/temp_directory" %in% fields) {
-    scfg$flywheel_sync$temp_directory <- prompt_input(
+    scfg$flywheel_sync$temp_directory <- prompt_directory(
       instruct = "Specify a temporary directory for Flywheel sync operations:",
-      type = "character",
-      default = scfg$flywheel_sync$temp_directory
+      default = scfg$flywheel_sync$temp_directory, check_readable = TRUE
     )
   }
 
@@ -630,12 +628,13 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$bids_conversion$clear_cache) || "bids_conversion/clear_cache" %in% fields) {
     scfg$bids_conversion$clear_cache <- prompt_input(
-      instruct = glue("Heudiconv caches its matching results inside the root of the BIDS folder in a hidden
+      instruct = glue("\n\n
+      Heudiconv caches its matching results inside the root of the BIDS folder in a hidden
       directory called .heudiconv. This provides a record of what heudiconv did for each subject conversion.
       It also speeds up conversions in future if you reprocess data. That said, if you modify the heuristic file,
       the cache can interfere because it will use the old heuristic file to match DICOMs to BIDS.
       If you want to clear the cache, say 'yes' here. If you want to keep the cache, say 'no'.
-      ", .trim = FALSE),
+      "),
       prompt = glue("Should the heudiconv cache be cleared?"),
       type = "flag", default = FALSE
     )

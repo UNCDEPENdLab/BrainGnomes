@@ -745,3 +745,58 @@ is_external_path <- function(path, project_dir) {
   inside <- identical(path, project_dir) || startsWith(path, proj_slash)
   !inside
 }
+
+# little function to attempt to make a file/directory user-writeable
+ensure_user_writable <- function(path) {
+  stopifnot(is.character(path), length(path) == 1L)
+  if (!file.exists(path)) stop("Path does not exist: ", path)
+  
+  # Already writable for current user?
+  if (isTRUE(file.access(path, 2L) == 0L)) return(TRUE)
+  
+  # ---- helpers -------------------------------------------------------------
+  # Cross-platform stat to get owner *name*
+  get_owner <- function(p) {
+    p <- normalizePath(p, mustWork = TRUE)
+    q <- shQuote(p)
+    
+    # GNU stat
+    ow <- suppressWarnings(system2("stat", c("-c", "%U", q),
+                                   stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L && !grepl("invalid option|usage:", ow, ignore.case = TRUE)) {
+      return(ow)
+    }
+    
+    # BSD/macOS stat
+    ow <- suppressWarnings(system2("stat", c("-f", "%Su", q),
+                                   stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L) return(ow)
+    
+    stop("Could not retrieve file owner via 'stat'.")
+  }
+  
+  add_user_write <- function(p) {
+    info <- file.info(p, extra_cols = TRUE)
+    cur  <- info$mode
+    if (is.na(cur)) return(FALSE)
+    new_mode <- bitwOr(cur, as.integer(strtoi("0200", base = 8L)))  # user-write bit
+    ok <- isTRUE(Sys.chmod(p, mode = as.octmode(new_mode)))
+    ok && isTRUE(file.access(p, 2L) == 0L)
+  }
+  
+  # ---- main logic ----------------------------------------------------------
+  whoami <- suppressWarnings(system2("id", "-un", stdout = TRUE, stderr = FALSE))
+  if (!length(whoami)) whoami <- Sys.info()[["user"]]
+  if (!length(whoami) || is.na(whoami) || !nzchar(whoami)) {
+    whoami <- Sys.getenv("USER", unset = NA_character_)
+  }
+  
+  owner <- get_owner(path)
+  
+  if (!is.na(owner) && identical(owner, whoami)) {
+    if (add_user_write(path)) return(TRUE)
+  }
+  
+  # Either not the owner, or chmod failed
+  FALSE
+}
