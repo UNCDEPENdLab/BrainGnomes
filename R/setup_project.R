@@ -143,6 +143,30 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     }
   }
 
+  # Flywheel sync directory defaults to metadata$dicom_directory
+  if ("metadata/flywheel_sync_directory" %in% fields) {
+    if (is.null(scfg$metadata$flywheel_sync_directory)) {
+      if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
+      default <- scfg$metadata$dicom_directory
+    } else {
+      default <- scfg$metadata$flywhee_sync_directory
+    }
+
+    scfg$metadata$flywheel_sync_directory <- prompt_directory(
+      instruct = "Where should Flywheel place downloaded DICOM files?",
+      default = default, check_readable = TRUE
+    )
+  }
+
+  # use scratch directory as base of flywheel sync temps if not otherwise specified
+  if ("metadata/flywheel_temp_directory" %in% fields) {
+    if (is.null(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$work_directory, "flywheel")
+    scfg$metadata$flywheel_temp_directory <- prompt_directory(
+      instruct = "Where should temporary files for Flywheel sync go?",
+      default = scfg$metadata$flywheel_temp_directory, check_readable = TRUE
+    )
+  }
+
   # location of DICOMs -- only needed if BIDS conversion enabled
   if ("metadata/dicom_directory" %in% fields) {
     scfg$metadata$dicom_directory <- prompt_directory(prompt="Where is your DICOM directory?", default = scfg$metadata$dicom_directory, check_readable = TRUE)
@@ -202,6 +226,8 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     scfg$metadata$rois_directory <- file.path(scfg$metadata$project_directory, "data_rois")
   }
 
+
+
   return(scfg)
 }
 
@@ -260,6 +286,14 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
 
+  # prompt for fmriprep container at this step, but only if it is not already in fields
+  # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
+  if (!validate_exists(scfg$compute_environment$fmriprep_container) && !"compute_environment/fmriprep_container" %in% fields) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
+  }
+
+  scfg <- setup_job(scfg, "fmriprep", defaults, fields)
+
   # prompt for BIDS directory -- input to fmriprep
   if (is.null(scfg$metadata$bids_directory)) {
     scfg <- setup_project_metadata(scfg, fields = "metadata/bids_directory")
@@ -269,14 +303,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
   if (is.null(scfg$metadata$fmriprep_directory)) {
     scfg <- setup_project_metadata(scfg, fields = "metadata/fmriprep_directory")
   }
-
-  # prompt for fmriprep container at this step, but only if it is not already in fields
-  # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
-  if (!validate_exists(scfg$compute_environment$fmriprep_container) && !"compute_environment/fmriprep_container" %in% fields) {
-    scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
-  }
-
-  scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
@@ -455,6 +481,8 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/flywheel")
   }
 
+  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
+
   if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
     scfg$flywheel_sync$source_url <- prompt_input(
       instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
@@ -462,30 +490,15 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
     )
   }
 
-  # drop-off directory defaults to metadata$dicom_directory
+  # prompt for sync directory
   if (is.null(scfg$metadata$flywheel_sync_directory)) {
-    if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
-    scfg$metadata$flywheel_sync_directory <- scfg$metadata$dicom_directory
+    scfg <- setup_project_metadata(scfg, fields = "metadata/flywheel_sync_directory")
   }
 
-  if ("metadata/flywheel_sync_directory" %in% fields) {
-    scfg$metadata$flywheel_sync_directory <- prompt_directory(
-      instruct = "Where should Flywheel place downloaded DICOM files?",
-      default = scfg$metadata$flywheel_sync_directory, check_readable = TRUE
-    )
+  # prompt for temp directory
+  if (is.null(scfg$metadata$flywheel_temp_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/flywheel_temp_directory")
   }
-
-  # use scratch directory as base if not otherwise specified
-  if (is.null(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$work_directory, "flywheel")
-
-  if ("metadata/flywheel_temp_directory" %in% fields) {
-    scfg$metadata$flywheel_temp_directory <- prompt_directory(
-      instruct = "Where should temporary files for Flywheel sync go?",
-      default = scfg$metadata$flywheel_temp_directory, check_readable = TRUE
-    )
-  }
-
-  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
 
   return(scfg)
 }

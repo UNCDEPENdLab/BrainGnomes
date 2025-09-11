@@ -1,4 +1,12 @@
+# BrainGnomes 0.6-2
+
+Released 2025-09-11
+
+* Tested and vetted flywheel sync
+
 # BrainGnomes 0.6-1
+
+Released 2025-09-04
 
 * Added Rcpp automask function, mimicking AFNI 3dAutomask.
 * Use automask to get approximate whole-brain mask for image quantiles in postprocessing (spatial_smooth, intensity_normalize)
