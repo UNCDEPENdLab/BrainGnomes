@@ -24,7 +24,7 @@ edit_project <- function(input = NULL) {
       "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
-      "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container"
+      "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container", "flywheel"
     )),
     "Flywheel Sync" = list(setup_fn = setup_flywheel_sync, prefix = "flywheel_sync/", fields = c(
       "enable", "source_url", "dropoff_directory", "temp_directory"

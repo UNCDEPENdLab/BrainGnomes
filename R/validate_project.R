@@ -192,6 +192,11 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
       message("Config file is missing valid directory for flywheel_sync/temp_directory.")
       gaps <- c(gaps, "flywheel_sync/temp_directory")
     }
+
+    if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
+      message("Flywheel sync is enabled but flywheel executable is missing. You will be asked for this.")
+      gaps <- c(gaps, "compute_environment/flywheel")
+    }
   }
 
   # step-specific required files
