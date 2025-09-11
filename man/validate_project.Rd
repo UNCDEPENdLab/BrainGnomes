@@ -4,12 +4,23 @@
 \alias{validate_project}
 \title{Validate the structure of a project configuration object}
 \usage{
-validate_project(scfg = list(), quiet = FALSE)
+validate_project(scfg = list(), quiet = FALSE, correct_problems = FALSE)
 }
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
+
+\item{quiet}{if TRUE, suppress messages about validation failures}
+
+\item{correct_problems}{if TRUE, prompt user to correct validation failures. In this case,
+an amended scfg object will be returned. If FALSE, \code{validate_project} will simply return
+\code{TRUE/FALSE} to indicate whether the project is valid.}
 }
 \description{
 Validate the structure of a project configuration object
+}
+\details{
+If \code{correct_problems = FALSE}, the return will be TRUE/FALSE to indicate whether the project
+passed validation. If it did not, an attribute called \code{'gaps'} will be added to the return
+containing the failed fields in the nested list string syntax (e.g. \code{metadata/log_directory}).
 }
 \keyword{internal}
