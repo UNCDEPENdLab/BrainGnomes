@@ -463,26 +463,25 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
   }
 
   # drop-off directory defaults to metadata$dicom_directory
-  if (is.null(scfg$flywheel_sync$dropoff_directory)) {
+  if (is.null(scfg$metadata$flywheel_sync_directory)) {
     if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
-    scfg$flywheel_sync$dropoff_directory <- scfg$metadata$dicom_directory
+    scfg$metadata$flywheel_sync_directory <- scfg$metadata$dicom_directory
   }
 
-  if ("flywheel_sync/dropoff_directory" %in% fields) {
-    scfg$flywheel_sync$dropoff_directory <- prompt_directory(
+  if ("metadata/flywheel_sync_directory" %in% fields) {
+    scfg$metadata$flywheel_sync_directory <- prompt_directory(
       instruct = "Where should Flywheel place downloaded DICOM files?",
-      default = scfg$flywheel_sync$dropoff_directory, check_readable = TRUE
+      default = scfg$metadata$flywheel_sync_directory, check_readable = TRUE
     )
   }
 
-  if (is.null(scfg$flywheel_sync$temp_directory)) {
-    scfg$flywheel_sync$temp_directory <- file.path(scfg$metadata$project_directory, "flywheel_tmp")
-  }
+  # use scratch directory as base if not otherwise specified
+  if (is.null(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$work_directory, "flywheel")
 
-  if ("flywheel_sync/temp_directory" %in% fields) {
-    scfg$flywheel_sync$temp_directory <- prompt_directory(
-      instruct = "Specify a temporary directory for Flywheel sync operations:",
-      default = scfg$flywheel_sync$temp_directory, check_readable = TRUE
+  if ("metadata/flywheel_temp_directory" %in% fields) {
+    scfg$metadata$flywheel_temp_directory <- prompt_directory(
+      instruct = "Where should temporary files for Flywheel sync go?",
+      default = scfg$metadata$flywheel_temp_directory, check_readable = TRUE
     )
   }
 

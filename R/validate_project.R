@@ -183,12 +183,12 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
       gaps <- c(gaps, "flywheel_sync/source_url")
     }
 
-    if (!checkmate::test_directory_exists(scfg$flywheel_sync$dropoff_directory)) {
-      message("Config file is missing valid directory for flywheel_sync/dropoff_directory.")
-      gaps <- c(gaps, "flywheel_sync/dropoff_directory")
+    if (!checkmate::test_directory_exists(scfg$metadata$flywheel_sync_directory)) {
+      message("Config file is missing valid directory for metadata/flywheel_sync_directory.")
+      gaps <- c(gaps, "metadata/flywheel_sync_directory")
     }
 
-    if (!checkmate::test_directory_exists(scfg$flywheel_sync$temp_directory)) {
+    if (!checkmate::test_directory_exists(scfg$metadata$flywheel_temp_directory)) {
       message("Config file is missing valid directory for flywheel_sync/temp_directory.")
       gaps <- c(gaps, "flywheel_sync/temp_directory")
     }

@@ -21,7 +21,9 @@ setup_project_directories <- function(scfg) {
     scfg$metadata$fmriprep_directory,
     scfg$metadata$mriqc_directory,
     scfg$metadata$scratch_directory,
-    scfg$metadata$templateflow_home
+    scfg$metadata$templateflow_home,
+    scfg$metadata$flywheel_temp_directory,
+    scfg$metadata$flywheel_sync_directory
   )
 
   dirs <- dirs[!is.na(dirs) & nzchar(dirs)]
@@ -30,7 +32,7 @@ setup_project_directories <- function(scfg) {
     if (checkmate::test_directory_exists(d)) {
       next
     } else if (dir.exists(d)) {
-      warning("Directory exists but is not readable: ", d)
+      warning("Directory exists but is not readable: ", d, immediate. = TRUE)
     } else {
       message("Creating directory: ", d)
       dir.create(d, recursive = TRUE, showWarnings = FALSE)

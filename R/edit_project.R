@@ -21,13 +21,14 @@ edit_project <- function(input = NULL) {
   # Define editable fields per setup function
   config_map <- list(
     "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
-      "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home"
+      "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home",
+      "flywheel_temp_directory", "flywheel_sync_directory"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container", "flywheel"
     )),
     "Flywheel Sync" = list(setup_fn = setup_flywheel_sync, prefix = "flywheel_sync/", fields = c(
-      "enable", "source_url", "dropoff_directory", "temp_directory"
+      "enable", "source_url"
     )),
     "BIDS Conversion" = list(setup_fn = setup_bids_conversion, prefix = "bids_conversion/", fields = c(
       "enable", "sub_regex", "sub_id_match", "ses_regex", "ses_id_match",

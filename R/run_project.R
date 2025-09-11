@@ -67,14 +67,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # by passing steps, user is asking for unattended execution
   prompt <- is.null(steps)
 
-  if (isFALSE(prompt)) {
-    
-    
+  if (isFALSE(prompt)) {   
     if ("flywheel_sync" %in% steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
       if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
-      if (is.null(scfg$flywheel_sync$dropoff_directory)) stop("Cannot run flywheel_sync without a dropoff_directory.")
+      if (is.null(scfg$metadata$flywheel_sync_directory)) stop("Cannot run flywheel_sync without a flywheel_sync_directory.")
+      if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) stop("Cannot run flywheel_sync without a valid location of the fw command.")
     }
+
     if ("bids_conversion" %in% steps) {
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
@@ -264,7 +264,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   }
 }
 
-# submit Flywheel sync job
+# submit Flywheel sync job -- superordinate to subjects
 submit_flywheel_sync <- function(scfg, lg = NULL) {
   checkmate::assert_list(scfg)
 
@@ -283,9 +283,12 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     glue::glue("--output={scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
   )
 
-  cmd <- glue::glue(
-    "fw sync --include dicom --tmp-path '{scfg$flywheel_sync$temp_directory}' {scfg$flywheel_sync$cli_options} {scfg$flywheel_sync$source_url} {scfg$flywheel_sync$dropoff_directory}"
-  )
+  cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
+    "--include dicom", "-y",
+    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'")
+  ))
+
+  cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 
