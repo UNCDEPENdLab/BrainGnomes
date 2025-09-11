@@ -191,8 +191,8 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     stop("prompt_input() requires an interactive session.")
   }
   
-  if (is.null(prompt)) prompt <- ""
-  if (is.null(prompt_eol)) prompt_eol <- ""
+  if (is.null(prompt) || length(prompt) == 0L || is.na(prompt[1L])) prompt <- ""
+  if (is.null(prompt_eol) || length(prompt_eol) == 0L || is.na(prompt_eol[1L])) prompt_eol <- ""
 
   checkmate::assert_string(prompt)
   checkmate::assert_string(prompt_eol)

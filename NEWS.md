@@ -1,8 +1,11 @@
-# BrainGnomes 0.6-2
+# BrainGnomes 0.7
 
-Released 2025-09-11
+Released 2025-09-XX
 
 * Tested and vetted flywheel sync
+* validate_project adds argument correct_problems to prompt user for corrections if requested
+* run_project does not continue if no steps are requested
+* bugfix: validate_project does not return a top-level 'gap' for postprocess when config is valid
 
 # BrainGnomes 0.6-1
 

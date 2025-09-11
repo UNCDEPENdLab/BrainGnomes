@@ -35,7 +35,7 @@ validate_job_settings <- function(scfg, job_name = NULL) {
   scfg[[job_name]]$cli_options <- validate_char(get_nested_values(scfg, job_name)$cli_options)
   scfg[[job_name]]$sched_args <- validate_char(get_nested_values(scfg, job_name)$sched_args)
 
-  attr(scfg, "gaps") <- gaps
+  attr(scfg, "gaps") <- gaps # will set to NULL if none
   return(scfg)
 }
 
@@ -111,15 +111,24 @@ validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
     scfg$bids_conversion$clear_cache <- NULL
   }
 
-  attr(scfg, "gaps") <- gaps
+  attr(scfg, "gaps") <- gaps # will set to NULL if none
   return(scfg)
 }
 
 #' Validate the structure of a project configuration object
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
+#' @param quiet if TRUE, suppress messages about validation failures
+#' @param correct_problems if TRUE, prompt user to correct validation failures. In this case,
+#'   an amended scfg object will be returned. If FALSE, `validate_project` will simply return
+#'   `TRUE/FALSE` to indicate whether the project is valid.
+#' @details
+#'   If `correct_problems = FALSE`, the return will be TRUE/FALSE to indicate whether the project
+#'   passed validation. If it did not, an attribute called `'gaps'` will be added to the return
+#'   containing the failed fields in the nested list string syntax (e.g. `metadata/log_directory`).
+#'  
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
-validate_project <- function(scfg = list(), quiet = FALSE) {
+validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FALSE) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     if (inherits(scfg, "list")) {
       class(scfg) <- c(class(scfg), "bg_project_cfg")
@@ -129,6 +138,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   checkmate::assert_flag(quiet)
+  checkmate::assert_flag(correct_problems)
 
   gaps <- c()
 
@@ -147,6 +157,12 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
       message("Config file is missing valid directory for ", rr, ".")
       gaps <- c(gaps, rr)
     }
+  }
+
+  # make sure that scratch is writeable
+  if (test_directory_exists(scfg$metadata$scratch_directory) && !test_directory_exists(scfg$metadata$scratch_directory, access="rwx")) {
+    message("Work/scratch directory lacks read/write access. You will be asked for a new scratch directory")
+    gaps <- c(gaps, "metadata/scratch_directory")
   }
 
   # step-specific directories
@@ -189,8 +205,8 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
 
     if (!checkmate::test_directory_exists(scfg$metadata$flywheel_temp_directory)) {
-      message("Config file is missing valid directory for flywheel_sync/temp_directory.")
-      gaps <- c(gaps, "flywheel_sync/temp_directory")
+      message("Config file is missing valid directory for metadata/flywheel_temp_directory.")
+      gaps <- c(gaps, "metadata/flywheel_temp_directory")
     }
 
     if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
@@ -239,7 +255,7 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   }
 
   # validate job settings only for enabled steps
-  for (job in c("fmriprep", "mriqc", "aroma")) {
+  for (job in c("fmriprep", "mriqc", "aroma", "flywheel_sync")) {
     if (!checkmate::test_flag(scfg[[job]]$enable)) {
       message("Invalid enable flag in ", job, ". You will be asked for this.")
       gaps <- c(gaps, paste0(job, "/enable"))
@@ -289,9 +305,16 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     gaps <- c(gaps, extract_result$gaps)
   }
 
-  attr(scfg, "gaps") <- gaps
+  if (correct_problems) {
+    if (length(gaps) > 0L) scfg <- setup_project(scfg, fields = gaps)
+    attr(scfg, "gaps") <- NULL # remove gaps attr
+    return(scfg)
+  } else {
+    success <- length(gaps) == 0L
+    if (!success) attr(success, "gaps") <- gaps
+    return(success)
+  }
 
-  return(scfg)
 }
 
 
@@ -531,8 +554,8 @@ validate_postprocess_configs <- function(ppcfg, quiet = FALSE) {
     res <- validate_postprocess_config_single(ppcfg[[nm]], nm, quiet)
     ppcfg[[nm]] <- res$postprocess
 
-    # rename gaps by config, like postprocess/ppcfg1/temporal_filter/prefix
-    gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
+    # if there are gaps, rename by config, like postprocess/ppcfg1/temporal_filter/prefix
+    if (!is.null(res$gaps)) gaps <- c(gaps, paste0("postprocess/", nm, "/", sub("^postprocess/", "", res$gaps)))
   }
   return(list(postprocess = ppcfg, gaps = gaps))
 }

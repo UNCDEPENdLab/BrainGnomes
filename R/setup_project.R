@@ -13,10 +13,8 @@ load_project <- function(input = NULL, validate = TRUE) {
   checkmate::test_flag(validate)
   scfg <- read_yaml(input)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
-  if (validate) scfg <- validate_project(scfg)
+  if (validate) scfg <- validate_project(scfg, correct_problems = TRUE)
 
-  # fill in any gaps in the config
-  if (!is.null(attr(scfg, "gaps"))) scfg <- setup_project(scfg, fields = attr(scfg, "gaps"))
   return(scfg)
 }
 
@@ -145,24 +143,24 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   # Flywheel sync directory defaults to metadata$dicom_directory
   if ("metadata/flywheel_sync_directory" %in% fields) {
-    if (is.null(scfg$metadata$flywheel_sync_directory)) {
-      if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
+    if (!test_string(scfg$metadata$flywheel_sync_directory)) {
+      if (!test_string(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
       default <- scfg$metadata$dicom_directory
     } else {
       default <- scfg$metadata$flywhee_sync_directory
     }
 
     scfg$metadata$flywheel_sync_directory <- prompt_directory(
-      instruct = "Where should Flywheel place downloaded DICOM files?",
+      prompt = "Where should Flywheel place downloaded DICOM files?",
       default = default, check_readable = TRUE
     )
   }
 
   # use scratch directory as base of flywheel sync temps if not otherwise specified
   if ("metadata/flywheel_temp_directory" %in% fields) {
-    if (is.null(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$work_directory, "flywheel")
+    if (!test_string(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$scratch_directory, "flywheel")
     scfg$metadata$flywheel_temp_directory <- prompt_directory(
-      instruct = "Where should temporary files for Flywheel sync go?",
+      prompt = "Where should temporary files for Flywheel sync go?",
       default = scfg$metadata$flywheel_temp_directory, check_readable = TRUE
     )
   }
@@ -174,13 +172,13 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
-    default <- if (is.null(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
+    default <- if (!test_string(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
     scfg$metadata$bids_directory <- prompt_directory(prompt="Where is your BIDS directory?", default = default, check_readable = TRUE)
   }
 
   # location of fMRIPrep outputs -- default within project directory, but allow external paths. Only prompt if fmriprep enabled
   if ("metadata/fmriprep_directory" %in% fields) {
-    default <- if (is.null(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
+    default <- if (!test_string(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
     scfg$metadata$fmriprep_directory <- prompt_directory(
       instruct = glue("\n\n
         We recommend that fmriprep outputs be placed in data_fmriprep within the BrainGnomes project directory.

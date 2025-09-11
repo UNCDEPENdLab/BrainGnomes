@@ -163,6 +163,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     #   type = "character", among=c("INFO", "ERROR", "DEBUG")
     # )
   }
+  
+  if (!any(steps)) stop("No processing steps were requested in run_project.")
 
   # check that required containers are present for any requested step
   if (steps["bids_conversion"] && !validate_exists(scfg$compute_environment$heudiconv_container)) {
@@ -186,9 +188,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   }
 
   flywheel_id <- NULL
-  if (isTRUE(steps["flywheel_sync"])) {
-    flywheel_id <- submit_flywheel_sync(scfg)
-  }
+  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
+
+  # If only sync was requested, don't enter subject-level processing
+  if (!any(steps[names(steps) != "flywheel_sync"])) return(invisible(TRUE))
 
   # look for subject directories in the DICOM directory
   # empty default data.frame for dicom directories
@@ -286,7 +289,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
   cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
     "--include dicom", "-y",
     glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'")
-  ))
+  ), collapse = TRUE)
 
   cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
 
