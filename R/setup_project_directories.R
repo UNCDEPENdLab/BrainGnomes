@@ -40,7 +40,7 @@ setup_project_directories <- function(scfg) {
   # check that scratch directory is user-writeable
   scratch_dir <- scfg$metadata$scratch_directory
   if (!checkmate::test_directory_exists(scratch_dir, access = "w")) {
-    warning("Scratch directory is not user-writeable. Attempting to modify permissions: ", scratch_dir)
+    warning("Work/scratch directory is not user-writeable. Attempting to modify permissions: ", scratch_dir, immediate. = TRUE)
     okay <- ensure_user_writable(scratch_dir)
     if (!okay) stop("Cannot write to scratch directory. BrainGnomes cannot proceed. Fix permissions on: ", scratch_dir)
   }
