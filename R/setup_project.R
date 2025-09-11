@@ -451,6 +451,10 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   if (isFALSE(scfg$flywheel_sync$enable)) return(scfg)
 
+  if (!validate_exists(scfg$compute_environment$flywheel) && !"compute_environment/flywheel" %in% fields) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/flywheel")
+  }
+
   if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
     scfg$flywheel_sync$source_url <- prompt_input(
       instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
@@ -794,6 +798,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     if (isTRUE(scfg$fmriprep$enable) && !validate_exists(scfg$compute_environment$fmriprep_container)) fields <- c(fields, "compute_environment/fmriprep_container")
     if (isTRUE(scfg$bids_conversion$enable) && !validate_exists(scfg$compute_environment$heudiconv_container)) fields <- c(fields, "compute_environment/heudiconv_container")
     if (isTRUE(scfg$bids_validation$enable) && !validate_exists(scfg$compute_environment$bids_validator)) fields <- c(fields, "compute_environment/bids_validator")
+    if (isTRUE(scfg$flywheel_sync$enable) && !validate_exists(scfg$compute_environment$flywheel)) fields <- c(fields, "compute_environment/flywheel")
     if (isTRUE(scfg$mriqc$enable) && !validate_exists(scfg$compute_environment$mriqc_container)) fields <- c(fields, "compute_environment/mriqc_container")
     if (isTRUE(scfg$aroma$enable) && !validate_exists(scfg$compute_environment$aroma_container)) fields <- c(fields, "compute_environment/aroma_container")
     if (isTRUE(scfg$postprocess$enable) && !validate_exists(scfg$compute_environment$fsl_container)) fields <- c(fields, "compute_environment/fsl_container")
@@ -804,6 +809,27 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       instruct = "The pipeline currently runs on TORQUE (aka qsub) and SLURM clusters.\nWhich will you use?",
       type = "character", len = 1L, among = c("slurm", "torque")
     )
+  }
+
+  if ("compute_environment/flywheel" %in% fields) {
+    fw_path <- tryCatch(system("command -v fw", intern = TRUE, ignore.stderr = TRUE), error = function(e) "")
+    if (nzchar(fw_path)) {
+      use_fw <- prompt_input(
+        instruct = glue("Found Flywheel CLI at {fw_path}"),
+        prompt = "Use this location?",
+        type = "flag",
+        default = TRUE
+      )
+      if (isTRUE(use_fw)) scfg$compute_environment$flywheel <- fw_path
+    }
+    if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
+      scfg$compute_environment$flywheel <- prompt_input(
+        instruct = "Specify the location of the Flywheel CLI (fw):",
+        prompt = "Location of Flywheel CLI:",
+        type = "file",
+        default = scfg$compute_environment$flywheel
+      ) |> normalizePath(mustWork = TRUE)
+    }
   }
 
   # location of fmriprep container -- use normalizePath() to follow any symbolic links or home directory shortcuts
