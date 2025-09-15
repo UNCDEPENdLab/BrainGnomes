@@ -24,13 +24,27 @@ get_job_script <- function(scfg = NULL, job_name) {
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
+#' @param jobid_str An optional character string naming the job, passed to the HPC scheduler
+#' @param stdout_log The file path to the log file used for stdout
+#' @param stderr_log The file path to the log file used for stderr
 #' @return A character string of scheduler arguments
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string
 #' @keywords internal
 #' @noRd
-get_job_sched_args <- function(scfg = NULL, job_name) {
+get_job_sched_args <- function(scfg = NULL, job_name, jobid_str = NULL, stdout_log = NULL, stderr_log = NULL) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_string(job_name)
+  checkmate::assert_string(jobid_str, null.ok = TRUE)
+  checkmate::assert_string(stdout_log, null.ok = TRUE)
+  checkmate::assert_string(stderr_log, null.ok = TRUE)
+  
+  # job_name must be present in scfg
+  if (is.null(scfg[[job_name]])) stop("Cannot find job in scfg: ", job_name)
+
+  # if no explicit job id string is given, use the job name
+  if (is.null(jobid_str)) jobid_str <- job_name
+  jobid_str <- gsub("\\s", "", jobid_str) # job name can't have spaces
 
   # TODO: need to use cli_opts approach to remove conflicting/redundant fields in sched_args for -n, -N, etc.
 
@@ -44,6 +58,7 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
     nhours <- 0.1
     ncores <- 1
   }
+
   # convert empty strings to NULL for compatibility with glue
   if (length(sched_args) == 0L || is.na(sched_args[1L]) || sched_args[1L] == "") sched_args <- NULL
 
@@ -51,20 +66,33 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
     # ensure that we strip off any #SBATCH prefix since we are passing arguments directly to sbatch or qsub
     if (!is.null(sched_args)) sched_args <- sub("^\\s*#SBATCH\\s+", "", sched_args, ignore.case = TRUE)
 
+    if (!is.null(stdout_log)) stdout_log <- glue("--output={shQuote(stdout_log)}")
+    if (!is.null(stderr_log)) stderr_log <- glue("--error={shQuote(stderr_log)}")
+
     sched_args <- glue(
       "-N 1",
       "-n {ncores}",
       "--time={hours_to_dhms(nhours)}",
       "--mem={memgb}g",
+      "--job_name={jobid_str}",
+      "{stdout_log}",
+      "{stderr_log}",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )
   } else {
     if (!is.null(sched_args)) sched_args <- sub("^\\s*#PBS\\s+", "", sched_args, ignore.case = TRUE)
+
+    if (!is.null(stdout_log)) stdout_log <- glue("-o {shQuote(stdout_log)}")
+    if (!is.null(stderr_log)) stderr_log <- glue("-e {shQuote(stderr_log)}")
+
     sched_args <- glue(
       "-l nodes=1:ppn={ncores}",
       "-l walltime={hours_to_dhms(nhours)}",
       "-l mem={memgb}",
+      "-N {jobid_str}",
+      "{stdout_log}",
+      "{stderr_log}",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )

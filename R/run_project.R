@@ -281,9 +281,9 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     }
   }
 
-  sched_args <- c(
-    get_job_sched_args(scfg, "flywheel_sync"),
-    glue::glue("--output={scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  sched_args <- get_job_sched_args(scfg, job_name = "flywheel_sync",
+    stdout_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+    stderr_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
   )
 
   cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(

@@ -113,26 +113,20 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     )
 
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
+    sched_call <- list(job_name = name, jobid_str = jobid_str, stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
     if (name == "postprocess") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$postprocess <- scfg$postprocess[[pp_stream]]
-      sched_args <- get_job_sched_args(scfg_tmp, name)
+      sched_args$scfg <- scfg_tmp
     } else if (name == "extract_rois") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$extract_rois <- scfg$extract_rois[[ex_stream]]
-      sched_args <- get_job_sched_args(scfg_tmp, name)
+      sched_args$scfg <- scfg_tmp
     } else {
-      sched_args <- get_job_sched_args(scfg, name)
+      sched_args$scfg <- scfg
     }
 
-    sched_args <- set_cli_options( # setup files for stdout and stderr, job name
-      sched_args,
-      c(
-        glue("--job-name={jobid_str}"),
-        glue("--output={env_variables['stdout_log']}"),
-        glue("--error={env_variables['stderr_log']}")
-      )
-    )
+    sched_args <- do.call(get_job_sched_args, sched_call)
 
     # determine the directory to use for the job submission
     if (session_level && has_ses) {

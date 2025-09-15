@@ -144,10 +144,9 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # Flywheel sync directory defaults to metadata$dicom_directory
   if ("metadata/flywheel_sync_directory" %in% fields) {
     if (!test_string(scfg$metadata$flywheel_sync_directory)) {
-      if (!test_string(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
-      default <- scfg$metadata$dicom_directory
+      default <- if (test_string(scfg$metadata$dicom_directory)) scfg$metadata$dicom_directory else NULL
     } else {
-      default <- scfg$metadata$flywhee_sync_directory
+      default <- scfg$metadata$flywheel_sync_directory
     }
 
     scfg$metadata$flywheel_sync_directory <- prompt_directory(
@@ -453,8 +452,8 @@ setup_mriqc <- function(scfg, fields = NULL) {
 #' @keywords internal
 setup_flywheel_sync <- function(scfg, fields = NULL) {
   defaults <- list(
-    memgb = 8,
-    nhours = 2,
+    memgb = 16,
+    nhours = 4,
     ncores = 1,
     cli_options = "",
     sched_args = ""
