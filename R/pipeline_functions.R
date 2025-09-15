@@ -774,7 +774,7 @@ is_external_path <- function(path, project_dir) {
   !inside
 }
 
-# little function to attempt to make a file/directory user-writeable
+# little function to attempt to make a file/directory user-writable
 ensure_user_writable <- function(path) {
   stopifnot(is.character(path), length(path) == 1L)
   if (!file.exists(path)) stop("Path does not exist: ", path)

@@ -372,23 +372,23 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
 #' Prompts the user for a directory path. If it exists, optionally checks:
 #' - ownership (check_owner)
 #' - readability (check_readable; can try make_readable if owned)
-#' - writability (check_writeable; can try make_writeable if owned)
+#' - writability (check_writable; can try make_writable if owned)
 #' Any remaining issues are combined into a single proceed prompt.
 #'
 #' @param check_owner logical; if TRUE, confirm the directory is owned by the current user (or prompt to proceed).
 #' @param check_readable logical; require directory to be readable (or confirm proceed).
-#' @param check_writeable logical; require directory to be writable (or confirm proceed).
+#' @param check_writable logical; require directory to be writable (or confirm proceed).
 #' @param make_readable logical; if TRUE and owned, add user-read (+x for dirs).
-#' @param make_writeable logical; if TRUE and owned, add user-write.
+#' @param make_writablelogical; if TRUE and owned, add user-write.
 #' @param default Default directory path to suggest.
 #' @param ... Additional args forwarded to `prompt_input()` (e.g., `instruct`, `prompt`).
 #' @return A character scalar path (may or may not exist).
 #' @keywords internal
 prompt_directory <- function(check_owner = FALSE,
                              check_readable = FALSE,
-                             check_writeable = FALSE,
+                             check_writable = FALSE,
                              make_readable = FALSE,
-                             make_writeable = FALSE,
+                             make_writable = FALSE,
                              default = NULL,
                              ...) {
   # ---- helpers -------------------------------------------------------------
@@ -432,7 +432,7 @@ prompt_directory <- function(check_owner = FALSE,
   }
   
   # u+w
-  ensure_user_writeable <- function(path) {
+  ensure_user_writable<- function(path) {
     if (isTRUE(file.access(path, 2L) == 0L)) return(TRUE)
     cat("Attempting to add write permission to", path, "\n")
     if (!add_bits_if_owner(path, "0200")) return(FALSE)
@@ -457,9 +457,9 @@ prompt_directory <- function(check_owner = FALSE,
         invisible(ensure_user_readable(dir_path))
       }
       # WRITE
-      if (isTRUE(check_writeable) && !isTRUE(file.access(dir_path, 2L) == 0L) &&
-          isTRUE(make_writeable) && is_owner) {
-        invisible(ensure_user_writeable(dir_path))
+      if (isTRUE(check_writable && !isTRUE(file.access(dir_path, 2L) == 0L) &&
+          isTRUE(make_writable) && is_owner) {
+        invisible(ensure_user_writable(dir_path))
       }
       
       # Now collect any *remaining* issues into a single message
@@ -475,8 +475,8 @@ prompt_directory <- function(check_owner = FALSE,
           issues <- c(issues, "it is not readable by the current user")
         }
       }
-      if (isTRUE(check_writeable) && !isTRUE(file.access(dir_path, 2L) == 0L)) {
-        if (isTRUE(make_writeable) && !is_owner) {
+      if (isTRUE(check_writable) && !isTRUE(file.access(dir_path, 2L) == 0L)) {
+        if (isTRUE(make_writable) && !is_owner) {
           issues <- c(issues, glue::glue("it is not writable and permissions cannot be changed because you are not the owner"))
         } else {
           issues <- c(issues, "it is not writable by the current user")

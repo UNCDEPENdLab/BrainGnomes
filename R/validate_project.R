@@ -159,7 +159,7 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
     }
   }
 
-  # make sure that scratch is writeable
+  # make sure that scratch is writable
   if (test_directory_exists(scfg$metadata$scratch_directory) && !test_directory_exists(scfg$metadata$scratch_directory, access="rwx")) {
     message("Work/scratch directory lacks read/write access. You will be asked for a new scratch directory")
     gaps <- c(gaps, "metadata/scratch_directory")
