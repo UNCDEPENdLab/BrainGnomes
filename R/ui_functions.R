@@ -457,7 +457,7 @@ prompt_directory <- function(check_owner = FALSE,
         invisible(ensure_user_readable(dir_path))
       }
       # WRITE
-      if (isTRUE(check_writable && !isTRUE(file.access(dir_path, 2L) == 0L) &&
+      if (isTRUE(check_writable) && !isTRUE(file.access(dir_path, 2L) == 0L) &&
           isTRUE(make_writable) && is_owner) {
         invisible(ensure_user_writable(dir_path))
       }
