@@ -145,7 +145,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
 setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
-  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
+  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields))) || ("postprocess/enable" %in% fields)) {
     scfg$postprocess$enable <- prompt_input(
       instruct = glue("\n\n
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
@@ -163,7 +163,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       ),
       prompt = "Enable postprocessing?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$postprocess$enable)) TRUE else isTRUE(scfg$postprocess$enable)
     )
   }
 

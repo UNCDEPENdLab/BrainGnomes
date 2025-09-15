@@ -267,7 +267,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   }
 }
 
-# submit Flywheel sync job -- superordinate to subjects
+#' submit Flywheel sync job -- superordinate to subjects
+#' @param scfg A bg_project_cfg object
+#' @param lg a lgr object
+#' @keywords internal
+#' @noRd
+#' @importFrom checkmate test_true
 submit_flywheel_sync <- function(scfg, lg = NULL) {
   checkmate::assert_list(scfg)
 
@@ -286,9 +291,16 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     stderr_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
   )
 
+  audit_str <- if (test_true(scfg$flywheel_sync$save_audit_logs)) {
+    glue("--save-audit-logs {scfg$metadata$log_directory}/flywheel_sync_audit_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.csv")
+  } else {
+    NULL
+  }
+
   cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
     "--include dicom", "-y",
-    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'")
+    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'"),
+    audit_str
   ), collapse = TRUE)
 
   cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")

@@ -199,6 +199,11 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, "flywheel_sync/source_url")
     }
 
+    if (is.null(scfg$flywheel_sync$save_audit_logs)) {
+      message("Config file is missing valid setting for flywheel save_audi_logs.")
+      gaps <- c(gaps, "flywheel_sync/save_audit_logs")
+    }
+
     if (!checkmate::test_directory_exists(scfg$metadata$flywheel_sync_directory)) {
       message("Config file is missing valid directory for metadata/flywheel_sync_directory.")
       gaps <- c(gaps, "metadata/flywheel_sync_directory")

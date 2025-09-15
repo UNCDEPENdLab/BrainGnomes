@@ -261,7 +261,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields)))) {
+  if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields))) || ("fmriprep/enable" %in% fields)) {
     scfg$fmriprep$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -277,7 +277,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
       "),
       prompt = "Do you want to include fMRIPrep as part of your preprocessing pipeline?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$fmriprep$enable)) TRUE else isTRUE(scfg$fmriprep$enable)
     )
   }
 
@@ -342,7 +342,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields)))) {
+  if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields))) || ("bids_validation/enable" %in% fields)) {
     scfg$bids_validation$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -358,7 +358,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
       "),
       prompt = "Enable BIDS validation?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$bids_validation$enable)) TRUE else isTRUE(scfg$bids_validation$enable)
     )
   }
 
@@ -403,7 +403,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields)))) {
+  if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields))) || ("mriqc/enable" %in% fields)) {
     scfg$mriqc$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -420,7 +420,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
       "),
       prompt = "Run MRIQC?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$mriqc$enable)) TRUE else isTRUE(scfg$mriqc$enable)
     )
   }
 
@@ -459,7 +459,7 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields)))) {
+  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields))) || ("flywheel_sync/enable" %in% fields)) {
     scfg$flywheel_sync$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -468,7 +468,7 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
       conversion to ensure all data are available locally.\n\n"),
       prompt = "Run Flywheel sync?",
       type = "flag",
-      default = FALSE
+      default = if (is.null(scfg$flywheel_sync$enable)) FALSE else isTRUE(scfg$flywheel_sync$enable)
     )
   }
 
@@ -484,6 +484,18 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
     scfg$flywheel_sync$source_url <- prompt_input(
       instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
       type = "character"
+    )
+  }
+
+  if (is.null(scfg$flywheel_sync$save_audit_logs) || "flywheel_sync/save_audit_logs" %in% fields) {
+    scfg$flywheel_sync$save_audit_logs <- prompt_input(
+      instruct = glue("\n\n
+        Flywheel can save an audit log (CSV) that includes the result of
+        each dataset. This is helpful for debugging sync failures or glitches
+        and is recommended. The file is saved in the project's logs directory."),
+      prompt = "Save Flywheel sync audit logs?",
+      type = "flag",
+      default = TRUE
     )
   }
 
@@ -514,7 +526,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields)))) {
+  if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields))) || ("bids_conversion/enable" %in% fields)) {
     scfg$bids_conversion$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -557,7 +569,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       "),
       prompt = "Run BIDS conversion?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$bids_conversion$enable)) TRUE else isTRUE(scfg$bids_conversion$enable)
     )
   }
 
@@ -697,7 +709,7 @@ setup_aroma <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields)))) {
+  if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields))) || ("aroma/enable" %in% fields)) {
     scfg$aroma$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -717,7 +729,7 @@ setup_aroma <- function(scfg, fields = NULL) {
       "),
       prompt = "Run ICA-AROMA?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$aroma$enable)) TRUE else isTRUE(scfg$aroma$enable)
     )
   }
 
@@ -930,4 +942,3 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
 
   return(scfg)
 }
-

@@ -6,6 +6,8 @@ Released 2025-09-XX
 * validate_project adds argument correct_problems to prompt user for corrections if requested
 * run_project does not continue if no steps are requested
 * bugfix: validate_project does not return a top-level 'gap' for postprocess when config is valid
+* bugfix: edit_project allows enable/disable modifications
+* bugfix: edit_project looks for missing config settings when enabling a previously disabled step
 * check that the scratch_directory is writable when the project is loaded and prompt for a new directory if not
 
 # BrainGnomes 0.6-1
