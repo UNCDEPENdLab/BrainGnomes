@@ -25,7 +25,7 @@ test_that("get_job_sched_args uses debug settings", {
   expect_equal(
     result,
     glue::glue(
-      "-N 1 -n 1 --time=00:06:00 --mem=4g --job_name=myjob",
+      "-N 1 -n 1 --time=00:06:00 --mem=4g --job-name=myjob",
       .trim = TRUE, .sep = " ", .null = NULL
     )
   )
@@ -41,7 +41,7 @@ test_that("get_job_sched_args formats slurm arguments", {
   expect_equal(
     result,
     glue::glue(
-      "-N 1 -n 4 --time=02:00:00 --mem=8g --job_name=myjob",
+      "-N 1 -n 4 --time=02:00:00 --mem=8g --job-name=myjob",
       .trim = TRUE, .sep = " ", .null = NULL
     )
   )

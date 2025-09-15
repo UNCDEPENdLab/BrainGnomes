@@ -74,7 +74,7 @@ get_job_sched_args <- function(scfg = NULL, job_name, jobid_str = NULL, stdout_l
       "-n {ncores}",
       "--time={hours_to_dhms(nhours)}",
       "--mem={memgb}g",
-      "--job_name={jobid_str}",
+      "--job-name={jobid_str}",
       "{stdout_log}",
       "{stderr_log}",
       "{paste(sched_args, collapse=' ')}",
