@@ -7,9 +7,9 @@
 prompt_directory(
   check_owner = FALSE,
   check_readable = FALSE,
-  check_writeable = FALSE,
+  check_writable = FALSE,
   make_readable = FALSE,
-  make_writeable = FALSE,
+  make_writable = FALSE,
   default = NULL,
   ...
 )
@@ -19,15 +19,15 @@ prompt_directory(
 
 \item{check_readable}{logical; require directory to be readable (or confirm proceed).}
 
-\item{check_writeable}{logical; require directory to be writable (or confirm proceed).}
+\item{check_writable}{logical; require directory to be writable (or confirm proceed).}
 
 \item{make_readable}{logical; if TRUE and owned, add user-read (+x for dirs).}
-
-\item{make_writeable}{logical; if TRUE and owned, add user-write.}
 
 \item{default}{Default directory path to suggest.}
 
 \item{...}{Additional args forwarded to \code{prompt_input()} (e.g., \code{instruct}, \code{prompt}).}
+
+\item{make_writablelogical;}{if TRUE and owned, add user-write.}
 }
 \value{
 A character scalar path (may or may not exist).
@@ -37,7 +37,7 @@ Prompts the user for a directory path. If it exists, optionally checks:
 \itemize{
 \item ownership (check_owner)
 \item readability (check_readable; can try make_readable if owned)
-\item writability (check_writeable; can try make_writeable if owned)
+\item writability (check_writable; can try make_writable if owned)
 Any remaining issues are combined into a single proceed prompt.
 }
 }
