@@ -41,16 +41,8 @@ run_bids_validation <- function(scfg, outfile = NULL) {
   )
 
   sched_script <- get_job_script(scfg, "bids_validation")
-  sched_args <- get_job_sched_args(scfg, "bids_validation")
-  sched_args <- set_cli_options(
-    sched_args,
-    c(
-      glue::glue("--job-name=bids_validation"),
-      glue::glue("--output={env_variables['stdout_log']}"),
-      glue::glue("--error={env_variables['stderr_log']}")
-    )
-  )
-
+  sched_args <- get_job_sched_args(scfg, "bids_validation", stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
+  
   job_id <- submit_bids_validation(
     scfg,
     sub_dir = scfg$metadata$bids_directory,

@@ -91,7 +91,9 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
   if (!isTRUE(scfg$extract_rois$enable)) return(scfg)
 
   # if fields are present, prompt only for those that are present
-  if (!is.null(fields) && any(grepl("^extract_rois/", fields))) {
+  if (!is.null(fields)) {
+    if (!any(grepl("^extract_rois/", fields))) return(scfg) # if fields are passed, but none relate to extract rois, skip out
+
     extract_fields <- grep("^extract_rois/", fields, value = TRUE)
 
     # extract_rois stream and setting using sub()

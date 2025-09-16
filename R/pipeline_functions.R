@@ -4,20 +4,21 @@
 #' Get the HPC job script for a given job name
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
+#' @param subject_suffix If TRUE, assume that the job script should have the suffix "_suffix". Applies
+#'   to all subject-level processing steps, like job_name="bids_conversion" -> bids_conversion_subject.sbatch
 #' @return The path to the job script
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string test_file_exists
 #' @keywords internal
 #' @noRd
-get_job_script <- function(scfg = NULL, job_name) {
+get_job_script <- function(scfg = NULL, job_name, subject_suffix = TRUE) {
   checkmate::assert_string(job_name)
 
   ext <- ifelse(scfg$compute_environment$scheduler == "torque", "pbs", "sbatch")
-  expect_file <- glue("hpc_scripts/{job_name}_subject.{ext}")
+  sub_str <- if (isTRUE(subject_suffix)) "_subject" else ""
+  expect_file <- glue("hpc_scripts/{job_name}{sub_str}.{ext}")
   script <- system.file(expect_file, package = "BrainGnomes")
-  if (!checkmate::test_file_exists(script)) {
-    stop("In get_job_script, cannot find expected script file: ", expect_file)
-  }
+  if (!checkmate::test_file_exists(script)) stop("In get_job_script, cannot find expected script file: ", expect_file)
   return(script)
 }
 

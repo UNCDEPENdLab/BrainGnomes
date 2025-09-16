@@ -379,7 +379,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
 #' @param check_readable logical; require directory to be readable (or confirm proceed).
 #' @param check_writable logical; require directory to be writable (or confirm proceed).
 #' @param make_readable logical; if TRUE and owned, add user-read (+x for dirs).
-#' @param make_writablelogical; if TRUE and owned, add user-write.
+#' @param make_writable logical; if TRUE and owned, add user-write.
 #' @param default Default directory path to suggest.
 #' @param ... Additional args forwarded to `prompt_input()` (e.g., `instruct`, `prompt`).
 #' @return A character scalar path (may or may not exist).

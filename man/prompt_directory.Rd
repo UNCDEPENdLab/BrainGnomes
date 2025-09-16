@@ -23,11 +23,11 @@ prompt_directory(
 
 \item{make_readable}{logical; if TRUE and owned, add user-read (+x for dirs).}
 
+\item{make_writable}{logical; if TRUE and owned, add user-write.}
+
 \item{default}{Default directory path to suggest.}
 
 \item{...}{Additional args forwarded to \code{prompt_input()} (e.g., \code{instruct}, \code{prompt}).}
-
-\item{make_writablelogical;}{if TRUE and owned, add user-write.}
 }
 \value{
 A character scalar path (may or may not exist).

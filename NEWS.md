@@ -1,14 +1,16 @@
 # BrainGnomes 0.7
 
-Released 2025-09-XX
+Released 2025-09-16
 
 * Tested and vetted flywheel sync
+* Defer subject processing loop when flywheel sync is the first step
 * validate_project adds argument correct_problems to prompt user for corrections if requested
 * run_project does not continue if no steps are requested
+* check that the scratch_directory is writable when the project is loaded and prompt for a new directory if not
 * bugfix: validate_project does not return a top-level 'gap' for postprocess when config is valid
 * bugfix: edit_project allows enable/disable modifications
 * bugfix: edit_project looks for missing config settings when enabling a previously disabled step
-* check that the scratch_directory is writable when the project is loaded and prompt for a new directory if not
+* bugfix: do not display postproc or extract menus when filling in configuration gaps
 
 # BrainGnomes 0.6-1
 

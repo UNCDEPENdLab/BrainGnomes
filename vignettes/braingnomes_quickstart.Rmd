@@ -238,6 +238,40 @@ As an optional part of the pipeline, bids-validator can be run on the BIDS direc
 3. Additional command lines arguments to bids-validator. https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html for details.
 4. Additional arguments to be passed to the HPC scheduler
 
+## Flywheel sync setup
+
+If your DICOM data live in a Flywheel project, BrainGnomes can optionally run a Flywheel-to-filesystem synchronization step before any downstream processing. This uses the Flywheel CLI (`fw sync`) to download DICOMs to your project so that BIDS conversion (and later steps) operate on a complete, current dataset.
+
+- Enable in setup: Answer "Run Flywheel sync?" with yes in `setup_project()` (or use `edit_project()` → "Flywheel Sync"). You will be prompted for:
+  - Flywheel project URL (`source_url`), for example: `fw://flywheel.example.edu/MyGroup/MyProject`.
+  - Drop-off directory for downloaded DICOMs (`metadata/flywheel_sync_directory`). This is typically your project DICOM folder.
+  - Temporary directory for transfers (`metadata/flywheel_temp_directory`). Defaults under your scratch directory.
+  - Whether to save audit logs (`flywheel_sync/save_audit_logs`). When enabled, a CSV is written under your project `logs/`.
+  - Location of the Flywheel CLI binary (`compute_environment/flywheel`), i.e., the path to the `fw` executable.
+
+- Get an API token: The Flywheel CLI requires an API key associated with your user. Generate one in the Flywheel web UI:
+  - Navigate to your Flywheel site (for example, `https://flywheel.example.edu`).
+  - Open your user profile → API Keys and create a key. A direct route in many deployments is `https://<your-flywheel-host>/#/profile` then the API Keys tab.
+  - Copy the generated token and keep it secure.
+
+- Log in with the Flywheel CLI before syncing: BrainGnomes does not perform `fw login` for you. You must complete CLI login once on the machine/account that will run the jobs, e.g.:
+
+```
+fw login --host https://flywheel.example.edu --api-key <YOUR_API_TOKEN>
+```
+
+After successful login, the CLI stores credentials locally so subsequent runs can use `fw sync` non-interactively. If `fw login` is not complete, the Flywheel sync step will fail.
+
+- What BrainGnomes runs: The sync job uses `fw sync` with sensible defaults (includes DICOMs, non-interactive `-y`, your specified temp path, and optional audit log). Data are written to your `flywheel_sync_directory`.
+
+Usage tip: You can include Flywheel sync as part of a larger unattended run, for example:
+
+```{r eval = FALSE}
+run_project(scfg, steps = c("flywheel_sync", "bids_conversion", "fmriprep"))
+```
+
+When `flywheel_sync` is in the requested steps, BrainGnomes defers subject-level job scheduling until after the sync job completes. This ensures downstream steps (BIDS conversion, fMRIPrep, etc.) see all current data from Flywheel.
+
 ## Conclusion
 
 After `setup_project` completes, it will write a file called `project_config.yaml` into your project directory (if one exists, you will be prompted whether to overwrite it). This will contain all of your settings and can be used in future to load a project into R from an existing configuration.
