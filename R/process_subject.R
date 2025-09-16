@@ -117,13 +117,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     if (name == "postprocess") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$postprocess <- scfg$postprocess[[pp_stream]]
-      sched_args$scfg <- scfg_tmp
+      sched_call$scfg <- scfg_tmp
     } else if (name == "extract_rois") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$extract_rois <- scfg$extract_rois[[ex_stream]]
-      sched_args$scfg <- scfg_tmp
+      sched_call$scfg <- scfg_tmp
     } else {
-      sched_args$scfg <- scfg
+      sched_call$scfg <- scfg
     }
 
     sched_args <- do.call(get_job_sched_args, sched_call)
