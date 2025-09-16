@@ -210,13 +210,6 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
-  # optional files
-  if (!is.null(scfg$compute_environment$bids_validator) && !checkmate::test_file_exists(scfg$compute_environment$bids_validator)) {
-    message("Cannot find bids_validator at ", scfg$compute_environment$bids_validator, ". You will be asked for this.")
-    gaps <- c(gaps, "compute_environment/bids_validator")
-    scfg$compute_environment$bids_validator <- NULL
-  }
-
   if (!checkmate::test_subset(scfg$compute_environment$scheduler, c("slurm", "torque"), empty.ok = FALSE)) {
     message("Invalid scheduler setting. You will be asked for this.")
     gaps <- c(gaps, "compute_environment/scheduler")
@@ -226,11 +219,6 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
   if (isTRUE(scfg$aroma$enable) && !checkmate::test_file_exists(scfg$compute_environment$aroma_container)) {
     message("AROMA is enabled but aroma_container is missing. You will be asked for this.")
     gaps <- c(gaps, "compute_environment/aroma_container")
-  }
-
-  if (isTRUE(scfg$bids_validation$enable) && !checkmate::test_file_exists(scfg$compute_environment$bids_validator)) {
-    message("BIDS validation is enabled but bids_validator is missing. You will be asked for this.")
-    gaps <- c(gaps, "compute_environment/bids_validator")
   }
 
   # validate job settings only for enabled steps
@@ -244,6 +232,26 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     if (isTRUE(scfg[[job]]$enable)) {
       scfg <- validate_job_settings(scfg, job)
       gaps <- c(gaps, attr(scfg, "gaps"))
+    }
+  }
+
+  if (!checkmate::test_flag(scfg$bids_validation$enable)) {
+    message("Invalid bids_validation/enable flag. You will be asked for this.")
+    gaps <- c(gaps, "bids_validation/enable")
+    scfg$bids_validation$enable <- NULL
+  } else if (isTRUE(scfg$bids_validation$enable)) {
+    if (!checkmate::test_file_exists(scfg$compute_environment$bids_validator)) {
+      message("BIDS validation is enabled but bids_validator is missing. You will be asked for this.")
+      gaps <- c(gaps, "compute_environment/bids_validator")
+    }
+    scfg <- validate_job_settings(scfg, "bids_validation")
+    gaps <- c(gaps, attr(scfg, "gaps"))
+
+    scfg$bids_validation$outfile <- validate_char(scfg$bids_validation$outfile)
+    if (!checkmate::test_string(scfg$bids_validation$outfile)) {
+      message("Missing outfile in $bids_validation. You will be asked for this.")
+      gaps <- c(gaps, "bids_validation/outfile")
+      scfg$bids_validation$outfile <- NULL
     }
   }
 
