@@ -294,6 +294,94 @@ higher than you think you need to avoid killed jobs.)</li>
 SLURM) beyond what the pipeline already handles itself.</li>
 </ul>
 <div class="section level3">
+<h3 id="flywheel-sync-setup">Flywheel sync setup<a class="anchor" aria-label="anchor" href="#flywheel-sync-setup"></a>
+</h3>
+<p>If your DICOM data live in a Flywheel project, BrainGnomes can
+optionally run a Flywheel-to-filesystem synchronization step before any
+downstream processing. This uses the Flywheel CLI (<code>fw sync</code>)
+to download DICOMs to your project so that BIDS conversion (and later
+steps) operate on a complete, current dataset.</p>
+<ul>
+<li>Enable in setup: Answer “Run Flywheel sync?” with yes in
+<code><a href="../reference/setup_project.html">setup_project()</a></code> (or use <code><a href="../reference/edit_project.html">edit_project()</a></code> →
+“Flywheel Sync”). You will be prompted for:
+<ul>
+<li>Flywheel project URL (<code>source_url</code>), for example:
+<code>fw://hallquistm/momentum/</code>. Watch out for the trailing
+slash! Flywheel sync operates a lot like rsync, so having the trailing
+slash here means, “synchronize files within momentum.”</li>
+<li>Drop-off directory for downloaded DICOMs
+(<code>metadata/flywheel_sync_directory</code>). This is typically your
+project DICOM folder.</li>
+<li>Temporary directory for transfers
+(<code>metadata/flywheel_temp_directory</code>). Defaults under your
+scratch directory.</li>
+<li>Whether to save audit logs
+(<code>flywheel_sync/save_audit_logs</code>). When enabled, a CSV is
+written under your project <code>logs/</code>.</li>
+<li>Location of the Flywheel CLI binary
+(<code>compute_environment/flywheel</code>), i.e., the path to the
+<code>fw</code> executable.</li>
+</ul>
+</li>
+<li>Get an API token: The Flywheel CLI requires an API key associated
+with your user. Generate one in the Flywheel web UI:
+<ul>
+<li>Navigate to your Flywheel site (for example,
+<code>https://flywheel.example.edu</code>).</li>
+<li>Open your user profile → API Keys and create a key. A direct route
+in many deployments is
+<code>https://&lt;your-flywheel-host&gt;/#/profile</code> then the API
+Keys tab.</li>
+<li>Copy the generated token and keep it secure.</li>
+</ul>
+</li>
+<li>Log in with the Flywheel CLI before syncing: BrainGnomes does not
+perform <code>fw login</code> for you. You must complete CLI login once
+on the machine/account that will run the jobs, e.g.:</li>
+</ul>
+<pre><code>fw login &lt;YOUR_API_TOKEN&gt;</code></pre>
+<p>After successful login, the CLI stores credentials locally so
+subsequent runs can use <code>fw sync</code> non-interactively. If
+<code>fw login</code> is not complete, the Flywheel sync step will
+fail.</p>
+<p>What BrainGnomes runs: The sync job uses <code>fw sync</code> with
+sensible defaults (includes DICOMs, non-interactive <code>-y</code>,
+your specified temp path, and optional audit log). Data are written to
+your <code>flywheel_sync_directory</code>. Typically the call will look
+something like this:</p>
+<pre><code>/path/to/fw sync --include dicom -y --tmp_path &lt;scfg$metadata$flywheel_temp_directory&gt; \
+  --save-audit-logs &lt;logs/flywheel_sync_audit.csv&gt; \
+  fw://hallquistm/momentum/ \
+  /proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync</code></pre>
+<div class="section level4">
+<h4 id="a-note-about-trailing-slashes-in-the-fw-string">A note about trailing slashes in the fw:// string<a class="anchor" aria-label="anchor" href="#a-note-about-trailing-slashes-in-the-fw-string"></a>
+</h4>
+<p>Flywheel sync operates a lot like rsync, so having the trailing slash
+in the <code>fw://</code> project string like
+<code>fw://hallquistm/momentum/</code> indicates that folders within
+that project are synchronized to the top level of the
+flywheel_sync_directory (in the example,
+<code>/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync</code>).
+Thus, you typically want a trailing slash after your project name in the
+<code>fw://</code> string so that the top-level folder itself isn’t
+copied to the synch folder.</p>
+</div>
+<div class="section level4">
+<h4 id="deferred-queueing-of-subject-processing-when-flywheel-comes-first">Deferred queueing of subject processing when flywheel comes
+first<a class="anchor" aria-label="anchor" href="#deferred-queueing-of-subject-processing-when-flywheel-comes-first"></a>
+</h4>
+<p>Usage tip: You can include Flywheel sync as part of a larger
+unattended run, for example:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"flywheel_sync"</span>, <span class="st">"bids_conversion"</span>, <span class="st">"fmriprep"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>When <code>flywheel_sync</code> is in the requested steps,
+BrainGnomes defers subject-level job scheduling until after the sync job
+completes. This ensures downstream steps (BIDS conversion, fMRIPrep,
+etc.) see all current data from Flywheel.</p>
+</div>
+</div>
+<div class="section level3">
 <h3 id="bids-conversion">BIDS conversion<a class="anchor" aria-label="anchor" href="#bids-conversion"></a>
 </h3>
 <p>You will be prompted for whether you want to include BIDS conversion:
@@ -499,71 +587,6 @@ for details.</li>
 </ol>
 </div>
 <div class="section level3">
-<h3 id="flywheel-sync-setup">Flywheel sync setup<a class="anchor" aria-label="anchor" href="#flywheel-sync-setup"></a>
-</h3>
-<p>If your DICOM data live in a Flywheel project, BrainGnomes can
-optionally run a Flywheel-to-filesystem synchronization step before any
-downstream processing. This uses the Flywheel CLI (<code>fw sync</code>)
-to download DICOMs to your project so that BIDS conversion (and later
-steps) operate on a complete, current dataset.</p>
-<ul>
-<li>Enable in setup: Answer “Run Flywheel sync?” with yes in
-<code><a href="../reference/setup_project.html">setup_project()</a></code> (or use <code><a href="../reference/edit_project.html">edit_project()</a></code> →
-“Flywheel Sync”). You will be prompted for:
-<ul>
-<li>Flywheel project URL (<code>source_url</code>), for example:
-<code>fw://flywheel.example.edu/MyGroup/MyProject</code>.</li>
-<li>Drop-off directory for downloaded DICOMs
-(<code>metadata/flywheel_sync_directory</code>). This is typically your
-project DICOM folder.</li>
-<li>Temporary directory for transfers
-(<code>metadata/flywheel_temp_directory</code>). Defaults under your
-scratch directory.</li>
-<li>Whether to save audit logs
-(<code>flywheel_sync/save_audit_logs</code>). When enabled, a CSV is
-written under your project <code>logs/</code>.</li>
-<li>Location of the Flywheel CLI binary
-(<code>compute_environment/flywheel</code>), i.e., the path to the
-<code>fw</code> executable.</li>
-</ul>
-</li>
-<li>Get an API token: The Flywheel CLI requires an API key associated
-with your user. Generate one in the Flywheel web UI:
-<ul>
-<li>Navigate to your Flywheel site (for example,
-<code>https://flywheel.example.edu</code>).</li>
-<li>Open your user profile → API Keys and create a key. A direct route
-in many deployments is
-<code>https://&lt;your-flywheel-host&gt;/#/profile</code> then the API
-Keys tab.</li>
-<li>Copy the generated token and keep it secure.</li>
-</ul>
-</li>
-<li>Log in with the Flywheel CLI before syncing: BrainGnomes does not
-perform <code>fw login</code> for you. You must complete CLI login once
-on the machine/account that will run the jobs, e.g.:</li>
-</ul>
-<pre><code>fw login --host https://flywheel.example.edu --api-key &lt;YOUR_API_TOKEN&gt;</code></pre>
-<p>After successful login, the CLI stores credentials locally so
-subsequent runs can use <code>fw sync</code> non-interactively. If
-<code>fw login</code> is not complete, the Flywheel sync step will
-fail.</p>
-<ul>
-<li>What BrainGnomes runs: The sync job uses <code>fw sync</code> with
-sensible defaults (includes DICOMs, non-interactive <code>-y</code>,
-your specified temp path, and optional audit log). Data are written to
-your <code>flywheel_sync_directory</code>.</li>
-</ul>
-<p>Usage tip: You can include Flywheel sync as part of a larger
-unattended run, for example:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"flywheel_sync"</span>, <span class="st">"bids_conversion"</span>, <span class="st">"fmriprep"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>When <code>flywheel_sync</code> is in the requested steps,
-BrainGnomes defers subject-level job scheduling until after the sync job
-completes. This ensures downstream steps (BIDS conversion, fMRIPrep,
-etc.) see all current data from Flywheel.</p>
-</div>
-<div class="section level3">
 <h3 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
 </h3>
 <p>After <code>setup_project</code> completes, it will write a file
@@ -581,7 +604,7 @@ into R from an existing configuration.</p>
 </h3>
 <p>Use <code><a href="../reference/setup_project.html">setup_project()</a></code> to interactively complete or correct
 configuration entries:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>This will say a <code>project_config.yaml</code> file in your project
 directory.</p>
@@ -594,7 +617,7 @@ directory.</p>
 great for now, but if you quit R and come back later, you probably want
 to pick up from where you left off. You can use
 <code><a href="../reference/load_project.html">load_project()</a></code> to load an existing configuration:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_project.html">load_project</a></span><span class="op">(</span><span class="st">"/path/to/my/project"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
@@ -602,7 +625,7 @@ to pick up from where you left off. You can use
 </h3>
 <p>Use <code><a href="../reference/edit_project.html">edit_project()</a></code> for a menu-driven interface to modify
 parts of the project configuration.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/edit_project.html">edit_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>Follow the prompts to choose what to edit. This is useful if you want
 to change job resources (e.g., memory or CPU for fMRIPrep) or adjust CLI
@@ -612,20 +635,20 @@ options for specific pipeline steps.</p>
 <h3 id="step-4-run-the-project">Step 4: Run the project<a class="anchor" aria-label="anchor" href="#step-4-run-the-project"></a>
 </h3>
 <p>Once your configuration is complete, you can run the pipeline.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
 <p>By default, this will prompt you whether to run all steps in your
 pipeline. It will also process all available subjects and sessions
 defined in the BIDS directory.</p>
 <p>If you want to run only a subset of subjects, you can use the
 <code>subject_filter</code> argument like:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>Likewise, if you want to skip the menu prompts for which step to run,
 you can use the <code>steps</code> argument. For example, to run only
 postprocessing on these subjects:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># run subjects 242 and 510 only</span></span>
 <span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_filter<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"242"</span>, <span class="st">"510"</span><span class="op">)</span>, steps<span class="op">=</span><span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The available <code>steps</code> are
@@ -645,7 +668,7 @@ running a processing step.</p>
 <p>To get BrainGnomes on the command line, you need to add the location
 of the package to your Linux path. If you don’t know where it is
 installed, run this in an R session.</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/find.package.html" class="external-link">find.package</a></span><span class="op">(</span><span class="st">"BrainGnomes"</span><span class="op">)</span></span></code></pre></div>
 <p>You then need this in your path when a terminal starts. If you use
 bash, the easiest route is often to add a line like this to your
