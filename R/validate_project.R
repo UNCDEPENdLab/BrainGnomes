@@ -165,6 +165,13 @@ validate_project <- function(scfg = list(), quiet = FALSE) {
     }
   }
 
+  if (isTRUE(scfg$extract_rois$enable)) {
+    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/rois_directory"))) {
+      message("Config file is missing valid directory for metadata/rois_directory.")
+      gaps <- c(gaps, "metadata/rois_directory")
+    }
+  }
+
   if (isTRUE(scfg$mriqc$enable)) {
     if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/mriqc_directory"))) {
       message("Config file is missing valid directory for metadata/mriqc_directory.")

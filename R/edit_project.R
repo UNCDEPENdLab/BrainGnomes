@@ -21,7 +21,7 @@ edit_project <- function(input = NULL) {
   # Define editable fields per setup function
   config_map <- list(
     "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
-      "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home"
+      "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home", "rois_directory"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container"

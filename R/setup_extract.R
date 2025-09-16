@@ -90,6 +90,10 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
 
   if (!isTRUE(scfg$extract_rois$enable)) return(scfg)
 
+  if (is.null(scfg$metadata$rois_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/rois_directory")
+  }
+
   # if fields are present, prompt only for those that are present
   if (!is.null(fields) && any(grepl("^extract_rois/", fields))) {
     extract_fields <- grep("^extract_rois/", fields, value = TRUE)
