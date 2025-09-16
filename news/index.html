@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -41,14 +41,16 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7" id="braingnomes-07">BrainGnomes 0.7<a class="anchor" aria-label="anchor" href="#braingnomes-07"></a></h2>
-<p>Released 2025-09-XX</p>
+<p>Released 2025-09-16</p>
 <ul><li>Tested and vetted flywheel sync</li>
+<li>Defer subject processing loop when flywheel sync is the first step</li>
 <li>validate_project adds argument correct_problems to prompt user for corrections if requested</li>
 <li>run_project does not continue if no steps are requested</li>
+<li>check that the scratch_directory is writable when the project is loaded and prompt for a new directory if not</li>
 <li>bugfix: validate_project does not return a top-level ‘gap’ for postprocess when config is valid</li>
 <li>bugfix: edit_project allows enable/disable modifications</li>
 <li>bugfix: edit_project looks for missing config settings when enabling a previously disabled step</li>
-<li>check that the scratch_directory is writable when the project is loaded and prompt for a new directory if not</li>
+<li>bugfix: do not display postproc or extract menus when filling in configuration gaps</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6-1" id="braingnomes-06-1">BrainGnomes 0.6-1<a class="anchor" aria-label="anchor" href="#braingnomes-06-1"></a></h2>
