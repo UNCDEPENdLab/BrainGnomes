@@ -68,7 +68,7 @@ edit_project <- function(input = NULL) {
   config_map <- list(
     "General" = list(setup_fn = setup_project_metadata, prefix = "metadata/", fields = c(
       "project_name", "project_directory", "dicom_directory", "bids_directory", "fmriprep_directory", "scratch_directory", "templateflow_home",
-      "flywheel_temp_directory", "flywheel_sync_directory"
+      "flywheel_temp_directory", "flywheel_sync_directory", "rois_directory"
     )),
     "Compute Environment" = list(setup_fn = setup_compute_environment, prefix = "compute_environment/", fields = c(
       "scheduler", "fmriprep_container", "heudiconv_container", "bids_validator", "mriqc_container", "aroma_container", "fsl_container", "flywheel"
