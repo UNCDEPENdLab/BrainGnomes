@@ -11,7 +11,7 @@ postprocess_subject(in_file, cfg = NULL)
 
 \item{cfg}{A list containing configuration options, including TR (\code{cfg$tr}), enabled processing steps (\verb{cfg$<step>$enable}),
 logging (\code{cfg$log_file}), and paths to resources such as singularity images (\code{cfg$fsl_img}). A whole-brain mask is
-automatically generated using \code{automask()} for relevant processing steps.}
+automatically generated using \code{automask()} and used for relevant processing steps.}
 }
 \value{
 The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),

@@ -13,10 +13,8 @@ load_project <- function(input = NULL, validate = TRUE) {
   checkmate::test_flag(validate)
   scfg <- read_yaml(input)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
-  if (validate) scfg <- validate_project(scfg)
+  if (validate) scfg <- validate_project(scfg, correct_problems = TRUE)
 
-  # fill in any gaps in the config
-  if (!is.null(attr(scfg, "gaps"))) scfg <- setup_project(scfg, fields = attr(scfg, "gaps"))
   return(scfg)
 }
 
@@ -136,44 +134,67 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
         type = "flag"
       )
       if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
+    } else if (!checkmate::test_directory_exists(scfg$metadata$project_directory, access="r")) {
+      stop("Project directory exists, but is not readable by you. Fix read permissions on: ", scfg$metadata$project_directory, call. = FALSE)
+    } else if (!checkmate::test_directory_exists(scfg$metadata$project_directory, access="w")) {
+      stop("Project directory exists, but is not writable by you. Fix write permissions on: ", scfg$metadata$project_directory, call. = FALSE)
     }
+  }
+
+  # Flywheel sync directory defaults to metadata$dicom_directory
+  if ("metadata/flywheel_sync_directory" %in% fields) {
+    if (!test_string(scfg$metadata$flywheel_sync_directory)) {
+      default <- if (test_string(scfg$metadata$dicom_directory)) scfg$metadata$dicom_directory else NULL
+    } else {
+      default <- scfg$metadata$flywheel_sync_directory
+    }
+
+    scfg$metadata$flywheel_sync_directory <- prompt_directory(
+      prompt = "Where should Flywheel place downloaded DICOM files?",
+      default = default, check_readable = TRUE
+    )
+  }
+
+  # use scratch directory as base of flywheel sync temps if not otherwise specified
+  if ("metadata/flywheel_temp_directory" %in% fields) {
+    if (!test_string(scfg$metadata$flywheel_temp_directory)) scfg$metadata$flywheel_temp_directory <- file.path(scfg$metadata$scratch_directory, "flywheel")
+    scfg$metadata$flywheel_temp_directory <- prompt_directory(
+      prompt = "Where should temporary files for Flywheel sync go?",
+      default = scfg$metadata$flywheel_temp_directory, check_readable = TRUE
+    )
   }
 
   # location of DICOMs -- only needed if BIDS conversion enabled
   if ("metadata/dicom_directory" %in% fields) {
-    scfg$metadata$dicom_directory <- prompt_input("Where are DICOM files stored?", type = "character")
+    scfg$metadata$dicom_directory <- prompt_directory(prompt="Where is your DICOM directory?", default = scfg$metadata$dicom_directory, check_readable = TRUE)
   }
 
   # location of BIDS data -- default within project directory, but allow external paths
   if ("metadata/bids_directory" %in% fields) {
-    default <- if (is.null(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
-    scfg$metadata$bids_directory <- normalizePath(prompt_input(
-      "Where is your BIDS directory located?",
-      type = "character", default = default
-    ), mustWork = FALSE)
+    default <- if (!test_string(scfg$metadata$bids_directory)) file.path(scfg$metadata$project_directory, "data_bids") else scfg$metadata$bids_directory
+    scfg$metadata$bids_directory <- prompt_directory(prompt="Where is your BIDS directory?", default = default, check_readable = TRUE)
   }
 
   # location of fMRIPrep outputs -- default within project directory, but allow external paths. Only prompt if fmriprep enabled
   if ("metadata/fmriprep_directory" %in% fields) {
-    default <- if (is.null(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
-    scfg$metadata$fmriprep_directory <- normalizePath(prompt_input(
-      instruct = glue("
+    default <- if (!test_string(scfg$metadata$fmriprep_directory)) file.path(scfg$metadata$project_directory, "data_fmriprep") else scfg$metadata$fmriprep_directory
+    scfg$metadata$fmriprep_directory <- prompt_directory(
+      instruct = glue("\n\n
         We recommend that fmriprep outputs be placed in data_fmriprep within the BrainGnomes project directory.
         You can specify a different location if you wish. Also, if you're working from extant fmriprep files, you
         can point to an existing directory containing the results of fmriprep."),
-      "Specify the directory for fmriprep files",
-      type = "character", default = default
-    ), mustWork = FALSE)
+      prompt = "Specify the directory for fmriprep files", default = default
+    )
   }
   
   if ("metadata/scratch_directory" %in% fields) {
-    scfg$metadata$scratch_directory <- prompt_input("Work directory: ",
+    scfg$metadata$scratch_directory <- prompt_directory(prompt = "Where is your work directory?",
       instruct = glue("\n\n
-      fmriprep uses a lot of disk space for processing intermediate files. It's best if these
-      are written to a scratch/temporary directory that is cleared regularly so that you don't
+      Some BrainGnomes tools (especially fmriprep) use a lot of disk space for processing intermediate files. 
+      It's best if these are written to a scratch/temporary directory that is cleared regularly so that you don't
       use up precious disk space for unnecessary files. Please indicate where these intermediate
-      file should be written.\n
-      "), type = "character"
+      files should be written.\n
+      ")
     )
   }
 
@@ -201,6 +222,8 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   if ("metadata/rois_directory" %in% fields) {
     scfg$metadata$rois_directory <- file.path(scfg$metadata$project_directory, "data_rois")
   }
+
+
 
   return(scfg)
 }
@@ -238,7 +261,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields)))) {
+  if (is.null(scfg$fmriprep$enable) || (isFALSE(scfg$fmriprep$enable) && any(grepl("fmriprep/", fields))) || ("fmriprep/enable" %in% fields)) {
     scfg$fmriprep$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -254,11 +277,19 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
       "),
       prompt = "Do you want to include fMRIPrep as part of your preprocessing pipeline?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$fmriprep$enable)) TRUE else isTRUE(scfg$fmriprep$enable)
     )
   }
 
   if (isFALSE(scfg$fmriprep$enable)) return(scfg)
+
+  # prompt for fmriprep container at this step, but only if it is not already in fields
+  # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
+  if (!validate_exists(scfg$compute_environment$fmriprep_container) && !"compute_environment/fmriprep_container" %in% fields) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
+  }
+
+  scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # prompt for BIDS directory -- input to fmriprep
   if (is.null(scfg$metadata$bids_directory)) {
@@ -269,14 +300,6 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
   if (is.null(scfg$metadata$fmriprep_directory)) {
     scfg <- setup_project_metadata(scfg, fields = "metadata/fmriprep_directory")
   }
-
-  # prompt for fmriprep container at this step, but only if it is not already in fields
-  # if compute_environment/fmriprep_container is already in fields, it will be caught by setup_compute_environment
-  if (!validate_exists(scfg$compute_environment$fmriprep_container) && !"compute_environment/fmriprep_container" %in% fields) {
-    scfg <- setup_compute_environment(scfg, fields="compute_environment/fmriprep_container")
-  }
-
-  scfg <- setup_job(scfg, "fmriprep", defaults, fields)
 
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   if (is.null(fields)) {
@@ -319,7 +342,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields)))) {
+  if (is.null(scfg$bids_validation$enable) || (isFALSE(scfg$bids_validation$enable) && any(grepl("bids_validation/", fields))) || ("bids_validation/enable" %in% fields)) {
     scfg$bids_validation$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -335,7 +358,7 @@ setup_bids_validation <- function(scfg, fields=NULL) {
       "),
       prompt = "Enable BIDS validation?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$bids_validation$enable)) TRUE else isTRUE(scfg$bids_validation$enable)
     )
   }
 
@@ -380,7 +403,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields)))) {
+  if (is.null(scfg$mriqc$enable) || (isFALSE(scfg$mriqc$enable) && any(grepl("mriqc/", fields))) || ("mriqc/enable" %in% fields)) {
     scfg$mriqc$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -397,7 +420,7 @@ setup_mriqc <- function(scfg, fields = NULL) {
       "),
       prompt = "Run MRIQC?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$mriqc$enable)) TRUE else isTRUE(scfg$mriqc$enable)
     )
   }
 
@@ -429,14 +452,14 @@ setup_mriqc <- function(scfg, fields = NULL) {
 #' @keywords internal
 setup_flywheel_sync <- function(scfg, fields = NULL) {
   defaults <- list(
-    memgb = 8,
-    nhours = 2,
+    memgb = 16,
+    nhours = 4,
     ncores = 1,
     cli_options = "",
     sched_args = ""
   )
 
-  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields)))) {
+  if (is.null(scfg$flywheel_sync$enable) || (isFALSE(scfg$flywheel_sync$enable) && any(grepl("flywheel_sync/", fields))) || ("flywheel_sync/enable" %in% fields)) {
     scfg$flywheel_sync$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -445,11 +468,17 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
       conversion to ensure all data are available locally.\n\n"),
       prompt = "Run Flywheel sync?",
       type = "flag",
-      default = FALSE
+      default = if (is.null(scfg$flywheel_sync$enable)) FALSE else isTRUE(scfg$flywheel_sync$enable)
     )
   }
 
   if (isFALSE(scfg$flywheel_sync$enable)) return(scfg)
+
+  if (!validate_exists(scfg$compute_environment$flywheel) && !"compute_environment/flywheel" %in% fields) {
+    scfg <- setup_compute_environment(scfg, fields="compute_environment/flywheel")
+  }
+
+  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
 
   if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
     scfg$flywheel_sync$source_url <- prompt_input(
@@ -458,33 +487,27 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
     )
   }
 
-  # drop-off directory defaults to metadata$dicom_directory
-  if (is.null(scfg$flywheel_sync$dropoff_directory)) {
-    if (is.null(scfg$metadata$dicom_directory)) scfg <- setup_project_metadata(scfg, fields = "metadata/dicom_directory")
-    scfg$flywheel_sync$dropoff_directory <- scfg$metadata$dicom_directory
-  }
-
-  if ("flywheel_sync/dropoff_directory" %in% fields) {
-    scfg$flywheel_sync$dropoff_directory <- prompt_input(
-      instruct = "Where should Flywheel place downloaded DICOM files?",
-      type = "character",
-      default = scfg$flywheel_sync$dropoff_directory
+  if (is.null(scfg$flywheel_sync$save_audit_logs) || "flywheel_sync/save_audit_logs" %in% fields) {
+    scfg$flywheel_sync$save_audit_logs <- prompt_input(
+      instruct = glue("\n\n
+        Flywheel can save an audit log (CSV) that includes the result of
+        each dataset. This is helpful for debugging sync failures or glitches
+        and is recommended. The file is saved in the project's logs directory."),
+      prompt = "Save Flywheel sync audit logs?",
+      type = "flag",
+      default = TRUE
     )
   }
 
-  if (is.null(scfg$flywheel_sync$temp_directory)) {
-    scfg$flywheel_sync$temp_directory <- file.path(scfg$metadata$project_directory, "flywheel_tmp")
+  # prompt for sync directory
+  if (is.null(scfg$metadata$flywheel_sync_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/flywheel_sync_directory")
   }
 
-  if ("flywheel_sync/temp_directory" %in% fields) {
-    scfg$flywheel_sync$temp_directory <- prompt_input(
-      instruct = "Specify a temporary directory for Flywheel sync operations:",
-      type = "character",
-      default = scfg$flywheel_sync$temp_directory
-    )
+  # prompt for temp directory
+  if (is.null(scfg$metadata$flywheel_temp_directory)) {
+    scfg <- setup_project_metadata(scfg, fields = "metadata/flywheel_temp_directory")
   }
-
-  scfg <- setup_job(scfg, "flywheel_sync", defaults, fields)
 
   return(scfg)
 }
@@ -503,7 +526,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields)))) {
+  if (is.null(scfg$bids_conversion$enable) || (isFALSE(scfg$bids_conversion$enable) && any(grepl("bids_conversion/", fields))) || ("bids_conversion/enable" %in% fields)) {
     scfg$bids_conversion$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -546,7 +569,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
       "),
       prompt = "Run BIDS conversion?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$bids_conversion$enable)) TRUE else isTRUE(scfg$bids_conversion$enable)
     )
   }
 
@@ -630,12 +653,13 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$bids_conversion$clear_cache) || "bids_conversion/clear_cache" %in% fields) {
     scfg$bids_conversion$clear_cache <- prompt_input(
-      instruct = glue("Heudiconv caches its matching results inside the root of the BIDS folder in a hidden
+      instruct = glue("\n\n
+      Heudiconv caches its matching results inside the root of the BIDS folder in a hidden
       directory called .heudiconv. This provides a record of what heudiconv did for each subject conversion.
       It also speeds up conversions in future if you reprocess data. That said, if you modify the heuristic file,
       the cache can interfere because it will use the old heuristic file to match DICOMs to BIDS.
       If you want to clear the cache, say 'yes' here. If you want to keep the cache, say 'no'.
-      ", .trim = FALSE),
+      "),
       prompt = glue("Should the heudiconv cache be cleared?"),
       type = "flag", default = FALSE
     )
@@ -669,7 +693,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 #' - `sched_args`: "" (additional job scheduler directives)
 #'
 #' Users may also opt to remove large intermediate AROMA outputs after
-#' completion. These NIfTI/JSON files are not required for applying AROMA
+#' completion via the `cleanup` flag. These NIfTI/JSON files are not required for applying AROMA
 #' during postprocessing and can be deleted to save disk space. Cleanup is only
 #' available when fMRIPrep output spaces do not include
 #' `MNI152NLin6Asym:res-2`; if that space is later added, cleanup will be
@@ -685,7 +709,7 @@ setup_aroma <- function(scfg, fields = NULL) {
     sched_args = ""
   )
 
-  if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields)))) {
+  if (is.null(scfg$aroma$enable) || (isFALSE(scfg$aroma$enable) && any(grepl("aroma/", fields))) || ("aroma/enable" %in% fields)) {
     scfg$aroma$enable <- prompt_input(
       instruct = glue("\n\n
       -----------------------------------------------------------------------------------------------------------------
@@ -705,7 +729,7 @@ setup_aroma <- function(scfg, fields = NULL) {
       "),
       prompt = "Run ICA-AROMA?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$aroma$enable)) TRUE else isTRUE(scfg$aroma$enable)
     )
   }
 
@@ -795,6 +819,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     if (isTRUE(scfg$fmriprep$enable) && !validate_exists(scfg$compute_environment$fmriprep_container)) fields <- c(fields, "compute_environment/fmriprep_container")
     if (isTRUE(scfg$bids_conversion$enable) && !validate_exists(scfg$compute_environment$heudiconv_container)) fields <- c(fields, "compute_environment/heudiconv_container")
     if (isTRUE(scfg$bids_validation$enable) && !validate_exists(scfg$compute_environment$bids_validator)) fields <- c(fields, "compute_environment/bids_validator")
+    if (isTRUE(scfg$flywheel_sync$enable) && !validate_exists(scfg$compute_environment$flywheel)) fields <- c(fields, "compute_environment/flywheel")
     if (isTRUE(scfg$mriqc$enable) && !validate_exists(scfg$compute_environment$mriqc_container)) fields <- c(fields, "compute_environment/mriqc_container")
     if (isTRUE(scfg$aroma$enable) && !validate_exists(scfg$compute_environment$aroma_container)) fields <- c(fields, "compute_environment/aroma_container")
     if (isTRUE(scfg$postprocess$enable) && !validate_exists(scfg$compute_environment$fsl_container)) fields <- c(fields, "compute_environment/fsl_container")
@@ -805,6 +830,27 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       instruct = "The pipeline currently runs on TORQUE (aka qsub) and SLURM clusters.\nWhich will you use?",
       type = "character", len = 1L, among = c("slurm", "torque")
     )
+  }
+
+  if ("compute_environment/flywheel" %in% fields) {
+    fw_path <- tryCatch(system("command -v fw", intern = TRUE, ignore.stderr = TRUE), error = function(e) "")
+    if (nzchar(fw_path)) {
+      use_fw <- prompt_input(
+        instruct = glue("Found Flywheel CLI at {fw_path}"),
+        prompt = "Use this location?",
+        type = "flag",
+        default = TRUE
+      )
+      if (isTRUE(use_fw)) scfg$compute_environment$flywheel <- fw_path
+    }
+    if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
+      scfg$compute_environment$flywheel <- prompt_input(
+        instruct = "Specify the location of the Flywheel CLI (fw):",
+        prompt = "Location of Flywheel CLI:",
+        type = "file",
+        default = scfg$compute_environment$flywheel
+      ) |> normalizePath(mustWork = TRUE)
+    }
   }
 
   # location of fmriprep container -- use normalizePath() to follow any symbolic links or home directory shortcuts
@@ -896,4 +942,3 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
 
   return(scfg)
 }
-

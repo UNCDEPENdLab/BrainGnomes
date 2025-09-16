@@ -84,8 +84,8 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
 setup_extract_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
-  if (is.null(scfg$extract_rois$enable) || (isFALSE(scfg$extract_rois$enable) && any(grepl("extract_rois/", fields)))) {
-    scfg$extract_rois$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = FALSE)
+  if (is.null(scfg$extract_rois$enable) || (isFALSE(scfg$extract_rois$enable) && any(grepl("extract_rois/", fields))) || ("extract_rois/enable" %in% fields)) {
+    scfg$extract_rois$enable <- prompt_input("Perform ROI extraction?", type = "flag", default = if (is.null(scfg$extract_rois$enable)) FALSE else isTRUE(scfg$extract_rois$enable))
   }
 
   if (!isTRUE(scfg$extract_rois$enable)) return(scfg)
@@ -95,7 +95,9 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
   }
 
   # if fields are present, prompt only for those that are present
-  if (!is.null(fields) && any(grepl("^extract_rois/", fields))) {
+  if (!is.null(fields)) {
+    if (!any(grepl("^extract_rois/", fields))) return(scfg) # if fields are passed, but none relate to extract rois, skip out
+
     extract_fields <- grep("^extract_rois/", fields, value = TRUE)
 
     # extract_rois stream and setting using sub()

@@ -2,7 +2,7 @@
 #' Run the processing pipeline
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
-#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess").
+#'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
 #'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
@@ -39,11 +39,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     checkmate::check_data_frame(subject_filter, null.ok = TRUE)
   )
   checkmate::assert_character(postprocess_streams, null.ok = TRUE)
-  checkmate::assert_subset(
-    postprocess_streams,
-    choices = c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"),
-    empty.ok = TRUE
-  )
+  checkmate::assert_character(extract_streams, null.ok = TRUE)
+  
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
   
@@ -53,6 +50,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   all_pp_streams <- get_postprocess_stream_names(scfg) # vector of potential postprocessing streams
   all_ex_streams <- get_extract_stream_names(scfg) # vector of potential extraction streams
 
+  checkmate::assert_subset(postprocess_streams, choices = all_pp_streams, empty.ok = TRUE)
+  checkmate::assert_subset(extract_streams, choices = all_ex_streams, empty.ok = TRUE)
+  
   scfg <- setup_project_directories(scfg)
 
   cat(glue("
@@ -67,12 +67,14 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # by passing steps, user is asking for unattended execution
   prompt <- is.null(steps)
 
-  if (isFALSE(prompt)) {
+  if (isFALSE(prompt)) {   
     if ("flywheel_sync" %in% steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
       if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
-      if (is.null(scfg$flywheel_sync$dropoff_directory)) stop("Cannot run flywheel_sync without a dropoff_directory.")
+      if (is.null(scfg$metadata$flywheel_sync_directory)) stop("Cannot run flywheel_sync without a flywheel_sync_directory.")
+      if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) stop("Cannot run flywheel_sync without a valid location of the fw command.")
     }
+
     if ("bids_conversion" %in% steps) {
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
@@ -97,10 +99,12 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
-    nm <- steps
-    steps <- rep(TRUE, length(steps))
-    names(steps) <- nm
-
+    # convert steps to logicals to match downstream expectations (e.g., in process_subject)
+    user_steps <- steps # copy user character vector to populate logical vector
+    steps <- rep(FALSE, 7)
+    names(steps) <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
+    for (s in user_steps) steps[s] <- TRUE
+    
     # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
@@ -159,6 +163,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     #   type = "character", among=c("INFO", "ERROR", "DEBUG")
     # )
   }
+  
+  if (!any(steps)) stop("No processing steps were requested in run_project.")
 
   # check that required containers are present for any requested step
   if (steps["bids_conversion"] && !validate_exists(scfg$compute_environment$heudiconv_container)) {
@@ -182,12 +188,77 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   }
 
   flywheel_id <- NULL
+  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
+
+  # If only sync was requested, don't enter subject-level processing
+  if (!any(steps[names(steps) != "flywheel_sync"])) return(invisible(TRUE))
+
+  # Submit fsaverage setup early (used by fmriprep) to avoid race conditions
+  fsaverage_id <- NULL
+  if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
+
+  # If flywheel sync is requested, defer subject scheduling to a dependent controller job
+  # This ensures that downstream steps see all data synched from flywheel (e.g., new subjects)
   if (isTRUE(steps["flywheel_sync"])) {
-    flywheel_id <- submit_flywheel_sync(scfg)
+    snapshot <- list(
+      scfg = scfg,
+      steps = steps,
+      subject_filter = subject_filter,
+      postprocess_streams = postprocess_streams,
+      extract_streams = extract_streams,
+      parent_ids = fsaverage_id
+    )
+    snap_file <- file.path(scfg$metadata$log_directory, "run_project_snapshot.rds")
+    dir.create(dirname(snap_file), showWarnings = FALSE, recursive = TRUE)
+    saveRDS(snapshot, snap_file)
+
+    # Lightweight controller job to schedule subjects after flywheel completes
+    scfg$submit_subjects <- list(nhours = 0.5, memgb = 4, ncores = 1)
+    sched_args <- get_job_sched_args(
+      scfg, job_name = "submit_subjects",
+      stdout_log = glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+      stderr_log = glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
+    )
+    sched_script <- get_job_script(scfg, "submit_subjects", subject_suffix = FALSE)
+    env_variables <- c(
+      pkg_dir = find.package(package = "BrainGnomes"),
+      R_HOME = R.home(),
+      snapshot_rds = snap_file
+    )
+    cluster_job_submit(
+      sched_script,
+      scheduler = scfg$compute_environment$scheduler,
+      sched_args = sched_args,
+      env_variables = env_variables,
+      wait_jobs = flywheel_id,
+      echo = FALSE
+    )
+    return(invisible(TRUE))
   }
 
+  # No flywheel sync: schedule subjects immediately
+  submit_subjects(
+    scfg = scfg, steps = steps, subject_filter = subject_filter,
+    postprocess_streams = postprocess_streams, extract_streams = extract_streams, parent_ids = fsaverage_id
+  )
+  return(invisible(TRUE))
+}
+
+#' Schedule subject-level processing
+#' @param scfg A bg_project_cfg object
+#' @param steps Named logical vector of steps
+#' @param subject_filter Optional subject/session filter (character or data.frame)
+#' @param postprocess_streams Optional character vector of postprocess streams
+#' @param extract_streams Optional character vector of extraction streams
+#' @param parent_ids Optional character vector of job IDs to depend on
+#' @details 
+#'   This function is not meant to be called by users! Instead, it is called internally
+#'   after flywheel sync completes.
+#' @keywords internal
+submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
+  extract_streams = NULL, parent_ids = NULL) {
+
   # look for subject directories in the DICOM directory
-  # empty default data.frame for dicom directories
   subject_dicom_dirs <- data.frame(
     sub_id = character(), ses_id = character(),
     dicom_sub_dir = character(), dicom_ses_dir = character(), stringsAsFactors = FALSE
@@ -206,13 +277,16 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     if (nrow(subject_dicom_dirs) == 0L) {
       warning(glue("Cannot find any valid subject folders inside the DICOM directory: {scfg$metadata$dicom_directory}"))
     } else {
-      # add DICOM prefix
       names(subject_dicom_dirs) <- sub("(sub|ses)_dir", "dicom_\\1_dir", names(subject_dicom_dirs))
     }
   }
 
   # look for all existing subject BIDS directories
-  subject_bids_dirs <- get_subject_dirs(scfg$metadata$bids_directory, sub_regex = "^sub-.+", ses_regex = "^ses-.+", sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE)
+  subject_bids_dirs <- get_subject_dirs(
+    scfg$metadata$bids_directory,
+    sub_regex = "^sub-.+", ses_regex = "^ses-.+",
+    sub_id_match = "sub-(.*)", ses_id_match = "ses-(.*)", full.names = TRUE
+  )
   names(subject_bids_dirs) <- sub("(sub|ses)_dir", "bids_\\1_dir", names(subject_bids_dirs))
 
   subject_dirs <- merge(subject_dicom_dirs, subject_bids_dirs, by = c("sub_id", "ses_id"), all = TRUE)
@@ -226,41 +300,39 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       subject_dirs <- subject_dirs[subject_dirs$sub_id %in% subject_filter, , drop = FALSE]
     }
 
-    if (nrow(subject_dirs) == 0L) {
-      stop("No subject directories match the provided subject_filter")
-    }
+    if (nrow(subject_dirs) == 0L) stop("No subject directories match the provided subject_filter")
 
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id")])
     msg_lines <- apply(msg_df, 1, function(rr) {
-      if (!is.na(rr["ses_id"])) {
-        glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}")
-      } else {
-        glue("  sub-{rr['sub_id']}")
-      }
+      if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}") else glue("  sub-{rr['sub_id']}")
     })
     cat("Processing the following subjects:\n", paste(msg_lines, collapse = "\n"), "\n")
   }
 
   if (nrow(subject_dirs) == 0L) {
     stop(glue("Cannot find any valid subject folders in bids directory: {scfg$metadata$bids_directory}"))
-  } else {
-    # split data.frame by subject (some steps are subject-level, some are session-level)
-    subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
-
-    # avoid race condition in setting up fsaverage folder: https://github.com/nipreps/fmriprep/issues/3492
-    fsaverage_id <- NULL
-    if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
-
-    for (ss in seq_along(subject_dirs)) {
-      process_subject(scfg, subject_dirs[[ss]], steps,
-        postprocess_streams = postprocess_streams, extract_streams = extract_streams, 
-        parent_ids = c(flywheel_id, fsaverage_id)
-      )
-    }
   }
+
+  # split data.frame by subject (some steps are subject-level, some are session-level)
+  subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
+
+  for (ss in seq_along(subject_dirs)) {
+    process_subject(
+      scfg, subject_dirs[[ss]], steps,
+      postprocess_streams = postprocess_streams, extract_streams = extract_streams,
+      parent_ids = parent_ids
+    )
+  }
+
+  invisible(TRUE)
 }
 
-# submit Flywheel sync job
+#' submit Flywheel sync job -- superordinate to subjects
+#' @param scfg A bg_project_cfg object
+#' @param lg a lgr object
+#' @keywords internal
+#' @noRd
+#' @importFrom checkmate test_true
 submit_flywheel_sync <- function(scfg, lg = NULL) {
   checkmate::assert_list(scfg)
 
@@ -274,14 +346,24 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     }
   }
 
-  sched_args <- c(
-    get_job_sched_args(scfg, "flywheel_sync"),
-    glue::glue("--output={scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  sched_args <- get_job_sched_args(scfg, job_name = "flywheel_sync",
+    stdout_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+    stderr_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
   )
 
-  cmd <- glue::glue(
-    "fw sync --include dicom --tmp-path '{scfg$flywheel_sync$temp_directory}' {scfg$flywheel_sync$cli_options} {scfg$flywheel_sync$source_url} {scfg$flywheel_sync$dropoff_directory}"
-  )
+  audit_str <- if (test_true(scfg$flywheel_sync$save_audit_logs)) {
+    glue("--save-audit-logs {scfg$metadata$log_directory}/flywheel_sync_audit_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.csv")
+  } else {
+    NULL
+  }
+
+  cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
+    "--include dicom", "-y",
+    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'"),
+    audit_str
+  ), collapse = TRUE)
+
+  cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 

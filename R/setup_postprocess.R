@@ -145,7 +145,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
 setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
-  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields)))) {
+  if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields))) || ("postprocess/enable" %in% fields)) {
     scfg$postprocess$enable <- prompt_input(
       instruct = glue("\n\n
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
@@ -163,7 +163,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       ),
       prompt = "Enable postprocessing?",
       type = "flag",
-      default = TRUE
+      default = if (is.null(scfg$postprocess$enable)) TRUE else isTRUE(scfg$postprocess$enable)
     )
   }
 
@@ -184,8 +184,10 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
     scfg <- setup_compute_environment(scfg, fields="compute_environment/fsl_container")
   }
 
-  # if fields are present, prompt only for those that are present
-  if (!is.null(fields) && any(grepl("^postprocess/", fields))) {
+  # if fields are present, prompt only for those that are present and return before menu system
+  if (!is.null(fields)) {
+    if (!any(grepl("^postprocess/", fields))) return(scfg) # fields are present, but not relevant to postproc -- skip out
+    
     postprocess_fields <- grep("^postprocess/", fields, value = TRUE)
 
     # Extract stream and setting using sub()
@@ -202,7 +204,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
       scfg <- setup_postprocess_stream(scfg, fields = stream_list[[ss]], stream_name = names(stream_list)[ss])
     }
 
-    return(scfg) # skip out before menu system when fields are passed
+    return(scfg) # skip out before menu system when postproc fields are passed
   }
 
   cat(glue("\n

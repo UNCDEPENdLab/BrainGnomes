@@ -132,6 +132,56 @@ You will then be asked whether you want to include major steps in the pipeline. 
 - Any other command line arguments that will be passed to the command (e.g., fmriprep)
 - Any arguments that should be passed to the HPC scheduler (e.g., SLURM) beyond what the pipeline already handles itself.
 
+## Flywheel sync setup
+
+If your DICOM data live in a Flywheel project, BrainGnomes can optionally run a Flywheel-to-filesystem synchronization step before any downstream processing. This uses the Flywheel CLI (`fw sync`) to download DICOMs to your project so that BIDS conversion (and later steps) operate on a complete, current dataset.
+
+- Enable in setup: Answer "Run Flywheel sync?" with yes in `setup_project()` (or use `edit_project()` → "Flywheel Sync"). You will be prompted for:
+  - Flywheel project URL (`source_url`), for example: `fw://hallquistm/momentum/`. Watch out for the trailing slash! Flywheel sync operates a lot like rsync, so having the trailing slash here means, "synchronize files within momentum."
+  - Drop-off directory for downloaded DICOMs (`metadata/flywheel_sync_directory`). This is typically your project DICOM folder.
+  - Temporary directory for transfers (`metadata/flywheel_temp_directory`). Defaults under your scratch directory.
+  - Whether to save audit logs (`flywheel_sync/save_audit_logs`). When enabled, a CSV is written under your project `logs/`.
+  - Location of the Flywheel CLI binary (`compute_environment/flywheel`), i.e., the path to the `fw` executable.
+
+- Get an API token: The Flywheel CLI requires an API key associated with your user. Generate one in the Flywheel web UI:
+  - Navigate to your Flywheel site (for example, `https://flywheel.example.edu`).
+  - Open your user profile → API Keys and create a key. A direct route in many deployments is `https://<your-flywheel-host>/#/profile` then the API Keys tab.
+  - Copy the generated token and keep it secure.
+
+- Log in with the Flywheel CLI before syncing: BrainGnomes does not perform `fw login` for you. You must complete CLI login once on the machine/account that will run the jobs, e.g.:
+
+```
+fw login <YOUR_API_TOKEN>
+```
+
+After successful login, the CLI stores credentials locally so subsequent runs can use `fw sync` non-interactively. If `fw login` is not complete, the Flywheel sync step will fail.
+
+What BrainGnomes runs: The sync job uses `fw sync` with sensible defaults (includes DICOMs, non-interactive `-y`, your specified temp path, and optional audit log). Data are written to your `flywheel_sync_directory`. Typically the call will look something like this:
+
+```
+/path/to/fw sync --include dicom -y --tmp_path <scfg$metadata$flywheel_temp_directory> \
+  --save-audit-logs <logs/flywheel_sync_audit.csv> \
+  fw://hallquistm/momentum/ \
+  /proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync
+```
+
+### A note about trailing slashes in the fw:// string
+
+Flywheel sync operates a lot like rsync, so having the trailing slash in the `fw://` project string like `fw://hallquistm/momentum/` indicates that folders within that project are synchronized to
+the top level of the flywheel_sync_directory (in the example, `/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/raw_images/unc_flywheel_sync`). Thus, you typically want a trailing slash after your project
+name in the `fw://` string so that the top-level folder itself isn't copied to the synch folder.
+
+### Deferred queueing of subject processing when flywheel comes first
+
+Usage tip: You can include Flywheel sync as part of a larger unattended run, for example:
+
+```{r eval = FALSE}
+run_project(scfg, steps = c("flywheel_sync", "bids_conversion", "fmriprep"))
+```
+
+When `flywheel_sync` is in the requested steps, BrainGnomes defers subject-level job scheduling until after the sync job completes. This ensures downstream steps (BIDS conversion, fMRIPrep, etc.) see all current data from Flywheel.
+
+
 ## BIDS conversion
 
 You will be prompted for whether you want to include BIDS conversion: `Run BIDS conversion? (yes/no; Press enter to accept default: yes)`. If you say yes, you will be asked for the location of a heudiconv container, followed by questions about memory, compute hours, CPU cores, command line arguments, and scheduler arguments.

@@ -40,7 +40,7 @@ save_project_config <- function(scfg, file = NULL) {
         instruct = "Specify an alternative directory for project_config.yaml (or press Enter to cancel):",
         type = "character", required = FALSE
       )
-      if (length(new_dir) == 0L) {
+      if (is.na(new_dir[1L])) {
         message("Configuration not saved: no valid directory provided.")
         return(invisible(scfg))
       }

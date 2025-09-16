@@ -169,10 +169,12 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
     } else if (scheduler == "sbatch") {
+      # one-liner command to sbatch using --wrap
       cmd <- paste(scheduler, sched_args, paste0("--wrap=", shQuote(script)))
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system2(scheduler, args = paste0(sched_args, " --wrap=", shQuote(script)), stdout = sub_stdout, stderr = sub_stderr)
     } else if (scheduler == "qsub") {
+      # one-liner command to qsub using echo <cmd> | qsub syntax
       cmd <- paste("echo", shQuote(script), "|", scheduler, sched_args)
       if (isTRUE(echo)) cat(cmd, "\n")
       jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr))
