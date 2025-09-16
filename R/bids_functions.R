@@ -457,10 +457,9 @@ get_fmriprep_outputs <- function(in_file) {
   conf2 <- file.path(dir_path, paste0(prefix, "_desc-confounds_regressors.tsv"))
   confounds <- if (file.exists(conf1)) conf1 else if (file.exists(conf2)) conf2 else NA
 
+  # this is the variant from fmripost aroma (newer)
   melodic_mix <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(resolution = "2", space = NA, description = "melodic", suffix = "mixing", ext = ".tsv"))))
-
-  # this is no longer output by fmripost-aroma
-  # noise_ics <- file.path(dir_path, paste0(prefix, "_AROMAnoiseICs.csv"))
+  if (!test_file_exists(melodic_mix)) melodic_mix <- file.path(dir_path, glue("{prefix}_desc-MELODIC_mixing.tsv")) # older version internal to fmriprep (< 23)
 
   # need to read the aroma metrics file and figure it out.
   aroma_metrics <- file.path(dir_path, glue("{prefix}_desc-aroma_metrics.tsv"))
@@ -469,7 +468,13 @@ get_fmriprep_outputs <- function(in_file) {
     adat <- read.table(aroma_metrics, header = TRUE, sep = "\t")
     noise_ics <- which(adat$classification == "rejected")
   } else {
-    noise_ics <- NULL
+    # attempt to look for old fmriprep version (internal to fmriprep 23 and before)
+    f <- file.path(dir_path, paste0(prefix, "_AROMAnoiseICs.csv"))
+    if (test_file_exists(f)) {
+      noise_ics <- as.integer(strsplit(readLines(f, n = 1L, warn = FALSE), ",")[[1]])
+    } else {
+      noise_ics <- NULL
+    }    
   }
 
   # Assemble output

@@ -191,8 +191,8 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     stop("prompt_input() requires an interactive session.")
   }
   
-  if (is.null(prompt)) prompt <- ""
-  if (is.null(prompt_eol)) prompt_eol <- ""
+  if (is.null(prompt) || length(prompt) == 0L || is.na(prompt[1L])) prompt <- ""
+  if (is.null(prompt_eol) || length(prompt_eol) == 0L || is.na(prompt_eol[1L])) prompt_eol <- ""
 
   checkmate::assert_string(prompt)
   checkmate::assert_string(prompt_eol)
@@ -367,6 +367,154 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
 # x <- prompt_input(prompt = "test me?", type = "numeric", split = " ", min.len = 2, max.len = 5)
 # x <- prompt_input(prompt="test me?", type="integer", split=" ", min.len=2, max.len=5)
 
+#' Prompt for a directory path and confirm behavior if it does not exist
+#'
+#' Prompts the user for a directory path. If it exists, optionally checks:
+#' - ownership (check_owner)
+#' - readability (check_readable; can try make_readable if owned)
+#' - writability (check_writable; can try make_writable if owned)
+#' Any remaining issues are combined into a single proceed prompt.
+#'
+#' @param check_owner logical; if TRUE, confirm the directory is owned by the current user (or prompt to proceed).
+#' @param check_readable logical; require directory to be readable (or confirm proceed).
+#' @param check_writable logical; require directory to be writable (or confirm proceed).
+#' @param make_readable logical; if TRUE and owned, add user-read (+x for dirs).
+#' @param make_writable logical; if TRUE and owned, add user-write.
+#' @param default Default directory path to suggest.
+#' @param ... Additional args forwarded to `prompt_input()` (e.g., `instruct`, `prompt`).
+#' @return A character scalar path (may or may not exist).
+#' @keywords internal
+prompt_directory <- function(check_owner = FALSE,
+                             check_readable = FALSE,
+                             check_writable = FALSE,
+                             make_readable = FALSE,
+                             make_writable = FALSE,
+                             default = NULL,
+                             ...) {
+  # ---- helpers -------------------------------------------------------------
+  get_owner <- function(p) {
+    p <- normalizePath(p, mustWork = TRUE)
+    q <- shQuote(p)
+    ow <- suppressWarnings(system2("stat", c("-c", "%U", q), stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L && !grepl("invalid option|usage:", ow, ignore.case = TRUE)) return(ow)
+    ow <- suppressWarnings(system2("stat", c("-f", "%Su", q), stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L) return(ow)
+    NA_character_
+  }
+  
+  current_user <- function() {
+    u <- suppressWarnings(system2("id", "-un", stdout = TRUE, stderr = FALSE))
+    if (!length(u) || is.na(u) || !nzchar(u)) u <- Sys.info()[["user"]]
+    if (!length(u) || is.na(u) || !nzchar(u)) u <- Sys.getenv("USER", unset = NA_character_)
+    u
+  }
+  
+  add_bits_if_owner <- function(path, oct_bits) {
+    owner <- get_owner(path); who <- current_user()
+    if (!length(owner) || is.na(owner) || !identical(owner, who)) return(FALSE)
+    info <- file.info(path, extra_cols = TRUE); cur <- info$mode
+    if (is.na(cur)) return(FALSE)
+    new_mode <- bitwOr(cur, as.integer(strtoi(oct_bits, base = 8L)))
+    ok <- isTRUE(Sys.chmod(path, mode = as.octmode(new_mode)))
+    isTRUE(ok)
+  }
+  
+  # u+r (and u+x for dirs)
+  ensure_user_readable <- function(path) {
+    if (isTRUE(file.access(path, 4L) == 0L)) return(TRUE)
+    bits <- "0400"
+    if (isTRUE(file.info(path, extra_cols = TRUE)$isdir)) {
+      bits <- sprintf("%04o", strtoi("0400", 8L) + strtoi("0100", 8L)) # 0500
+    }
+    cat("Attempting to add read permission to", path, "\n")
+    if (!add_bits_if_owner(path, bits)) return(FALSE)
+    isTRUE(file.access(path, 4L) == 0L)
+  }
+  
+  # u+w
+  ensure_user_writable<- function(path) {
+    if (isTRUE(file.access(path, 2L) == 0L)) return(TRUE)
+    cat("Attempting to add write permission to", path, "\n")
+    if (!add_bits_if_owner(path, "0200")) return(FALSE)
+    isTRUE(file.access(path, 2L) == 0L)
+  }
+  
+  # ---- main loop -----------------------------------------------------------
+  repeat {
+    dir_path <- prompt_input(type = "character", default = default, ...)
+    
+    if (checkmate::test_directory_exists(dir_path)) {
+      dir_path <- normalizePath(dir_path, mustWork = TRUE)
+      
+      owner <- get_owner(dir_path)
+      who   <- current_user()
+      is_owner <- (length(owner) == 1L && !is.na(owner) && identical(owner, who))
+      
+      # Try to fix what we can first (only when owned)
+      # READ
+      if (isTRUE(check_readable) && !isTRUE(file.access(dir_path, 4L) == 0L) &&
+          isTRUE(make_readable) && is_owner) {
+        invisible(ensure_user_readable(dir_path))
+      }
+      # WRITE
+      if (isTRUE(check_writable) && !isTRUE(file.access(dir_path, 2L) == 0L) &&
+          isTRUE(make_writable) && is_owner) {
+        invisible(ensure_user_writable(dir_path))
+      }
+      
+      # Now collect any *remaining* issues into a single message
+      issues <- character()
+      
+      if (isTRUE(check_owner) && !is_owner) {
+        issues <- c(issues, glue::glue("it is owned by '{owner}', not the current user ('{who}')"))
+      }
+      if (isTRUE(check_readable) && !isTRUE(file.access(dir_path, 4L) == 0L)) {
+        if (isTRUE(make_readable) && !is_owner) {
+          issues <- c(issues, glue::glue("it is not readable and permissions cannot be changed because you are not the owner"))
+        } else {
+          issues <- c(issues, "it is not readable by the current user")
+        }
+      }
+      if (isTRUE(check_writable) && !isTRUE(file.access(dir_path, 2L) == 0L)) {
+        if (isTRUE(make_writable) && !is_owner) {
+          issues <- c(issues, glue::glue("it is not writable and permissions cannot be changed because you are not the owner"))
+        } else {
+          issues <- c(issues, "it is not writable by the current user")
+        }
+      }
+      
+      # If there are any issues, prompt ONCE
+      if (length(issues)) {
+        instruct <- glue::glue("
+          The selected directory '{dir_path}' has the following issue(s):
+            - {paste(issues, collapse = '\\n  - ')}
+          ")
+        proceed <- prompt_input(
+          instruct = instruct,
+          prompt   = "Proceed with this directory anyway?",
+          type     = "flag"
+        )
+        if (!isTRUE(proceed)) next
+      }
+      
+      return(dir_path)
+      
+    } else {
+      proceed <- prompt_input(
+        instruct = glue::glue("
+          The specified directory '{dir_path}' does not currently exist.
+          BrainGnomes will attempt to create it later if needed, but if you expected it to exist, this may indicate a problem with your path.
+        "),
+        prompt = "Proceed with this directory?",
+        type   = "flag"
+      )
+      if (isTRUE(proceed)) {
+        return(normalizePath(dir_path, mustWork = FALSE))
+      }
+      # otherwise, re-prompt
+    }
+  }
+}
 
 #' helper function to setup output spaces for fMRIPrep
 #' @param output_spaces A string of existing output spaces to be modified.

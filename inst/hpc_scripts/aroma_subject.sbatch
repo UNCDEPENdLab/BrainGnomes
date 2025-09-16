@@ -65,6 +65,12 @@ log_flag=""
 mem=$((SLURM_MEM_PER_NODE / 1024))GB
 start_time=$(date +%s)
 
+# check for BOLD input files. fmripost aroma is pretty weak in its error messages
+if ! compgen -G "$out_dir/func/"'*_space-MNI152NLin6Asym_res-2_desc-preproc_bold.nii.gz' > /dev/null; then
+  log_message FATAL No MNI152NLin6Asym_res-2 NIfTI files found in $out_dir. AROMA cannot run. Ensure that fMRIPrep --output-spaces includes MNI152NLin6Asym:res-2.
+  exit 1
+fi
+
 log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
 # protect existing sub-<id>.html file

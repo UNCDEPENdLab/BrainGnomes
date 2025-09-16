@@ -8,6 +8,7 @@ test_that("run_project uses custom sub_id_match for dicom dirs", {
   postproc_dir <- file.path(tmp, "postproc"); dir.create(postproc_dir)
   mriqc_dir <- file.path(tmp, "mriqc"); dir.create(mriqc_dir)
   log_dir <- file.path(tmp, "logs"); dir.create(log_dir)
+  work_dir <- file.path(tmp, "work"); dir.create(work_dir)
 
   # Create a subject directory with letters and numbers
   dir.create(file.path(dicom_dir, "SB1134"))
@@ -25,7 +26,8 @@ test_that("run_project uses custom sub_id_match for dicom dirs", {
       fmriprep_directory = fmriprep_dir,
       postproc_directory = postproc_dir,
       mriqc_directory = mriqc_dir,
-      log_directory = log_dir
+      log_directory = log_dir,
+      scratch_directory = work_dir
     ),
     bids_conversion = list(
       enable = TRUE,

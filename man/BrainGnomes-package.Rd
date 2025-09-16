@@ -6,7 +6,7 @@
 \alias{BrainGnomes-package}
 \title{BrainGnomes: An R package for preprocessing and analyzing fMRI data}
 \description{
-This R package handles preprocessing and analysis of fMRI data on HPC clusters.
+This R package handles preprocessing of fMRI data on HPC clusters.
 }
 \seealso{
 Useful links:

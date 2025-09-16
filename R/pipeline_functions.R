@@ -4,33 +4,48 @@
 #' Get the HPC job script for a given job name
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
+#' @param subject_suffix If TRUE, assume that the job script should have the suffix "_suffix". Applies
+#'   to all subject-level processing steps, like job_name="bids_conversion" -> bids_conversion_subject.sbatch
 #' @return The path to the job script
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string test_file_exists
 #' @keywords internal
 #' @noRd
-get_job_script <- function(scfg = NULL, job_name) {
+get_job_script <- function(scfg = NULL, job_name, subject_suffix = TRUE) {
   checkmate::assert_string(job_name)
 
   ext <- ifelse(scfg$compute_environment$scheduler == "torque", "pbs", "sbatch")
-  expect_file <- glue("hpc_scripts/{job_name}_subject.{ext}")
+  sub_str <- if (isTRUE(subject_suffix)) "_subject" else ""
+  expect_file <- glue("hpc_scripts/{job_name}{sub_str}.{ext}")
   script <- system.file(expect_file, package = "BrainGnomes")
-  if (!checkmate::test_file_exists(script)) {
-    stop("In get_job_script, cannot find expected script file: ", expect_file)
-  }
+  if (!checkmate::test_file_exists(script)) stop("In get_job_script, cannot find expected script file: ", expect_file)
   return(script)
 }
 
 #' Convert scheduler arguments into a scheduler-specific string
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
 #' @param job_name The name of the job (e.g., "fmriprep", "bids_conversion")
+#' @param jobid_str An optional character string naming the job, passed to the HPC scheduler
+#' @param stdout_log The file path to the log file used for stdout
+#' @param stderr_log The file path to the log file used for stderr
 #' @return A character string of scheduler arguments
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string
 #' @keywords internal
 #' @noRd
-get_job_sched_args <- function(scfg = NULL, job_name) {
+get_job_sched_args <- function(scfg = NULL, job_name, jobid_str = NULL, stdout_log = NULL, stderr_log = NULL) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_string(job_name)
+  checkmate::assert_string(jobid_str, null.ok = TRUE)
+  checkmate::assert_string(stdout_log, null.ok = TRUE)
+  checkmate::assert_string(stderr_log, null.ok = TRUE)
+  
+  # job_name must be present in scfg
+  if (is.null(scfg[[job_name]])) stop("Cannot find job in scfg: ", job_name)
+
+  # if no explicit job id string is given, use the job name
+  if (is.null(jobid_str)) jobid_str <- job_name
+  jobid_str <- gsub("\\s", "", jobid_str) # job name can't have spaces
 
   # TODO: need to use cli_opts approach to remove conflicting/redundant fields in sched_args for -n, -N, etc.
 
@@ -44,6 +59,7 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
     nhours <- 0.1
     ncores <- 1
   }
+
   # convert empty strings to NULL for compatibility with glue
   if (length(sched_args) == 0L || is.na(sched_args[1L]) || sched_args[1L] == "") sched_args <- NULL
 
@@ -51,20 +67,33 @@ get_job_sched_args <- function(scfg = NULL, job_name) {
     # ensure that we strip off any #SBATCH prefix since we are passing arguments directly to sbatch or qsub
     if (!is.null(sched_args)) sched_args <- sub("^\\s*#SBATCH\\s+", "", sched_args, ignore.case = TRUE)
 
+    if (!is.null(stdout_log)) stdout_log <- glue("--output={shQuote(stdout_log)}")
+    if (!is.null(stderr_log)) stderr_log <- glue("--error={shQuote(stderr_log)}")
+
     sched_args <- glue(
       "-N 1",
       "-n {ncores}",
       "--time={hours_to_dhms(nhours)}",
       "--mem={memgb}g",
+      "--job-name={jobid_str}",
+      "{stdout_log}",
+      "{stderr_log}",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )
   } else {
     if (!is.null(sched_args)) sched_args <- sub("^\\s*#PBS\\s+", "", sched_args, ignore.case = TRUE)
+
+    if (!is.null(stdout_log)) stdout_log <- glue("-o {shQuote(stdout_log)}")
+    if (!is.null(stderr_log)) stderr_log <- glue("-e {shQuote(stderr_log)}")
+
     sched_args <- glue(
       "-l nodes=1:ppn={ncores}",
       "-l walltime={hours_to_dhms(nhours)}",
       "-l mem={memgb}",
+      "-N {jobid_str}",
+      "{stdout_log}",
+      "{stderr_log}",
       "{paste(sched_args, collapse=' ')}",
       .trim = TRUE, .sep = " ", .null = NULL
     )
@@ -744,4 +773,59 @@ is_external_path <- function(path, project_dir) {
   proj_slash <- paste0(project_dir, "/")
   inside <- identical(path, project_dir) || startsWith(path, proj_slash)
   !inside
+}
+
+# little function to attempt to make a file/directory user-writable
+ensure_user_writable <- function(path) {
+  stopifnot(is.character(path), length(path) == 1L)
+  if (!file.exists(path)) stop("Path does not exist: ", path)
+  
+  # Already writable for current user?
+  if (isTRUE(file.access(path, 2L) == 0L)) return(TRUE)
+  
+  # ---- helpers -------------------------------------------------------------
+  # Cross-platform stat to get owner *name*
+  get_owner <- function(p) {
+    p <- normalizePath(p, mustWork = TRUE)
+    q <- shQuote(p)
+    
+    # GNU stat
+    ow <- suppressWarnings(system2("stat", c("-c", "%U", q),
+                                   stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L && !grepl("invalid option|usage:", ow, ignore.case = TRUE)) {
+      return(ow)
+    }
+    
+    # BSD/macOS stat
+    ow <- suppressWarnings(system2("stat", c("-f", "%Su", q),
+                                   stdout = TRUE, stderr = FALSE))
+    if (length(ow) == 1L) return(ow)
+    
+    stop("Could not retrieve file owner via 'stat'.")
+  }
+  
+  add_user_write <- function(p) {
+    info <- file.info(p, extra_cols = TRUE)
+    cur  <- info$mode
+    if (is.na(cur)) return(FALSE)
+    new_mode <- bitwOr(cur, as.integer(strtoi("0200", base = 8L)))  # user-write bit
+    ok <- isTRUE(Sys.chmod(p, mode = as.octmode(new_mode)))
+    ok && isTRUE(file.access(p, 2L) == 0L)
+  }
+  
+  # ---- main logic ----------------------------------------------------------
+  whoami <- suppressWarnings(system2("id", "-un", stdout = TRUE, stderr = FALSE))
+  if (!length(whoami)) whoami <- Sys.info()[["user"]]
+  if (!length(whoami) || is.na(whoami) || !nzchar(whoami)) {
+    whoami <- Sys.getenv("USER", unset = NA_character_)
+  }
+  
+  owner <- get_owner(path)
+  
+  if (!is.na(owner) && identical(owner, whoami)) {
+    if (add_user_write(path)) return(TRUE)
+  }
+  
+  # Either not the owner, or chmod failed
+  FALSE
 }

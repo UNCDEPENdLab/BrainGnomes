@@ -5,3 +5,5 @@
 ^docs$
 ^pkgdown$
 local
+AGENTS.md
+CONTRIBUTING.md
