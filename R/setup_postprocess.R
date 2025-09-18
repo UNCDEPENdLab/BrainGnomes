@@ -148,6 +148,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields))) || ("postprocess/enable" %in% fields)) {
     scfg$postprocess$enable <- prompt_input(
       instruct = glue("\n\n
+        -----------------------------------------------------------------------------------------------------------------
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
 
         These steps may include:

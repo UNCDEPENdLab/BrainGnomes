@@ -113,11 +113,11 @@ edit_project <- function(input = NULL) {
 
   # Top-level menu loop
   repeat {
-    choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit"),
+    choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit & Save"),
       title = "Select a configuration area to edit:"
     )
 
-    if (choice == "Quit" || choice == "") {
+    if (choice == "Quit & Save" || choice == "") {
       message("Exiting configuration editor.")
       break
     }
