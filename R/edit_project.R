@@ -134,7 +134,7 @@ edit_project <- function(input = NULL) {
       if (new_enable && !old_enable) scfg <- validate_after_enable(scfg, "extract_rois", setup_extract_streams)
     } else if (choice == "Job settings") {
       # Job settings logic
-      job <- select_list_safe(job_targets, title = "Select which job to configure:")
+      job <- select_list_safe(job_targets, title = "Select which job to configure, or 0 to exit:")
       if (length(job) == 0 || job == "") next
 
       if (job == "postprocess") {

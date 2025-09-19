@@ -80,6 +80,9 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
       }
       break
     }
+    else if (choice == 0) {
+      break
+    }
   }
 
   return(scfg)
