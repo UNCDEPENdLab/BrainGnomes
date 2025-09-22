@@ -124,11 +124,17 @@ edit_project <- function(input = NULL) {
 
     if (choice == "Postprocessing") {
       old_enable <- isTRUE(scfg$postprocess$enable)
+      if (isFALSE(scfg$postprocess$enable)){
+        scfg <- setup_postprocess_streams(scfg, fields = "postprocess/enable")
+      }
       scfg <- setup_postprocess_streams(scfg)
       new_enable <- isTRUE(scfg$postprocess$enable)
       if (new_enable && !old_enable) scfg <- validate_after_enable(scfg, "postprocess", setup_postprocess_streams)
     } else if (choice == "ROI extraction") {
       old_enable <- isTRUE(scfg$extract_rois$enable)
+      if (isFALSE(scfg$extract_rois$enable)) {
+        scfg <- setup_extract_streams(scfg, fields = "extract_rois/enable")
+      }
       scfg <- setup_extract_streams(scfg)
       new_enable <- isTRUE(scfg$extract_rois$enable)
       if (new_enable && !old_enable) scfg <- validate_after_enable(scfg, "extract_rois", setup_extract_streams)
