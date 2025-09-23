@@ -27,6 +27,11 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
                        title = "Modify extraction streams:")
 
     if (choice == 1) {
+      all_streams <- get_postprocess_stream_names(scfg)
+      if (length(all_streams) == 0) {
+        cat("You must define at least one postprocess stream before defining an extraction stream.\n\n")
+        next
+      }
       scfg <- setup_extract_stream(scfg) # add new stream
     } else if (choice == 2) {
       if (length(streams) == 0) {
@@ -73,6 +78,9 @@ manage_extract_streams <- function(scfg, allow_empty = FALSE) {
         proceed <- prompt_input("No extraction streams were setup. Are you sure you want to finish?", type = "flag", default = FALSE)
         if (!proceed) next
       }
+      break
+    }
+    else if (choice == 0) {
       break
     }
   }

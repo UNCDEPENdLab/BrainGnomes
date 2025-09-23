@@ -113,28 +113,34 @@ edit_project <- function(input = NULL) {
 
   # Top-level menu loop
   repeat {
-    choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit"),
+    choice <- select_list_safe(c(names(config_map), "Postprocessing", "ROI extraction", "Job settings", "Quit & Save"),
       title = "Select a configuration area to edit:"
     )
 
-    if (choice == "Quit" || choice == "") {
+    if (choice == "Quit & Save" || choice == "") {
       message("Exiting configuration editor.")
       break
     }
 
     if (choice == "Postprocessing") {
       old_enable <- isTRUE(scfg$postprocess$enable)
+      if (isFALSE(scfg$postprocess$enable)){
+        scfg <- setup_postprocess_streams(scfg, fields = "postprocess/enable")
+      }
       scfg <- setup_postprocess_streams(scfg)
       new_enable <- isTRUE(scfg$postprocess$enable)
       if (new_enable && !old_enable) scfg <- validate_after_enable(scfg, "postprocess", setup_postprocess_streams)
     } else if (choice == "ROI extraction") {
       old_enable <- isTRUE(scfg$extract_rois$enable)
+      if (isFALSE(scfg$extract_rois$enable)) {
+        scfg <- setup_extract_streams(scfg, fields = "extract_rois/enable")
+      }
       scfg <- setup_extract_streams(scfg)
       new_enable <- isTRUE(scfg$extract_rois$enable)
       if (new_enable && !old_enable) scfg <- validate_after_enable(scfg, "extract_rois", setup_extract_streams)
     } else if (choice == "Job settings") {
       # Job settings logic
-      job <- select_list_safe(job_targets, title = "Select which job to configure:")
+      job <- select_list_safe(job_targets, title = "Select which job to configure, or 0 to exit:")
       if (length(job) == 0 || job == "") next
 
       if (job == "postprocess") {

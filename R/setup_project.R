@@ -827,7 +827,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
 
   if ("compute_environment/scheduler" %in% fields) {
     scfg$compute_environment$scheduler <- prompt_input("Scheduler (slurm/torque): ",
-      instruct = "The pipeline currently runs on TORQUE (aka qsub) and SLURM clusters.\nWhich will you use?",
+    instruct = glue("\n\n-----------------------------------------------------------------------------------------------------------------\nThe pipeline currently runs on TORQUE (aka qsub) and SLURM clusters.\nWhich will you use?\n"),
       type = "character", len = 1L, among = c("slurm", "torque")
     )
   }
