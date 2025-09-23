@@ -375,7 +375,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
 
 # helper for avoiding race condition in setting up fsaverage folder in data_fmriprep
 # avoid race condition in setting up fsaverage folder: https://github.com/nipreps/fmriprep/issues/3492
-submit_fsaverage_setup <- function(scfg) {
+submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   checkmate::assert_directory_exists(scfg$metadata$fmriprep_directory)
   checkmate::assert_file_exists(scfg$compute_environment$fmriprep_container)
 
