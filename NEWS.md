@@ -1,3 +1,7 @@
+# BrainGnomes 0.7-1
+
+* Clarified low_pass_hz and high_pass_hz settings in temporal filtering (postprocessing)
+
 # BrainGnomes 0.7
 
 Released 2025-09-16

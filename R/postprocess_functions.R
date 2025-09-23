@@ -149,12 +149,12 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
 #' @keywords internal
 scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
                              confound_files = NULL,
-                             overwrite=FALSE, lg=NULL) {
-  #checkmate::assert_file_exists(in_file)
+                             overwrite = FALSE, lg = NULL) {
+  # checkmate::assert_file_exists(in_file)
   checkmate::assert_string(out_file)
   checkmate::assert_flag(overwrite)
   checkmate::assert_character(confound_files, any.missing = FALSE, null.ok = TRUE)
-  
+
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
@@ -167,10 +167,10 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
     lg$error(msg)
     stop(msg)
   }
-  
+
   censor <- as.integer(readLines(censor_file))
   t_scrub <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
-  
+
   if (!any(t_scrub)) {
     lg$info("No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")
   } else {
@@ -194,7 +194,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
     }
     writeLines(rep("1", new_len), con = censor_file)
   }
-  
+
   return(out_file)
 }
 
@@ -210,8 +210,8 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 #'
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_file The full path for the file output by this step
-#' @param low_pass_hz Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.
-#' @param high_pass_hz Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use \code{Inf} to skip.
+#' @param low_pass_hz Upper frequency cutoff in Hz. Frequencies above this are removed (low-pass). Use \code{NULL} to omit.
+#' @param high_pass_hz Lower frequency cutoff in Hz. Frequencies below this are removed (high-pass). Use \code{NULL} to omit.
 #' @param tr Repetition time (TR) in seconds. Required to convert Hz to volumes.
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr object used for logging messages
@@ -227,15 +227,19 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 #' @importFrom glue glue
 #' @importFrom lgr get_logger
 #' @importFrom checkmate assert_string assert_number assert_flag
-temporal_filter <- function(in_file, out_file, low_pass_hz=0, high_pass_hz=1/120, tr=NULL,
+temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NULL, tr=NULL,
                             overwrite=FALSE, lg=NULL, fsl_img = NULL,
                             method=c("fslmaths","butterworth")) {
   method <- match.arg(method)
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(out_file)
-  checkmate::assert_number(low_pass_hz)
-  checkmate::assert_number(high_pass_hz)
-  stopifnot(low_pass_hz < high_pass_hz)
+  checkmate::assert_number(low_pass_hz, null.ok = TRUE, na.ok = FALSE)
+  checkmate::assert_number(high_pass_hz, null.ok = TRUE, na.ok = FALSE)
+  if (is.null(low_pass_hz) && is.null(high_pass_hz)) stop("low_pass_hz and high_pass_hz are NULL, so no filtering can occur")
+  if (is.null(low_pass_hz)) low_pass_hz <- Inf
+  if (is.null(high_pass_hz) || abs(high_pass_hz) < 1e-6) low_pass_hz <- -Inf
+  
+  stopifnot(low_pass_hz > high_pass_hz)
   checkmate::assert_number(tr, lower = 0.01)
   checkmate::assert_flag(overwrite)
 
@@ -246,7 +250,15 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=0, high_pass_hz=1/120
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Temporal filtering with low-frequency cutoff: {low_pass_hz} Hz, high-frequency cutoff: {high_pass_hz} Hz given TR: {tr}")
+  if (is.infinite(low_pass_hz) && !is.infinite(high_pass_hz)) {
+    lg$info("Applying high-pass filter with cutoff: {high_pass_hz} Hz (removes frequencies below this), TR = {tr}s")
+  } else if (!is.infinite(low_pass_hz) && is.infinite(high_pass_hz)) {
+    lg$info("Applying low-pass filter with cutoff: {low_pass_hz} Hz (removes frequencies above this), TR = {tr}s")
+  } else if (!is.infinite(low_pass_hz) && !is.infinite(high_pass_hz)) {
+    lg$info("Applying band-pass filter: {high_pass_hz} Hz - {low_pass_hz} Hz, TR = {tr}s")
+  } else {
+    lg$warn("No filtering applied — both low_pass_hz and high_pass_hz are infinite or invalid.")
+  }
   lg$debug("in_file: {in_file}")
   
   if (method == "fslmaths") {
@@ -255,7 +267,7 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=0, high_pass_hz=1/120
 
     # set volumes to -1 to skip that side of filter in -bptf
     hp_volumes <- if (is.infinite(high_pass_hz)) -1 else 1 / (high_pass_hz * fwhm_to_sigma * tr)
-    lp_volumes <- if (is.infinite(low_pass_hz) || low_pass_hz==0) -1 else 1 / (low_pass_hz * fwhm_to_sigma * tr)
+    lp_volumes <- if (is.infinite(low_pass_hz)) -1 else 1 / (low_pass_hz * fwhm_to_sigma * tr)
 
     temp_tmean <- tempfile(pattern="tmean")
     run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
@@ -263,9 +275,10 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=0, high_pass_hz=1/120
 
     rm_niftis(temp_tmean) # clean up temporal mean image
   } else {
-    lg$info("Using internal Butterworth filter function")
-    bw_low <- if (is.infinite(low_pass_hz) || low_pass_hz == 0) NULL else low_pass_hz
-    bw_high <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
+    lg$info("Using internal Butterworth temporal filtering function")
+    # Note that butterworth_filter_4d accepts frequency cutoffs -- anything below low_hz is cut (high-pass), anything above high_hz is cut (low-pass)
+    bw_low <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
+    bw_high <- if (is.infinite(low_pass_hz)) NULL else low_pass_hz
     butterworth_filter_4d(infile = in_file, tr = tr, low_hz = bw_low, high_hz = bw_high, outfile = out_file)
   }
   

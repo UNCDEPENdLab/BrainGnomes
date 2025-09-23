@@ -87,8 +87,8 @@ postprocess:
     prefix: a
   temporal_filter:
     enable: yes
-    low_pass_hz: 0
-    high_pass_hz: 0.0083333
+    low_pass_hz: NULL
+    high_pass_hz: 0.0083333 # Filter out frequencies below .008 Hz
     prefix: f
     method: fslmaths
   intensity_normalize:

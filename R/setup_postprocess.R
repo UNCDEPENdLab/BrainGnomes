@@ -975,8 +975,15 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Temporal filtering removes low- and/or high-frequency components from the fMRI time series.
-      A high-pass filter (e.g., 0.008 Hz) is commonly used to remove slow scanner drift, while a low-pass
+      A high-pass filter (e.g., removing frequencies < 0.008 Hz) is commonly used to remove scanner drift, while a low-pass
       filter can remove physiological noise such as respiratory or cardiac fluctuations.
+
+      Example:
+
+      Entering .008 Hz for the 'lower cutoff' would result in a high-pass filter, removing frequencies < .008 Hz.
+      Entering .1 Hz for the 'upper cutoff' would result in a low-pass filter, removing frequencies > .1 Hz.
+
+      If both are entered (lower = .008 Hz, upper = .1 Hz), the bandpass filter keeps frequencies .008 Hz < f < .1 Hz.
 
       We support both fslmaths -bptf and an Butterworth temporal filter. The former is more common for task-based fMRI and
       the latter with resting-state fMRI. If filtering is enabled, you will be asked to choose between these filtering methods.
@@ -1004,24 +1011,33 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$temporal_filter$method)) fields <- c(fields, "postprocess/temporal_filter/method")
   }
 
-  if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$low_pass_hz <- prompt_input("Lower passband cutoff (Hz)", instruct = "Keeps frequencies above this", type = "numeric", lower = 0, required = FALSE)
-    if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
-      cat("Omitting filtering of low frequencies\n")
-      ppcfg$temporal_filter$low_pass_hz <- -Inf # indicates no low frequency filter
-    }
-  }
   
   if ("postprocess/temporal_filter/high_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$high_pass_hz <- prompt_input("Upper passband cutoff (Hz) ", instruct = "Keeps frequencies below this", type = "numeric", lower = 0, required = FALSE)
+    ppcfg$temporal_filter$high_pass_hz <- prompt_input(
+      "Lower cutoff / high-pass threshold (Hz) ",
+      instruct = "Keeps frequencies above this cutoff and removes frequencies below it", 
+      type = "numeric", lower = 0, required = FALSE
+    )
     if (is.na(ppcfg$temporal_filter$high_pass_hz)) {
-      cat("Omitting filtering of high frequencies\n")
-      ppcfg$temporal_filter$high_pass_hz <- Inf # indicates no high frequency filter
+      cat("Omitting filtering of low frequencies\n")
+      ppcfg$temporal_filter$high_pass_hz <- -Inf # indicates no filtering out of low frequencies
+    }
+  }
+
+  if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
+    ppcfg$temporal_filter$low_pass_hz <- prompt_input(
+      "Upper cutoff / low-pass threshold (Hz)",
+      instruct = "Retains frequencies below this cutoff and removes frequencies above it", 
+      type = "numeric", lower = 0, required = FALSE
+    )
+    if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
+      cat("Omitting filtering of low frequencies\n")
+      ppcfg$temporal_filter$low_pass_hz <- Inf # indicates no filtering out of high frequencies
     }
   }
 
   if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
-    ppcfg$temporal_filter$low_pass_hz > ppcfg$temporal_filter$high_pass_hz) stop("Low frequency cutoff cannot be larger than high frequency cutoff")
+    ppcfg$temporal_filter$low_pass_hz < ppcfg$temporal_filter$high_pass_hz) stop("Upper frequency cutoff cannot be smaller than lower frequency cutoff")
 
 
   if ("postprocess/temporal_filter/method" %in% fields) {
