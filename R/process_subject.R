@@ -36,6 +36,7 @@ null_empty <- function(x) {
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
 process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -109,7 +110,10 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
-      complete_file = complete_file
+      complete_file = complete_file,
+      insert_tracked_job_path = system.file("insert_tracked_job.R", package = "BrainGnomes"),
+      upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
+      add_parent_path = system.file("add_parent.R", package = "BrainGnomes")
     )
 
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
@@ -122,11 +126,44 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$extract_rois <- scfg$extract_rois[[ex_stream]]
       sched_call$scfg <- scfg_tmp
+      sched_args <- get_job_sched_args(scfg_tmp, name)
+      # get job tracking arguments
+      tracking_args <- list(
+        job_name = jobid_str,
+        sequence_id = sequence_id,
+        n_nodes = 1,
+        n_cpus = scfg_tmp[[name]]$ncores,
+        wall_time = hours_to_dhms(scfg_tmp[[name]]$nhours),
+        mem_total = scfg_tmp[[name]]$memgb,
+        scheduler = scfg_tmp$compute_environment$scheduler,
+        scheduler_options = scfg_tmp[[name]]$sched_args
+      )
     } else {
       sched_call$scfg <- scfg
+      sched_args <- get_job_sched_args(scfg, name)
+      # get job tracking arguments
+      tracking_args <- list(
+        job_name = jobid_str,
+        sequence_id = sequence_id,
+        n_nodes = 1,
+        n_cpus = scfg[[name]]$ncores,
+        wall_time = hours_to_dhms(scfg[[name]]$nhours),
+        mem_total = scfg[[name]]$memgb,
+        scheduler = scfg$compute_environment$scheduler,
+        scheduler_options = scfg[[name]]$sched_args
+      )
     }
-
-    sched_args <- do.call(get_job_sched_args, sched_call)
+    sched_args <- set_cli_options( # setup files for stdout and stderr, job name
+      sched_args,
+      c(
+        glue("--job-name={jobid_str}"),
+        glue("--output={env_variables['stdout_log']}"),
+        glue("--error={env_variables['stderr_log']}")
+      )
+    )
+    
+    # define tracking sqlite db
+    tracking_sqlite_db <- scfg$metadata$sqlite_db
 
     # determine the directory to use for the job submission
     if (session_level && has_ses) {
@@ -139,7 +176,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
 
     # launch submission function -- these all follow the same input argument structure
     lg$debug("Launching submit_{name_tag} for subject: {sub_id}")
-    args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
+    args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg, tracking_sqlite_db, tracking_args)
     if (name == "postprocess") args$pp_stream <- pp_stream # populate the current postprocess config to run
     if (name == "extract_rois") args$ex_stream <- ex_stream # populate the current extract_rois config to run
     job_id <- do.call(glue("submit_{name}"), args)
@@ -256,7 +293,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   return(TRUE) # nothing interesting for now
 }
 
-submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+
+submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   # heudiconv  --files dicom/219/itbs/*/*.dcm -o Nifti -f Nifti/code/heuristic1.py -s 219 -ss itbs -c dcm2niix -b --minmeta --overwrite
 
   env_variables <- c(
@@ -272,7 +310,8 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE, 
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   # log submission command
@@ -283,7 +322,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
 
 }
 
-submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   
   env_variables <- c(
     env_variables,
@@ -296,7 +335,8 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   lg$info("Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -305,7 +345,7 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   return(job_id)
 }
 
-submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   checkmate::assert_list(scfg)
   checkmate::assert_character(parent_ids, null.ok = TRUE)
 
@@ -353,7 +393,8 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   lg$info("Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -363,7 +404,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
 }
 
 
-submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
    if (!validate_exists(scfg$compute_environment$mriqc_container)) {
     message(glue("Skipping MRIQC in {sub_dir} because could not find MRIQC container {scfg$compute_environment$mriqc_container}"))
     return(NULL)
@@ -391,7 +432,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   lg$info("Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -400,8 +442,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
-  if (!validate_exists(scfg$compute_environment$aroma_container)) {
+submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
+   if (!validate_exists(scfg$compute_environment$aroma_container)) {
     message(glue("Skipping AROMA in {sub_dir} because could not find AROMA container {scfg$compute_environment$aroma_container}"))
     return(NULL)
   }
@@ -446,7 +488,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   lg$info("Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -455,10 +498,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_postprocess <- function(
-    scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL,
-    sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL) {
-
+submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, 
+sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   if (is.null(pp_stream)) stop("Cannot submit a postprocessing job without specifying a pp_stream")
 
   postprocess_rscript <- system.file("postprocess_cli.R", package = "BrainGnomes")
@@ -496,7 +537,8 @@ submit_postprocess <- function(
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   lg$info("Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")

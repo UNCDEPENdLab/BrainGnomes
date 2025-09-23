@@ -8,8 +8,11 @@ insert_tracked_job(sqlite_db, job_id, tracking_args = list())
 }
 \arguments{
 \item{sqlite_db}{Path to SQLite database used for tracking}
+
+\item{job_id}{Character string job ID}
+
+\item{tracking_args}{List of tracking arguments for SQLite database}
 }
 \description{
 Internal helper funciton to insert a job into the tracking SQLite database
 }
-\keyword{internal}

@@ -8,6 +8,7 @@ get_tracked_job_status(
   job_id = NULL,
   return_children = FALSE,
   return_parent = FALSE,
+  sequence_id = NULL,
   sqlite_db
 )
 }

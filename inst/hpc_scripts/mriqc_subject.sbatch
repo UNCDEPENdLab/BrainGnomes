@@ -59,6 +59,8 @@ log_flag=""
 
 log_message INFO Starting mriqc for subject $sub_id in $out_dir
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag singularity run --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
   -B "$loc_mriqc_root" "$mriqc_container" \
@@ -70,6 +72,9 @@ cmd_status=0
 wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+
 
 log_message INFO Finished mriqc for subject $sub_id
 exit $cmd_status

@@ -85,6 +85,8 @@ if [[ ${#files[@]} -eq 0 ]]; then
   exit 0
 fi
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 job_ids=()
 
 for f in "${files[@]}"; do
@@ -104,6 +106,9 @@ for f in "${files[@]}"; do
     --error="$postprocess_stderr_log" \
     --export=ALL,input_file="$f",stdout_log="$postprocess_stdout_log",stderr_log="$postprocess_stderr_log" \
     "$postprocess_image_sched_script")
+    
+  "${R_HOME}/bin/Rscript" "$insert_tracked_job_path" --sqlite_db "$sqlite_db" --job_id "$jid"  --job_name "$jobname" --scheduler "slurm" --scheduler_options "$sched_args"
+  "${R_HOME}/bin/Rscript" "$add_parent_path" --sqlite_db "$sqlite_db" --job_id "$jid" --parent_job_id "$SLURM_JOB_ID" --child_level 2
   
   log_message INFO Submitted postprocessing job $jid for $(basename $f) in $out_dir
   job_ids+=("$jid")
@@ -137,10 +142,12 @@ for jid in "${job_ids[@]}"; do
   if [[ "$state" != "COMPLETED" || "$exit_main" != "0" ]]; then
     log_message ERROR "Child job $jid failed with state $state exit code $exit_code"
     failed=1
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
   fi
 done
 
 [[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $failed -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 
 log_message INFO Finished postprocessing for subject $sub_id $ses_str
 exit $failed

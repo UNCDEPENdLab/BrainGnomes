@@ -94,6 +94,8 @@ log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir with
 rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_scratch" \
   -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" \
@@ -112,6 +114,9 @@ log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
 
 # [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 [[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $success -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $success -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+
 
 log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
 exit $success

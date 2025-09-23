@@ -196,23 +196,30 @@ read_df_sqlite <- function(gpa = NULL, db_file=NULL, id = NULL, session = NULL, 
 #' 
 #' @param sqlite_db Character path to SQLite database
 #' @param str Character query statement to execute
-#' @param params Optional list of parameters to pass to statement
+#' @param param Optional list of parameters to pass to statement
 #' @param busy_timeout Time (in s) after which to retry write operations; default is 10 s
+#' @param return_result Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
+#'                        Only use if expecting something in return for your query
 #' 
-#' @return description
-#' @importFrom DBI dbConnect dbExecute dbDisconnect
+#' @importFrom DBI dbConnect dbGetQuery dbExecute dbDisconnect
 #' @importFrom RSQLite sqliteSetBusyHandler
 #' 
 #' @keywords internal
-submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, params = NULL, busy_timeout = 10) {
-  
+submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL, 
+                                busy_timeout = 10, return_result = FALSE) {
+  checkmate::assert_logical(return_result)
   if(is.null(str) | is.null(sqlite_db)) return(invisible(NULL))
-  
+
   con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
-  
   sqliteSetBusyHandler(con, busy_timeout * 1000) # busy_timeout arg in seconds * 1000 ms
-  res <- dbExecute(con, str, params = params) # execute query
+  
+  if (isTRUE(return_result)) {
+    res <- dbGetQuery(con, str, param = param) # execute query and return result
+  } else {
+    res <- dbExecute(con, str, param = param) # execute query
+  }
+  
   dbDisconnect(con) # disconnect
   
-  return(invisible(res)) # return number of rows affected by the statement
+  return(invisible(res))
 }
