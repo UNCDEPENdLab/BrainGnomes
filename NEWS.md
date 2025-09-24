@@ -1,7 +1,9 @@
 # BrainGnomes 0.7-1
 
-* Fixed temporal_filter so omitting a high-pass cutoff no longer disables the requested low-pass filtering.
-* Corrected validation of band-pass cutoffs and clarified temporal filtering prompts/documentation.
+* UI/UX improvements to ask query enable/disable for postprocessing and ROI extraction during edit_project
+* Do not ask about ROI extraction details if no postprocessing streams are defined
+* Corrected validation of band-pass cutoffs and clarified temporal filtering prompts/documentation
+* Improved log messages related to temporal filtering
 
 # BrainGnomes 0.7
 

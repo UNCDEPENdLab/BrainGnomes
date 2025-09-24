@@ -241,7 +241,6 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
   if (is.null(low_pass_hz)) low_pass_hz <- Inf
   if (is.null(high_pass_hz) || abs(high_pass_hz) < 1e-6) high_pass_hz <- -Inf
   
-  stopifnot(low_pass_hz > high_pass_hz)
   checkmate::assert_number(tr, lower = 0.01)
   checkmate::assert_flag(overwrite)
 
@@ -253,13 +252,13 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
   }
 
   if (is.infinite(low_pass_hz) && !is.infinite(high_pass_hz)) {
-    lg$info("Applying high-pass filter with cutoff: {high_pass_hz} Hz (removes frequencies below this), TR = {tr}s")
+    to_log(lg, "info", "Applying high-pass filter with cutoff: {high_pass_hz} Hz (removes frequencies below this), TR = {tr}s")
   } else if (!is.infinite(low_pass_hz) && is.infinite(high_pass_hz)) {
-    lg$info("Applying low-pass filter with cutoff: {low_pass_hz} Hz (removes frequencies above this), TR = {tr}s")
+    to_log(lg, "info", "Applying low-pass filter with cutoff: {low_pass_hz} Hz (removes frequencies above this), TR = {tr}s")
   } else if (!is.infinite(low_pass_hz) && !is.infinite(high_pass_hz)) {
-    lg$info("Applying band-pass filter: {high_pass_hz} Hz - {low_pass_hz} Hz, TR = {tr}s")
+    to_log(lg, "info", "Applying band-pass filter: {high_pass_hz} Hz - {low_pass_hz} Hz, TR = {tr}s")
   } else {
-    lg$warn("No filtering applied. Both low_pass_hz and high_pass_hz are infinite or invalid.")
+    to_log(lg, "fatal", "Problem with temporal_filter settings. Both low_pass_hz and high_pass_hz are infinite or invalid.")
   }
   lg$debug("in_file: {in_file}")
   

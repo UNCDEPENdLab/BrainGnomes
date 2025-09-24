@@ -405,7 +405,7 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
     if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
         ppcfg$temporal_filter$high_pass_hz > ppcfg$temporal_filter$low_pass_hz) {
-      if (!quiet) message("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values.")
+      if (!quiet) message(glue("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values."))
       gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
       ppcfg$temporal_filter$low_pass_hz <- NULL
       ppcfg$temporal_filter$high_pass_hz <- NULL
