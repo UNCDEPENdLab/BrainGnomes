@@ -61,8 +61,8 @@ to sigma values in volumes using a standard FWHM-to-sigma transformation.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">temporal_filter</span><span class="op">(</span></span>
 <span>  <span class="va">in_file</span>,</span>
 <span>  <span class="va">out_file</span>,</span>
-<span>  low_pass_hz <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  high_pass_hz <span class="op">=</span> <span class="fl">1</span><span class="op">/</span><span class="fl">120</span>,</span>
+<span>  low_pass_hz <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  high_pass_hz <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tr <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  lg <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -84,11 +84,13 @@ to sigma values in volumes using a standard FWHM-to-sigma transformation.</p>
 
 
 <dt id="arg-low-pass-hz">low_pass_hz<a class="anchor" aria-label="anchor" href="#arg-low-pass-hz"></a></dt>
-<dd><p>Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use <code>0</code> to skip.</p></dd>
+<dd><p>Upper frequency cutoff in Hz. Frequencies above this are removed (low-pass).
+Use <code>NULL</code> to omit the low-pass component (internally treated as <code>Inf</code>).</p></dd>
 
 
 <dt id="arg-high-pass-hz">high_pass_hz<a class="anchor" aria-label="anchor" href="#arg-high-pass-hz"></a></dt>
-<dd><p>Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use <code>Inf</code> to skip.</p></dd>
+<dd><p>Lower frequency cutoff in Hz. Frequencies below this are removed (high-pass).
+Use <code>NULL</code> or a non-positive value to omit the high-pass component (internally treated as <code>-Inf</code>).</p></dd>
 
 
 <dt id="arg-tr">tr<a class="anchor" aria-label="anchor" href="#arg-tr"></a></dt>
