@@ -1015,7 +1015,7 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
   if ("postprocess/temporal_filter/high_pass_hz" %in% fields) {
     ppcfg$temporal_filter$high_pass_hz <- prompt_input(
       "Lower cutoff / high-pass threshold (Hz) ",
-      instruct = "Keeps frequencies above this cutoff and removes frequencies below it", 
+      instruct = "Keeps frequencies above this cutoff and removes frequencies below it. Leave blank to skip high-pass filtering.",
       type = "numeric", lower = 0, required = FALSE
     )
     if (is.na(ppcfg$temporal_filter$high_pass_hz)) {
@@ -1027,11 +1027,11 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
   if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
     ppcfg$temporal_filter$low_pass_hz <- prompt_input(
       "Upper cutoff / low-pass threshold (Hz)",
-      instruct = "Retains frequencies below this cutoff and removes frequencies above it", 
+      instruct = "Retains frequencies below this cutoff and removes frequencies above it. Leave blank to skip low-pass filtering.",
       type = "numeric", lower = 0, required = FALSE
     )
     if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
-      cat("Omitting filtering of low frequencies\n")
+      cat("Omitting filtering of high frequencies\n")
       ppcfg$temporal_filter$low_pass_hz <- Inf # indicates no filtering out of high frequencies
     }
   }

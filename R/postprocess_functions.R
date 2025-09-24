@@ -210,8 +210,10 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 #'
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_file The full path for the file output by this step
-#' @param low_pass_hz Upper frequency cutoff in Hz. Frequencies above this are removed (low-pass). Use \code{NULL} to omit.
-#' @param high_pass_hz Lower frequency cutoff in Hz. Frequencies below this are removed (high-pass). Use \code{NULL} to omit.
+#' @param low_pass_hz Upper frequency cutoff in Hz. Frequencies above this are removed (low-pass).
+#'   Use \code{NULL} to omit the low-pass component (internally treated as \code{Inf}).
+#' @param high_pass_hz Lower frequency cutoff in Hz. Frequencies below this are removed (high-pass).
+#'   Use \code{NULL} or a non-positive value to omit the high-pass component (internally treated as \code{-Inf}).
 #' @param tr Repetition time (TR) in seconds. Required to convert Hz to volumes.
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr object used for logging messages
@@ -237,7 +239,7 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
   checkmate::assert_number(high_pass_hz, null.ok = TRUE, na.ok = FALSE)
   if (is.null(low_pass_hz) && is.null(high_pass_hz)) stop("low_pass_hz and high_pass_hz are NULL, so no filtering can occur")
   if (is.null(low_pass_hz)) low_pass_hz <- Inf
-  if (is.null(high_pass_hz) || abs(high_pass_hz) < 1e-6) low_pass_hz <- -Inf
+  if (is.null(high_pass_hz) || abs(high_pass_hz) < 1e-6) high_pass_hz <- -Inf
   
   stopifnot(low_pass_hz > high_pass_hz)
   checkmate::assert_number(tr, lower = 0.01)

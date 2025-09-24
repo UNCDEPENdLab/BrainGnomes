@@ -7,8 +7,8 @@
 temporal_filter(
   in_file,
   out_file,
-  low_pass_hz = 0,
-  high_pass_hz = 1/120,
+  low_pass_hz = NULL,
+  high_pass_hz = NULL,
   tr = NULL,
   overwrite = FALSE,
   lg = NULL,
@@ -21,9 +21,11 @@ temporal_filter(
 
 \item{out_file}{The full path for the file output by this step}
 
-\item{low_pass_hz}{Lower frequency filter cutoff in Hz. Frequencies below this are removed. Use \code{0} to skip.}
+\item{low_pass_hz}{Upper frequency cutoff in Hz. Frequencies above this are removed (low-pass).
+Use \code{NULL} to omit the low-pass component (internally treated as \code{Inf}).}
 
-\item{high_pass_hz}{Higher frequency filter cutoff in Hz. Frequencies above this are removed. Use \code{Inf} to skip.}
+\item{high_pass_hz}{Lower frequency cutoff in Hz. Frequencies below this are removed (high-pass).
+Use \code{NULL} or a non-positive value to omit the high-pass component (internally treated as \code{-Inf}).}
 
 \item{tr}{Repetition time (TR) in seconds. Required to convert Hz to volumes.}
 

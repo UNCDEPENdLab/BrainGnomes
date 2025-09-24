@@ -1,6 +1,7 @@
 # BrainGnomes 0.7-1
 
-* Clarified low_pass_hz and high_pass_hz settings in temporal filtering (postprocessing)
+* Fixed temporal_filter so omitting a high-pass cutoff no longer disables the requested low-pass filtering.
+* Corrected validation of band-pass cutoffs and clarified temporal filtering prompts/documentation.
 
 # BrainGnomes 0.7
 
