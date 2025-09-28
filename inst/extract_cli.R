@@ -90,7 +90,7 @@ arg_list <- list(
   out_dir = cfg$out_dir,
   cor_method = cfg$cor_method,
   roi_reduce = cfg$roi_reduce,
-  brain_mask = cfg$brain_mask,
+  mask_file = cfg$mask_file,
   min_vox_per_roi = cfg$min_vox_per_roi,
   rtoz = cfg$rtoz,
   log_file = log_file

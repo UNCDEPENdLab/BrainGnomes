@@ -619,6 +619,21 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
     }
   }
 
+  if ("mask_file" %in% names(ecfg)) {
+    mask_val <- ecfg$mask_file
+    if (length(mask_val) == 1L && (is.na(mask_val) || mask_val %in% c("", ".na", ".na.character"))) {
+      ecfg$mask_file <- NULL
+    } else if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
+      if (!quiet) message(glue("Invalid mask_file in $extract_rois${cfg_name}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/mask_file")
+      ecfg$mask_file <- NULL
+    } else if (!is.null(mask_val) && !checkmate::test_file_exists(mask_val)) {
+      if (!quiet) message(glue("mask_file not found for $extract_rois${cfg_name}: {mask_val}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/mask_file")
+      ecfg$mask_file <- NULL
+    }
+  }
+
   if (!"roi_reduce" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/roi_reduce")
   } else if (!checkmate::test_string(ecfg$roi_reduce) ||
@@ -637,9 +652,16 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
 
   if (!"min_vox_per_roi" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/min_vox_per_roi")
-  } else if (!checkmate::test_integerish(ecfg$min_vox_per_roi, len=1L, lower=1L)) {
-    message(glue("Invalid min_vox_per_roi in $extract_rois${cfg_name}. You will be asked for this."))
-    gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+  } else {
+    valid_min_vox <- tryCatch({
+      parse_min_vox_per_roi(ecfg$min_vox_per_roi)
+      TRUE
+    }, error = function(e) FALSE)
+
+    if (!valid_min_vox) {
+      message(glue("Invalid min_vox_per_roi in $extract_rois${cfg_name}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+    }
   }
 
   return(list(extract_rois = ecfg, gaps = gaps))

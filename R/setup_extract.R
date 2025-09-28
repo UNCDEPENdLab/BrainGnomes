@@ -1,7 +1,7 @@
 #' @keywords internal
 manage_extract_streams <- function(scfg, allow_empty = FALSE) {
   extract_field_list <- function() {
-    c("input_streams", "atlases", "roi_reduce", "correlation/method", "rtoz")
+    c("input_streams", "atlases", "mask_file", "roi_reduce", "correlation/method", "rtoz")
   }
 
   show_val <- function(val) {
@@ -191,7 +191,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
 
   if (is.null(fields)) {
     fields <- c(
-      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/roi_reduce", "extract_rois/save_ts",
+      "extract_rois/input_streams", "extract_rois/atlases", "extract_rois/mask_file", "extract_rois/roi_reduce", "extract_rois/save_ts",
       "extract_rois/correlation/method", "extract_rois/rtoz", "extract_rois/min_vox_per_roi"
     )
   }
@@ -206,9 +206,23 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/atlases" %in% fields) {
-    atlas <- prompt_input("Atlas NIfTI file(s) (comma separated):", type = "character")
-    atlas <- trimws(strsplit(atlas, ",")[[1]])
+    atlas <- prompt_input("Atlas NIfTI file(s) (separate using commas for multiple):", type = "character", split="\\s*,\\s*")
     excfg$atlases <- atlas
+  }
+
+  if ("extract_rois/mask_file" %in% fields) {
+    mask_file <- prompt_input(
+      instruct = glue("\n
+        ROI extraction always removes constant and zero voxels from its calculations.
+        In addition, you may provide a mask file that only retains voxels in the mask
+        for ROI extraction and connectivity calculation. This mask is applied in addition
+        to masking done in postprocessing, if requested, as well as the automatic removal
+        of constant/zero voxels.
+      "),
+      prompt = "Mask file for ROI extraction",
+      type = "character", required = FALSE,
+      default = excfg$mask_file
+    )
   }
 
   if ("extract_rois/roi_reduce" %in% fields) {
@@ -258,16 +272,52 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if ("extract_rois/min_vox_per_roi" %in% fields) {
-    excfg$min_vox_per_roi <- prompt_input(instruct = glue("
-      Sometimes smaller ROIs, especially near the edge of the brain, may not have enough voxels to yield
-      a reasonable average time series. In this case, it's often best to exclude these ROIs, rather than
-      include a noisy estimate. How many voxels must an ROI have to be extracted (and entered into correlation)?
-      Note that ROIs less than this number will be set to NA in the output, but will still be labeled correctly rather
-      than being dropped altogether."),
+    default_value <- if (is.null(excfg$min_vox_per_roi)) "5" else as.character(excfg$min_vox_per_roi)
+    repeat {
+      response <- prompt_input(
+        instruct = glue("
+          Sometimes smaller ROIs, especially near the edge of the brain, may not have enough voxels to yield
+          a reasonable average time series. In this case, it's often best to exclude these ROIs, rather than
+          include a noisy estimate. ROIs failing this threshold will be set to NA in outputs, preserving labeling.
+          You can enter an absolute voxel count (e.g., 5) or a percentage/proportion (e.g., '80%' or 0.8) of atlas voxels."),
+        prompt = "Enter the minimum voxel requirement for valid ROIs:", type = "character", len = 1L,
+        default = default_value
+      )
 
-    "Enter the minimum number of voxels for valid ROIs:", type = "integer", lower = 1L, default=5L)
+      response <- trimws(response)
+      parsed <- tryCatch(parse_min_vox_per_roi(response), error = function(e) {
+        cat(conditionMessage(e), "\n")
+        NULL
+      })
+
+      if (!is.null(parsed)) {
+        excfg$min_vox_per_roi <- canonicalize_min_vox_per_roi(parsed)
+        break
+      }
+
+      default_value <- response
+    }
   }
 
   scfg$extract_rois[[stream_name]] <- excfg
   return(scfg)
+}
+
+
+#' Convert a parsed specification to a canonical configuration value
+#' @keywords internal
+#' @noRd
+canonicalize_min_vox_per_roi <- function(spec, digits = 1) {
+  checkmate::assert_list(spec, any.missing = FALSE)
+
+  if (spec$type == "count") return(spec$value)
+
+  pct <- round(spec$value * 100, digits)
+  fmt <- if (abs(pct - round(pct)) < .Machine$double.eps^0.5) {
+    as.integer(round(pct))
+  } else {
+    pct
+  }
+
+  return(paste0(fmt, "%"))
 }

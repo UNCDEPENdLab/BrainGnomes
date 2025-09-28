@@ -1,4 +1,14 @@
+# BrainGnomes 0.7-2
+
+* Allow `min_vox_per_roi` to be specified as a percentage or proportion of atlas voxels during ROI extraction
+* ROI extraction allows for an optional brain mask that is applied to the atlas and time series data
+* Add ability to set an optional field to NA (empty) in `prompt_input` when a default is provided
+* Support notch filtering of motion parameters prior to calculation of framewise_displacement
+* Support different head sizes for calculation of framewise displacement
+
 # BrainGnomes 0.7-1
+
+Released 2025-09-24
 
 * UI/UX improvements to ask query enable/disable for postprocessing and ROI extraction during edit_project
 * Do not ask about ROI extraction details if no postprocessing streams are defined
