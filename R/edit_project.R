@@ -166,8 +166,7 @@ edit_project <- function(input = NULL) {
         if (length(selected_job_fields) == 0) next
 
         scfg <- setup_postprocess_stream(
-          scfg,
-          stream_name = stream,
+          scfg, stream_name = stream,
           fields = paste0("postprocess/", stream, "/", names(selected_job_fields))
         )
       } else if (job == "extract_rois") {

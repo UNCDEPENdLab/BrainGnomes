@@ -140,6 +140,10 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
+  if (!is.null(stream_name)) {
+    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n"))
+  }
+
   defaults <- list(
     memgb = 32L,
     nhours = 2L,

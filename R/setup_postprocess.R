@@ -229,6 +229,10 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
+  if (!is.null(stream_name)) {
+    cat(glue("\n--- Specifying postprocessing stream: {stream_name} ---\n"))
+  }
+
   defaults <- list(
     memgb = 48L,
     nhours = 8L,
