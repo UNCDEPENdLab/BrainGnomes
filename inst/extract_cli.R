@@ -93,7 +93,8 @@ arg_list <- list(
   mask_file = cfg$mask_file,
   min_vox_per_roi = cfg$min_vox_per_roi,
   rtoz = cfg$rtoz,
-  log_file = log_file
+  log_file = log_file,
+  overwrite = isTRUE(cfg$overwrite)
 )
 
 for (i in input_files) {

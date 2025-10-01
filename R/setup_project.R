@@ -11,8 +11,10 @@ load_project <- function(input = NULL, validate = TRUE) {
   }
   if (!checkmate::test_file_exists(input)) stop("Cannot find file: ", input)
   checkmate::test_flag(validate)
-  scfg <- read_yaml(input)
+  yaml_path <- normalizePath(input, winslash = "/", mustWork = TRUE)
+  scfg <- read_yaml(yaml_path)
   class(scfg) <- c(class(scfg), "bg_project_cfg") # add class to the object
+  attr(scfg, "yaml_file") <- yaml_path
   if (validate) scfg <- validate_project(scfg, correct_problems = TRUE)
 
   return(scfg)

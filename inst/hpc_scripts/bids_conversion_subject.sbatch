@@ -30,6 +30,9 @@ trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 
+cli_options=${cli_options:-}
+heudiconv_clear_cache=${heudiconv_clear_cache:-0}
+
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
   log_message INFO "Running in debug mode; commands will not be executed"
@@ -48,10 +51,12 @@ stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
 ###
 # handle multi-session setup
+cache_dir="${loc_bids_root%/}/.heudiconv/${sub_id}"
 if [ -n "$ses_id" ]; then
   out_dir=${loc_bids_root}/sub-${sub_id}/ses-${ses_id}
   ses_flag="--ses $ses_id"
   ses_str="session $ses_id"
+  cache_dir="${cache_dir}/${ses_id}" # subfolder
 else
   out_dir=${loc_bids_root}/sub-${sub_id}
   ses_flag=""
@@ -59,6 +64,15 @@ else
 fi
 mkdir -p "$out_dir"
 cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
+
+if [[ "$heudiconv_clear_cache" =~ ^(1|TRUE|true|yes|YES)$ ]]; then
+  if [ -d "${cache_dir}" ]; then
+    log_message INFO "Clearing heudiconv cache at $cache_dir"
+    rm -rf "$cache_dir"
+  else
+    log_message WARN "Could not find heudiconv cache to clear at $cache_dir"
+  fi
+fi
 
 ####
 #run heudiconv
@@ -76,7 +90,7 @@ log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir wit
 rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_sub_dicoms" -B "$heuristic_dir" \
  "$heudiconv_container" --files $loc_sub_dicoms -s $sub_id $ses_flag \
   -f $heudiconv_heuristic -c dcm2niix \
-  -o $loc_bids_root --bids &
+  -o $loc_bids_root $cli_options &
 cmd_pid=$!
 
 cmd_status=0

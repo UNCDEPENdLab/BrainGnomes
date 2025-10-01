@@ -163,6 +163,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     #   type = "character", among=c("INFO", "ERROR", "DEBUG")
     # )
   }
+
+  if (isTRUE(scfg$force)) {
+    if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
+  }
   
   if (!any(steps)) stop("No processing steps were requested in run_project.")
 

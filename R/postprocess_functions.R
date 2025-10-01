@@ -197,7 +197,219 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 
   return(out_file)
 }
+#' Notch filter regressors (esp. motion parameters) from the confounds file
+#'
+#' Uses `iirnotch_r()` to design a single-frequency notch filter that
+#' suppresses respiratory-related oscillations in the six rigid-body
+#' motion parameters. The function filters the requested columns with
+#' [`filtfilt_cpp()`] (zero-phase), and optionally writes the updated
+#' confounds table to disk.
+#'
+#' @param confounds_dt A data.table containing confound regressors to filter
+#' @param tr The repetition time of the scan sequence in seconds. Used
+#'  to check that the stop band falls within the
+#' @param band_stop_min Lower bound of the notch stop-band, in breaths
+#'  per minute. This will be converted to Hz internally.
+#' @param band_stop_max Upper bound of the notch stop-band, in breaths
+#'  per minute. This will be converted to Hz internally.
+#' @param columns Columns in `confounds_dt` to filter. Defaults to the standard six
+#'   rigid-body parameters: `rot_x`, `rot_y`, `rot_z`, `trans_x`,
+#'   `trans_y`, `trans_z`.
+#' @param out_file Optional output path. When provided, the filtered
+#'   confounds table is written here (tab-delimited). If `NULL`, the
+#'   modified table is returned invisibly.
+#' @param padtype Passed to [`filtfilt_cpp()`]; governs how the edges are
+#'   padded before filtering. One of `"constant"`, `"odd"`, `"even"`, or
+#'   `"zero"`. Defaults to `"constant"` to match SciPy.
+#' @param padlen Optional integer pad length forwarded to
+#'   [`filtfilt_cpp()`]. If `NULL`, the default inside `filtfilt_cpp()`
+#'   (`-1L`) is used.
+#' @param use_zi Logical; whether to initialise the filter state using
+#'   steady-state conditions (the default in `filtfilt_cpp()`).
+#' @param lg Optional `Logger` (from `lgr`) used for status messages.
+#'
+#' @return If `out_file` is `NULL`, the filtered confounds are returned
+#'   as a `data.table`. Otherwise the path to `out_file` is returned
+#'   invisibly.
+#'
+#' @keywords internal
+#' @importFrom checkmate assert_file_exists assert_number assert_character assert_string assert_choice assert_flag
+#' @importFrom data.table fread fwrite
+notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, band_stop_max = NULL,
+    columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"), add_poly = TRUE,
+    out_file = NULL, padtype = "constant",  padlen = NULL, use_zi = TRUE, lg = NULL) {
 
+  checkmate::assert_data_table(confounds_dt)
+  checkmate::assert_number(tr, lower = 0.01)
+  checkmate::assert_number(band_stop_min, lower = 0)
+  checkmate::assert_number(band_stop_max, lower = 0)
+  checkmate::assert_character(columns, any.missing = FALSE, min.len = 1L)
+  checkmate::assert_flag(add_poly)
+  checkmate::assert_string(out_file, null.ok = TRUE)
+  checkmate::assert_choice(padtype, c("constant", "odd", "even", "zero"))
+  checkmate::assert_flag(use_zi)
+  if (!is.null(padlen)) checkmate::assert_integerish(padlen, len = 1L, lower = -1L)
+
+  if (!checkmate::test_class(lg, "Logger")) {
+    lg <- lgr::get_logger_glue("BrainGnomes")
+  }
+
+  if (band_stop_max <= band_stop_min) {
+    to_log(lg, "fatal", "band_stop_max ({band_stop_max}) must be greater than band_stop_min ({band_stop_min}).")
+  }
+
+  # polynomial expansion -- first derivatives and squares
+  poly_expand <- function(df, cols = NULL) {
+    df <- as.data.frame(df) # ensure base data.frame behavior
+
+    if (!is.null(cols)) checkmate::assert_subset(cols, names(df))
+
+    # 1) first differences for each numeric column
+    original_cols <- if (is.null(cols)) names(df) else cols
+    for (col in original_cols) {
+      if (is.numeric(df[[col]])) df[[paste0(col, "_derivative1")]] <- c(NA, diff(df[[col]]))
+    }
+
+    # 2) squares of originals + derivatives
+    all_cols <- paste0(original_cols, "_derivative1")
+    for (col in all_cols) {
+      if (is.numeric(df[[col]])) df[[paste0(col, "_power2")]] <- df[[col]]^2
+    }
+
+    df
+  }
+
+  available_cols <- intersect(columns, names(confounds_dt))
+  missing_cols <- setdiff(columns, available_cols)
+  if (length(missing_cols) > 0L) {
+    to_log(lg, "fatal", "Missing motion columns in confounds: {paste(missing_cols, collapse = ', ')}")
+  }
+
+  fs <- 1 / tr
+  nyquist <- fs / 2
+  stopband_hz <- c(band_stop_min, band_stop_max) / 60
+  f0 <- mean(stopband_hz)
+  bandwidth <- abs(diff(stopband_hz))
+
+  if (bandwidth <= 0) {
+    to_log(lg, "fatal", "band_stop_min and band_stop_max must define a non-zero bandwidth in Hz (received {bandwidth}).")
+  }
+
+  if (f0 >= nyquist) {
+    to_log(lg, "fatal", "Requested notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s.")
+  }
+
+  Q <- f0 / bandwidth
+  coeffs <- iirnotch_r(f0 = f0, Q = Q, fs = fs)
+  padlen_val <- if (is.null(padlen)) -1L else as.integer(padlen)
+
+  to_log(lg, "info", "Applying notch filter centred at {round(f0, 4)} Hz (Q = {round(Q, 2)}) to {length(available_cols)} motion columns.")
+
+  for (col_name in columns) {
+    series <- as.numeric(confounds_dt[[col_name]])
+    if (anyNA(series)) {
+      to_log(lg, "warn", "Column {col_name} contains missing values; replacing NAs with zeros before filtering.")
+      series[is.na(series)] <- 0
+    }
+    filtered <- filtfilt_cpp(series, b = coeffs$b, a = coeffs$a, padlen = padlen_val, padtype = padtype, use_zi = use_zi)
+    confounds_dt[[col_name]] <- filtered
+  }
+
+  # always recompute derivatives and quadratics after filtering
+  if (add_poly) confounds_dt <- poly_expand(confounds_dt, columns)
+
+  if (!is.null(out_file)) {
+    data.table::fwrite(confounds_dt, file = out_file, sep = "\t", na = "n/a")
+    return(invisible(out_file))
+  }
+
+  return(confounds_dt)
+}
+
+#' Compute framewise displacement from motion parameters
+#'
+#' Calculates Power-style framewise displacement (FD) from a matrix or
+#' data frame containing the six rigid-body motion parameters. Rotations
+#' are converted to displacements on the surface of a sphere with radius
+#' `head_radius` (in millimetres) before summation. Optional arguments
+#' mirror typical preprocessing steps (dropping initial dummy scans,
+#' truncating to a final volume, or handling rotations recorded in
+#' degrees).
+#'
+#' @param motion Numeric matrix or data frame with columns for
+#'   `rot_x`, `rot_y`, `rot_z`, `trans_x`, `trans_y`, and `trans_z`.
+#' @param head_radius Radius of the head (in millimetres) used to convert
+#'   rotational parameters to linear displacements. Defaults to 50 mm.
+#' @param columns Character vector giving the column order expected in
+#'   `motion`. Defaults to the six canonical fMRIPrep motion columns.
+#' @param rot_units Unit of the rotation parameters (`"rad"` or
+#'   `"deg"`). Values in degrees are internally converted to radians
+#'   prior to differencing.
+#' @param drop_volumes Number of leading timepoints to discard (e.g., if
+#'   dummy scans were dropped from the fMRI data). Defaults to 0.
+#' @param last_volume Optional index of the final volume to retain. If
+#'   supplied, frames beyond `last_volume` are excluded before FD is
+#'   computed.
+#' @param na_action Replacement applied to any remaining `NA` values
+#'   after subsetting. Defaults to `0`, matching the behavior used in
+#'   `notch_filter()`.
+#'
+#' @return Numeric vector of framewise displacement values (same length
+#'   as the number of rows in `motion`). The first entry is zero by
+#'   definition.
+#'
+#' @keywords internal
+#' @importFrom checkmate assert_data_frame assert_number assert_character
+framewise_displacement <- function(motion,
+                                   head_radius = 50,
+                                   columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
+                                   rot_units = c("rad", "deg"),
+                                   drop_volumes = 0L,
+                                   last_volume = NULL,
+                                   na_action = 0) {
+  if (is.matrix(motion)) {
+    if (is.null(colnames(motion))) stop("Matrix input must have column names matching the required motion parameters.")
+    motion_mat <- motion
+  } else {
+    checkmate::assert_data_frame(motion, any.missing = TRUE)
+    motion_mat <- as.matrix(motion)
+  }
+
+  checkmate::assert_number(head_radius, lower = 1)
+  checkmate::assert_character(columns, any.missing = FALSE, len = 6L)
+  rot_units <- match.arg(rot_units)
+  checkmate::assert_integerish(drop_volumes, len = 1L, lower = 0L)
+  if (is.null(last_volume)) {
+    last_volume <- nrow(motion_mat)
+  } else {
+    checkmate::assert_integerish(last_volume, len = 1L, lower = 1L, upper = nrow(motion_mat))
+  }
+
+  start_idx <- drop_volumes + 1L
+  if (start_idx > last_volume) stop("drop_volumes exceeds last_volume; no rows remain to compute framewise displacement.")
+  motion_mat <- motion_mat[start_idx:last_volume, , drop = FALSE]
+
+  missing_cols <- setdiff(columns, colnames(motion_mat))
+  if (length(missing_cols)) stop(sprintf("Missing motion columns required for FD: %s", paste(missing_cols, collapse = ", ")))
+
+  motion_mat <- motion_mat[, columns, drop = FALSE]
+  storage.mode(motion_mat) <- "double"
+  if (anyNA(motion_mat)) {
+    warning("NAs detected in motion matrix; replacing missing values before FD calculation.", call. = FALSE)
+    motion_mat[is.na(motion_mat)] <- na_action
+  }
+  if (nrow(motion_mat) == 0L) return(numeric())
+
+  if (rot_units == "deg") { # convert degrees to radians if needed
+    motion_mat[, columns[1:3]] <- motion_mat[, columns[1:3], drop = FALSE] * (pi / 180)
+  }
+
+  diffs <- rbind(rep(0, ncol(motion_mat)), diff(motion_mat))
+  rot_contrib <- rowSums(abs(diffs[, columns[1:3], drop = FALSE])) * head_radius
+  trans_contrib <- rowSums(abs(diffs[, columns[4:6], drop = FALSE]))
+
+  rot_contrib + trans_contrib
+}
 
 
 #' Apply temporal filtering to a 4D NIfTI image
@@ -615,16 +827,15 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #' @importFrom reticulate source_python py_module_available py_install
 #' @export
 resample_template_to_img <- function(
-  in_file,
-  output = NULL,
-  template_resolution = 1,
-  suffix = "mask",
-  desc = "brain",
-  extension = ".nii.gz",
-  interpolation = "nearest",
-  install_dependencies = TRUE,
-  overwrite = FALSE
-) {
+    in_file,
+    output = NULL,
+    template_resolution = 1,
+    suffix = "mask",
+    desc = "brain",
+    extension = ".nii.gz",
+    interpolation = "nearest",
+    install_dependencies = TRUE,
+    overwrite = FALSE) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(output, null.ok = TRUE)
   checkmate::assert_string(suffix)
@@ -657,7 +868,7 @@ resample_template_to_img <- function(
         "Please install them in your Python environment (e.g., with pip or reticulate::virtualenv_install).",
         call. = FALSE
       )
-    } 
+    }
   }
 
   # Load Python module from script
@@ -677,7 +888,6 @@ resample_template_to_img <- function(
 
   return(invisible(img))
 }
-utils::globalVariables("resample_template_to_bold") # avoid R CMD CHECK complaint about global function -- here, created by source_python
 
 # helper file to identify scrubbing censor file from input nifti
 get_censor_file <- function(bids_info) {
@@ -766,4 +976,31 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
   butterworth_filter_cpp(infile = infile, b = b, a = a,
                          outfile = outfile, internal = internal,
                          padtype = padtype, use_zi = use_zi, demean=demean)
+}
+
+#' iirnotch implementation in R (RBJ biquad design)
+#' @param f0 notch center frequency in Hz
+#' @param Q quality factor (higher = narrower notch)
+#' @param fs sampling rate in Hz
+#' @return filter coefficients `list(b, a)` normalized so a[1] == 1
+#' @keywords internal
+#' @noRd
+iirnotch_r <- function(f0, Q, fs) {
+  stopifnot(is.numeric(f0), is.numeric(Q), is.numeric(fs),
+            f0 > 0, Q > 0, fs > 0, f0 < fs/2)
+
+  w0 <- 2 * pi * (f0 / fs)           # normalized radian frequency
+  cw  <- cos(w0)
+  sw  <- sin(w0)
+  alpha <- sw / (2 * Q)
+
+  # RBJ cookbook notch (constant 0 dB)
+  b <- c(1, -2 * cw, 1)
+  a <- c(1 + alpha, -2 * cw, 1 - alpha)
+
+  # normalize so a[1] == 1
+  b <- b / a[1]
+  a <- a / a[1]
+
+  list(b = b, a = a)
 }

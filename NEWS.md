@@ -2,9 +2,12 @@
 
 * Allow `min_vox_per_roi` to be specified as a percentage or proportion of atlas voxels during ROI extraction
 * ROI extraction allows for an optional brain mask that is applied to the atlas and time series data
-* Add ability to set an optional field to NA (empty) in `prompt_input` when a default is provided
+* Add support for an explicit empty response (returns `NA`) in `prompt_input` when a default is provided
 * Support notch filtering of motion parameters prior to calculation of framewise_displacement
 * Support different head sizes for calculation of framewise displacement
+* `run_project` with `force=TRUE` enables `overwrite` for downstream operations, ensuring that steps are re-run
+* Persist location of non-standard YAML file locations when loading from file.
+* Pass through user-specified CLI to heudiconv, support overwrite and clearing the cache
 
 # BrainGnomes 0.7-1
 

@@ -232,8 +232,20 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
         ))
 
         cor_file <- file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))
-        to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
-        data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+        write_file <- TRUE
+        if (file.exists(cor_file)) {
+          if (overwrite) {
+            to_log(lg, "info", "Overwriting subject {sub_id} {cmeth} correlations to {cor_file}")
+          } else {
+            write_file <- FALSE
+            to_log(lg, "info", "Not writing subject {sub_id} {cmeth} correlations to {cor_file} because file exists and overwrite=FALSE")
+          }
+        } else {
+          to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
+        }
+        
+        if (write_file) data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+        
         cor_file
       })
       names(cor_files) <- cor_method

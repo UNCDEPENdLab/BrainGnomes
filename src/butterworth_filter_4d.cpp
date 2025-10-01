@@ -204,6 +204,15 @@ std::vector<double> filtfilt(const std::vector<double>& x, const std::vector<dou
   return y_trim;
 }
 
+void demean_vec(std::vector<double> &ts) {
+  if (ts.empty()) return;
+
+  // Compute the mean
+  double mean = std::accumulate(ts.begin(), ts.end(), 0.0) / ts.size();
+
+  // Subtract the mean from each element
+  for (double &x : ts) x -= mean;
+}
 
 //' Zero-Phase IIR Filtering via Forward and Reverse Filtering
 //'
@@ -244,16 +253,6 @@ NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a,
   
   std::vector<double> result = filtfilt(x_vec, b_vec, a_vec, padlen, padtype, use_zi);
   return NumericVector(result.begin(), result.end());
-}
-
-void demean_vec(std::vector<double> &ts) {
-  if (ts.empty()) return;
-
-  // Compute the mean
-  double mean = std::accumulate(ts.begin(), ts.end(), 0.0) / ts.size();
-
-  // Subtract the mean from each element
-  for (double &x : ts) x -= mean;
 }
 
 //' Apply Butterworth Filter to 4D NIfTI Image
