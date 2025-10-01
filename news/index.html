@@ -43,9 +43,13 @@
 <h2 class="pkg-version" data-toc-text="0.7-2" id="braingnomes-07-2">BrainGnomes 0.7-2<a class="anchor" aria-label="anchor" href="#braingnomes-07-2"></a></h2>
 <ul><li>Allow <code>min_vox_per_roi</code> to be specified as a percentage or proportion of atlas voxels during ROI extraction</li>
 <li>ROI extraction allows for an optional brain mask that is applied to the atlas and time series data</li>
-<li>Add ability to set an optional field to NA (empty) in <code>prompt_input</code> when a default is provided</li>
+<li>Add support for an explicit empty response (returns <code>NA</code>) in <code>prompt_input</code> when a default is provided</li>
 <li>Support notch filtering of motion parameters prior to calculation of framewise_displacement</li>
 <li>Support different head sizes for calculation of framewise displacement</li>
+<li>
+<code>run_project</code> with <code>force=TRUE</code> enables <code>overwrite</code> for downstream operations, ensuring that steps are re-run</li>
+<li>Persist location of non-standard YAML file locations when loading from file.</li>
+<li>Pass through user-specified CLI to heudiconv, support overwrite and clearing the cache</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-1" id="braingnomes-07-1">BrainGnomes 0.7-1<a class="anchor" aria-label="anchor" href="#braingnomes-07-1"></a></h2>
