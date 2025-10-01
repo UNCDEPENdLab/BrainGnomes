@@ -260,8 +260,6 @@ notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, b
 
   # polynomial expansion -- first derivatives and squares
   poly_expand <- function(df, cols = NULL) {
-    df <- as.data.frame(df) # ensure base data.frame behavior
-
     if (!is.null(cols)) checkmate::assert_subset(cols, names(df))
 
     # 1) first differences for each numeric column

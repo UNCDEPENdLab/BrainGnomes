@@ -27,6 +27,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "scrubbing/apply", "scrubbing/prefix",
       "confound_regression/columns", "confound_regression/noproc_columns",
       "confound_regression/prefix",
+      "motion_filter/enable", "motion_filter/band_stop_min", "motion_filter/band_stop_max",
       "force_processing_order", "processing_steps"
     )
   }
