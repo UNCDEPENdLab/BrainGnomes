@@ -239,6 +239,7 @@ notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, b
     columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"), add_poly = TRUE,
     out_file = NULL, padtype = "constant",  padlen = NULL, use_zi = TRUE, lg = NULL) {
 
+  # cf. https://github.com/PennLINC/xcp_d/blob/f1d779e842708312df62bb595e870c91b34edd99/xcp_d/utils/confounds.py#L169
   checkmate::assert_data_table(confounds_dt)
   checkmate::assert_number(tr, lower = 0.01)
   checkmate::assert_number(band_stop_min, lower = 0)
@@ -470,7 +471,7 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
   } else {
     to_log(lg, "fatal", "Problem with temporal_filter settings. Both low_pass_hz and high_pass_hz are infinite or invalid.")
   }
-  lg$debug("in_file: {in_file}")
+  to_log(lg, "debug", "in_file: {in_file}")
   
   if (method == "fslmaths") {
     # bptf specifies its filter cutoffs in terms of volumes, not frequencies

@@ -726,7 +726,7 @@ get_pipeline_status <- function(scfg) {
   #   }
 }
 
-to_log <- function(logger, condition = "info", msg, ...) {
+to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
   if (checkmate::test_string(logger)) {
     logger <- lgr::get_logger_glue(logger)
   } else {
@@ -745,7 +745,7 @@ to_log <- function(logger, condition = "info", msg, ...) {
     stop(msg, call. = FALSE)
   } else if (condition %in% c("warn", "error")) {
     warning(msg, call. = FALSE, immediate. = FALSE)
-  } else if (condition == "info") {
+  } else if (condition == "info" && isTRUE(info_message)) { # don't issue message() by default
     message(msg)
   }
 
