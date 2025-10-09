@@ -4,14 +4,14 @@
 \alias{submit_tracking_query}
 \title{Internal helper function to submit a query to the tracking SQLite database}
 \usage{
-submit_tracking_query(str, sqlite_db, params = NULL)
+submit_tracking_query(str, sqlite_db, param = NULL)
 }
 \arguments{
 \item{str}{Character string SQLite query}
 
 \item{sqlite_db}{Path to SQLite database used for tracking}
 
-\item{params}{List of parameters/arguments to be used in query}
+\item{param}{List of parameters/arguments to be used in query}
 }
 \description{
 Internal helper function to submit a query to the tracking SQLite database

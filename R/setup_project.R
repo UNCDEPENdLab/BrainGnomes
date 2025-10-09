@@ -226,6 +226,8 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
 
+  # define SQLite database path
+  scfg$metadata$sqlite_db <- file.path(scfg$metadata$project_directory, paste0(scfg$metadata$project_name, ".sqlite"))
 
   return(scfg)
 }
