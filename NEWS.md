@@ -1,5 +1,7 @@
 # BrainGnomes 0.7-2
 
+Released 2025-10-09
+
 * Allow `min_vox_per_roi` to be specified as a percentage or proportion of atlas voxels during ROI extraction
 * ROI extraction allows for an optional brain mask that is applied to the atlas and time series data
 * Add support for an explicit empty response (returns `NA`) in `prompt_input` when a default is provided
@@ -8,6 +10,7 @@
 * `run_project` with `force=TRUE` enables `overwrite` for downstream operations, ensuring that steps are re-run
 * Persist location of non-standard YAML file locations when loading from file.
 * Pass through user-specified CLI to heudiconv, support overwrite and clearing the cache
+* bugfix: look for MNI152NLin6Asym_res-2 recursively when verifying readiness for AROMA
 
 # BrainGnomes 0.7-1
 
