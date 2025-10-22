@@ -220,6 +220,8 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' @param preserve_mean Logical; if \code{TRUE}, constant time series will be left unchanged (not demeaned or recentered).
 #' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
 #'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
+#' @param remove_cols Integer vector of column indices (1-based in R) indicating which columns of X
+#'        should be regressed out. All columns are regressed out if omitted or empty.
 #'
 #' @return A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
 #' @export
@@ -243,8 +245,8 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' https://dannyjameswilliams.co.uk/portfolios/sc2/rcpp/
 NULL
 
-lmfit_residuals_4d <- function(infile, X, include_rows, add_intercept = TRUE, outfile = "", internal = FALSE, preserve_mean = FALSE, set_mean = 0.0) {
-    .Call(`_BrainGnomes_lmfit_residuals_4d`, infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean)
+lmfit_residuals_4d <- function(infile, X, include_rows, add_intercept = TRUE, outfile = "", internal = FALSE, preserve_mean = FALSE, set_mean = 0.0, remove_cols = as.integer( c())) {
+    .Call(`_BrainGnomes_lmfit_residuals_4d`, infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean, remove_cols)
 }
 
 #' Portable Menu Prompt for Interactive or TTY Sessions

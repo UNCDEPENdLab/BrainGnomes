@@ -26,6 +26,8 @@
 //' @param preserve_mean Logical; if \code{TRUE}, constant time series will be left unchanged (not demeaned or recentered).
 //' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
 //'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
+//' @param remove_cols Integer vector of column indices (1-based in R) indicating which columns of X
+//'        should be regressed out. All columns are regressed out if omitted or empty.
 //'
 //' @return A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
 //' @export
@@ -52,10 +54,10 @@
 // [[Rcpp::export]]
 Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const LogicalVector& include_rows, 
   bool add_intercept = true, std::string outfile = "", bool internal = false,
-  bool preserve_mean = false, double set_mean = 0.0) {
+  bool preserve_mean = false, double set_mean = 0.0,
+  const Rcpp::IntegerVector& remove_cols = Rcpp::IntegerVector::create()) {
   
   bool use_set = std::abs(set_mean) > 1e-8;
-  
   if (use_set && preserve_mean) {
     Rcpp::warning("Cannot use preserve_mean = TRUE and have a non-zero value for set_mean. The set_mean will be ignored.");
   }
@@ -77,7 +79,7 @@ Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const L
   
   int n_x = dims[0], n_y = dims[1], n_z = dims[2];
   arma::uword n_t = dims[3]; // use uword for consistency with arma matrix size types
-  
+
   if (X.n_rows != n_t || include_rows.size() != n_t) {
     stop("X and include_rows must match the number of timepoints in the image.");
   }
@@ -86,13 +88,13 @@ Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const L
   arma::mat X_use = X;
   std::vector<arma::uword> keep_cols;
   bool has_intercept = false;
-  
+
   // check for constant columns and existing intercept
   for (arma::uword j = 0; j < X.n_cols; ++j) {
     double min_val = X.col(j).min();
     double max_val = X.col(j).max();
     double range = std::abs(max_val - min_val);
-    
+
     if (std::abs(max_val - 1.0) < 1e-8 && std::abs(min_val - 1.0) < 1e-8 && !has_intercept) {
       has_intercept = true;
       keep_cols.push_back(j); // keep the first intercept
@@ -102,9 +104,9 @@ Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const L
       keep_cols.push_back(j);
     }
   }
-  
+
   X_use = X_use.cols(arma::uvec(keep_cols));
-  
+
   // Add intercept if needed
   if (!has_intercept && add_intercept) {
     X_use.insert_cols(0, arma::vec(n_t, arma::fill::ones));
@@ -115,63 +117,92 @@ Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const L
   for (arma::uword ti = 0; ti < n_t; ++ti) {
     if (include_rows[ti]) indices.push_back(ti);
   }
-  
+
   arma::uword n_t_sub = indices.size();
   
   // fail on rank deficient regression (p > n)
   if (n_t_sub < X_use.n_cols) {
     stop("Not enough uncensored timepoints to estimate model: %d available, but need at least %d", n_t_sub, X_use.n_cols);
   }
-  
+
   arma::uvec idx = arma::uvec(indices);
   arma::mat X_sub = X_use.rows(idx);
+
+  // Prepare remove_cols (convert from 1-based to 0-based)
+  std::vector<arma::uword> regress_cols;
+  if (remove_cols.size() == 0) {
+    for (arma::uword j = 0; j < X_use.n_cols; ++j)
+      regress_cols.push_back(j);
+  } else {
+    for (int j = 0; j < remove_cols.size(); ++j) {
+      int col = remove_cols[j] - 1;
+      if (col >= 0 && col < (int)X_use.n_cols)
+        regress_cols.push_back((arma::uword)col);
+    }
+  }
+
+  // Precompute QR and Qt for projection
+  arma::mat Q, R;
+  arma::uvec piv; // column pivot (0-based). Empty for econ success.
   
-  // lookup function for datapoint inside 4D data matrix
+  if (!arma::qr_econ(Q, R, X_sub)) {
+    // fallback: pivoted QR (X * P = Q * R)
+    if (!arma::qr(Q, R, piv, X)) {
+      stop("QR decomposition failed (both qr_econ and pivoted qr).");
+    }
+  }
+
+  arma::mat Qt = Q.t();
+
   auto flat_index = [&](int x, int y, int z, int t) {
     return x + n_x * (y + n_y * (z + n_z * t));
   };
-  
-  arma::vec y(n_t);
-  arma::vec y_sub(n_t_sub); // subset of y for included rows
-  arma::vec beta, fitted(n_t), residuals(n_t);
+
+  arma::vec y(n_t), y_sub(n_t_sub), beta_full, beta_filtered, fitted(n_t), residuals(n_t);
 
   for (int xi = 0; xi < n_x; ++xi) {
     for (int yi = 0; yi < n_y; ++yi) {
       for (int zi = 0; zi < n_z; ++zi) {
-        
+
         for (arma::uword ti = 0; ti < n_t; ++ti) {
           y[ti] = data[flat_index(xi, yi, zi, ti)]; // this timeseries
         }
-        
         y_sub = y.elem(idx); // valid points in y
-        
+
         // Based on basic timing tests, we get a small improvement in speed if we skip constant time series
         double range = y_sub.max() - y_sub.min();
         if (std::abs(range) < 1e-8) {
           residuals.fill(0.0);
         } else {
-          beta = arma::solve(X_sub, y_sub);  // OLS coefficients
-          fitted = X_use * beta; // compute fits on full time series
-          residuals = y - fitted; // compute residuals on full time series  
+          arma::vec Qt_y = Qt * y_sub;
+          beta_full = arma::solve(R, Qt_y);
+          if (regress_cols.size() < beta_full.n_elem) {
+            arma::vec beta_sub = beta_full.elem(arma::uvec(regress_cols));
+            arma::mat X_cols = X_use.cols(arma::uvec(regress_cols));
+            fitted = X_cols * beta_sub;
+          } else {
+            fitted = X_use * beta_full;
+          }
+          residuals = y - fitted;
         }
-        
+
         if (preserve_mean) {
           residuals += arma::mean(y_sub); // add back the mean of the valid timepoints
         } else if (use_set) {
-          residuals += set_mean; // add intended mean, if requested 
+          residuals += set_mean; // add intended mean, if requested
         }
-        
+
         for (arma::uword ti = 0; ti < n_t; ++ti) {
           data[flat_index(xi, yi, zi, ti)] = static_cast<float>(residuals[ti]);
         }
       }
     }
   }
-  
+
   // Write output if requested
   if (!outfile.empty()) {
     image.toFile(outfile, datatype);
   }
-  
+
   return image.toArrayOrPointer(internal, "NIfTI image");
 }
