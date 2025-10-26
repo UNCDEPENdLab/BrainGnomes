@@ -981,7 +981,7 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
 #' @param f0 notch center frequency in Hz
 #' @param Q quality factor (higher = narrower notch)
 #' @param fs sampling rate in Hz
-#' @return filter coefficients `list(b, a)` normalized so a[1] == 1
+#' @return filter coefficients `list(b, a)` normalized so `a[1] == 1`
 #' @keywords internal
 #' @noRd
 iirnotch_r <- function(f0, Q, fs) {

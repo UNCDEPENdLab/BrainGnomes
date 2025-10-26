@@ -79,7 +79,8 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   * image with them already set is not supported" (NiftiImage_impl.h, line 744). But we cannot rely on unscaled
   * values because they will be just random integers (not affected by intercept and slope). My workaround is to
   * essentially do what .changeDataType does here to convert to FLOAT32 */
-  if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64) {
+  if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64 ||
+  datatype == DT_UINT8 || datatype == DT_UINT16 || datatype == DT_UINT32 || datatype == DT_UINT64) {
     //image.changeDatatype(DT_FLOAT32, true); // doesn't work as expected
     NiftiImageData float_data(image.data(), DT_FLOAT32); // this will get the scaled data as expected
     image.replaceData(float_data); // force float32 data back into NiftiImage object

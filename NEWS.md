@@ -1,3 +1,8 @@
+# BrainGnomes 0.7-3
+
+* bugfix: correctly handle unsigned integer data types in NIfTIs
+* lmfit_residuals_4d now handles partial (ala fsl_regfilt) and full regression
+
 # BrainGnomes 0.7-2
 
 Released 2025-10-09

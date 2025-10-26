@@ -205,23 +205,25 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' dataset including censored timepoints (e.g., for continuity or interpolation).
 #'
 #' Constant columns in the design matrix are automatically removed. If an intercept column (all ones) is present,
-#' it is preserved; otherwise, an intercept will be added if \code{add_intercept = TRUE}.
+#' it is preserved. If \code{add_intercept = TRUE}, an intercept column will be added (if not present).
 #'
 #' @name lmfit_residuals_4d
 #'
 #' @param infile Path to a 4D NIfTI image file to denoise (e.g., functional data).
 #' @param X A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 #'          Typically includes motion parameters, physiological noise, etc.
-#' @param include_rows Logical vector indicating which timepoints to include in model fitting (e.g., uncensored).
-#'          Must be the same length as the number of timepoints in the image and the number of rows in \code{X}.
+#' @param include_rows Optional logical vector identifying the timepoints used when estimating the model
+#'          (e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}; when \code{NULL}, all timepoints are used.
 #' @param add_intercept Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.
 #' @param outfile Optional path to write the output residuals image. If empty, no file is written.
 #' @param internal Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.
 #' @param preserve_mean Logical; if \code{TRUE}, constant time series will be left unchanged (not demeaned or recentered).
 #' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
 #'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
-#' @param remove_cols Integer vector of column indices (1-based in R) indicating which columns of X
-#'        should be regressed out. All columns are regressed out if omitted or empty.
+#' @param regress_cols Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.
+#'        When omitted, all non-constant columns are removed unless \code{exclusive = TRUE}.
+#' @param exclusive Logical; if \code{TRUE}, only the columns listed in \code{regress_cols} (and an intercept, if present)
+#'        are used to estimate the model. This allows for partial regression that preserves other effects.
 #'
 #' @return A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
 #' @export
@@ -245,8 +247,8 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #' https://dannyjameswilliams.co.uk/portfolios/sc2/rcpp/
 NULL
 
-lmfit_residuals_4d <- function(infile, X, include_rows, add_intercept = TRUE, outfile = "", internal = FALSE, preserve_mean = FALSE, set_mean = 0.0, remove_cols = as.integer( c())) {
-    .Call(`_BrainGnomes_lmfit_residuals_4d`, infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean, remove_cols)
+lmfit_residuals_4d <- function(infile, X, include_rows = NULL, add_intercept = FALSE, outfile = "", internal = FALSE, preserve_mean = FALSE, set_mean = 0.0, regress_cols = NULL, exclusive = FALSE) {
+    .Call(`_BrainGnomes_lmfit_residuals_4d`, infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean, regress_cols, exclusive)
 }
 
 #' Portable Menu Prompt for Interactive or TTY Sessions

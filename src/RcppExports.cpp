@@ -91,21 +91,22 @@ BEGIN_RCPP
 END_RCPP
 }
 // lmfit_residuals_4d
-Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const LogicalVector& include_rows, bool add_intercept, std::string outfile, bool internal, bool preserve_mean, double set_mean, const Rcpp::IntegerVector& remove_cols);
-RcppExport SEXP _BrainGnomes_lmfit_residuals_4d(SEXP infileSEXP, SEXP XSEXP, SEXP include_rowsSEXP, SEXP add_interceptSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP preserve_meanSEXP, SEXP set_meanSEXP, SEXP remove_colsSEXP) {
+Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat& X, const Rcpp::Nullable<Rcpp::LogicalVector>& include_rows, bool add_intercept, std::string outfile, bool internal, bool preserve_mean, double set_mean, const Rcpp::Nullable<Rcpp::IntegerVector>& regress_cols, bool exclusive);
+RcppExport SEXP _BrainGnomes_lmfit_residuals_4d(SEXP infileSEXP, SEXP XSEXP, SEXP include_rowsSEXP, SEXP add_interceptSEXP, SEXP outfileSEXP, SEXP internalSEXP, SEXP preserve_meanSEXP, SEXP set_meanSEXP, SEXP regress_colsSEXP, SEXP exclusiveSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< std::string >::type infile(infileSEXP);
     Rcpp::traits::input_parameter< const arma::mat& >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const LogicalVector& >::type include_rows(include_rowsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::Nullable<Rcpp::LogicalVector>& >::type include_rows(include_rowsSEXP);
     Rcpp::traits::input_parameter< bool >::type add_intercept(add_interceptSEXP);
     Rcpp::traits::input_parameter< std::string >::type outfile(outfileSEXP);
     Rcpp::traits::input_parameter< bool >::type internal(internalSEXP);
     Rcpp::traits::input_parameter< bool >::type preserve_mean(preserve_meanSEXP);
     Rcpp::traits::input_parameter< double >::type set_mean(set_meanSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::IntegerVector& >::type remove_cols(remove_colsSEXP);
-    rcpp_result_gen = Rcpp::wrap(lmfit_residuals_4d(infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean, remove_cols));
+    Rcpp::traits::input_parameter< const Rcpp::Nullable<Rcpp::IntegerVector>& >::type regress_cols(regress_colsSEXP);
+    Rcpp::traits::input_parameter< bool >::type exclusive(exclusiveSEXP);
+    rcpp_result_gen = Rcpp::wrap(lmfit_residuals_4d(infile, X, include_rows, add_intercept, outfile, internal, preserve_mean, set_mean, regress_cols, exclusive));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -181,7 +182,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_butterworth_filter_cpp", (DL_FUNC) &_BrainGnomes_butterworth_filter_cpp, 9},
     {"_BrainGnomes_getline", (DL_FUNC) &_BrainGnomes_getline, 1},
     {"_BrainGnomes_image_quantile", (DL_FUNC) &_BrainGnomes_image_quantile, 4},
-    {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 9},
+    {"_BrainGnomes_lmfit_residuals_4d", (DL_FUNC) &_BrainGnomes_lmfit_residuals_4d, 10},
     {"_BrainGnomes_menu_safe", (DL_FUNC) &_BrainGnomes_menu_safe, 2},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},
