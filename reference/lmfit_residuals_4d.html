@@ -11,7 +11,7 @@ timepoints to obtain predicted values, and the residuals are returned as a clean
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -65,8 +65,8 @@ Typically includes motion parameters, physiological noise, etc.</p></dd>
 
 
 <dt id="arg-include-rows">include_rows<a class="anchor" aria-label="anchor" href="#arg-include-rows"></a></dt>
-<dd><p>Logical vector indicating which timepoints to include in model fitting (e.g., uncensored).
-Must be the same length as the number of timepoints in the image and the number of rows in <code>X</code>.</p></dd>
+<dd><p>Optional logical vector identifying the timepoints used when estimating the model
+(e.g., uncensored volumes). If supplied it must have length <code>nrow(X)</code>; when <code>NULL</code>, all timepoints are used.</p></dd>
 
 
 <dt id="arg-add-intercept">add_intercept<a class="anchor" aria-label="anchor" href="#arg-add-intercept"></a></dt>
@@ -89,6 +89,16 @@ Must be the same length as the number of timepoints in the image and the number 
 <dd><p>Optional numeric value; if specified, all residual time series will be shifted to have this mean
 (default is 0). Cannot be used in combination with <code>preserve_mean = TRUE</code>.</p></dd>
 
+
+<dt id="arg-regress-cols">regress_cols<a class="anchor" aria-label="anchor" href="#arg-regress-cols"></a></dt>
+<dd><p>Optional integer vector (1-based) indicating which columns of <code>X</code> should be regressed out.
+When omitted, all non-constant columns are removed unless <code>exclusive = TRUE</code>.</p></dd>
+
+
+<dt id="arg-exclusive">exclusive<a class="anchor" aria-label="anchor" href="#arg-exclusive"></a></dt>
+<dd><p>Logical; if <code>TRUE</code>, only the columns listed in <code>regress_cols</code> (and an intercept, if present)
+are used to estimate the model. This allows for partial regression that preserves other effects.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -100,7 +110,7 @@ Must be the same length as the number of timepoints in the image and the number 
 to valid (non-censored) timepoints to prevent bias, but the resulting model is applied to the full
 dataset including censored timepoints (e.g., for continuity or interpolation).</p>
 <p>Constant columns in the design matrix are automatically removed. If an intercept column (all ones) is present,
-it is preserved; otherwise, an intercept will be added if <code>add_intercept = TRUE</code>.</p>
+it is preserved. If <code>add_intercept = TRUE</code>, an intercept column will be added (if not present).</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
