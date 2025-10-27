@@ -95,6 +95,79 @@ test_that("lmfit_residuals_4d removes effects of nuisance regressors", {
   expect_true(mean(abs(corrs)) < 0.001)
 })
 
+test_that("lmfit_residuals_mat matches lmfit_residuals_4d", {
+  skip_if_not_installed("RNifti")
+  library(RNifti)
+
+  set.seed(2025)
+  n_t <- 40
+  n_vox <- 6
+
+  trend1 <- scale(seq_len(n_t))
+  trend2 <- scale(sin(seq_len(n_t) / 5))
+  X <- cbind(1, trend1, trend2)
+
+  betas <- matrix(runif(ncol(X) * n_vox, -0.5, 0.5), nrow = ncol(X))
+  signal <- X %*% betas
+  noise <- matrix(rnorm(n_t * n_vox, sd = 0.05), nrow = n_t)
+  Y_mat <- signal + noise
+
+  include_rows <- rep(TRUE, n_t)
+  include_rows[sample(n_t, 5)] <- FALSE
+
+  dims <- c(n_vox, 1, 1, n_t)
+  Y_array <- array(as.vector(t(Y_mat)), dim = dims)
+  temp_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(temp_file), add = TRUE)
+  RNifti::writeNifti(RNifti::asNifti(Y_array), temp_file)
+
+  res_cpp <- lmfit_residuals_4d(
+    infile = temp_file,
+    X = X,
+    include_rows = include_rows,
+    add_intercept = FALSE
+  )
+  res_cpp_arr <- as.array(res_cpp)
+  res_cpp_dims <- dim(res_cpp_arr)
+  res_cpp_mat <- t(matrix(res_cpp_arr, nrow = res_cpp_dims[1], ncol = res_cpp_dims[4]))
+
+  res_mat <- lmfit_residuals_mat(
+    Y = Y_mat,
+    X = X,
+    include_rows = include_rows,
+    add_intercept = FALSE
+  )
+
+  expect_equal(res_mat, res_cpp_mat, tolerance = 1e-6)
+
+  res_cpp_partial <- lmfit_residuals_4d(
+    infile = temp_file,
+    X = X,
+    include_rows = include_rows,
+    add_intercept = FALSE,
+    regress_cols = 3L,
+    exclusive = TRUE
+  )
+  res_cpp_partial_arr <- as.array(res_cpp_partial)
+  res_cpp_partial_dims <- dim(res_cpp_partial_arr)
+  res_cpp_partial_mat <- t(matrix(
+    res_cpp_partial_arr,
+    nrow = res_cpp_partial_dims[1],
+    ncol = res_cpp_partial_dims[4]
+  ))
+
+  res_mat_partial <- lmfit_residuals_mat(
+    Y = Y_mat,
+    X = X,
+    include_rows = include_rows,
+    add_intercept = FALSE,
+    regress_cols = 3L,
+    exclusive = TRUE
+  )
+
+  expect_equal(res_mat_partial, res_cpp_partial_mat, tolerance = 1e-6)
+})
+
 test_that("exclusive regression requires regress_cols", {
   skip_if_not_installed("RNifti")
   library(RNifti)

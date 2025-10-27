@@ -499,28 +499,31 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
 
 #' Apply AROMA-based denoising to an fMRI image
 #'
-#' Performs non-aggressive ICA-AROMA denoising by regressing out identified noise components
-#' from an fMRI time series using FSL's \code{fsl_regfilt}. Falls back to an R-based wrapper script
-#' if the standard FSL command fails due to dimensionality issues.
-#'
+#' Performs ICA-AROMA denoising by regressing out identified noise components from an fMRI
+#' time series using the internal \code{lmfit_residuals_4d()} helper. When \code{nonaggressive = TRUE}
+#' (the default) only the unique variance attributable to the specified components is removed,
+#' matching FSL's non-aggressive \code{fsl_regfilt} behavior. Set \code{nonaggressive = FALSE} for
+#' aggressive regression that fully removes the listed components.
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_file The full path for the file output by this step
 #' @param mixing_file Path to the MELODIC mixing matrix (e.g., \code{*_desc-MELODIC_mixing.tsv}).
 #' @param noise_ics Vector of ICA components to regress out (usually pulled from relevant aroma_timeseries.tsv file).
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr object used for logging messages
-#' @param use_R Logical; if \code{TRUE}, use an R wrapper script (\code{fsl_regfilt.R}) instead of \code{fsl_regfilt}.
-#' @param fsl_img Optional Singularity image to execute FSL commands in a containerized environment.
+#' @param nonaggressive Logical; \code{TRUE} (default) performs partial regression to emulate
+#'   non-aggressive AROMA. Set to \code{FALSE} for aggressive regression.
 #'
 #' @return Path to the denoised output NIfTI file. If required files are missing, returns \code{in_file} unmodified.
 #'
 #' @keywords internal
 #' @importFrom glue glue
-#' @importFrom checkmate assert_string test_file_exists
-apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = FALSE, lg = NULL, use_R = FALSE, fsl_img = NULL) {
-  # checkmate::assert_file_exists(in_file)
+#' @importFrom checkmate assert_string assert_flag test_file_exists test_integerish
+#' @importFrom data.table fread
+apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = FALSE,
+                        lg = NULL, nonaggressive = TRUE) {
   checkmate::assert_string(out_file)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_flag(nonaggressive)
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
     log_file <- NULL # no log file to write
@@ -536,27 +539,62 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
     return(in_file)
   }
 
-  if (isFALSE(checkmate::test_integerish(noise_ics, lower=1))) {
-    to_log(lg, "warn", "noise_ics must be a vector of integers identifying components to regress out. Skipping AROMA regression")
+  if (!overwrite && checkmate::test_file_exists(out_file)) {
+    lg$info("Output already exists at {out_file}; skipping AROMA regression.")
+    return(out_file)
+  }
+
+  if (is.null(noise_ics) || length(noise_ics) == 0) {
+    lg$info("No AROMA noise components provided; leaving data unchanged.")
     return(in_file)
   }
 
-  # just read in the comma-separated noise ICs
-  noise_ics <- paste(noise_ics, collapse=",") # fsl_regfilt requires comma-separated list
-
-  # for some reason, fsl_regfilt blows up when we try to feed a regressors x 1 x 1 x timepoints NIfTI
-  # fall back to R in this case
-  if (isTRUE(use_R)) {
-    regfilt_rscript <- system.file("fsl_regfilt.R", package = "BrainGnomes")
-    if (!file.exists(regfilt_rscript)) stop("Cannot find fsl_regfilt.R script in the BrainGnomes installation folder")
-
-    cmd <- glue("{Sys.getenv('R_HOME')}/bin/Rscript --vanilla {regfilt_rscript} --input={in_file} --melodic_mix={mixing_file} --filter={noise_ics} --njobs=1 --output={out_file}")
-    to_log(lg, "info", "Running fsl_regfilt.R: {cmd}")
-    system(cmd)
-  } else {
-    cmd <- glue("fsl_regfilt -i {file_sans_ext(in_file)} -o {file_sans_ext(out_file)} -d {mixing_file} -f {noise_ics}")
-    run_fsl_command(cmd, log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, mixing_file, out_file)))
+  if (isFALSE(checkmate::test_integerish(noise_ics, lower = 1, any.missing = FALSE))) {
+    to_log(lg, "warn", "noise_ics must be a vector of positive integers identifying components to regress out. Skipping AROMA regression")
+    return(in_file)
   }
+
+  mixing_dt <- data.table::fread(mixing_file, header = FALSE, data.table = FALSE)
+  mixing_mat <- as.matrix(mixing_dt)
+
+  if (nrow(mixing_mat) == 0 || ncol(mixing_mat) == 0) {
+    to_log(lg, "warn", "Mixing matrix {mixing_file} is empty; skipping AROMA regression")
+    return(in_file)
+  }
+
+  storage.mode(mixing_mat) <- "double"
+
+  comp_idx <- sort(unique(as.integer(noise_ics)))
+  invalid_idx <- comp_idx[comp_idx < 1 | comp_idx > ncol(mixing_mat)]
+  if (length(invalid_idx) > 0) {
+    to_log(lg, "warn", "Dropping invalid AROMA component indices: {paste(invalid_idx, collapse = ', ')}")
+    comp_idx <- setdiff(comp_idx, invalid_idx)
+  }
+
+  if (length(comp_idx) == 0) {
+    lg$info("No valid AROMA noise components remain after filtering; leaving data unchanged.")
+    return(in_file)
+  }
+
+  include_rows <- rep(TRUE, nrow(mixing_mat))
+  exclusive_flag <- !isTRUE(nonaggressive)
+  mode_label <- if (exclusive_flag) "aggressive" else "non-aggressive"
+
+  to_log(lg, "info", "Regressing {length(comp_idx)} AROMA noise components using {mode_label} internal lmfit implementation.")
+  tryCatch({
+    lmfit_residuals_4d(
+      infile = in_file,
+      X = mixing_mat,
+      include_rows = include_rows,
+      outfile = out_file,
+      regress_cols = comp_idx,
+      exclusive = exclusive_flag
+    )
+  }, error = function(e) {
+    to_log(lg, "error", "AROMA regression failed: {e$message}")
+    stop(e)
+  })
+
   return(out_file)
 }
 
@@ -667,6 +705,221 @@ intensity_normalize <- function(in_file, out_file, brain_mask=NULL, global_media
 
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {rescaling_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))
   return(out_file)
+}
+
+#' Residualize matrix time series using lm()
+#'
+#' Applies the same confound regression logic as \code{lmfit_residuals_4d} but operates on an
+#' in-memory matrix rather than a NIfTI image on disk. Each column of \code{Y} is treated as a
+#' separate time series, and nuisance regressors supplied in \code{X} are regressed out using
+#' \code{stats::lm.fit()} on the uncensored timepoints.
+#'
+#' Constant columns in the design matrix are removed automatically (with the first intercept
+#' column preserved). Optional censoring allows the fit to use only valid rows while predictions
+#' are generated for the full series.
+#'
+#' @param Y Numeric matrix of time series to residualize (rows = timepoints, columns = signals).
+#' @param X Numeric design matrix with the same number of rows as \code{Y}.
+#' @param include_rows Optional logical vector marking rows to use during fitting.
+#' @param add_intercept Logical; add an intercept column when the design lacks one.
+#' @param preserve_mean Logical; keep the original mean of uncensored timepoints.
+#' @param set_mean Numeric; shift residuals so every column has this mean (ignored when \code{preserve_mean = TRUE}).
+#' @param regress_cols Optional integer vector (1-based) selecting columns of \code{X} to regress out.
+#' @param exclusive Logical; if \code{TRUE}, the fit only uses columns listed in \code{regress_cols}
+#'   (and the intercept, if present).
+#'
+#' @return A numeric matrix of residuals with the same dimensions as \code{Y}.
+#' @keywords internal
+#' @seealso lmfit_residuals_4d
+lmfit_residuals_mat <- function(Y, X, include_rows = NULL, add_intercept = FALSE,
+                                preserve_mean = FALSE, set_mean = 0,
+                                regress_cols = NULL, exclusive = FALSE) {
+  Y <- as.matrix(Y)
+  X <- as.matrix(X)
+  checkmate::assert_matrix(Y, mode = "numeric", any.missing = FALSE)
+  checkmate::assert_matrix(X, mode = "numeric", nrows = nrow(Y), any.missing = FALSE)
+
+  n_t <- nrow(Y)
+  use_set <- abs(set_mean) > 1e-8
+  if (use_set && preserve_mean) {
+    warning("Cannot use preserve_mean = TRUE and have a non-zero value for set_mean. The set_mean will be ignored.")
+    use_set <- FALSE
+  }
+
+  if (!is.null(include_rows)) {
+    if (length(include_rows) != n_t) {
+      stop(sprintf("include_rows must be length %d (number of timepoints) or empty.", n_t))
+    }
+    if (!is.logical(include_rows)) {
+      include_rows <- as.logical(include_rows)
+    }
+    checkmate::assert_logical(include_rows, len = n_t, any.missing = FALSE)
+    include_idx <- which(include_rows)
+  } else {
+    include_idx <- seq_len(n_t)
+  }
+
+  if (length(include_idx) == 0) {
+    stop("No timepoints selected for fitting (include_rows has no TRUE values).")
+  }
+
+  X_valid <- X[include_idx, , drop = FALSE]
+  keep_cols <- integer(0)
+  dropped_constant <- integer(0)
+  has_intercept <- FALSE
+  intercept_original <- NA_integer_
+
+  for (j in seq_len(ncol(X))) {
+    col <- X_valid[, j]
+    min_val <- min(col)
+    max_val <- max(col)
+    range_val <- abs(max_val - min_val)
+    is_intercept <- abs(max_val - 1) < 1e-8 && abs(min_val - 1) < 1e-8
+
+    if (is_intercept && !has_intercept) {
+      has_intercept <- TRUE
+      intercept_original <- j
+      keep_cols <- c(keep_cols, j)
+    } else if (range_val < 1e-8) {
+      dropped_constant <- c(dropped_constant, j)
+    } else {
+      keep_cols <- c(keep_cols, j)
+    }
+  }
+
+  if (length(dropped_constant) > 0) {
+    warning(sprintf("Dropping constant column(s) from design matrix: %s", paste(dropped_constant, collapse = ", ")))
+  }
+
+  if (length(keep_cols) > 0) {
+    X_use <- X[, keep_cols, drop = FALSE]
+  } else {
+    X_use <- matrix(0, nrow = n_t, ncol = 0)
+  }
+
+  original_to_kept <- rep(NA_integer_, ncol(X))
+  if (length(keep_cols) > 0) {
+    original_to_kept[keep_cols] <- seq_along(keep_cols)
+  }
+
+  intercept_idx <- if (!is.na(intercept_original)) original_to_kept[intercept_original] else NA_integer_
+
+  if (length(regress_cols)) {
+    checkmate::assert_integerish(regress_cols, lower = 1, any.missing = FALSE)
+    regress_cols_vec <- as.integer(regress_cols)
+  } else {
+    regress_cols_vec <- integer(0)
+  }
+
+  if (exclusive && length(regress_cols_vec) == 0) {
+    stop("exclusive = TRUE requires regress_cols to specify at least one column.")
+  }
+
+  regress_mask <- rep(FALSE, ncol(X_use))
+  if (length(regress_cols_vec) > 0) {
+    for (col in regress_cols_vec) {
+      if (col < 1 || col > length(original_to_kept)) next
+      mapped <- original_to_kept[col]
+      if (!is.na(mapped)) {
+        regress_mask[mapped] <- TRUE
+      }
+    }
+  } else if (!exclusive && ncol(X_use) > 0) {
+    regress_mask[] <- TRUE
+  }
+
+  if (!has_intercept && add_intercept) {
+    X_use <- cbind("(Intercept)" = 1, X_use)
+    if (length(original_to_kept) > 0) {
+      mapped_idx <- which(!is.na(original_to_kept))
+      original_to_kept[mapped_idx] <- original_to_kept[mapped_idx] + 1L
+    }
+    regress_mask <- if (length(regress_mask) > 0) c(TRUE, regress_mask) else TRUE
+    has_intercept <- TRUE
+    intercept_idx <- 1L
+  }
+
+  regress_indices <- which(regress_mask)
+  if (length(regress_indices) == 0 && ncol(X_use) > 0 && !exclusive && length(regress_cols_vec) == 0) {
+    regress_indices <- seq_len(ncol(X_use))
+  }
+
+  if (exclusive && length(regress_indices) == 0) {
+    stop("exclusive = TRUE requires at least one usable regressor column after preprocessing.")
+  }
+
+  if (ncol(X_use) == 0) {
+    stop("Design matrix has no columns after preprocessing.")
+  }
+
+  fit_cols <- if (exclusive) {
+    unique(c(regress_indices, if (!is.na(intercept_idx)) intercept_idx else integer(0)))
+  } else {
+    seq_len(ncol(X_use))
+  }
+  fit_cols <- fit_cols[fit_cols >= 1 & fit_cols <= ncol(X_use)]
+
+  if (length(fit_cols) == 0) {
+    stop("Design matrix has no columns after preprocessing.")
+  }
+
+  X_fit <- X_use[, fit_cols, drop = FALSE]
+  if (length(regress_indices) > 0) {
+    X_regress <- X_use[, regress_indices, drop = FALSE]
+  } else {
+    X_regress <- matrix(0, nrow = n_t, ncol = 0)
+  }
+
+  predict_indices <- integer(length(regress_indices))
+  if (length(regress_indices) > 0) {
+    matches <- match(regress_indices, fit_cols)
+    if (any(is.na(matches))) {
+      stop("Internal error: regression column not present in fitting matrix.")
+    }
+    predict_indices <- matches
+  }
+
+  n_t_sub <- length(include_idx)
+  if (n_t_sub < ncol(X_fit)) {
+    stop(sprintf("Not enough uncensored timepoints to estimate model: %d available, but need at least %d", n_t_sub, ncol(X_fit)))
+  }
+
+  X_sub <- X_fit[include_idx, , drop = FALSE]
+  residuals_mat <- matrix(NA_real_, nrow = n_t, ncol = ncol(Y))
+  const_tol <- 1e-6
+
+  for (col_idx in seq_len(ncol(Y))) {
+    y <- Y[, col_idx]
+    y_sub <- y[include_idx]
+
+    if (max(y_sub) - min(y_sub) < const_tol) {
+      residuals <- rep(0, n_t)
+    } else {
+      fit <- stats::lm.fit(x = X_sub, y = y_sub)
+      coef_fit <- fit$coefficients
+      if (length(coef_fit) != ncol(X_fit)) {
+        coef_fit <- rep_len(coef_fit, ncol(X_fit))
+      }
+      coef_fit[is.na(coef_fit)] <- 0
+      if (length(regress_indices) > 0) {
+        beta_sub <- coef_fit[predict_indices]
+        fitted <- as.vector(X_regress %*% beta_sub)
+      } else {
+        fitted <- rep(0, n_t)
+      }
+      residuals <- y - fitted
+    }
+
+    if (preserve_mean) {
+      residuals <- residuals + mean(y_sub)
+    } else if (use_set) {
+      residuals <- residuals + set_mean
+    }
+
+    residuals_mat[, col_idx] <- residuals
+  }
+
+  residuals_mat
 }
 
 #' Regress confound time series from a 4D fMRI image

@@ -237,11 +237,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       )
     } else if (step == "apply_aroma") {
       lg$info("Removing AROMA noise components from fMRI data")
+      nonaggressive_val <- cfg$apply_aroma$nonaggressive
+      nonaggressive_flag <- if (is.null(nonaggressive_val) || is.na(nonaggressive_val)) TRUE else isTRUE(nonaggressive_val)
       cur_file <- apply_aroma(cur_file,
         out_file = out_file,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
-        overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
+        overwrite=cfg$overwrite, lg=lg, nonaggressive = nonaggressive_flag
       )
     } else if (step == "scrub_interpolate") {
       cur_file <- scrub_interpolate(cur_file,

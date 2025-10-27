@@ -11,8 +11,7 @@ apply_aroma(
   noise_ics,
   overwrite = FALSE,
   lg = NULL,
-  use_R = FALSE,
-  fsl_img = NULL
+  nonaggressive = TRUE
 )
 }
 \arguments{
@@ -28,16 +27,17 @@ apply_aroma(
 
 \item{lg}{Optional lgr object used for logging messages}
 
-\item{use_R}{Logical; if \code{TRUE}, use an R wrapper script (\code{fsl_regfilt.R}) instead of \code{fsl_regfilt}.}
-
-\item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
+\item{nonaggressive}{Logical; \code{TRUE} (default) performs partial regression to emulate
+non-aggressive AROMA. Set to \code{FALSE} for aggressive regression.}
 }
 \value{
 Path to the denoised output NIfTI file. If required files are missing, returns \code{in_file} unmodified.
 }
 \description{
-Performs non-aggressive ICA-AROMA denoising by regressing out identified noise components
-from an fMRI time series using FSL's \code{fsl_regfilt}. Falls back to an R-based wrapper script
-if the standard FSL command fails due to dimensionality issues.
+Performs ICA-AROMA denoising by regressing out identified noise components from an fMRI
+time series using the internal \code{lmfit_residuals_4d()} helper. When \code{nonaggressive = TRUE}
+(the default) only the unique variance attributable to the specified components is removed,
+matching FSL's non-aggressive \code{fsl_regfilt} behavior. Set \code{nonaggressive = FALSE} for
+aggressive regression that fully removes the listed components.
 }
 \keyword{internal}

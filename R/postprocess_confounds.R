@@ -110,11 +110,50 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   # TODO: consider whether to worry about notch filtering AROMA components if motion parameters or FD are in confound regressors
   # Regress out AROMA components, if requested (overwrites file in place)
   if ("apply_aroma" %in% processing_sequence) {
-    lg$info("Removing AROMA noise components from confounds")
-    confound_nii <- apply_aroma(confound_nii, out_file = confound_nii,
-      mixing_file = proc_files$melodic_mix, noise_ics = proc_files$noise_ics,
-      overwrite = TRUE, lg = lg, use_R = TRUE, fsl_img = fsl_img
-    )
+    if (is.null(proc_files$melodic_mix) || !checkmate::test_file_exists(proc_files$melodic_mix)) {
+      to_log(lg, "warn", "Cannot locate melodic mixing file; skipping AROMA regression for confounds.")
+    } else if (is.null(proc_files$noise_ics) || length(proc_files$noise_ics) == 0) {
+      to_log(lg, "info", "No AROMA noise components provided; skipping regression for confounds.")
+    } else if (!checkmate::test_integerish(proc_files$noise_ics, lower = 1, any.missing = FALSE)) {
+      to_log(lg, "warn", "noise_ics must be a vector of positive integers; skipping AROMA regression for confounds.")
+    } else {
+      nonaggressive_val <- cfg$apply_aroma$nonaggressive
+      nonaggressive_flag <- if (is.null(nonaggressive_val) || is.na(nonaggressive_val)) TRUE else isTRUE(nonaggressive_val)
+      exclusive_flag <- !nonaggressive_flag
+      mode_label <- if (exclusive_flag) "aggressive" else "non-aggressive"
+
+      mixing_mat <- as.matrix(data.table::fread(proc_files$melodic_mix, header = FALSE, data.table = FALSE))
+      storage.mode(mixing_mat) <- "double"
+      if (nrow(mixing_mat) != nrow(confounds_to_filt)) {
+        to_log(lg, "warn", "Mixing matrix has {nrow(mixing_mat)} rows but confounds have {nrow(confounds_to_filt)} timepoints; skipping AROMA regression for confounds.")
+      } else if (ncol(mixing_mat) == 0) {
+        to_log(lg, "warn", "Mixing matrix {proc_files$melodic_mix} has no components; skipping AROMA regression for confounds.")
+      } else {
+        comp_idx <- sort(unique(as.integer(proc_files$noise_ics)))
+        invalid_idx <- comp_idx[comp_idx < 1 | comp_idx > ncol(mixing_mat)]
+        if (length(invalid_idx) > 0) {
+          to_log(lg, "warn", "Dropping invalid AROMA component indices for confounds: {paste(invalid_idx, collapse = ', ')}")
+          comp_idx <- setdiff(comp_idx, invalid_idx)
+        }
+        if (length(comp_idx) == 0) {
+          lg$info("No valid AROMA noise components remain after filtering; skipping regression for confounds.")
+        } else {
+          to_log(lg, "info", "Regressing {length(comp_idx)} AROMA noise components from confounds using {mode_label} mode.")
+          confound_names <- colnames(confounds_to_filt)
+          resid_mat <- lmfit_residuals_mat(
+            Y = as.matrix(confounds_to_filt),
+            X = mixing_mat,
+            include_rows = rep(TRUE, nrow(mixing_mat)),
+            add_intercept = FALSE,
+            regress_cols = comp_idx,
+            exclusive = exclusive_flag
+          )
+          colnames(resid_mat) <- confound_names
+          confounds_to_filt <- resid_mat
+          confound_nii <- mat_to_nii(confounds_to_filt, ni_out = confound_nii)
+        }
+      }
+    }
   }
 
   # Temporally filter confounds, if requested (overwrites file in place)
