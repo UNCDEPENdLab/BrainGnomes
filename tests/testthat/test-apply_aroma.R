@@ -22,8 +22,8 @@ build_mixing_matrix <- function(n_time = 80L) {
 test_that("apply_aroma differentiates aggressive and non-aggressive denoising for NIfTI input", {
   skip_if_not_installed("RNifti")
 
-  withr::local_seed(42)
-  tmpdir <- withr::local_tempdir()
+  set.seed(42)
+  tmpdir <- tempdir()
 
   mixing <- build_mixing_matrix(100L)
   noise_ics <- c(2L, 4L) # regress only a subset of the available components
@@ -81,8 +81,8 @@ test_that("apply_aroma differentiates aggressive and non-aggressive denoising fo
 test_that("apply_aroma removes AROMA components from confounds using lmfit_residuals_mat", {
   skip_if_not_installed("RNifti")
 
-  withr::local_seed(101)
-  tmpdir <- withr::local_tempdir()
+  set.seed(101)
+  tmpdir <- tempdir()
 
   mixing <- build_mixing_matrix(90L)
   noise_ics <- c(2L, 4L)
