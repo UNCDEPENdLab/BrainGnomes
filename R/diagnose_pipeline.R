@@ -348,28 +348,43 @@ diagnose_pipeline <- function(input) {
     
     selected_action <- names(actions)[action_choice]
     
-    if (selected_action == "view_output") {
-      if (!is.null(out_file)) {
-        cli::cli_inform(readLines(out_file))
-      } else {
-        cli::cli_warn("No output file to display for this job.")
-      }
-    } else if (selected_action == "return_output") {
-      if (!is.null(out_file)) return(readLines(out_file))
-      else cli::cli_warn("No output file to return for this job.")
-    } else if (selected_action == "view_error") {
-      if (!is.null(err_file)) {
-        cli::cli_inform(readLines(err_file))
-      } else {
-        cli::cli_warn("No error file to display for this job.")
-      }
-    } else if (selected_action == "return_error") {
-      if (!is.null(err_file)) return(readLines(err_file))
-      else cli::cli_warn("No error file to return for this job.")
-    } else if (selected_action == "exit") {
-      cli::cli_inform(cli::col_cyan("Exiting without returning anything."))
-      return(invisible(NULL))
+      if (selected_action == "view_output") {
+    if (!is.null(out_file)) {
+      n_lines <- prompt_input(
+        prompt = "How many lines from the bottom of the output file to view?",
+        type = "integer",
+        default = 20,
+        lower = 1
+      )
+      file_lines <- readLines(out_file)
+      cli::cli_inform(paste(tail(file_lines, n_lines), collapse = "\n"))
+    } else {
+      cli::cli_warn("No output file to display for this job.")
     }
+  } else if (selected_action == "return_output") {
+    if (!is.null(out_file)) return(readLines(out_file))
+    else cli::cli_warn("No output file to return for this job.")
+  } else if (selected_action == "view_error") {
+    if (!is.null(err_file)) {
+      n_lines <- prompt_input(
+        prompt = "How many lines from the bottom of the error file to view?",
+        type = "integer",
+        default = 20,
+        lower = 1
+      )
+      file_lines <- readLines(err_file)
+      cli::cli_inform(paste(tail(file_lines, n_lines), collapse = "\n"))
+    } else {
+      cli::cli_warn("No error file to display for this job.")
+    }
+  } else if (selected_action == "return_error") {
+    if (!is.null(err_file)) return(readLines(err_file))
+    else cli::cli_warn("No error file to return for this job.")
+  } else if (selected_action == "exit") {
+    cli::cli_inform(cli::col_cyan("Exiting without returning anything."))
+    return(invisible(NULL))
+  }
+
     
     continue_loop <- prompt_input(
       prompt = "Would you like to perform another action? (yes/no)",
