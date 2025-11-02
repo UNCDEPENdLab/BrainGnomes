@@ -223,3 +223,135 @@ submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL,
   
   return(invisible(res))
 }
+
+#' helper function get all unique sequence_ids for a given sqlite database file
+#'
+#' @param db a sqlite database file path
+#'
+#' @keywords internal
+get_sequence_ids <- function(db) {
+  query <- "SELECT DISTINCT sequence_id FROM job_tracking WHERE sequence_id IS NOT NULL;"
+  res <- submit_sqlite_query(
+    str = query,
+    sqlite_db = db,
+    return_result = TRUE
+  )
+  if (is.null(res)) {
+    return(character(0))
+  } else {
+    return(res$sequence_id)
+  }
+}
+
+#' helper function to check if a table exists in a SQLite database
+#'
+#' @param sqlite_db Path to SQLite database file
+#' @param table_name Name of the table to check for
+#'
+#' @return Logical indicating whether the table exists
+#' @keywords internal
+sqlite_table_exists <- function(sqlite_db, table_name) {
+  # Check if database file exists
+  if (!file.exists(sqlite_db)) {
+    return(FALSE)
+  }
+  
+  # Connect to database
+  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  
+  # Check if table exists
+  exists <- DBI::dbExistsTable(con, table_name)
+  
+  return(exists)
+}
+
+#' helper for converting tracking data.frame into a multi-level data.tree hierarchy
+#'
+#' @param tracking_df A data.frame returned by get_tracked_job_status()
+#' @return A named list of data.tree Node objects (one per sequence_id)
+#' @importFrom data.tree Node
+#' @export
+tracking_df_to_tree <- function(tracking_df) {
+  if (!requireNamespace("data.tree", quietly = TRUE)) {
+    stop("Package 'data.tree' is required for tracking_df_to_tree()")
+  }
+
+  tracking_df$id <- as.character(tracking_df$id)
+  tracking_df$parent_id <- as.character(tracking_df$parent_id)
+  tracking_df$sequence_id <- as.character(tracking_df$sequence_id)
+
+  seq_split <- split(tracking_df, tracking_df$sequence_id)
+  trees <- list()
+
+  for (seq_id in names(seq_split)) {
+    df <- seq_split[[seq_id]]
+
+    # Create root node
+    root <- data.tree::Node$new(paste0("Sequence_", seq_id))
+
+    # Create a lookup: id -> Node
+    node_lookup <- list()
+    node_lookup[["root"]] <- root
+
+    # First, create all nodes without attaching
+    for (i in seq_len(nrow(df))) {
+      job <- df[i, ]
+      node <- data.tree::Node$new(job$job_name)
+      node$job_id <- job$job_id
+      node$scheduler <- job$scheduler
+      node$wall_time <- job$wall_time
+      node$status <- job$status
+      node$time_submitted <- job$time_submitted
+      node$time_started <- job$time_started
+      node$time_ended <- job$time_ended
+      node$compute_file <- job$compute_file
+
+      node_lookup[[job$id]] <- node
+    }
+
+    # Attach nodes to their parents
+    for (i in seq_len(nrow(df))) {
+      job <- df[i, ]
+      node <- node_lookup[[job$id]]
+
+      if (is.na(job$parent_id) || job$parent_id == "") {
+        # Attach to root if no parent
+        root$AddChildNode(node)
+      } else {
+        parent_node <- node_lookup[[job$parent_id]]
+        if (is.null(parent_node)) {
+          # fallback: attach to root if parent not found
+          root$AddChildNode(node)
+        } else {
+          parent_node$AddChildNode(node)
+        }
+      }
+    }
+
+    trees[[seq_id]] <- root
+  }
+
+  return(trees)
+}
+
+
+#' helper for retrieving a human-readable title for a pipeline step
+#'
+#' @param node A data.tree Node object representing a job
+#' @return A string summarizing the job
+#' @export
+get_step_title <- function(node) {
+  if (is.null(node)) return(NA_character_)
+  
+  # Use job_name if available, otherwise node name
+  job_name <- if (!is.null(node$job_name)) node$job_name else node$name
+  job_id <- if (!is.null(node$job_id)) node$job_id else NA
+  
+  # Return as "job_name (job job_id)" if job_id exists
+  if (!is.na(job_id)) {
+    paste0(job_name, " (job ", job_id, ")")
+  } else {
+    job_name
+  }
+}
