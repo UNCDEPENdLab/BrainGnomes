@@ -140,8 +140,10 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         } else {
           to_log(lg, "info", "Regressing {length(comp_idx)} AROMA noise components from confounds using {mode_label} mode.")
           confound_names <- colnames(confounds_to_filt)
+          Y <- as.matrix(confounds_to_filt)
+          Y[is.na(Y)] <- 0 # need no NAs for regression
           resid_mat <- lmfit_residuals_mat(
-            Y = as.matrix(confounds_to_filt),
+            Y = Y,
             X = mixing_mat,
             include_rows = rep(TRUE, nrow(mixing_mat)),
             add_intercept = FALSE,
