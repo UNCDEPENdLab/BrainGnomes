@@ -29,7 +29,36 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     stop("Cannot locate required confounds file")
   }
 
+  # read confounds file
   confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
+
+  # handle filtering of motion parameters for respiratory artifacts, recalculation of framewise_displacement
+  motion_filter_cfg <- cfg$motion_filter
+  if (!is.null(motion_filter_cfg) && isTRUE(motion_filter_cfg$enable)) {
+    motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
+    confounds <- notch_filter(
+        confounds,
+        tr = cfg$tr,
+        band_stop_min = motion_filter_cfg$band_stop_min,
+        band_stop_max = motion_filter_cfg$band_stop_max,
+        columns = motion_cols,
+        lg = lg
+      )
+          
+    if (all(motion_cols %in% names(confounds))) {
+      head_radius <- cfg$scrubbing$head_radius
+      if (is.null(head_radius)) head_radius <- 50
+      fd <- framewise_displacement(
+        motion = confounds[, motion_cols, with = FALSE],
+        head_radius = head_radius,
+        columns = motion_cols
+      )
+      confounds[, framewise_displacement := fd]
+      to_log(lg, "info", "Updated framewise_displacement after notch filtering ({motion_filter_cfg$band_stop_min}-{motion_filter_cfg$band_stop_max} BPM).")
+    } else {
+      to_log(lg, "warn", "Filtered motion parameters available but required columns are missing; cannot recompute framewise displacement.")
+    }
+  }
 
   # handle regular expression and range expansion in column names
   cfg$confound_regression$columns <- expand_confound_columns(
@@ -78,6 +107,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
   confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out)
 
+  # TODO: consider whether to worry about notch filtering AROMA components if motion parameters or FD are in confound regressors
   # Regress out AROMA components, if requested (overwrites file in place)
   if ("apply_aroma" %in% processing_sequence) {
     lg$info("Removing AROMA noise components from confounds")

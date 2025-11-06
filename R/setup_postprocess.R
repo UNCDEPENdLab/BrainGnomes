@@ -27,6 +27,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "scrubbing/apply", "scrubbing/prefix",
       "confound_regression/columns", "confound_regression/noproc_columns",
       "confound_regression/prefix",
+      "motion_filter/enable", "motion_filter/band_stop_min", "motion_filter/band_stop_max",
       "force_processing_order", "processing_steps"
     )
   }
@@ -148,6 +149,7 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
   if (is.null(scfg$postprocess$enable) || (isFALSE(scfg$postprocess$enable) && any(grepl("postprocess/", fields))) || ("postprocess/enable" %in% fields)) {
     scfg$postprocess$enable <- prompt_input(
       instruct = glue("\n\n
+        -----------------------------------------------------------------------------------------------------------------
         Postprocessing refers to the set of steps applied after fMRIPrep has produced preprocessed BOLD data.
 
         These steps may include:
@@ -227,6 +229,10 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
     stop("scfg input must be a bg_project_cfg object produced by setup_project")
   }
 
+  if (!is.null(stream_name)) {
+    cat(glue("\n--- Specifying postprocessing stream: {stream_name} ---\n"))
+  }
+
   defaults <- list(
     memgb = 48L,
     nhours = 8L,
@@ -286,6 +292,7 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_confound_calculate(ppcfg, fields)
   ppcfg <- setup_scrubbing(ppcfg, fields)
   ppcfg <- setup_confound_regression(ppcfg, fields)
+  ppcfg <- setup_motion_filter(ppcfg, fields)
   ppcfg <- setup_postprocess_steps(ppcfg, fields)
 
   # repopulate the relevant part of scfg
@@ -479,7 +486,6 @@ setup_postprocess_steps <- function(ppcfg = list(), fields = NULL) {
 #' Generates spike regressors based on expressions evaluated on the confounds
 #' file (e.g., "framewise_displacement > 0.9" or "-1:1; dvars > 1.5"). These regressors can later be
 #' used to censor volumes during modeling.
-#'
 #' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields Optional vector of fields to prompt for.
 #' @return Modified `scfg` with `$postprocess$scrubbing` populated.
@@ -532,6 +538,7 @@ setup_scrubbing <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$scrubbing$interpolate_prefix)) ppcfg$scrubbing$interpolate_prefix <- "i"
     if (is.null(ppcfg$scrubbing$apply)) fields <- c(fields, "postprocess/scrubbing/apply")
     if (is.null(ppcfg$scrubbing$prefix)) ppcfg$scrubbing$prefix <- "x"
+    fields <- unique(fields)
   }
 
   if ("postprocess/scrubbing/expression" %in% fields) {
@@ -759,6 +766,174 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
   return(ppcfg)
 }
 
+#' Configure optional motion parameter filtering
+#'
+#' If motion parameters are used in scrubbing expressions or included among the
+#' selected confound regressors, users can choose to apply a notch (band-stop)
+#' filter to the rigid-body motion time series prior to downstream processing.
+#' This mirrors the respiration filtering strategy used in tools such as xcp-d
+#' and helps mitigate respiration-induced spikes in framewise displacement.
+#'
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
+#' @param fields Optional vector of fields to prompt for.
+#' @return Modified `ppcfg` with `$motion_filter` populated when applicable.
+#' @keywords internal
+setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
+  motion_filter_cfg <- ppcfg$motion_filter
+  if (!is.list(motion_filter_cfg)) motion_filter_cfg <- list()
+
+  # identify whether motion regressors are in use
+  confound_candidates <- unlist(list(
+    ppcfg$confound_regression$columns,
+    ppcfg$confound_regression$noproc_columns,
+    ppcfg$confound_calculate$columns,
+    ppcfg$confound_calculate$noproc_columns
+  ), use.names = FALSE)
+  if (!is.null(confound_candidates)) {
+    confound_candidates <- confound_candidates[!is.na(confound_candidates)]
+    confound_candidates <- trimws(confound_candidates)
+    confound_candidates <- confound_candidates[nzchar(confound_candidates)]
+  }
+
+  motion_shortcuts <- c("6p", "12p", "24p", "27p", "36p")
+  motion_in_confounds <- length(confound_candidates) > 0L && any(
+    grepl("^framewise_displacement", confound_candidates, ignore.case = TRUE) |
+      grepl("^rot_", confound_candidates, ignore.case = TRUE) |
+      grepl("^trans_", confound_candidates, ignore.case = TRUE) |
+      tolower(confound_candidates) %in% motion_shortcuts
+  )
+
+  scrub_expr <- ppcfg$scrubbing$expression
+  if (!is.null(scrub_expr)) scrub_expr <- scrub_expr[!is.na(scrub_expr)]
+  motion_in_scrubbing <- length(scrub_expr) > 0L && any(
+    grepl("framewise_displacement|rot_|trans_", scrub_expr, ignore.case = TRUE)
+  )
+
+  require_prompt <- motion_in_confounds || motion_in_scrubbing
+  motion_fields <- if (is.null(fields)) character() else fields[grepl("^postprocess/motion_filter", fields)]
+  explicit_enable <- "postprocess/motion_filter/enable" %in% motion_fields
+  explicit_band_min <- "postprocess/motion_filter/band_stop_min" %in% motion_fields
+  explicit_band_max <- "postprocess/motion_filter/band_stop_max" %in% motion_fields
+  any_explicit <- explicit_enable || explicit_band_min || explicit_band_max
+
+  need_enable_prompt <- FALSE
+  if (is.null(fields)) {
+    need_enable_prompt <- require_prompt && is.null(motion_filter_cfg$enable)
+  } else {
+    need_enable_prompt <- explicit_enable || (require_prompt && is.null(motion_filter_cfg$enable))
+  }
+
+  if (!need_enable_prompt && !any_explicit && !require_prompt) {
+    if (!isTRUE(motion_filter_cfg$enable) ||
+        (!is.null(motion_filter_cfg$band_stop_min) && !is.null(motion_filter_cfg$band_stop_max))) {
+      if (length(motion_filter_cfg) == 0L) {
+        ppcfg$motion_filter <- NULL
+      } else {
+        ppcfg$motion_filter <- motion_filter_cfg
+      }
+      return(ppcfg)
+    }
+  }
+
+  reason_bits <- character()
+  if (motion_in_confounds) {
+    reason_bits <- c(reason_bits, "your confound selections include motion regressors")
+  }
+  if (motion_in_scrubbing) {
+    reason_bits <- c(reason_bits, "the scrubbing expression references motion parameters")
+  }
+
+  reason_sentence <- ""
+  if (length(reason_bits) == 1L) {
+    reason_sentence <- reason_bits
+  } else if (length(reason_bits) == 2L) {
+    reason_sentence <- paste(reason_bits, collapse = " and ")
+  } else if (length(reason_bits) > 2L) {
+    reason_sentence <- paste(
+      paste(reason_bits[-length(reason_bits)], collapse = ", "),
+      reason_bits[length(reason_bits)],
+      sep = ", and "
+    )
+  }
+
+  if (need_enable_prompt) {
+    default_enable <- isTRUE(motion_filter_cfg$enable)
+    context_text <- ""
+    if (reason_sentence != "") {
+      context_text <- glue("I noticed that {reason_sentence}. Filtering the motion parameters can help reduce respiration-related spikes in framewise displacement.\n\n")
+    }
+    motion_filter_cfg$enable <- prompt_input(
+      instruct = glue("\n\n{context_text}
+      Respiratory motion can inflate framewise displacement estimates. A notch filter can attenuate
+      a specified band of frequencies (breaths per minute) before FD is recomputed, similar to the
+      approach used by xcp-d. Typical adult respiration falls between 12 and 20 BPM.
+      \n"),
+      prompt = "Notch-filter motion parameters before computing FD?",
+      type = "flag",
+      default = default_enable
+    )
+  }
+
+  ppcfg$motion_filter <- motion_filter_cfg
+  motion_filter_cfg <- ppcfg$motion_filter
+
+  ask_band_min <- FALSE
+  if (isTRUE(motion_filter_cfg$enable)) {
+    if (is.null(fields)) {
+      ask_band_min <- is.null(motion_filter_cfg$band_stop_min)
+    } else {
+      ask_band_min <- explicit_band_min
+      if (!ask_band_min && is.null(motion_filter_cfg$band_stop_min)) {
+        ask_band_min <- TRUE
+      }
+    }
+  }
+
+  if (ask_band_min) {
+    default_min <- motion_filter_cfg$band_stop_min
+    if (is.null(default_min)) default_min <- 12
+    motion_filter_cfg$band_stop_min <- prompt_input(
+      prompt = "Lower band-stop cutoff (breaths per minute)",
+      type = "numeric", lower = 1, upper = 80, default = default_min
+    )
+    ppcfg$motion_filter <- motion_filter_cfg
+  }
+
+  motion_filter_cfg <- ppcfg$motion_filter
+  ask_band_max <- FALSE
+  if (isTRUE(motion_filter_cfg$enable)) {
+    if (is.null(fields)) {
+      ask_band_max <- is.null(motion_filter_cfg$band_stop_max)
+    } else {
+      ask_band_max <- explicit_band_max
+      if (!ask_band_max && is.null(motion_filter_cfg$band_stop_max)) {
+        ask_band_max <- TRUE
+      }
+    }
+  }
+
+  if (ask_band_max) {
+    min_reference <- motion_filter_cfg$band_stop_min
+    if (is.null(min_reference)) min_reference <- 12
+    lower_bound <- min_reference + 0.01
+    default_max <- motion_filter_cfg$band_stop_max
+    if (is.null(default_max) || default_max <= lower_bound) {
+      default_max <- min_reference + 8
+    }
+    motion_filter_cfg$band_stop_max <- prompt_input(
+      prompt = "Upper band-stop cutoff (breaths per minute)",
+      type = "numeric", lower = lower_bound, upper = 100, default = default_max
+    )
+  }
+
+  if (length(motion_filter_cfg) == 0L) {
+    ppcfg$motion_filter <- NULL
+  } else {
+    ppcfg$motion_filter <- motion_filter_cfg
+  }
+  return(ppcfg)
+}
+
 #' Configure confound calculation for postprocessing
 #'
 #' This function configures the generation of a confound file during postprocessing. The resulting file includes
@@ -974,8 +1149,15 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
       Temporal filtering removes low- and/or high-frequency components from the fMRI time series.
-      A high-pass filter (e.g., 0.008 Hz) is commonly used to remove slow scanner drift, while a low-pass
+      A high-pass filter (e.g., removing frequencies < 0.008 Hz) is commonly used to remove scanner drift, while a low-pass
       filter can remove physiological noise such as respiratory or cardiac fluctuations.
+
+      Example:
+
+      Entering .008 Hz for the 'lower cutoff' would result in a high-pass filter, removing frequencies < .008 Hz.
+      Entering .1 Hz for the 'upper cutoff' would result in a low-pass filter, removing frequencies > .1 Hz.
+
+      If both are entered (lower = .008 Hz, upper = .1 Hz), the bandpass filter keeps frequencies .008 Hz < f < .1 Hz.
 
       We support both fslmaths -bptf and an Butterworth temporal filter. The former is more common for task-based fMRI and
       the latter with resting-state fMRI. If filtering is enabled, you will be asked to choose between these filtering methods.
@@ -1003,24 +1185,33 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$temporal_filter$method)) fields <- c(fields, "postprocess/temporal_filter/method")
   }
 
-  if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$low_pass_hz <- prompt_input("Lower passband cutoff (Hz)", instruct = "Keeps frequencies above this", type = "numeric", lower = 0, required = FALSE)
-    if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
-      cat("Omitting filtering of low frequencies\n")
-      ppcfg$temporal_filter$low_pass_hz <- -Inf # indicates no low frequency filter
-    }
-  }
   
   if ("postprocess/temporal_filter/high_pass_hz" %in% fields) {
-    ppcfg$temporal_filter$high_pass_hz <- prompt_input("Upper passband cutoff (Hz) ", instruct = "Keeps frequencies below this", type = "numeric", lower = 0, required = FALSE)
+    ppcfg$temporal_filter$high_pass_hz <- prompt_input(
+      "Lower cutoff / high-pass threshold (Hz) ",
+      instruct = "Keeps frequencies above this cutoff and removes frequencies below it. Leave blank to skip high-pass filtering.",
+      type = "numeric", lower = 0, required = FALSE
+    )
     if (is.na(ppcfg$temporal_filter$high_pass_hz)) {
+      cat("Omitting filtering of low frequencies\n")
+      ppcfg$temporal_filter$high_pass_hz <- -Inf # indicates no filtering out of low frequencies
+    }
+  }
+
+  if ("postprocess/temporal_filter/low_pass_hz" %in% fields) {
+    ppcfg$temporal_filter$low_pass_hz <- prompt_input(
+      "Upper cutoff / low-pass threshold (Hz)",
+      instruct = "Retains frequencies below this cutoff and removes frequencies above it. Leave blank to skip low-pass filtering.",
+      type = "numeric", lower = 0, required = FALSE
+    )
+    if (is.na(ppcfg$temporal_filter$low_pass_hz)) {
       cat("Omitting filtering of high frequencies\n")
-      ppcfg$temporal_filter$high_pass_hz <- Inf # indicates no high frequency filter
+      ppcfg$temporal_filter$low_pass_hz <- Inf # indicates no filtering out of high frequencies
     }
   }
 
   if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
-    ppcfg$temporal_filter$low_pass_hz > ppcfg$temporal_filter$high_pass_hz) stop("Low frequency cutoff cannot be larger than high frequency cutoff")
+    ppcfg$temporal_filter$low_pass_hz < ppcfg$temporal_filter$high_pass_hz) stop("Upper frequency cutoff cannot be smaller than lower frequency cutoff")
 
 
   if ("postprocess/temporal_filter/method" %in% fields) {

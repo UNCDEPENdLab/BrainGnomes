@@ -403,9 +403,9 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/temporal_filter/high_pass_hz")
       ppcfg$temporal_filter$high_pass_hz <- NULL
     }
-    if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) && 
-        ppcfg$temporal_filter$high_pass_hz < ppcfg$temporal_filter$low_pass_hz) {
-      if (!quiet) message("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values.")
+    if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
+        ppcfg$temporal_filter$high_pass_hz > ppcfg$temporal_filter$low_pass_hz) {
+      if (!quiet) message(glue("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values."))
       gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
       ppcfg$temporal_filter$low_pass_hz <- NULL
       ppcfg$temporal_filter$high_pass_hz <- NULL
@@ -419,6 +419,79 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/temporal_filter/method")
       ppcfg$temporal_filter$method <- NULL
     }
+  }
+
+  # validate motion parameter filtering
+  motion_filter_cfg <- ppcfg$motion_filter
+  if (!is.list(motion_filter_cfg)) motion_filter_cfg <- list()
+
+  confound_candidates <- unlist(list(
+    ppcfg$confound_regression$columns,
+    ppcfg$confound_regression$noproc_columns,
+    ppcfg$confound_calculate$columns,
+    ppcfg$confound_calculate$noproc_columns
+  ), use.names = FALSE)
+
+  if (length(confound_candidates) > 0L) {
+    confound_candidates <- confound_candidates[!is.na(confound_candidates)]
+    confound_candidates <- trimws(confound_candidates)
+    confound_candidates <- confound_candidates[nzchar(confound_candidates)]
+  }
+
+  motion_shortcuts <- c("6p", "12p", "24p", "27p", "36p")
+  motion_in_confounds <- length(confound_candidates) > 0L && any(
+    grepl("^framewise_displacement", confound_candidates, ignore.case = TRUE) |
+      grepl("^rot_", confound_candidates, ignore.case = TRUE) |
+      grepl("^trans_", confound_candidates, ignore.case = TRUE) |
+      tolower(confound_candidates) %in% motion_shortcuts
+  )
+
+  scrub_expr <- ppcfg$scrubbing$expression
+  if (!is.null(scrub_expr)) scrub_expr <- scrub_expr[!is.na(scrub_expr)]
+  motion_in_scrubbing <- length(scrub_expr) > 0L && any(
+    grepl("framewise_displacement|rot_|trans_", scrub_expr, ignore.case = TRUE)
+  )
+
+  validate_motion_filter <- motion_in_confounds || motion_in_scrubbing || length(motion_filter_cfg) > 0L
+
+  if (validate_motion_filter) {
+    if (is.null(motion_filter_cfg$enable)) {
+      gaps <- c(gaps, "postprocess/motion_filter/enable")
+    } else if (!checkmate::test_flag(motion_filter_cfg$enable)) {
+      if (!quiet) message(glue("Invalid enable flag in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/motion_filter/enable")
+      motion_filter_cfg$enable <- NULL
+    }
+
+    if (isTRUE(motion_filter_cfg$enable)) {
+      if (!checkmate::test_number(motion_filter_cfg$band_stop_min, lower = 1, upper = 80)) {
+        if (!quiet) message(glue("Invalid band_stop_min in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+        gaps <- c(gaps, "postprocess/motion_filter/band_stop_min")
+        motion_filter_cfg$band_stop_min <- NULL
+      }
+      if (!checkmate::test_number(motion_filter_cfg$band_stop_max, lower = 1, upper = 100)) {
+        if (!quiet) message(glue("Invalid band_stop_max in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+        gaps <- c(gaps, "postprocess/motion_filter/band_stop_max")
+        motion_filter_cfg$band_stop_max <- NULL
+      }
+      if (!is.null(motion_filter_cfg$band_stop_min) && !is.null(motion_filter_cfg$band_stop_max) &&
+          motion_filter_cfg$band_stop_max <= motion_filter_cfg$band_stop_min) {
+        if (!quiet) message(glue("band_stop_max must be greater than band_stop_min for $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+        gaps <- unique(c(gaps, "postprocess/motion_filter/band_stop_min", "postprocess/motion_filter/band_stop_max"))
+        motion_filter_cfg$band_stop_min <- NULL
+        motion_filter_cfg$band_stop_max <- NULL
+      }
+    }
+  }
+
+  if (length(motion_filter_cfg) == 0L) {
+    if (validate_motion_filter) {
+      ppcfg$motion_filter <- motion_filter_cfg
+    } else {
+      ppcfg$motion_filter <- NULL
+    }
+  } else {
+    ppcfg$motion_filter <- motion_filter_cfg
   }
 
   # validate spatial smoothing
@@ -619,6 +692,21 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
     }
   }
 
+  if ("mask_file" %in% names(ecfg)) {
+    mask_val <- ecfg$mask_file
+    if (length(mask_val) == 1L && (is.na(mask_val) || mask_val %in% c("", ".na", ".na.character"))) {
+      ecfg$mask_file <- NULL
+    } else if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
+      if (!quiet) message(glue("Invalid mask_file in $extract_rois${cfg_name}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/mask_file")
+      ecfg$mask_file <- NULL
+    } else if (!is.null(mask_val) && !checkmate::test_file_exists(mask_val)) {
+      if (!quiet) message(glue("mask_file not found for $extract_rois${cfg_name}: {mask_val}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/mask_file")
+      ecfg$mask_file <- NULL
+    }
+  }
+
   if (!"roi_reduce" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/roi_reduce")
   } else if (!checkmate::test_string(ecfg$roi_reduce) ||
@@ -637,9 +725,16 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
 
   if (!"min_vox_per_roi" %in% names(ecfg)) {
     gaps <- c(gaps, "extract_rois/min_vox_per_roi")
-  } else if (!checkmate::test_integerish(ecfg$min_vox_per_roi, len=1L, lower=1L)) {
-    message(glue("Invalid min_vox_per_roi in $extract_rois${cfg_name}. You will be asked for this."))
-    gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+  } else {
+    valid_min_vox <- tryCatch({
+      parse_min_vox_per_roi(ecfg$min_vox_per_roi)
+      TRUE
+    }, error = function(e) FALSE)
+
+    if (!valid_min_vox) {
+      message(glue("Invalid min_vox_per_roi in $extract_rois${cfg_name}. You will be asked for this."))
+      gaps <- c(gaps, "extract_rois/min_vox_per_roi")
+    }
   }
 
   return(list(extract_rois = ecfg, gaps = gaps))

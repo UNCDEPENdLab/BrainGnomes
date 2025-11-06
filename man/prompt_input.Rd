@@ -18,7 +18,8 @@ prompt_input(
   among = NULL,
   required = TRUE,
   uniq = FALSE,
-  default = NULL
+  default = NULL,
+  empty_keyword = "NA"
 )
 }
 \arguments{
@@ -49,6 +50,8 @@ prompt_input(
 \item{uniq}{If \code{TRUE}, all entries must be unique.}
 
 \item{default}{A default value to use if the user presses Enter without typing anything. If non-\code{NULL}, the prompt will show this default choice.}
+
+\item{empty_keyword}{Optional single token (default \code{"NA"}) that the user can enter (case-insensitive) to explicitly return a missing value when \code{default} is non-\code{NULL} and \code{required = FALSE}. Use \code{NULL} to disable this shortcut entirely.}
 }
 \value{
 The user input, converted to the appropriate type (\code{numeric}, \code{integer}, \code{character}, etc.), or the \code{default} if provided and no input is given.
@@ -59,6 +62,7 @@ Obtain user input from the console
 \details{
 The function will keep prompting the user until a valid input is provided.
 It displays instructions and enforces constraints (e.g., value range, length, uniqueness).
+When \code{empty_keyword} is supplied and \code{default} is non-\code{NULL} with \code{required = FALSE}, typing the token (case-insensitive) returns a missing value for the given \code{type} without accepting the default.
 }
 \note{
 This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).

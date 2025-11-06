@@ -1,3 +1,26 @@
+# BrainGnomes 0.7-2
+
+Released 2025-10-09
+
+* Allow `min_vox_per_roi` to be specified as a percentage or proportion of atlas voxels during ROI extraction
+* ROI extraction allows for an optional brain mask that is applied to the atlas and time series data
+* Add support for an explicit empty response (returns `NA`) in `prompt_input` when a default is provided
+* Support notch filtering of motion parameters prior to calculation of framewise_displacement
+* Support different head sizes for calculation of framewise displacement
+* `run_project` with `force=TRUE` enables `overwrite` for downstream operations, ensuring that steps are re-run
+* Persist location of non-standard YAML file locations when loading from file.
+* Pass through user-specified CLI to heudiconv, support overwrite and clearing the cache
+* bugfix: look for MNI152NLin6Asym_res-2 recursively when verifying readiness for AROMA
+
+# BrainGnomes 0.7-1
+
+Released 2025-09-24
+
+* UI/UX improvements to ask query enable/disable for postprocessing and ROI extraction during edit_project
+* Do not ask about ROI extraction details if no postprocessing streams are defined
+* Corrected validation of band-pass cutoffs and clarified temporal filtering prompts/documentation
+* Improved log messages related to temporal filtering
+
 # BrainGnomes 0.7
 
 Released 2025-09-16

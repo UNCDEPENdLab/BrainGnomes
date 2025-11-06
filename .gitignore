@@ -52,3 +52,5 @@ site-library/
 # Local files for development
 local/
 docs
+
+.DS_Store

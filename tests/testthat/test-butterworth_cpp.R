@@ -2,7 +2,6 @@ test_that("butterworth_filter_4d matches signal::filtfilt and filtfilt_cpp", {
   skip_if_not_installed("signal")
   skip_if_not_installed("RNifti")
   
-  
   # Parameters
   dims <- c(5, 5, 5, 100)
   n_vox <- prod(dims[1:3])
@@ -24,19 +23,17 @@ test_that("butterworth_filter_4d matches signal::filtfilt and filtfilt_cpp", {
   img_data <- array(signal, dim = dims)
   
   # Write to NIfTI
-  img <- asNifti(img_data)
+  img <- RNifti::asNifti(img_data)
   RNifti::writeNifti(img, temp_file)
   
   # Filter and compare
   outfile <- tempfile(fileext = ".nii.gz")
   result <- butterworth_filter_4d(
     infile = temp_file,
-    tr = tr,
-    low_hz = low_hz,
-    high_hz = high_hz,
-    outfile = outfile,
-    internal = FALSE,
-    order = filt_order, padtype = "constant", use_zi = TRUE
+    tr = tr, low_hz = low_hz, high_hz = high_hz,
+    outfile = outfile, internal = FALSE, order = filt_order, 
+    padtype = "zero", use_zi = FALSE, # zero pad and drop zi to match signal::filtfilt
+    demean = FALSE # avoid demeaning to match filtfilt_cpp call below, where demeaning does not occur
   )
   
   result_data <- as.array(result)
@@ -56,11 +53,11 @@ test_that("butterworth_filter_4d matches signal::filtfilt and filtfilt_cpp", {
   for (idx in voxel_indices) {
     x <- idx[1]; y <- idx[2]; z <- idx[3]
     ts_original <- img_data[x, y, z, ]
-    ts_r <- signal::filtfilt(b_a, ts_original) # using signal package -- uses zero padding and no zi, so not identical
-    ts_cpp <- filtfilt_cpp(ts_original, b = b_a$b, a = b_a$a, padtype = "constant", use_zi = TRUE)
+    ts_r <- signal::filtfilt(b_a, ts_original) # using signal package -- uses zero padding and no zi
+    ts_cpp <- filtfilt_cpp(ts_original, b = b_a$b, a = b_a$a, padtype = "zero", use_zi = FALSE) # to match signal, drop zi and use zero padding
     ts_out <- result_data[x, y, z, ] # voxel in generated 4d file
     
     expect_equal(ts_cpp, ts_out, tolerance = 1e-6) # voxelwise wrapper versus direct C++ call -- should be exact
-    expect_gt(cor(ts_cpp, ts_r), expected = 0.90) # we can only expect approximate match due to the difference in implementation
+    expect_gt(cor(ts_cpp, ts_r), expected = 0.99) # we can only expect close match due small differences in implementation
   }
 })

@@ -66,7 +66,7 @@ if (!checkmate::test_directory(cfg$input)) {
 input_files <- get_postproc_stream_outputs(cfg$input, cfg$input_regex, cfg$bids_desc)
 
 if (length(input_files) == 0L) {
-  stop("Cannot find files to postprocess with --input: ", cfg$input)
+  stop("Cannot find files for ROI extraction with --input: ", cfg$input)
 }
 
 # cat("About to postprocess the following files: ")
@@ -90,10 +90,11 @@ arg_list <- list(
   out_dir = cfg$out_dir,
   cor_method = cfg$cor_method,
   roi_reduce = cfg$roi_reduce,
-  brain_mask = cfg$brain_mask,
+  mask_file = cfg$mask_file,
   min_vox_per_roi = cfg$min_vox_per_roi,
   rtoz = cfg$rtoz,
-  log_file = log_file
+  log_file = log_file,
+  overwrite = isTRUE(cfg$overwrite)
 )
 
 for (i in input_files) {

@@ -16,19 +16,22 @@
 save_project_config <- function(scfg, file = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
+  # if a file is not passed in, default to the yaml_file attribute
   if (!checkmate::test_string(file)) {
-    if (is.null(scfg$metadata$project_directory)) {
-      stop("Cannot determine project directory from scfg")
-    }
+    stored_file <- attr(scfg, "yaml_file")
+    if (checkmate::test_string(stored_file)) file <- stored_file
+  }
+
+  # default to project_config.yaml in project_directory if file is not provided
+  if (!checkmate::test_string(file)) {
+    if (is.null(scfg$metadata$project_directory)) stop("Cannot determine project directory from scfg")
     file <- file.path(scfg$metadata$project_directory, "project_config.yaml")
   }
 
+  file <- path.expand(file)
   dir <- dirname(file)
   if (!dir.exists(dir)) {
-    create <- prompt_input(
-      instruct = sprintf("The directory %s does not exist. Create it?", dir),
-      type = "flag"
-    )
+    create <- prompt_input(instruct = glue("The directory {dir} does not exist. Create it?"), type = "flag")
     if (create) {
       dir.create(dir, recursive = TRUE, showWarnings = FALSE)
       if (!dir.exists(dir)) {
@@ -37,7 +40,7 @@ save_project_config <- function(scfg, file = NULL) {
       }
     } else {
       new_dir <- prompt_input(
-        instruct = "Specify an alternative directory for project_config.yaml (or press Enter to cancel):",
+        instruct = glue("Specify an alternative directory for {basename(file)} (or press Enter to cancel):"),
         type = "character", required = FALSE
       )
       if (is.na(new_dir[1L])) {
@@ -65,6 +68,8 @@ save_project_config <- function(scfg, file = NULL) {
     }
   }
 
+  attr(scfg, "yaml_file") <- normalizePath(file, winslash = "/", mustWork = FALSE)
+
   overwrite <- TRUE
   if (file.exists(file)) {
     old_cfg <- yaml::read_yaml(file)
@@ -79,7 +84,7 @@ save_project_config <- function(scfg, file = NULL) {
       }
     }
 
-    overwrite <- prompt_input(instruct = "Overwrite existing project_config.yaml?", type = "flag")
+    overwrite <- prompt_input(instruct = glue("Overwrite existing {basename(file)}?"), type = "flag")
   }
 
   if (overwrite) {

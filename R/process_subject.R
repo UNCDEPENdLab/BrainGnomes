@@ -296,6 +296,15 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     ses_id = ses_id
   )
 
+  forced_cli <- c("--bids")
+  if (isTRUE(scfg$bids_conversion$overwrite)) forced_cli <- c(forced_cli, "--overwrite")
+  cli_options <- set_cli_options(scfg$bids_conversion$cli_options, forced_cli, collapse = TRUE)
+
+  env_variables <- c(env_variables,
+    cli_options = cli_options,
+    heudiconv_clear_cache = if (isTRUE(scfg$bids_conversion$clear_cache)) "1" else "0"
+  )
+
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
@@ -502,6 +511,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
 
   # pull the requested postprocessing stream from the broader list
   pp_cfg <- scfg$postprocess[[pp_stream]]
+  if (isTRUE(scfg$force)) pp_cfg$overwrite <- TRUE # overwrite existing postprocessed files
   pp_cfg$fsl_img <- scfg$compute_environment$fsl_container
   pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
   pp_cfg$output_dir <- out_dir
@@ -551,6 +561,7 @@ submit_extract_rois <- function(
 
   # pull the requested extraction stream from the broader list
   ex_cfg <- scfg$extract_rois[[ex_stream]]
+  if (isTRUE(scfg$force)) ex_cfg$overwrite <- TRUE # enable overwrite of ROIs if force=TRUE
 
   # Every extract_rois stream can pull for 1+ postprocess streams. Based on postprocess input stream(s), generate regular expressions
   # need to find outputs of postproc stream. A little tricky given that desc may not be in input_regex. This is handled inside extract_cli.R,

@@ -172,9 +172,11 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #' @param required If `TRUE`, the user must provide a value; if `FALSE`, pressing Enter yields an empty/default value.
 #' @param uniq If `TRUE`, all entries must be unique.
 #' @param default A default value to use if the user presses Enter without typing anything. If non-`NULL`, the prompt will show this default choice.
+#' @param empty_keyword Optional single token (default `"NA"`) that the user can enter (case-insensitive) to explicitly return a missing value when `default` is non-`NULL` and `required = FALSE`. Use `NULL` to disable this shortcut entirely.
 #' @return The user input, converted to the appropriate type (`numeric`, `integer`, `character`, etc.), or the `default` if provided and no input is given.
 #' @details The function will keep prompting the user until a valid input is provided. 
 #'   It displays instructions and enforces constraints (e.g., value range, length, uniqueness). 
+#'   When `empty_keyword` is supplied and `default` is non-`NULL` with `required = FALSE`, typing the token (case-insensitive) returns a missing value for the given `type` without accepting the default.
 #' 
 #' @note This function is intended for interactive use and may not work as expected in non-interactive environments (e.g., batch scripts).
 #' @importFrom glue glue
@@ -182,7 +184,8 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
 #' @importFrom utils type.convert
 #' @keywords internal
 prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "character", lower = -Inf, upper = Inf, 
-  len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL) {
+  len = NULL, min.len=NULL, max.len=NULL, split = NULL, among = NULL, required = TRUE, uniq=FALSE, default = NULL,
+  empty_keyword = "NA") {
 
   # In non-interactive sessions launched via Rscript, interactive() returns
   # FALSE even though reading from stdin is possible. Allow such cases when the
@@ -203,6 +206,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   checkmate::assert_number(len, lower = 1L, null.ok = TRUE)
   checkmate::assert_number(min.len, lower = 1L, null.ok = TRUE)
   checkmate::assert_number(max.len, lower = 1L, null.ok = TRUE)
+  checkmate::assert_string(empty_keyword, null.ok = TRUE)
   if (!is.null(min.len) && !is.null(max.len) && max.len < min.len) {
     stop("max.len must be greater than or equal to min.len")
   }
@@ -262,11 +266,24 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     }
   }
 
+  empty_keyword_display <- NULL
+  empty_keyword_lookup <- NULL
+  if (!is.null(empty_keyword)) {
+    empty_keyword <- trimws(empty_keyword) # always remove whitespace
+    if (nzchar(empty_keyword)) {
+      empty_keyword_lookup <- tolower(empty_keyword)
+      empty_keyword_display <- glue::glue("'{empty_keyword}'")
+    }
+  }
+  show_empty_hint <- !is.null(empty_keyword_display) && !is.null(default) && isFALSE(required)
+
   if (type == "flag") {
     # Handle yes/no prompts
     if (!is.null(default)) {
       # Add helpful hint that pressing enter accepts default
-      prompt <- glue::glue("{prompt} (yes/no; Press enter to accept default: {ifelse(isTRUE(default), 'yes', 'no')})")
+      prompt <- glue::glue("{prompt} (yes/no; Press enter to accept default: {ifelse(isTRUE(default), 'yes', 'no')}")
+      if (show_empty_hint) prompt <- glue::glue("{prompt}; type {empty_keyword_display} to leave blank")
+      prompt <- paste0(prompt, ")")
     } else if (required) {
       prompt <- glue::glue("{prompt} (yes/no)")
     } else {
@@ -275,7 +292,9 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   } else {
     # Non-flag input types
     if (!is.null(default)) {
-      prompt <- glue::glue("{prompt} (Press enter to accept default: {default})")
+      prompt <- glue::glue("{prompt} (Press enter to accept default: {default}")
+      if (show_empty_hint) prompt <- glue::glue("{prompt}; type {empty_keyword_display} to leave blank")
+      prompt <- paste0(prompt, ")")
     } else if (!required) {
       prompt <- glue::glue("{prompt} (Press enter to skip)")
     }
@@ -289,24 +308,31 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   # print instructions
   if (checkmate::test_string(instruct)) cat(instruct, "\n")
 
-  # obtain user input
-  res <- ""
-  while (is.na(res[1L]) || res[1L] == "") {
-    #r <- readline(prompt)
-    r <- getline(prompt)
-    
-    if (!is.null(split) && nzchar(r)) r <- strsplit(r, split, perl = TRUE)[[1]]
-
-    if (!is.null(default) && r[1L] == "") {
-      return(default)
-    } else if (isFALSE(required) && r[1L] == "") {
-      empty <- switch(type,
+  # define typed empty return value
+  empty <- switch(type,
         "integer" = NA_integer_,
         "numeric" = NA_real_,
         "character" = NA_character_,
         "flag" = NA,
         "file" = NA_character_
       )
+
+  # obtain user input
+  res <- ""
+  while (is.na(res[1L]) || res[1L] == "") {
+    #r <- readline(prompt)
+    r <- getline(prompt)
+
+    # handle skip-out on empty_keyword
+    if (show_empty_hint && !is.null(empty_keyword_lookup)) {
+      if (tolower(trimws(r)) == empty_keyword_lookup) return(empty)
+    }
+
+    if (!is.null(split) && nzchar(r)) r <- strsplit(r, split, perl = TRUE)[[1]]
+
+    if (!is.null(default) && r[1L] == "") {
+      return(default)
+    } else if (isFALSE(required) && r[1L] == "") {
       return(empty) # empty input and not required
     } else if (isTRUE(uniq) && length(unique(r)) != length(r)) {
       cat("All entries must be unique.\n")

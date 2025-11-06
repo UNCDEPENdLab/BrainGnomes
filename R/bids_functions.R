@@ -451,13 +451,12 @@ get_fmriprep_outputs <- function(in_file) {
   bold <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(suffix = "bold"))))
   brain_mask <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(description = "brain", suffix = "mask"))))
 
-
   # Check for two variants of confounds
   conf1 <- file.path(dir_path, paste0(prefix, "_desc-confounds_timeseries.tsv"))
   conf2 <- file.path(dir_path, paste0(prefix, "_desc-confounds_regressors.tsv"))
   confounds <- if (file.exists(conf1)) conf1 else if (file.exists(conf2)) conf2 else NA
 
-  # this is the variant from fmripost aroma (newer)
+  # Check for mixing matrix from AROMA. This is the variant from fmripost aroma (newer)
   melodic_mix <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(resolution = "2", space = NA, description = "melodic", suffix = "mixing", ext = ".tsv"))))
   if (!test_file_exists(melodic_mix)) melodic_mix <- file.path(dir_path, glue("{prefix}_desc-MELODIC_mixing.tsv")) # older version internal to fmriprep (< 23)
 
