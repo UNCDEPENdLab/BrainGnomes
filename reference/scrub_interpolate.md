@@ -1,0 +1,70 @@
+# Interpolate Over Censored Timepoints in a 4D NIfTI Image
+
+Applies cubic spline interpolation to a 4D fMRI image to replace
+censored (scrubbed) timepoints, as defined in a censor file. Timepoints
+with a value of `0` in the censor file are interpolated across using
+voxelwise natural splines, with nearest-neighbor extrapolation at the
+edges.
+
+## Usage
+
+``` r
+scrub_interpolate(
+  in_file,
+  censor_file,
+  out_file,
+  confound_files = NULL,
+  overwrite = FALSE,
+  lg = NULL
+)
+```
+
+## Arguments
+
+- in_file:
+
+  Path to the input 4D NIfTI image file.
+
+- censor_file:
+
+  Path to a 1D censor file (e.g., from fMRI preprocessing) containing a
+  binary vector of `1`s (keep) and `0`s (scrub) for each timepoint.
+
+- out_file:
+
+  The full path for the file output by this step
+
+- confound_files:
+
+  Optional character vector of confound or regressor files to update
+  alongside the fMRI data. Rows corresponding to interpolated volumes
+  are filled in using natural splines with nearest-neighbor
+  extrapolation.
+
+- overwrite:
+
+  Logical indicating whether to overwrite an existing interpolated file
+  (default is `FALSE`).
+
+- lg:
+
+  Optional `Logger` object (from the `lgr` package) for logging output.
+  If not provided, the root logger is used.
+
+## Value
+
+A character string giving the path to the interpolated output NIfTI
+file. If the file already exists and `overwrite = FALSE`, the existing
+file path is returned.
+
+## Details
+
+Timepoints to interpolate are identified as those with a `0` in the
+`censor_file`. These are replaced using voxelwise cubic spline
+interpolation across the remaining timepoints. Extrapolation at the
+beginning or end of the series uses the nearest valid value (i.e.,
+`edge_nn = TRUE`).
+
+This function relies on a lower-level Rcpp function
+[`natural_spline_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.md)
+that performs the actual interpolation.

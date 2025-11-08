@@ -1,0 +1,62 @@
+# Building Singularity containers for BrainGnomes
+
+## Running singularity
+
+On most HPC systems, Singularity is not available on login nodes. Thus,
+to build containers, you must enter an interactive compute session and
+build there. For example, on SLURM, for an 8-hour session with 32 GB
+RAM, use:
+
+    srun -t 8:00:00 --mem=32gb -p interact -N 1 -n 4  --pty /bin/bash
+
+Now that you’re in that session, you can proceed with building
+containers needed for BrainGnomes
+
+## Heudiconv
+
+    singularity pull docker://nipy/heudiconv:latest
+
+More details here:
+<https://heudiconv.readthedocs.io/en/latest/installation.html>
+
+## fmriprep
+
+Fill in a version, such as 25.1.3
+
+    singularity build /proj/hng/software/containers/fmriprep-<version>.simg docker://nipreps/fmriprep:<version>
+
+## MRIQC
+
+    singularity build /proj/mnhallqlab/mriqc-latest.simg docker://nipreps/mriqc:latest
+
+## fmripost-aroma (ICA-AROMA)
+
+    singularity build /proj/hng/software/containers/aroma-latest.simg docker://nipreps/fmripost-aroma:main
+
+Details:
+<https://github.com/nipreps/fmripost-aroma?tab=readme-ov-file#installation>
+
+## FSL
+
+Used in postprocessing. NeuroDesk has a number of pre-built containers
+that work well, whereas building FSL from a container file (e.g.,
+<https://www.repronim.org/neurodocker/user_guide/examples.html>) was
+throwing tricky errors on the UNC HPC.
+
+### Image for FSL 6.0.7.16
+
+    curl -X GET https://neurocontainers.neurodesk.org/fsl_6.0.7.16_20250131.simg -O
+
+## AFNI
+
+Not currently used, but if you want it!
+
+    singularity build /proj/hng/software/containers/afni-latest.simg  docker://afni/afni_make_build
+
+## BIDS-validator
+
+Not quite as easy
+
+    module load node
+    npm install -g deno
+    deno compile -ERWN -o bids-validator jsr:@bids/validator
