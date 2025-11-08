@@ -1,43 +1,116 @@
 #!/bin/bash
-#Default PBS requests if not overridden on qsub command line
+# Default PBS requests if not overridden on qsub command line
 #PBS -l nodes=1:ppn=4
 #PBS -l walltime=24:00:00
 #PBS -l mem=48g
 
+set -eE  # 'E' ensures ERR trap inherits in functions/subshells
+cd "$PBS_O_WORKDIR"
 
+# source bash functions used in pipeline shell scripts
+[ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
+source "${pkg_dir}/shell_functions"
 
-set -e
-cd $PBS_O_WORKDIR
+# Set trap for common termination signals and errors
+trap 'trap_job_failure fmriprep SIGTERM' SIGTERM
+trap 'trap_job_failure fmriprep SIGINT' SIGINT
+trap 'trap_job_failure fmriprep SIGHUP' SIGHUP
+trap 'trap_job_failure fmriprep SIGQUIT' SIGQUIT
+trap 'traperror fmriprep $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+
+ncores=${PBS_NP:-1}
 
 ####
-#setup compute environment
-[ -z "$pipedir" ] && pipedir="$PWD"
-source "${pipedir}/pipeline_functions"
-
-#in principle, we could pass all environment variables in with -v
-[ -z "$env_file" ] && env_file="${pipedir}/compute_environment.cfg" #set default
-[ ! -r "$env_file" ]  && echo "Cannot access compute config file ${env_file}" && exit 1
-source "$env_file" #setup relevant variables for this processing environment
-
-[[ -n "${study_cfg}" && -r "${study_cfg}" ]] && source "${study_cfg}" #source a study config file if passed as environment variable
-
-####
-#verify necessary arguments
+# verify required arguments (mirror SBATCH)
+[ -z "$fmriprep_container" ] && echo "fmriprep_container not set. Exiting" && exit 1
+[ ! -f "$fmriprep_container" ] && echo "fmriprep_container $fmriprep_container not found. Exiting" && exit 1
+[ ! -r "$fmriprep_container" ] && echo "fmriprep_container $fmriprep_container not readable. Exiting" && exit 1
 [ -z "$loc_mrproc_root" ] && echo "loc_mrproc_root not set. Exiting." && exit 1
-[ -z "$loc_root" ] && echo "loc_root not set. Exiting." && exit 1
+[ -z "$loc_scratch" ] && echo "loc_scratch not set. Exiting." && exit 1
 [ -z "$loc_bids_root" ] && echo "loc_bids_root not set. Exiting." && exit 1
-[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ ! -d "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not found. Exiting" && exit 1
+[ ! -r "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not readable. Exiting" && exit 1
+[ -z "$templateflow_home" ] && echo "templateflow_home not set. Exiting." && exit 1
+if [ ! -d "$templateflow_home" ]; then
+  log_message WARN templateflow_home directory $templateflow_home does not exist. Creating it inside fmriprep_subject.pbs script.
+  mkdir -p "$templateflow_home"
+fi
 
-####
+[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
   log_message INFO "Running in debug mode; commands will not be executed"
-  rel_suffix=c
+  rel_flag=c
 else
   debug_pipeline=0
 fi
 
-rel "${pipedir}/fmriprep_wrapper ${loc_bids_root} ${loc_mrproc_root}/ participant --participant_label $sub --nthreads $fmriprep_nthreads -w ${loc_root}/fmriprep_tempfiles && date \"+%m%d%y@%H:%M\" > $loc_bids_root/sub-$sub/.fmriprep_complete" $rel_suffix
+[ -z "$fs_license_file" ] && fs_license_file="$FS_LICENSE" # fall back to global freesurfer license file if not set
+[ -z "$fs_license_file" ] && fs_license_file="$FREESURFER_HOME/license.txt" # fall back to freesurfer license file in $FREESURFER_HOME if not set
+[ -z "$fs_license_file" ] && echo "fs_license_file not set and cannot find a fallback. Exiting." && exit 1
+[ ! -f "$fs_license_file" ] && echo "FreeSurfer license file $fs_license_file not found. Exiting" && exit 1
+[ ! -r "$fs_license_file" ] && echo "FreeSurfer license file $fs_license_file not readable. Exiting" && exit 1
 
-#add --low-mem?
-#add --mem-mb?
+fs_dir=$(dirname "$fs_license_file")
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
+
+###
+# handle multi-session setup
+if [ -n "$ses_id" ]; then
+  out_dir="${loc_mrproc_root}/sub-${sub_id}/ses-${ses_id}"
+  ses_str="session $ses_id"
+else
+  out_dir="${loc_mrproc_root}/sub-${sub_id}"
+  ses_str=""
+fi
+mkdir -p "$out_dir"
+cd "$out_dir" || { echo "Failed to change directory to $out_dir"; exit 1; }
+
+####
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
+
+# ensure that all paths to singularity are absolute paths
+vars=(loc_bids_root loc_scratch loc_mrproc_root templateflow_home fs_dir)
+
+# Convert each to absolute path using abspath
+for var in "${vars[@]}"; do
+  abs=$(abspath "${!var}")
+  eval "$var=\"\$abs\""
+done
+
+mem="${PBS_RESOURCE_LIST_mem:-unknown}"
+start_time=$(date +%s)
+
+log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $ncores
+
+# export necessary environment variables for fmriprep in singularity
+rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
+rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
+
+# to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
+rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
+  -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" \
+  "$loc_bids_root" "$loc_mrproc_root/" participant \
+  $cli_options & # all options setup by submit_fmriprep()
+cmd_pid=$!
+
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+
+# fmriprep may exit non-zero even when it completes successfully.
+success=$(grep -q "fMRIPrep finished successfully!" "$stdout_log" && echo 0 || echo 1)
+
+log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
+
+# [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
+exit $success

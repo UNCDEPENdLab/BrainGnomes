@@ -201,6 +201,13 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   fsaverage_id <- NULL
   if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
 
+  # Prefetch TemplateFlow templates when needed so downstream runs can disable networking
+  # This avoids socket errors in Python multiprocessing: https://github.com/nipreps/mriqc/issues/1170
+  prefetch_id <- NULL
+  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps)
+
+  parent_ids <- c(fsaverage_id, prefetch_id)
+
   # If flywheel sync is requested, defer subject scheduling to a dependent controller job
   # This ensures that downstream steps see all data synched from flywheel (e.g., new subjects)
   if (isTRUE(steps["flywheel_sync"])) {
@@ -210,7 +217,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       subject_filter = subject_filter,
       postprocess_streams = postprocess_streams,
       extract_streams = extract_streams,
-      parent_ids = fsaverage_id
+      parent_ids = parent_ids
     )
     snap_file <- file.path(scfg$metadata$log_directory, "run_project_snapshot.rds")
     dir.create(dirname(snap_file), showWarnings = FALSE, recursive = TRUE)
@@ -243,7 +250,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
     scfg = scfg, steps = steps, subject_filter = subject_filter,
-    postprocess_streams = postprocess_streams, extract_streams = extract_streams, parent_ids = fsaverage_id
+    postprocess_streams = postprocess_streams, extract_streams = extract_streams, parent_ids = parent_ids
   )
   return(invisible(TRUE))
 }
@@ -385,16 +392,85 @@ submit_fsaverage_setup <- function(scfg) {
 
   # get resource allocation request
   scfg$fsaverage <- list(nhours = 0.15, memgb = 8, ncores = 1) # fake top-level job to let get_job_sched_args work
-  sched_args <- c(
-    get_job_sched_args(scfg, "fsaverage"),
-    glue::glue("--output={scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
-  )
+  log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
+  stdout_log <- glue::glue("{scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{log_stamp}.out")
+  stderr_log <- glue::glue("{scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{log_stamp}.err")
+  sched_args <- get_job_sched_args(scfg, "fsaverage", stdout_log = stdout_log, stderr_log = stderr_log)
 
   # copy fsaverage from fmriprep's instance of freesurfer to the output destination
   cmd <- glue::glue("singularity exec --cleanenv --containall -B '{scfg$metadata$fmriprep_directory}' '{scfg$compute_environment$fmriprep_container}' \\
     rsync --mkpath -a /opt/freesurfer/subjects/fsaverage '{scfg$metadata$fmriprep_directory}/sourcedata/freesurfer'")
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+
+  return(job_id)
+}
+
+# helper for handling the problem of multi
+submit_prefetch_templates <- function(scfg, steps) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  checkmate::assert_logical(steps, any.missing = FALSE)
+
+  # run the python script for fetching within the fmriprep container to ensure templateflow presence and alignment
+  container_path <- scfg$compute_environment$fmriprep_container
+  if (!checkmate::test_file_exists(container_path)) {
+    warning("Skipping TemplateFlow prefetch because the fMRIPrep container is missing.")
+    return(NULL)
+  }
+
+  tf_home <- scfg$metadata$templateflow_home
+  if (!checkmate::test_string(tf_home) || !nzchar(tf_home)) {
+    tf_home <- file.path(Sys.getenv("HOME"), ".cache", "templateflow")
+  }
+
+  tf_home <- normalizePath(tf_home, mustWork = FALSE)
+  if (!dir.exists(tf_home)) dir.create(tf_home, showWarnings = FALSE, recursive = TRUE)
+
+  spaces <- scfg$fmriprep$output_spaces
+  if (isTRUE(steps["aroma"]) && (is.null(spaces) || !grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE))) {
+    spaces <- trimws(paste(spaces, "MNI152NLin6Asym:res-2"))
+  }
+
+  # make sure that at least fmriprep's default space is included
+  if (is.null(spaces) || !nzchar(trimws(spaces))) spaces <- "MNI152NLin2009cAsym"
+
+  # pull out non-template output spaces
+  spaces_vec <- unique(strsplit(trimws(spaces), "\\s+")[[1]])
+  skip_spaces <- c("anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6", "T1w", "T2w", "func")
+  fetch_spaces <- setdiff(spaces_vec, skip_spaces)
+  if (length(fetch_spaces) == 0L) return(NULL)
+
+  script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
+  if (!checkmate::test_file_exists(script_path)) {
+    warning("Cannot locate TemplateFlow prefetch helper script; skipping prefetch step.")
+    return(NULL)
+  }
+
+  script_dir <- normalizePath(dirname(script_path))
+  bind_paths <- unique(c(tf_home, script_dir))
+  bind_flags <- paste(sprintf("-B %s", shQuote(paste0(bind_paths, ":", bind_paths))), collapse = " ")
+
+  # default resource allocation requirements
+  scfg$prefetch_templates <- list(nhours = 0.5, memgb = 16, ncores = 1)
+
+  log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
+  stdout_log <- glue::glue("{scfg$metadata$log_directory}/prefetch_templates_jobid-%j_{log_stamp}.out")
+  stderr_log <- sub("\\.out$", ".err", stdout_log)
+  sched_args <- get_job_sched_args(scfg, "prefetch_templates", stdout_log = stdout_log, stderr_log = stderr_log)
+
+  # run TemplateFlow prefetch inside fmriprep container
+  spaces_arg <- paste(fetch_spaces, collapse = " ")
+  singularity_args <- paste("--cleanenv --containall", bind_flags)
+  cmd <- glue::glue(
+    "TEMPLATEFLOW_HOME={shQuote(tf_home)} APPTAINERENV_TEMPLATEFLOW_HOME={shQuote(tf_home)} ",
+    "singularity exec {singularity_args} {shQuote(container_path)} ",
+    "python {shQuote(script_path)} --output-spaces {shQuote(spaces_arg)}"
+  )
+
+  job_id <- cluster_job_submit(cmd,
+    scheduler = scfg$compute_environment$scheduler,
+    sched_args = sched_args
+  )
 
   return(job_id)
 }

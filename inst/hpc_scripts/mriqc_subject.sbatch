@@ -60,7 +60,7 @@ log_flag=""
 log_message INFO Starting mriqc for subject $sub_id in $out_dir
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag singularity run --cleanenv -B "$loc_bids_root" -B "$loc_scratch" \
+rel $rel_flag $log_flag singularity run --cleanenv --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
   -B "$loc_mriqc_root" "$mriqc_container" \
   "$loc_bids_root" "$loc_mriqc_root/" participant \
   $cli_options & # all options setup by submit_mriqc()

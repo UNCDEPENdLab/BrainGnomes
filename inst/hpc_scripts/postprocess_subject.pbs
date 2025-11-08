@@ -1,0 +1,203 @@
+#!/bin/bash
+# Default PBS requests if not overridden on qsub command line
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=8:00:00
+#PBS -l mem=8g
+
+# This script postprocesses all files in a subject input directory that match a given regular expression (input_regex).
+# For each file it finds, it launches a separate child PBS job, then waits for these child jobs to complete.
+
+set -eE  # 'E' ensures ERR trap inherits in functions/subshells
+cd "$PBS_O_WORKDIR"
+
+# source bash functions used in pipeline shell scripts
+[ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
+source "${pkg_dir}/shell_functions"
+
+# Set trap for common termination signals
+trap 'trap_job_failure postprocess SIGTERM' SIGTERM
+trap 'trap_job_failure postprocess SIGINT' SIGINT
+trap 'trap_job_failure postprocess SIGHUP' SIGHUP
+trap 'trap_job_failure postprocess SIGQUIT' SIGQUIT
+trap 'traperror postprocess $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+
+ncores=${PBS_NP:-1}
+
+####
+#verify required arguments
+[ -z "$out_dir" ] && echo "out_dir not set. Exiting." && exit 1
+[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
+[ -z "$postprocess_cli" ] && echo "postprocess_cli not set. Exiting." && exit 1
+[ -z "$postprocess_rscript" ] && echo "postprocess_rscript not set. Exiting." && exit 1
+[ ! -f "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not found. Exiting" && exit 1
+[ ! -r "$postprocess_rscript" ] && echo "postprocess_rscript $postprocess_rscript not readable. Exiting" && exit 1
+[ -z "$input_dir" ] && echo "input_dir is not set. Exiting" && exit 1
+[ ! -d "$input_dir" ] && echo "input_dir $input_dir cannot be found. Exiting" && exit 1
+[ -z "$input_regex" ] && echo "input_regex is not set. Exiting" && exit 1
+[  -z "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script is not set. Exiting" && exit 1
+[ ! -f "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not found. Exiting" && exit 1
+[ ! -r "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not readable. Exiting" && exit 1
+[ -z "$stream_name" ] && echo "stream_name not set. Exiting" && exit 1
+
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
+
+ses_str=""
+if [ -n "$ses_id" ]; then
+  ses_str="session $ses_id"
+fi
+mkdir -p "$out_dir"
+cd "$out_dir" || { echo "Failed to change directory to $out_dir"; exit 1; }
+export out_dir
+
+####
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
+
+### Pass forward only scheduler args that don't conflict with child arguments
+sanitize_sched_args() {
+  local args=($1)
+  local keep=()
+  local skip_next=0
+  for i in "${!args[@]}"; do
+    if [[ $skip_next -eq 1 ]]; then
+      skip_next=0
+      continue
+    fi
+    a=${args[$i]}
+    case "$a" in
+      -N|--job-name|--output|--error|-o|-e)
+        skip_next=1;;
+      *)
+        keep+=("$a");;
+    esac
+  done
+  echo "${keep[@]}"
+}
+
+sched_args="$(sanitize_sched_args "$sched_args")"
+
+# remove fields that will be supplied by the child script
+rm_cli_fields_local() {
+  local args=($1)
+  local keep=()
+  local skip_next=0
+  for i in "${!args[@]}"; do
+    if [[ $skip_next -eq 1 ]]; then
+      skip_next=0
+      continue
+    fi
+    a=${args[$i]}
+    case "$a" in
+      --input|--input_regex)
+        skip_next=1;;
+      *)
+        keep+=("$a");;
+    esac
+  done
+  echo "${keep[@]}"
+}
+postprocess_cli="$(rm_cli_fields_local "$postprocess_cli")"
+
+### Look for all relevant input files in the input directory
+full_regex="${input_dir%/}/$input_regex"  # Ensure slash between dir and file
+
+cmd="find \"$input_dir\" -regextype posix-extended -regex \"$full_regex\""
+log_message DEBUG Looking for files to postprocess using "$cmd"
+files=($(find "$input_dir" -regextype posix-extended -regex "$full_regex"))
+
+if [[ ${#files[@]} -eq 0 ]]; then
+  log_message DEBUG No files to postprocess found in $out_dir.
+  exit 0
+fi
+
+job_ids=()
+
+for f in "${files[@]}"; do
+  fname=$(remove_ext "$f")
+  jobname="postprocess_${fname}"
+
+  # create separate logs for each image -- place in the same location as the subject-level job
+  ts=$(date +%Y%m%d%H%M%S)
+  postprocess_stdout_log="$(dirname "$stdout_log")/postprocess_${stream_name}_${fname}_${ts}.out"
+  postprocess_stderr_log="$(dirname "$stdout_log")/postprocess_${stream_name}_${fname}_${ts}.err"
+
+  # Build variable export list for child job
+  vars=(
+    "input_file=$f"
+    "stdout_log=$postprocess_stdout_log"
+    "stderr_log=$postprocess_stderr_log"
+    "pkg_dir=$pkg_dir"
+    "postprocess_cli=$postprocess_cli"
+    "postprocess_rscript=$postprocess_rscript"
+    "out_dir=$out_dir"
+    "sub_id=$sub_id"
+    "log_file=$log_file"
+    "R_HOME=$R_HOME"
+    "debug_pipeline=$debug_pipeline"
+    "ses_id=$ses_id"
+  )
+  vlist=$(IFS=, ; echo "${vars[*]}")
+
+  jid=$(qsub \
+    -V \
+    $sched_args \
+    -N "$jobname" \
+    -o "$postprocess_stdout_log" \
+    -e "$postprocess_stderr_log" \
+    -v "$vlist" \
+    "$postprocess_image_sched_script")
+
+  log_message INFO Submitted postprocessing job $jid for $(basename "$f") in $out_dir
+  job_ids+=("$jid")
+done
+
+# Wait for all child jobs to finish
+echo "Waiting for child jobs to complete..."
+
+while true; do
+  active_jobs=0
+  for jid in "${job_ids[@]}"; do
+    qstat -f "$jid" &> /dev/null && ((active_jobs += 1))
+  done
+
+  if [[ $active_jobs -eq 0 ]]; then
+    echo "All child jobs completed."
+    break
+  fi
+  sleep 180 # poll every 3 minutes
+done
+
+# Check exit status of child jobs using qstat -xf
+failed=0
+for jid in "${job_ids[@]}"; do
+  if details=$(qstat -xf "$jid" 2>/dev/null); then
+    exit_status=$(printf "%s" "$details" | awk -F' = ' '/^\s*exit_status\s*=/{print $2}' | tail -n1)
+    state=$(printf "%s" "$details" | awk -F' = ' '/^\s*job_state\s*=/{print $2}' | tail -n1)
+    exit_status=${exit_status:-1}
+    if [[ "$exit_status" != "0" ]]; then
+      log_message ERROR "Child job $jid failed with state ${state:-unknown} exit status $exit_status"
+      failed=1
+    fi
+  else
+    log_message ERROR "Could not retrieve final status for child job $jid; marking as failed"
+    failed=1
+  fi
+done
+
+[[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+log_message INFO Finished postprocessing for subject $sub_id $ses_str
+exit $failed

@@ -1,49 +1,112 @@
 #!/bin/bash
-#Default PBS requests if not overridden on qsub command line
+# Default PBS requests if not overridden on qsub command line
 #PBS -l nodes=1:ppn=1
 #PBS -l walltime=2:00:00
 #PBS -l mem=16g
-#PBS -A mnh5174_c_g_sc_default
-#PBS -o aci_output
-#PBS -e aci_output
-#PBS -N heudiconv
 
 set -e
-cd $PBS_O_WORKDIR
+cd "$PBS_O_WORKDIR"
+
+# source bash functions used in pipeline shell scripts
+[ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
+source "${pkg_dir}/shell_functions"
+
+# Set trap for common termination signals
+trap 'trap_job_failure bids_conversion SIGTERM' SIGTERM
+trap 'trap_job_failure bids_conversion SIGINT' SIGINT
+trap 'trap_job_failure bids_conversion SIGHUP' SIGHUP
+trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
 
 ####
-#setup compute environment
-[ -z "$pipedir" ] && pipedir="$PWD"
-source "${pipedir}/pipeline_functions"
+# verify necessary arguments (match SBATCH version)
+[ -z "$heudiconv_container" ] && echo "heudiconv_container not set. Exiting" && exit 1
+[ ! -f "$heudiconv_container" ] && echo "heudiconv_container $heudiconv_container not found. Exiting" && exit 1
+[ ! -r "$heudiconv_container" ] && echo "heudiconv_container $heudiconv_container not readable. Exiting" && exit 1
+[ -z "$loc_sub_dicoms" ] && echo "loc_sub_dicoms not set. Exiting." && exit 1
+[ -z "$loc_bids_root" ] && echo "loc_bids_root not set. Exiting." && exit 1
+[ -z "$heudiconv_heuristic" ] && echo "No heudiconv_heuristic variable set." && exit 1
+[ ! -f "$heudiconv_heuristic" ] && echo "Heuristic file $heudiconv_heuristic not found." && exit 1
+[ ! -r "$heudiconv_heuristic" ] && echo "Heuristic file $heudiconv_heuristic not readable. Exiting" && exit 1
+[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 
-#in principle, we could pass all environment variables in with -v
-[ -z "$env_file" ] && env_file="${pipedir}/compute_environment.cfg" #set default
-[ ! -r "$env_file" ]  && echo "Cannot access compute config file ${env_file}" && exit 1
-source "$env_file" #setup relevant variables for this processing environment
+cli_options=${cli_options:-}
+heudiconv_clear_cache=${heudiconv_clear_cache:-0}
 
-[[ -n "${study_cfg}" && -r "${study_cfg}" ]] && source "${study_cfg}" #source a study config file if passed as environment variable
-[ -n "$torque_modules_root" ] && module use "$torque_modules_root"
-[ -n "$r_module" ] && module load "$r_module"
-
-####
-#verify necessary arguments
-[ -z "${heudiconv_location}" ] && echo "No heudiconv_location variable set." && exit 1
-[ -z "${heudiconv_heuristic}" ] && echo "No heudiconv_heuristic variable set." && exit 1
-[ -z "${loc_mrraw_root}" ] && echo "No loc_mrraw_root variable set." && exit 1
-[ -z "${loc_bids_root}" ] && echo "No loc_bids_root variable set." && exit 1
-
-####
-# convert debug flag to numeric
-[[ "$debug_pipeline" == "TRUE" ]] && debug_pipeline=1 || debug_pipeline=0
-
-#run heudiconv
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
   log_message INFO "Running in debug mode; commands will not be executed"
-  rel_suffix=c
+  rel_flag=c
 else
   debug_pipeline=0
 fi
 
-rel "${heudiconv_location} -d ${loc_mrraw_root}/{subject}/*/*.dcm -s $sub -f ${heudiconv_heuristic} -c dcm2niix -o ${loc_bids_root} -b && date \"+%m%d%y@%H:%M\" > ${loc_bids_root}/sub-${sub}/.heudiconv_complete" $rel_suffix
-rel "${pipedir}/add_intendedfor_bold ${loc_bids_root}/sub-${sub}" $rel_suffix #add IntendedFor field to FMAP jsons, pointing to all BOLD
+heuristic_dir=$(dirname "$heudiconv_heuristic")
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
+
+###
+# handle multi-session setup
+cache_dir="${loc_bids_root%/}/.heudiconv/${sub_id}"
+if [ -n "$ses_id" ]; then
+  out_dir=${loc_bids_root}/sub-${sub_id}/ses-${ses_id}
+  ses_flag="--ses $ses_id"
+  ses_str="session $ses_id"
+  cache_dir="${cache_dir}/${ses_id}" # subfolder
+else
+  out_dir=${loc_bids_root}/sub-${sub_id}
+  ses_flag=""
+  ses_str=""
+fi
+mkdir -p "$out_dir"
+cd "$out_dir" || { echo "Failed to change directory to $out_dir"; exit 1; }
+
+if [[ "$heudiconv_clear_cache" =~ ^(1|TRUE|true|yes|YES)$ ]]; then
+  if [ -d "${cache_dir}" ]; then
+    log_message INFO "Clearing heudiconv cache at $cache_dir"
+    rm -rf "$cache_dir"
+  else
+    log_message WARN "Could not find heudiconv cache to clear at $cache_dir"
+  fi
+fi
+
+####
+# run heudiconv
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
+
+mem="${PBS_RESOURCE_LIST_mem:-unknown}"
+ncores=${PBS_NP:-1}
+start_time=$(date +%s)
+
+log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $ncores
+
+# to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
+# we now use --files to specify the dicoms to convert rather than -d since we don't want to assume
+# the dicoms are in a specific directory structure (esp. in terms of level of nesting).
+rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_sub_dicoms" -B "$heuristic_dir" \
+ "$heudiconv_container" --files $loc_sub_dicoms -s $sub_id $ses_flag \
+  -f $heudiconv_heuristic -c dcm2niix \
+  -o $loc_bids_root $cli_options &
+cmd_pid=$!
+
+cmd_status=0
+wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+
+# write complete file if the command was successful and debug_pipeline is not set
+[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
+log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
+exit $cmd_status
+
+#######
+# example call
+# singularity run --cleanenv -B /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms \
+#   -B /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_BIDS \
+#   /proj/mnhallqlab/users/michael/fmriprep_pipeline_setup/heudiconv_latest.sif \
+#   --files /proj/mnhallqlab/projects/preproc_pipeline_test_data/dicoms/540311 -f heuristic.py -s 540311 -c dcm2niix --bids \
+#   -o /proj/mnhallqlab/projects/preproc_pipeline_test_data/data_BIDS

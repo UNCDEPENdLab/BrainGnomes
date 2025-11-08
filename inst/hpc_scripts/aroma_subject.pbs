@@ -1,11 +1,11 @@
 #!/bin/bash
-# Default SLURM requests if not overridden on command line
-#SBATCH -N 1
-#SBATCH -n 4
-#SBATCH --time=24:00:00
-#SBATCH --mem=48g
+# Default PBS requests if not overridden on qsub command line
+#PBS -l nodes=1:ppn=4
+#PBS -l walltime=24:00:00
+#PBS -l mem=48g
 
 set -eE  # 'E' ensures ERR trap inherits in functions/subshells
+cd "$PBS_O_WORKDIR"
 
 # source bash functions used in pipeline shell scripts
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
@@ -18,10 +18,10 @@ trap 'trap_job_failure aroma SIGHUP' SIGHUP
 trap 'trap_job_failure aroma SIGQUIT' SIGQUIT
 trap 'traperror aroma $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
-# default nthreads to however many cores we have $SLURM_SOMETHING
+# default nthreads
 [ -z "$aroma_nthreads" ] && echo "No aroma_nthreads environment variable. Defaulting to 4" && aroma_nthreads=4
 
-ncores=$SLURM_NTASKS
+ncores=${PBS_NP:-1}
 
 ####
 #verify required arguments
@@ -49,20 +49,19 @@ fi
 # add the job id to the log file variables in case of crash
 [ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
 [ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
-stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
-stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
 
 ###
 out_dir="${loc_mrproc_root}/sub-${sub_id}"
 mkdir -p "$out_dir"
-cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
+cd "$out_dir" || { echo "Failed to change directory to $out_dir"; exit 1; }
 
 ####
-
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-mem=$((SLURM_MEM_PER_NODE / 1024))GB
+mem="${PBS_RESOURCE_LIST_mem:-unknown}"
 start_time=$(date +%s)
 
 # check for BOLD input files. fmripost aroma is pretty weak in its error messages.
@@ -72,7 +71,7 @@ if ! find "$out_dir" -type f -path '*/func/*_space-MNI152NLin6Asym_res-2_desc-pr
   exit 1
 fi
 
-log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
+log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $ncores
 
 # protect existing sub-<id>.html file
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
@@ -87,15 +86,13 @@ cmd_pid=$!
 cmd_status=0
 wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
-# fmripost-aroma somehow decides to throw a non-zero exit status even when it completes successfully.
-# fall back to looking for success string in fmriprep log file
+# fmripost-aroma sometimes exits non-zero even when it completes successfully.
 success=$(grep -q "fMRIPost-AROMA finished successfully!" "$stdout_log" && echo 0 || echo 1)
 
 log_message DEBUG "Exit status of fmripost-aroma is $cmd_status, success is $success"
 
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_aroma.html"
 [ -f "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" "${loc_mrproc_root}/sub-${sub_id}.html"
-# [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
 if [[ $success -eq 0 ]]; then
   if [[ "$aroma_cleanup" == "TRUE" || "$aroma_cleanup" -eq 1 ]]; then
     log_message INFO "Removing unneeded AROMA NIfTI/JSON files"
@@ -106,3 +103,4 @@ fi
 
 log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
 exit $success
+
