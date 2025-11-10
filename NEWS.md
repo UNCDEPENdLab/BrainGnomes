@@ -4,6 +4,7 @@
 * lmfit_residuals_4d now handles partial (ala fsl_regfilt) and full regression and is used for applying AROMA
 * Nonaggressive and aggressive AROMA now supported
 * fsl_regfilt.R wrapper script removed from pipeline -- all regression now happens with lmfit_residuals_4d
+* bugfix: args_to_df now tolerate multiple arguments after a hyphen
 
 # BrainGnomes 0.7-2
 

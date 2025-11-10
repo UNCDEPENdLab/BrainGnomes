@@ -334,7 +334,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("--participant_label {sub_id}"),
     glue("-w {scfg$metadata$scratch_directory}"),
     glue("--fs-license-file {scfg$fmriprep$fs_license_file}"),
-    glue("--output-spaces {shQuote(trimws(scfg$fmriprep$output_spaces))}"),
+    glue("--output-spaces {trimws(scfg$fmriprep$output_spaces)}"),
     glue("--mem {format(max(4, scfg$fmriprep$memgb - 4)*1000, scientific=FALSE)}") # convert to MB
   ), collapse = TRUE)
 
