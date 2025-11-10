@@ -141,7 +141,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if (!is.null(stream_name)) {
-    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n"))
+    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n", .trim = FALSE))
   }
 
   defaults <- list(

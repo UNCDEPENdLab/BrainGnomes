@@ -324,10 +324,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     return(NULL)
   }
 
-  if (isTRUE(scfg$aroma$enable) && (is.null(scfg$fmriprep$output_spaces) || !grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE))) {
-    message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
-    scfg$fmriprep$output_spaces <- paste(scfg$fmriprep$output_spaces, "MNI152NLin6Asym:res-2")
-  }
+  scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(scfg$aroma$enable), verbose = FALSE)
 
   # for the mem request, have fmriprep request a bit less than the job gets itself
   # https://neurostars.org/t/fmriprep-failing-on-hpc-via-singularity/26342/27
@@ -337,7 +334,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     glue("--participant_label {sub_id}"),
     glue("-w {scfg$metadata$scratch_directory}"),
     glue("--fs-license-file {scfg$fmriprep$fs_license_file}"),
-    glue("--output-spaces {scfg$fmriprep$output_spaces}"),
+    glue("--output-spaces {shQuote(trimws(scfg$fmriprep$output_spaces))}"),
     glue("--mem {format(max(4, scfg$fmriprep$memgb - 4)*1000, scientific=FALSE)}") # convert to MB
   ), collapse = TRUE)
 
@@ -433,7 +430,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   ), collapse = TRUE)
 
   cleanup <- isTRUE(scfg$aroma$cleanup)
-  if (cleanup && !is.null(scfg$fmriprep$output_spaces) &&
+  auto_added_aroma <- isTRUE(scfg$fmriprep$auto_added_aroma_space)
+  if (cleanup && !auto_added_aroma && !is.null(scfg$fmriprep$output_spaces) &&
       grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE)) {
     msg <- "AROMA cleanup requested but will not occur because MNI152NLin6Asym:res-2 is in fmriprep --output-spaces."
     if (!is.null(lg)) lg$warn(msg) else warning(msg)

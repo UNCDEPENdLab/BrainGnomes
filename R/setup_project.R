@@ -838,7 +838,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     if (nzchar(fw_path)) {
       use_fw <- prompt_input(
         instruct = glue("Found Flywheel CLI at {fw_path}"),
-        prompt = "Use this location?",
+        prompt = "Use this to run flywheel?",
         type = "flag",
         default = TRUE
       )

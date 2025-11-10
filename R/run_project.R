@@ -191,6 +191,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
+  scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
+
   flywheel_id <- NULL
   if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
 
@@ -473,4 +475,30 @@ submit_prefetch_templates <- function(scfg, steps) {
   )
 
   return(job_id)
+}
+
+ensure_aroma_output_space <- function(scfg, require_aroma = isTRUE(scfg$aroma$enable), verbose = TRUE) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  if (!isTRUE(require_aroma)) return(scfg)
+
+  if (is.null(scfg$fmriprep$auto_added_aroma_space)) scfg$fmriprep$auto_added_aroma_space <- FALSE
+
+  spaces <- scfg$fmriprep$output_spaces
+  has_required_space <- !is.null(spaces) && grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE)
+  if (has_required_space) return(scfg)
+
+  addition <- "MNI152NLin6Asym:res-2"
+  if (is.null(spaces) || !nzchar(trimws(spaces))) {
+    scfg$fmriprep$output_spaces <- addition
+  } else {
+    scfg$fmriprep$output_spaces <- trimws(paste(spaces, addition))
+  }
+
+  if (isTRUE(verbose)) {
+    message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+  }
+
+  scfg$fmriprep$auto_added_aroma_space <- TRUE
+
+  return(scfg)
 }
