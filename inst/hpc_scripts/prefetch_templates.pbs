@@ -1,0 +1,89 @@
+#!/bin/bash
+# Default PBS requests if not overridden on the qsub command line
+# These defaults are superseded by scheduler arguments built in submit_prefetch_templates()
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=0:30:00
+#PBS -l mem=16g
+
+set -eE  # 'E' ensures ERR trap inherits in functions/subshells
+cd "$PBS_O_WORKDIR"
+
+# source bash functions used in pipeline shell scripts
+[ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
+source "${pkg_dir}/shell_functions"
+
+# Set trap for common termination signals and errors
+trap 'trap_job_failure prefetch_templates SIGTERM' SIGTERM
+trap 'trap_job_failure prefetch_templates SIGINT' SIGINT
+trap 'trap_job_failure prefetch_templates SIGHUP' SIGHUP
+trap 'trap_job_failure prefetch_templates SIGQUIT' SIGQUIT
+trap 'traperror prefetch_templates $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+
+####
+# verify required arguments
+[ -z "$prefetch_container" ] && echo "prefetch_container not set. Exiting." && exit 1
+[ ! -f "$prefetch_container" ] && echo "prefetch_container $prefetch_container not found. Exiting." && exit 1
+[ ! -r "$prefetch_container" ] && echo "prefetch_container $prefetch_container not readable. Exiting." && exit 1
+[ -z "$prefetch_script" ] && echo "prefetch_script not set. Exiting." && exit 1
+[ ! -f "$prefetch_script" ] && echo "prefetch_script $prefetch_script not found. Exiting." && exit 1
+[ ! -r "$prefetch_script" ] && echo "prefetch_script $prefetch_script not readable. Exiting." && exit 1
+[ -z "$templateflow_home" ] && echo "templateflow_home not set. Exiting." && exit 1
+[ -z "$prefetch_spaces" ] && echo "prefetch_spaces not set. Exiting." && exit 1
+
+if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
+  debug_pipeline=1
+  log_message INFO "Running in debug mode; commands will not be executed"
+  rel_flag=c
+else
+  debug_pipeline=0
+fi
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
+
+log_flag=""
+[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
+
+# ensure TemplateFlow home exists before mounting
+if [ ! -d "$templateflow_home" ]; then
+  log_message INFO "Creating missing templateflow_home directory: $templateflow_home"
+  mkdir -p "$templateflow_home"
+fi
+
+# normalize important paths
+prefetch_container=$(abspath "$prefetch_container")
+prefetch_script=$(abspath "$prefetch_script")
+templateflow_home=$(abspath "$templateflow_home")
+prefetch_script_dir=$(dirname "$prefetch_script")
+
+bind_args=()
+bind_paths=("$templateflow_home" "$prefetch_script_dir")
+for path in "${bind_paths[@]}"; do
+  [ -z "$path" ] && continue
+  bind_args+=("-B" "$path:$path")
+done
+
+log_message INFO "Prefetching TemplateFlow resources into $templateflow_home for spaces: $prefetch_spaces"
+
+# export necessary environment variables for the container
+rel $rel_flag $log_flag export TEMPLATEFLOW_HOME="$templateflow_home"
+rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home"
+
+# run the TemplateFlow prefetch helper inside the fMRIPrep container
+rel $rel_flag $log_flag singularity exec --cleanenv --containall "${bind_args[@]}" \
+  "$prefetch_container" python "$prefetch_script" --output-spaces "$prefetch_spaces" &
+cmd_pid=$!
+
+cmd_status=0
+wait $cmd_pid || cmd_status=$?
+
+if [[ $cmd_status -eq 0 ]]; then
+  log_message INFO "TemplateFlow prefetch completed successfully."
+else
+  log_message ERROR "TemplateFlow prefetch failed with status $cmd_status."
+fi
+
+exit $cmd_status

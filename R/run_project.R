@@ -448,30 +448,35 @@ submit_prefetch_templates <- function(scfg, steps) {
     return(NULL)
   }
 
-  script_dir <- normalizePath(dirname(script_path))
-  bind_paths <- unique(c(tf_home, script_dir))
-  bind_flags <- paste(sprintf("-B %s", shQuote(paste0(bind_paths, ":", bind_paths))), collapse = " ")
-
   # default resource allocation requirements
   scfg$prefetch_templates <- list(nhours = 0.5, memgb = 16, ncores = 1)
-
+  
   log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
   stdout_log <- glue::glue("{scfg$metadata$log_directory}/prefetch_templates_jobid-%j_{log_stamp}.out")
   stderr_log <- sub("\\.out$", ".err", stdout_log)
   sched_args <- get_job_sched_args(scfg, "prefetch_templates", stdout_log = stdout_log, stderr_log = stderr_log)
+  sched_script <- get_job_script(scfg, "prefetch_templates", subject_suffix = FALSE)
 
   # run TemplateFlow prefetch inside fmriprep container
   spaces_arg <- paste(fetch_spaces, collapse = " ")
-  singularity_args <- paste("--cleanenv --containall", bind_flags)
-  cmd <- glue::glue(
-    "TEMPLATEFLOW_HOME={shQuote(tf_home)} APPTAINERENV_TEMPLATEFLOW_HOME={shQuote(tf_home)} ",
-    "singularity exec {singularity_args} {shQuote(container_path)} ",
-    "python {shQuote(script_path)} --output-spaces {shQuote(spaces_arg)}"
+  log_file <- file.path(scfg$metadata$log_directory, "prefetch_templates_log.txt")
+  env_variables <- c(
+    pkg_dir = find.package(package = "BrainGnomes"),
+    debug_pipeline = scfg$debug,
+    log_file = log_file,
+    stdout_log = stdout_log,
+    stderr_log = stderr_log,
+    prefetch_container = container_path,
+    prefetch_script = script_path,
+    prefetch_spaces = spaces_arg,
+    templateflow_home = tf_home
   )
 
-  job_id <- cluster_job_submit(cmd,
+  job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
-    sched_args = sched_args
+    sched_args = sched_args,
+    env_variables = env_variables,
+    echo = FALSE
   )
 
   return(job_id)
