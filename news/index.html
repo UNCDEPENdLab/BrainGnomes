@@ -46,6 +46,9 @@
 <li>Nonaggressive and aggressive AROMA now supported</li>
 <li>fsl_regfilt.R wrapper script removed from pipeline – all regression now happens with lmfit_residuals_4d</li>
 <li>bugfix: args_to_df now tolerate multiple arguments after a hyphen</li>
+<li>Added pre-fetch step for TemplateFlow files so that network access can be turned off inside singularity containers, avoiding socket errors that crop up within python’s multiprocessing module.</li>
+<li>Amended PBS scripts to match current pipeline</li>
+<li>TemplateFlow prefetch now runs via dedicated Slurm/PBS scripts that mirror other steps, including trapping and logging</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-2" id="braingnomes-07-2">BrainGnomes 0.7-2<a class="anchor" aria-label="anchor" href="#braingnomes-07-2"></a></h2>

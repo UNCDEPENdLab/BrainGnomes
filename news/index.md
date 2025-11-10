@@ -9,6 +9,12 @@
 - fsl_regfilt.R wrapper script removed from pipeline – all regression
   now happens with lmfit_residuals_4d
 - bugfix: args_to_df now tolerate multiple arguments after a hyphen
+- Added pre-fetch step for TemplateFlow files so that network access can
+  be turned off inside singularity containers, avoiding socket errors
+  that crop up within python’s multiprocessing module.
+- Amended PBS scripts to match current pipeline
+- TemplateFlow prefetch now runs via dedicated Slurm/PBS scripts that
+  mirror other steps, including trapping and logging
 
 ## BrainGnomes 0.7-2
 
