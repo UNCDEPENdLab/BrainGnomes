@@ -77,8 +77,11 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
 # protect existing sub-<id>.html file
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
 
+# at present, fmripost-aroma does not support an offline mode, so we have to tolerate the risk of a race condition.
+# rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
+rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_root" -B "$loc_scratch" \
   -B "$loc_mrproc_root" "$aroma_container" \
   "$loc_bids_root" "$loc_mrproc_root/" participant \
   $cli_options & # all options setup by submit_aroma()
