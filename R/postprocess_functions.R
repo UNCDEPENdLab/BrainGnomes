@@ -976,6 +976,7 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
   } else if (method == "lmfit") {
     lg$info("Using internal lmfit confound regression function")
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
+    good_vols <- rep(TRUE, nrow(Xmat))
     if (checkmate::test_file_exists(censor_file)) {
       good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
       if (sum(good_vols) < length(good_vols)) lg$info("Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")

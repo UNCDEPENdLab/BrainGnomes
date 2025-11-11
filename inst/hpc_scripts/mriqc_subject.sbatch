@@ -32,6 +32,8 @@ trap 'traperror mriqc $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%
 [ -z "$loc_bids_root" ] && echo "loc_bids_root not set. Exiting." && exit 1
 [ ! -d "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not found. Exiting" && exit 1
 [ ! -r "$loc_bids_root" ] && echo "loc_bids_root $loc_bids_root not readable. Exiting" && exit 1
+[ -z "$templateflow_home" ] && echo "templateflow_home not set. Exiting." && exit 1
+[ ! -d "$templateflow_home" ] && log_message INFO "Creating missing templateflow_home directory: $templateflow_home" && mkdir -p "$templateflow_home"
 [ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
 [ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
@@ -57,11 +59,18 @@ cd $out_dir || { echo "Failed to change directory to $out_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
+# normalize important paths for binding
+templateflow_home=$(abspath "$templateflow_home")
+
 log_message INFO Starting mriqc for subject $sub_id in $out_dir
+
+# expose TemplateFlow cache inside the container
+rel $rel_flag $log_flag export TEMPLATEFLOW_HOME="$templateflow_home"
+rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home"
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag $log_flag singularity run --cleanenv --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
-  -B "$loc_mriqc_root" "$mriqc_container" \
+  -B "$loc_mriqc_root" -B "$templateflow_home" "$mriqc_container" \
   "$loc_bids_root" "$loc_mriqc_root/" participant \
   $cli_options & # all options setup by submit_mriqc()
 cmd_pid=$!

@@ -9,6 +9,8 @@
     avoiding socket errors that crop up within python's multiprocessing module.
 * Amended PBS scripts to match current pipeline
 * TemplateFlow prefetch now runs via dedicated Slurm/PBS scripts that mirror other steps, including trapping and logging
+* bugfix: confound regression does not crash when scrubbing is disabled
+* bugfix: incorporate additional BIDS entities into location of confounds file
 
 # BrainGnomes 0.7-2
 

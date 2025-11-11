@@ -383,6 +383,11 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     glue("--mem-gb {scfg$mriqc$memgb}")
   ), collapse=TRUE)
 
+  if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
+    lg$debug("Creating missing templateflow_home directory for MRIQC: {scfg$metadata$templateflow_home}")
+    dir.create(scfg$metadata$templateflow_home, showWarnings = FALSE, recursive = TRUE)
+  }
+
   env_variables <- c(
     env_variables,
     mriqc_container = scfg$compute_environment$mriqc_container,
@@ -391,6 +396,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     loc_bids_root = scfg$metadata$bids_directory,
     loc_mriqc_root = scfg$metadata$mriqc_directory,
     loc_scratch = scfg$metadata$scratch_directory,
+    templateflow_home = normalizePath(scfg$metadata$templateflow_home),
     cli_options = cli_options
   )
 

@@ -468,15 +468,9 @@ def build_queries_legacy(
                     query["resolution"] = res_arg
                 if desc not in (None, ""):
                     query["desc"] = desc
-                queries.append((template, query, token))
-                dbg(f"Legacy query: template={template}, params={query}, label={token}")
-            if res_arg is not None:
-                query["resolution"] = res_arg
-            desc = desc_values[0] if len(desc_values) == 1 else desc_values[suffix_values.index(suffix) if suffix in suffix_values else 0]
-            if desc not in (None, ""):
-                query["desc"] = desc
-            queries.append((template, query, token))
-            dbg(f"Legacy query: template={template}, params={query}, label={token}")
+                query_copy = dict(query)  # ensure stored query is immutable for later iterations
+                queries.append((template, query_copy, token))
+                dbg(f"Legacy query: template={template}, params={query_copy}, label={token}")
     dbg(f"Total legacy queries: {len(queries)}")
     return queries
 
