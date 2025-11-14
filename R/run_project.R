@@ -380,8 +380,8 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 
-  lg$info("Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }

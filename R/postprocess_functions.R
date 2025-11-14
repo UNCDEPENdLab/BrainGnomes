@@ -30,7 +30,7 @@ apply_mask <- function(in_file, mask_file, out_file, overwrite=FALSE, lg=NULL, f
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Apply mask {mask_file} to {in_file}")
+  to_log(lg, "info", "Apply mask {mask_file} to {in_file}")
 
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {mask_file} {file_sans_ext(out_file)} -odt float"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, mask_file, out_file)))
   return(out_file)
@@ -86,17 +86,17 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
     log_file <- lg$appenders$postprocess_log$destination
   }
   
-  lg$info("Applying spline interpolate to scrubbed timepoints")
-  lg$debug("in_file: {in_file}")
-  lg$debug("censor_file: {censor_file}")
+  to_log(lg, "info", "Applying spline interpolate to scrubbed timepoints")
+  to_log(lg, "debug", "in_file: {in_file}")
+  to_log(lg, "debug", "censor_file: {censor_file}")
 
   censor <- as.integer(readLines(censor_file))
   t_interpolate <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
   
   if (!any(t_interpolate)) {
-    lg$info("No timepoints to scrub found in {censor_file}. Interpolation will have no effect.")
+    to_log(lg, "info", "No timepoints to scrub found in {censor_file}. Interpolation will have no effect.")
   } else {
-    lg$info("Applying voxelwise natural spline interpolation for {length(t_interpolate)} timepoints to {in_file}.")
+    to_log(lg, "info", "Applying voxelwise natural spline interpolation for {length(t_interpolate)} timepoints to {in_file}.")
   }
 
   # run 4D interpolation with Rcpp function
@@ -109,7 +109,7 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
     last_valid <- max(good_idx)
     for (cf in confound_files) {
       if (!checkmate::test_file_exists(cf)) {
-        lg$warn("Confound file {cf} not found; skipping")
+        to_log(lg, "warn", "Confound file {cf} not found; skipping")
         next
       }
       df <- data.table::fread(cf)
@@ -164,17 +164,16 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 
   if (!checkmate::test_file_exists(censor_file)) {
     msg <- glue("In scrub_timepoints, cannot locate censor file: {censor_file}")
-    lg$error(msg)
-    stop(msg)
+    to_log(lg, "fatal", msg)
   }
 
   censor <- as.integer(readLines(censor_file))
   t_scrub <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
 
   if (!any(t_scrub)) {
-    lg$info("No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")
+    to_log(lg, "info", "No timepoints to scrub found in {censor_file}. Scrubbing will not change the length of the output data.")
   } else {
-    lg$info("Applying timepoint scrubbing, removing {length(t_scrub)} timepoints from {in_file}.")
+    to_log(lg, "info", "Applying timepoint scrubbing, removing {length(t_scrub)} timepoints from {in_file}.")
   }
 
   # run 4D interpolation with Rcpp function
@@ -183,7 +182,7 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
   if (length(confound_files) > 0 && length(t_scrub) > 0) {
     for (cf in confound_files) {
       if (!checkmate::test_file_exists(cf)) {
-        lg$warn("Confound file {cf} not found; skipping")
+        to_log(lg, "warn", "Confound file {cf} not found; skipping")
         next
       }
       df <- data.table::fread(cf)
@@ -487,7 +486,7 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
 
     rm_niftis(temp_tmean) # clean up temporal mean image
   } else {
-    lg$info("Using internal Butterworth temporal filtering function")
+    to_log(lg, "info", "Using internal Butterworth temporal filtering function")
     # Note that butterworth_filter_4d accepts frequency cutoffs -- anything below low_hz is cut (high-pass), anything above high_hz is cut (low-pass)
     bw_low <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
     bw_high <- if (is.infinite(low_pass_hz)) NULL else low_pass_hz
@@ -531,8 +530,8 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$debug("in_file: {in_file}")
-  lg$debug("mixing_file: {mixing_file}")
+  to_log(lg, "debug", "in_file: {in_file}")
+  to_log(lg, "debug", "mixing_file: {mixing_file}")
 
   if (isFALSE(checkmate::test_file_exists(mixing_file))) {
     to_log(lg, "warn", "Cannot find mixing file corresponding to {in_file}. Skipping AROMA regression")
@@ -540,12 +539,12 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
   }
 
   if (!overwrite && checkmate::test_file_exists(out_file)) {
-    lg$info("Output already exists at {out_file}; skipping AROMA regression.")
+    to_log(lg, "info", "Output already exists at {out_file}; skipping AROMA regression.")
     return(out_file)
   }
 
   if (is.null(noise_ics) || length(noise_ics) == 0) {
-    lg$info("No AROMA noise components provided; leaving data unchanged.")
+    to_log(lg, "info", "No AROMA noise components provided; leaving data unchanged.")
     return(in_file)
   }
 
@@ -572,7 +571,7 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
   }
 
   if (length(comp_idx) == 0) {
-    lg$info("No valid AROMA noise components remain after filtering; leaving data unchanged.")
+    to_log(lg, "info", "No valid AROMA noise components remain after filtering; leaving data unchanged.")
     return(in_file)
   }
 
@@ -591,8 +590,7 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
       exclusive = exclusive_flag
     )
   }, error = function(e) {
-    to_log(lg, "error", "AROMA regression failed: {e$message}")
-    stop(e)
+    to_log(lg, "fatal", "AROMA regression failed: {e$message}")
   })
 
   return(out_file)
@@ -632,8 +630,8 @@ spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, ov
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Spatial smoothing with FHWM {fwhm_mm}mm kernel")
-  lg$debug("in_file: {in_file}")
+  to_log(lg, "info", "Spatial smoothing with FHWM {fwhm_mm}mm kernel")
+  to_log(lg, "debug", "in_file: {in_file}")
 
   fwhm_to_sigma <- sqrt(8 * log(2)) # Details here: https://www.mail-archive.com/hcp-users@humanconnectome.org/msg01393.html
   sigma <- fwhm_mm / fwhm_to_sigma
@@ -693,7 +691,7 @@ intensity_normalize <- function(in_file, out_file, brain_mask=NULL, global_media
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Intensity normalizing fMRI data to global median: {global_median}")
+  to_log(lg, "info", "Intensity normalizing fMRI data to global median: {global_median}")
 
   median_intensity <- image_quantile(in_file, brain_mask, .5)
 
@@ -974,12 +972,12 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
 
     rm_niftis(temp_tmean)
   } else if (method == "lmfit") {
-    lg$info("Using internal lmfit confound regression function")
+    to_log(lg, "info", "Using internal lmfit confound regression function")
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
     good_vols <- rep(TRUE, nrow(Xmat))
     if (checkmate::test_file_exists(censor_file)) {
       good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
-      if (sum(good_vols) < length(good_vols)) lg$info("Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
+      if (sum(good_vols) < length(good_vols)) to_log(lg, "info", "Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
     }
     
     lmfit_residuals_4d(in_file, X = as.matrix(Xmat), include_rows = good_vols, outfile = out_file, preserve_mean = TRUE)
@@ -1017,7 +1015,7 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  lg$info("Computing brain mask from fMRI data using FSL's 98-2 percentile method")
+  to_log(lg, "info", "Computing brain mask from fMRI data using FSL's 98-2 percentile method")
 
   # first use FSL bet on the mean functional to get a starting point
   tmean_file <- tempfile(pattern="tmean")

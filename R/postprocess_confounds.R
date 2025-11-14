@@ -25,8 +25,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   if (!checkmate::test_file_exists(proc_files$confounds)) {
-    lg$error("Cannot find required confounds file: {proc_files$confounds}")
-    stop("Cannot locate required confounds file")
+    to_log(lg, "fatal", "Cannot find required confounds file: {proc_files$confounds}")
   }
 
   # read confounds file
@@ -83,7 +82,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   if (isTRUE(cfg$scrubbing$enable)) {
-    lg$info("Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
+    to_log(lg, "info", "Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
     spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
     scrub_file <- construct_bids_filename(
       modifyList(output_bids_info, list(suffix = "scrub", ext = ".tsv")), full.names = TRUE
@@ -95,7 +94,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       censor_vec <- ifelse(rowSums(spike_mat) > 0, 0, 1)
       writeLines(as.character(censor_vec), con = censor_file)
     } else {
-      lg$info("No spikes detected; censor file will contain all 1s")
+      to_log(lg, "info", "No spikes detected; censor file will contain all 1s")
       writeLines(rep("1", nrow(confounds)), con = censor_file)
     }
   }
@@ -136,7 +135,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
           comp_idx <- setdiff(comp_idx, invalid_idx)
         }
         if (length(comp_idx) == 0) {
-          lg$info("No valid AROMA noise components remain after filtering; skipping regression for confounds.")
+          to_log(lg, "info", "No valid AROMA noise components remain after filtering; skipping regression for confounds.")
         } else {
           to_log(lg, "info", "Regressing {length(comp_idx)} AROMA noise components from confounds using {mode_label} mode.")
           confound_names <- colnames(confounds_to_filt)
@@ -160,7 +159,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
   # Temporally filter confounds, if requested (overwrites file in place)
   if ("temporal_filter" %in% processing_sequence) {
-    lg$info("Temporally filtering confounds with low-pass cutoff {cfg$temporal_filter$low_pass_hz}, high-pass cutoff {cfg$temporal_filter$high_pass_hz}, method {cfg$temporal_filter$method}")
+    to_log(lg, "info", "Temporally filtering confounds with low-pass cutoff {cfg$temporal_filter$low_pass_hz}, high-pass cutoff {cfg$temporal_filter$high_pass_hz}, method {cfg$temporal_filter$method}")
     confound_nii <- temporal_filter(confound_nii,
       out_file = confound_nii,
       tr = cfg$tr,
@@ -200,7 +199,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     # timepoints anyhow (since then the spike regressors would be all zero)
     if (isTRUE(cfg$scrubbing$enable) && !isTRUE(cfg$scrubbing$apply) && isTRUE(cfg$scrubbing$add_to_confounds) 
       && exists("spike_mat") && !is.null(spike_mat)) {
-      lg$debug("Adding spike_mat ({ncol(spike_mat) columns) from scrubbing calculation to confounds file")
+      to_log(lg, "debug", "Adding spike_mat ({ncol(spike_mat) columns) from scrubbing calculation to confounds file")
       df <- cbind(df, spike_mat)
     }
 
@@ -211,8 +210,8 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       )
     }
 
-    lg$info("Writing postprocessed confounds to: {confile}")
-    lg$info("Columns are: {paste(names(df), collapse=', ')}")
+    to_log(lg, "info", "Writing postprocessed confounds to: {confile}")
+    to_log(lg, "info", "Columns are: {paste(names(df), collapse=', ')}")
     data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
   }
 
@@ -225,10 +224,8 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
 
       if (length(missing_cols) > 0L) {
-        lg$warn(
-          "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: ",
-          paste(missing_cols, collapse = ", ")
-        )
+        to_log(lg, "warn",
+               "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: {paste(missing_cols, collapse = ', ')}")
       }
 
       if (length(present_cols) > 0L) {
@@ -393,12 +390,12 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
     }
 
     spike_vec <- tryCatch(with(confounds_df, eval(parse(text = expr))), error = function(e) {
-      lg$error("Problem evaluating spike expression: {expr}")
+      to_log(lg, "error", "Problem evaluating spike expression: {expr}")
       return(NULL)
     })
 
     if (!checkmate::test_logical(spike_vec)) {
-      lg$error("Spike expression {expr} did not return a vector of TRUE/FALSE values.")
+      to_log(lg, "error", "Spike expression {expr} did not return a vector of TRUE/FALSE values.")
       return(NULL)
     }
 

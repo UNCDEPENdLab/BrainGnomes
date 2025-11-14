@@ -83,13 +83,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # determine if final output file already exists
   if (checkmate::test_file_exists(final_filename)) {
-    lg$info("Postprocessed file already exists: {final_filename}")
+    to_log(lg, "info", "Postprocessed file already exists: {final_filename}")
 
     if (isTRUE(cfg$overwrite)) {
-      lg$info("Removing {final_filename} because overwrite is TRUE")
+      to_log(lg, "info", "Removing {final_filename} because overwrite is TRUE")
       file.remove(final_filename)
     } else {
-      lg$info("Skipping postprocessing for {in_file} because postprocessed file already exists")
+      to_log(lg, "info", "Skipping postprocessing for {in_file} because postprocessed file already exists")
       return(final_filename)
     }
   }
@@ -109,7 +109,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   if (!checkmate::test_flag(cfg$force_processing_order)) cfg$force_processing_order <- FALSE
 
   start_time <- Sys.time()
-  lg$info("Start preprocessing: {as.character(start_time)}")
+  to_log(lg, "info", "Start preprocessing: {as.character(start_time)}")
   
   # compute a data-driven whole-brain mask using automask
   brain_mask <- tempfile(fileext = ".nii.gz")
@@ -124,7 +124,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       if (apply_mask_file == "template") {
         apply_mask_file <- resample_template_to_img(in_file)
       } else if (!checkmate::test_file_exists(apply_mask_file)) {
-        lg$warn("Cannot find apply_mask mask_file: {apply_mask_file}. This step will be skipped!")
+        to_log(lg, "warn", "Cannot find apply_mask mask_file: {apply_mask_file}. This step will be skipped!")
         apply_mask_file <- NULL
       }
     } else {
@@ -148,7 +148,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     cfg$processing_steps <- sub("intensity_normalization", "intensity_normalize", cfg$processing_steps, fixed = TRUE)
 
     processing_sequence <- cfg$processing_steps
-    lg$info("We will follow the user-specified processing order, with no guarantees on data validity.")
+    to_log(lg, "info", "We will follow the user-specified processing order, with no guarantees on data validity.")
   } else {
     processing_sequence <- c()
     if (isTRUE(cfg$apply_mask$enable)) processing_sequence <- c(processing_sequence, "apply_mask")
@@ -161,7 +161,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     if (isTRUE(cfg$intensity_normalize$enable)) processing_sequence <- c(processing_sequence, "intensity_normalize")
   }
 
-  lg$info("Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
+  to_log(lg, "info", "Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
 
   #### handle confounds, filtering to match MRI data. This will also calculate scrubbing information, if requested
   to_regress <- postprocess_confounds(
@@ -215,7 +215,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
     # handle extant output
     if (file.exists(out_file) && !isTRUE(cfg$overwrite)) {
-      lg$info("Skipping {step}; output exists: {out_file}")
+      to_log(lg, "info", "Skipping {step}; output exists: {out_file}")
       cur_file <- out_file
       file_set <- c(file_set, cur_file)
       first_file <- TRUE
@@ -223,7 +223,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     }
 
     if (step == "apply_mask") {
-      lg$info("Masking fMRI data using file: {apply_mask_file}")
+      to_log(lg, "info", "Masking fMRI data using file: {apply_mask_file}")
       cur_file <- apply_mask(cur_file,
         mask_file = apply_mask_file,
         out_file = out_file,
@@ -236,7 +236,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
     } else if (step == "apply_aroma") {
-      lg$info("Removing AROMA noise components from fMRI data")
+      to_log(lg, "info", "Removing AROMA noise components from fMRI data")
       nonaggressive_val <- cfg$apply_aroma$nonaggressive
       nonaggressive_flag <- if (is.null(nonaggressive_val) || is.na(nonaggressive_val)) TRUE else isTRUE(nonaggressive_val)
       cur_file <- apply_aroma(cur_file,
@@ -260,7 +260,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         method = cfg$temporal_filter$method
       )
     } else if (step == "confound_regression") {
-      lg$info("Removing confound regressors from fMRI data using file: {to_regress}")
+      to_log(lg, "info", "Removing confound regressors from fMRI data using file: {to_regress}")
       cur_file <- confound_regression(cur_file,
         out_file = out_file,
         to_regress = to_regress, censor_file = censor_file,
@@ -293,7 +293,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     to_delete <- file_set[2:(length(file_set) - 1)]
     for (ff in to_delete) {
       if (file.exists(ff)) {
-        lg$debug("Removing intermediate file: {ff}")
+        to_log(lg, "debug", "Removing intermediate file: {ff}")
         unlink(ff)
       }
     }
@@ -302,21 +302,21 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # clean up confound regressors file
   if (isFALSE(cfg$keep_intermediates) && isTRUE(cfg$confound_regression$enable)) {
     if (file.exists(to_regress)) {
-      lg$debug("Removing intermediate confound regression file: {to_regress}")
+      to_log(lg, "debug", "Removing intermediate confound regression file: {to_regress}")
       unlink(to_regress)
     }
   }
 
   # move the final file into a BIDS-friendly file name with a desc field
   if (cur_file != proc_files$bold) {
-    lg$debug("Renaming last file in stream: {cur_file} to postprocessed file name: {final_filename}")
+    to_log(lg, "debug", "Renaming last file in stream: {cur_file} to postprocessed file name: {final_filename}")
     file.rename(cur_file, final_filename)
   } else {
     to_log(lg, "warn", "Not renaming last postprocessed file to {final_filename} because it is the same as the input file {proc_files$bold}")
   }
   
   end_time <- Sys.time()
-  lg$info("Final postprocessed is: {final_filename}")
-  lg$info("End postprocessing: {as.character(end_time)}")
+  to_log(lg, "info", "Final postprocessed is: {final_filename}")
+  to_log(lg, "info", "End postprocessing: {as.character(end_time)}")
   return(final_filename)
 }

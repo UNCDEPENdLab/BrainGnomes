@@ -506,8 +506,8 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   full_cmd <- paste(full_cmd, ">", shQuote(ofile), "2>", shQuote(efile))
 
   if (use_lgr) {
-    lg$info("FSL command: %s", args)
-    lg$debug("Shell command: %s", full_cmd)
+    to_log(lg, "info", "FSL command: {args}")
+    to_log(lg, "debug", "Shell command: {full_cmd}")
   } else if (checkmate::test_string(log_file)) {
     cat(args, file=log_file, append=TRUE, sep="\n")
     # cat("FSL command: ", full_cmd, "\n")
@@ -544,7 +544,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   if (retcode != 0) {    
     errmsg <- glue("run_fsl_command failed with exit code: {retcode}, stdout: {paste(stdout, collapse='\n')}, stderr: {paste(stderr, collapse='\n')}")
     if (use_lgr) {
-      lg$error(errmsg)
+      to_log(lg, "error", errmsg)
     } else {
       cat(errmsg, "\n", file = log_file, append = TRUE)
     }    
@@ -719,16 +719,22 @@ get_pipeline_status <- function(scfg) {
   #          feat_checks$feat_execution_end <- timing[2L]
   #          feat_checks$feat_execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
   #        } else {
-  #          lg$warn("Did not find two timing entries in %s.", timing_file)
-  #          lg$warn("File contents: %s", timing)
+  #          to_log(lg, "warn", "Did not find two timing entries in {timing_file}")
+  #          to_log(lg, "warn", "File contents: {timing}")
   #        }
   #      }
   #   }
 }
 
 to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
-  if (checkmate::test_string(logger)) {
+  if (is.null(logger)) {
+    logger <- lgr::get_logger_glue("BrainGnomes")
+  } else if (checkmate::test_string(logger)) {
     logger <- lgr::get_logger_glue(logger)
+  } else if (inherits(logger, "Logger")) {
+    logger_name <- logger$name
+    if (is.null(logger_name) || !nzchar(logger_name)) logger_name <- "BrainGnomes"
+    logger <- lgr::get_logger_glue(logger_name)
   } else {
     checkmate::assert_class(logger, "LoggerGlue")
   }

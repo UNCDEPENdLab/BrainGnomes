@@ -87,16 +87,16 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
     if (!isTRUE(steps[[name]])) {
-      lg$debug("Skipping {name} for {sub_id} because step is not requested.")
+      to_log(lg, "debug", "Skipping {name} for {sub_id} because step is not requested.")
       return(job_id)
     } else if (file_exists && !isTRUE(scfg$force)) {
-      lg$info("Skipping {name_tag} for {sub_id} because {complete_file} already exists and force = FALSE.")
+      to_log(lg, "info", "Skipping {name_tag} for {sub_id} because {complete_file} already exists and force = FALSE.")
       return(job_id)
     }
 
     # clear existing complete file if we are starting over on this step
     if (file_exists) {
-      lg$info("Removing existing .complete file: {complete_file}")
+      to_log(lg, "info", "Removing existing .complete file: {complete_file}")
       unlink(complete_file)
     }
 
@@ -138,7 +138,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     }
 
     # launch submission function -- these all follow the same input argument structure
-    lg$debug("Launching submit_{name_tag} for subject: {sub_id}")
+    to_log(lg, "debug", "Launching submit_{name_tag} for subject: {sub_id}")
     args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
     if (name == "postprocess") args$pp_stream <- pp_stream # populate the current postprocess config to run
     if (name == "extract_rois") args$ex_stream <- ex_stream # populate the current extract_rois config to run
@@ -147,8 +147,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     return(job_id)
   }
 
-  lg$info("Processing subject {sub_id} with {nrow(sub_cfg)} sessions.")
-  # lg$info("Processing steps: {glue_collapse(names(steps), sep = ', ')}")
+  to_log(lg, "info", "Processing subject {sub_id} with {nrow(sub_cfg)} sessions.")
+  # to_log(lg, "info", "Processing steps: {glue_collapse(names(steps), sep = ', ')}")
   
   ## Handle BIDS conversion -- session-level
   n_inputs <- nrow(sub_cfg)
@@ -157,7 +157,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx, parent_ids = parent_ids)))
   
   if (isTRUE(steps["bids_conversion"])) {
-    if (!is.na(bids_sub_dir)) lg$info("BIDS directory: {bids_sub_dir}")
+    if (!is.na(bids_sub_dir)) to_log(lg, "info", "BIDS directory: {bids_sub_dir}")
 
     # Use expected directory as input to subsequent steps, anticipating that conversion completes
     # and the expected directory is created. If conversion fails, the dependent jobs should automatically fail.
@@ -167,18 +167,18 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     # When bids_sub_dir and bids_ses_dir exist, do they match these expectations?
     extant_bids <- !is.na(sub_cfg$bids_sub_dir)
     if (!identical(sub_cfg$bids_sub_dir[extant_bids], bids_sub_dir[extant_bids])) {
-      lg$warn("Exiting process_subject for {sub_id} because expected BIDS directory does not match: {bids_sub_dir}")
+      to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS directory does not match: {bids_sub_dir}")
       return(TRUE)
     }
 
     extant_bids_ses <- !is.na(sub_cfg$bids_ses_dir)
     if (multi_session && !identical(sub_cfg$bids_ses_dir[extant_bids_ses], bids_ses_dir[extant_bids_ses])) {
-      lg$warn("Exiting process_subject for {sub_id} because expected BIDS session directory does not match: {bids_ses_dir[1L]}")
+      to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS session directory does not match: {bids_ses_dir[1L]}")
       return(TRUE)
     }
     
   } else if (!checkmate::test_directory_exists(bids_sub_dir)) {
-    lg$warn("Exiting process_subject for {sub_id} because expected BIDS directory does not exist: {bids_sub_dir}")
+    to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS directory does not exist: {bids_sub_dir}")
     return(TRUE)
   }
 
@@ -203,13 +203,13 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         fp_dir <- file.path(scfg$metadata$fmriprep_directory,
           glue("sub-{sub_id}"))
         if (!checkmate::test_directory_exists(fp_dir)) {
-          lg$warn("Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
+          to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
           return(TRUE)
         }
       } else {
         chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
         if (!chk$complete) {
-          lg$warn("Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
+          to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
           return(TRUE)
         }
       }
@@ -220,7 +220,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       if (is.null(all_streams)) {
         stop("Cannot run postprocessing in submit_subject because no streams exist")
       } else {
-        lg$debug("Running all postprocessing streams because postprocess_streams was NULL in process_subject")
+        to_log(lg, "debug", "Running all postprocessing streams because postprocess_streams was NULL in process_subject")
         postprocess_streams <- all_streams # run all
       }
     }
@@ -239,7 +239,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       if (is.null(all_extract_streams)) {
         stop("Cannot run ROI extraction in submit_subject because no extraction streams exist")
       } else {
-        lg$debug("Running all ROI extraction streams because extract_streams was NULL in process_subject")
+        to_log(lg, "debug", "Running all ROI extraction streams because extract_streams was NULL in process_subject")
         extract_streams <- all_extract_streams # run all
       }
     }
@@ -285,8 +285,8 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   )
 
   # log submission command
-  lg$info("Scheduled bids_conversion job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled bids_conversion job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 
@@ -308,8 +308,8 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -319,7 +319,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
   checkmate::assert_character(parent_ids, null.ok = TRUE)
 
   if (!validate_exists(scfg$compute_environment$fmriprep_container)) {
-    #lg$debug("Unable to submit fmriprep for {sub_dir} because $compute_environment$fmriprep_container is missing.")
+    #to_log(lg, "debug", "Unable to submit fmriprep for {sub_dir} because $compute_environment$fmriprep_container is missing.")
     warning("Unable to submit fmriprep for {sub_dir} because $compute_environment$fmriprep_container is missing.")
     return(NULL)
   }
@@ -339,7 +339,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
   ), collapse = TRUE)
 
   if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
-    lg$debug("Creating missing templateflow_home directory: {scfg$metadata$templateflow_home}")
+    to_log(lg, "debug", "Creating missing templateflow_home directory: {scfg$metadata$templateflow_home}")
     dir.create(scfg$metadata$templateflow_home, showWarnings = FALSE, recursive = TRUE)
   }
 
@@ -362,8 +362,8 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -384,7 +384,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   ), collapse=TRUE)
 
   if (!checkmate::test_directory_exists(scfg$metadata$templateflow_home)) {
-    lg$debug("Creating missing templateflow_home directory for MRIQC: {scfg$metadata$templateflow_home}")
+    to_log(lg, "debug", "Creating missing templateflow_home directory for MRIQC: {scfg$metadata$templateflow_home}")
     dir.create(scfg$metadata$templateflow_home, showWarnings = FALSE, recursive = TRUE)
   }
 
@@ -406,8 +406,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -440,7 +440,7 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   if (cleanup && !auto_added_aroma && !is.null(scfg$fmriprep$output_spaces) &&
       grepl("MNI152NLin6Asym:res-2", scfg$fmriprep$output_spaces, fixed = TRUE)) {
     msg <- "AROMA cleanup requested but will not occur because MNI152NLin6Asym:res-2 is in fmriprep --output-spaces."
-    if (!is.null(lg)) lg$warn(msg) else warning(msg)
+    if (!is.null(lg)) to_log(lg, "warn", msg) else warning(msg)
     cleanup <- FALSE
   }
 
@@ -462,8 +462,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -513,8 +513,8 @@ submit_postprocess <- function(
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -568,8 +568,8 @@ submit_extract_rois <- function(
     wait_jobs = parent_ids, echo = FALSE
   )
 
-  lg$info("Scheduled ROI extraction stream {ex_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled ROI extraction stream {ex_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
