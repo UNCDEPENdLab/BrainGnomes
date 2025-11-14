@@ -15,9 +15,12 @@
 
 suppressWarnings(suppressMessages({
   have_RNifti <- requireNamespace("RNifti", quietly = TRUE)
-  have_oro    <- requireNamespace("oro.nifti", quietly = TRUE)
   have_pracma <- requireNamespace("pracma", quietly = TRUE)
 }))
+
+if (!have_RNifti) {
+  stop("RNifti package is required for 3dSmoothnessChange.R.")
+}
 
 # Load shared helper functions (classic/ACF estimators)
 get_script_dir <- function() {
@@ -181,6 +184,73 @@ die <- function(...) {
 
 msg <- function(..., quiet = FALSE) if (!quiet) cat(..., "\n")
 
+volume_limit <- function(nt, max_volumes) {
+  if (!is.finite(max_volumes) || max_volumes <= 0) return(nt)
+  max(1L, min(nt, as.integer(max_volumes)))
+}
+
+afni_limit_path <- function(path, total_volumes, used_volumes) {
+  if (is.null(path) || !nzchar(path)) return(path)
+  if (!is.finite(total_volumes) || total_volumes <= 1L) return(path)
+  if (!is.finite(used_volumes) || used_volumes <= 0) return(path)
+  if (used_volumes >= total_volumes) return(path)
+  paste0(path, "[0..", used_volumes - 1L, "]")
+}
+
+read_nifti <- function(path, max_volumes = Inf, label = NULL, quiet = FALSE,
+                       load_data = TRUE) {
+  if (is.null(path) || !nzchar(path)) {
+    die("Dataset path is missing.")
+  }
+  if (!file.exists(path)) {
+    die("Dataset '%s' not found.", path)
+  }
+  if (is.null(label)) label <- basename(path)
+  hdr <- RNifti::niftiHeader(path)
+  pix <- as.numeric(hdr$pixdim[2:4])
+  pix[!is.finite(pix) | pix <= 0] <- 1
+  dim_vec <- as.integer(hdr$dim)
+  ndim <- dim_vec[1]
+  ndim_use <- max(3L, min(ndim, length(dim_vec) - 1L))
+  dims <- as.integer(dim_vec[seq_len(ndim_use) + 1L])
+  if (length(dims) < 3L) {
+    die("Dataset '%s' has invalid dimensions.", path)
+  }
+  dims_spatial <- dims[1:3]
+  n_vox <- prod(dims_spatial)
+  nt_total <- if (length(dims) >= 4L) dims[4] else 1L
+  nt_use <- if (length(dims) >= 4L) volume_limit(nt_total, max_volumes) else 1L
+  if (length(dims) >= 4L && nt_use < nt_total) {
+    msg(sprintf("[%s] Limiting analysis to first %d/%d time points.",
+                label, nt_use, nt_total),
+        quiet = quiet)
+  }
+  vols <- NULL
+  data <- NULL
+  if (load_data) {
+    if (length(dims) >= 4L && nt_total > 1L) {
+      vols <- seq_len(nt_use)
+    }
+    raw <- if (is.null(vols)) RNifti::readNifti(path) else RNifti::readNifti(path, volumes = vols)
+    raw <- ensure_4d(raw)
+    dims_raw <- dim(raw)
+    if (!all(dims_raw[1:3] == dims_spatial)) {
+      die("Dataset '%s' spatial dims mismatch header.", path)
+    }
+    nt_use <- dims_raw[4]
+    data <- matrix(as.numeric(raw), nrow = n_vox, ncol = nt_use)
+  }
+  list(
+    data = data,
+    pixdim = pix,
+    total_volumes = nt_total,
+    used_volumes = if (length(dims) >= 4L) nt_use else 1L,
+    spatial_dim = dims_spatial,
+    dims = dims,
+    n_voxels = n_vox
+  )
+}
+
 parse_args <- function(argv) {
   opts <- list(
     input = NULL,
@@ -273,29 +343,12 @@ parse_args <- function(argv) {
   opts
 }
 
-read_nifti <- function(path) {
-  if (have_RNifti) {
-    img <- RNifti::readNifti(path)
-    hdr <- RNifti::niftiHeader(path)
-    pix <- as.numeric(hdr$pixdim[2:4])
-    pix[!is.finite(pix) | pix <= 0] <- 1
-    list(data = img, pixdim = pix)
-  } else if (have_oro) {
-    img <- oro.nifti::readNIfTI(path, reorient = FALSE)
-    pix <- tryCatch(as.numeric(oro.nifti::voxdim(img)),
-                    error = function(e) as.numeric(slot(img, "pixdim")[2:4]))
-    pix[!is.finite(pix) | pix <= 0] <- 1
-    list(data = oro.nifti::img_data(img), pixdim = pix)
-  } else {
-    die("Need RNifti or oro.nifti to read '%s'", path)
-  }
-}
-
 # Build an analysis mask (either supplied, or via automask fallback)
-build_mask <- function(mask_path, target_dim, automask, data_arr) {
+build_mask <- function(mask_path, target_dim, automask, data_mat = NULL) {
   if (!is.null(mask_path)) {
-    m <- read_nifti(mask_path)$data
-    if (length(dim(m)) == 4L) {
+    m <- RNifti::readNifti(mask_path)
+    mask_dims <- dim(m)
+    if (length(mask_dims) == 4L) {
       m <- apply(m != 0 & is.finite(m), c(1, 2, 3), any)
     } else {
       m <- (m != 0) & is.finite(m)
@@ -308,11 +361,15 @@ build_mask <- function(mask_path, target_dim, automask, data_arr) {
     return(m)
   }
   if (!automask) die("Mask is required when -no_automask is used.")
-  if (length(dim(data_arr)) == 4L) {
-    apply(is.finite(data_arr) & data_arr != 0, c(1, 2, 3), any)
-  } else {
-    (is.finite(data_arr) & data_arr != 0)
+  if (is.null(data_mat)) {
+    die("Automask requested but data are unavailable to derive it.")
   }
+  if (nrow(data_mat) != prod(target_dim)) {
+    die("Automask data rows (%d) do not match spatial dimensions %s",
+        nrow(data_mat), paste(target_dim, collapse = "x"))
+  }
+  mask_vec <- apply(is.finite(data_mat) & data_mat != 0, 1L, any)
+  array(mask_vec, dim = target_dim)
 }
 
 # Guarantee 4D shape for all datasets (adds a singleton time axis if needed)
@@ -421,32 +478,39 @@ detrend_voxels <- function(mat, degree, demean = TRUE) {
   mat - fitted
 }
 
-# Convenience wrapper to reshape data → matrix → detrend → array
-apply_detrend_to_array <- function(arr4d, degree, demean) {
-  dims <- dim(arr4d)
-  mat <- matrix(as.numeric(arr4d), nrow = prod(dims[1:3]), ncol = dims[4])
-  mat <- detrend_voxels(mat, degree = degree, demean = demean)
-  array(mat, dim = dims)
+# Detrend a voxel-by-time matrix
+detrend_matrix <- function(mat, degree, demean) {
+  detrend_voxels(mat, degree = degree, demean = demean)
 }
 
 # Classic/ACF normalization: scale voxels by temporal MAD to equalize variance
-apply_mad_scaling <- function(arr4d, mask) {
-  mad_vals <- mad_over_time(arr4d)
+mad_scale_matrix <- function(mat, mask_vec) {
+  mad_vals <- apply(mat, 1L, stats::mad, constant = 1.4826, na.rm = TRUE)
   mad_vals[!is.finite(mad_vals) | mad_vals <= 1e-6] <- 1
-  mad_vals[!mask] <- 1
-  sweep(arr4d, c(1, 2, 3), mad_vals, "/")
+  if (!is.null(mask_vec)) mad_vals[!mask_vec] <- 1
+  mat / mad_vals
 }
 
 # Core PSD pipeline: detrend, FFT per time point, accumulate gradient energy,
 # and derive pre/post smoothness plus optional per-axis outputs.
 run_estimation <- function(arr, pixdim, mask, kernel_sigma, opts,
-                           label = "input", save_fits = FALSE,
-                           return_data = FALSE) {
-  arr <- ensure_4d(arr)
-  dims <- dim(arr)
-  dims_spat <- dims[1:3]
+                           dims_spat = NULL, label = "input",
+                           save_fits = FALSE, return_data = FALSE) {
+  mat <- NULL
+  if (is.matrix(arr)) {
+    if (is.null(dims_spat)) {
+      die("[%s] Spatial dimensions are required when passing matrix data.", label)
+    }
+    dims <- c(dims_spat, ncol(arr))
+    mat <- arr
+  } else {
+    arr <- ensure_4d(arr)
+    dims <- dim(arr)
+    dims_spat <- dims[1:3]
+    mat <- matrix(as.numeric(arr), nrow = prod(dims_spat), ncol = dims[4])
+  }
   n_vox <- prod(dims_spat)
-  nt <- dims[4]
+  nt <- ncol(mat)
   if (nt < 1) die("[%s] Dataset has zero time points.", label)
   mask_vec <- as.vector(mask)
   if (length(mask_vec) != n_vox) die("[%s] Mask mismatch.", label)
@@ -458,7 +522,6 @@ run_estimation <- function(arr, pixdim, mask, kernel_sigma, opts,
   msg(sprintf("[%s] Mask voxels : %d", label, sum(mask_vec)),
       quiet = opts$quiet)
 
-  mat <- matrix(as.numeric(arr), nrow = n_vox, ncol = nt)
   mat[!mask_vec, ] <- 0
   if (opts$demean || opts$polydeg > 0) {
     mat[mask_vec, ] <- detrend_voxels(mat[mask_vec, , drop = FALSE],
@@ -466,8 +529,7 @@ run_estimation <- function(arr, pixdim, mask, kernel_sigma, opts,
                                       demean = opts$demean)
   }
 
-  nt_use <- if (!is.finite(opts$max_volumes) || opts$max_volumes <= 0) nt
-            else max(1L, min(nt, as.integer(opts$max_volumes)))
+  nt_use <- volume_limit(nt, opts$max_volumes)
   mat_use <- mat[, seq_len(nt_use), drop = FALSE]
   msg(sprintf("[%s] Using first %d/%d time points.", label, nt_use, nt),
       quiet = opts$quiet)
@@ -577,20 +639,23 @@ write_exgauss <- function(mat, path) {
 }
 
 # Classic/ACF preprocessing entry point (shared by both methods)
-prepare_classic_data <- function(arr4d, mask, opts) {
-  proc <- apply_detrend_to_array(arr4d, opts$polydeg, opts$demean)
-  if (opts$unif) proc <- apply_mad_scaling(proc, mask)
+prepare_classic_data <- function(mat, mask, opts) {
+  proc <- detrend_matrix(mat, opts$polydeg, opts$demean)
+  mask_vec <- if (is.null(mask)) NULL else as.vector(mask)
+  if (opts$unif) proc <- mad_scale_matrix(proc, mask_vec)
   proc
 }
 
 # Wrapper returning the geometric-mean FWHM from the classic neighbour differences
-measure_classic <- function(arr4d, mask, vox_mm) {
+measure_classic <- function(mat, mask, vox_mm, dims_spat) {
+  arr4d <- array(mat, dim = c(dims_spat, ncol(mat)))
   res <- estimate_classic_fwhm(arr4d, mask, vox_mm)
   list(value = res$geom, details = res)
 }
 
 # Wrapper returning the single-parameter Gaussian-equivalent FWHM from the ACF fit
-measure_acf_internal <- function(arr4d, mask, vox_mm, opts, use_cpp = FALSE) {
+measure_acf_internal <- function(mat, mask, vox_mm, opts, dims_spat, use_cpp = FALSE) {
+  arr4d <- array(mat, dim = c(dims_spat, ncol(mat)))
   res <- estimate_acf_fwhm(arr4d, mask, vox_mm,
                            radius_mm = opts$acf_radius,
                            use_cpp = use_cpp)
@@ -727,27 +792,39 @@ main <- function() {
     }
   }
 
+  need_psd_prediction <- !is.na(kernel_sigma) && kernel_sigma > 0
+  need_data_single <- (opts$method != "acf") || opts$use_internal_acf || need_psd_prediction
+
   if (!compare_mode) {
-    nif <- read_nifti(opts$input)
-    arr <- ensure_4d(nif$data)
-    mask_arr <- build_mask(opts$mask, dim(arr), opts$automask, arr)
+    nif <- read_nifti(opts$input, opts$max_volumes, label = "input",
+                      quiet = opts$quiet, load_data = need_data_single)
+    data_mat <- mask_arr <- NULL
+    if (need_data_single) {
+      data_mat <- nif$data
+      mask_arr <- build_mask(opts$mask, nif$spatial_dim, opts$automask, data_mat)
+    }
+    psd_prediction <- NULL
     if (opts$method == "psd") {
-      res <- run_estimation(arr, nif$pixdim, mask_arr, 0, opts,
+      psd_sigma <- if (is.na(kernel_sigma)) 0 else kernel_sigma
+      res <- run_estimation(data_mat, nif$pixdim, mask_arr, psd_sigma, opts,
+                            dims_spat = nif$spatial_dim,
                             label = "input", save_fits = !is.null(opts$exgauss_out))
       value <- res$fwhm_pre
       if (!is.null(opts$exgauss_out) && !is.null(res$fits)) {
         write_exgauss(res$fits, opts$exgauss_out)
       }
+      if (psd_sigma > 0) psd_prediction <- res
     } else if (opts$method == "acf" && !opts$use_internal_acf) {
-      meas <- measure_acf_external(opts$input, opts, label = "input")
+      dset_path <- afni_limit_path(opts$input, nif$total_volumes, nif$used_volumes)
+      meas <- measure_acf_external(dset_path, opts, label = "input")
       value <- meas$value
     } else {
-      proc <- prepare_classic_data(arr, mask_arr, opts)
+      proc <- prepare_classic_data(data_mat, mask_arr, opts)
       meas <- if (opts$method == "classic")
-        measure_classic(proc, mask_arr, nif$pixdim)
+        measure_classic(proc, mask_arr, nif$pixdim, nif$spatial_dim)
       else
         measure_acf_internal(proc, mask_arr, nif$pixdim, opts,
-                             use_cpp = use_cpp_acf)
+                             dims_spat = nif$spatial_dim, use_cpp = use_cpp_acf)
       value <- meas$value
     }
     msg(sprintf("%s measured FWHM             : %.4f mm", method_label, value),
@@ -757,6 +834,21 @@ main <- function() {
                          file = opts$out, quote = FALSE,
                          row.names = FALSE, sep = "\t")
     }
+    if (need_psd_prediction) {
+      if (is.null(psd_prediction)) {
+        psd_prediction <- run_estimation(data_mat, nif$pixdim, mask_arr,
+                                         kernel_sigma, opts,
+                                         dims_spat = nif$spatial_dim,
+                                         label = "input_psd", save_fits = FALSE)
+      }
+      kernel_mm <- 2 * sqrt(2 * log(2)) * kernel_sigma
+      msg(sprintf("PSD predicted FWHM (kernel %.2f mm): %.4f -> %.4f mm",
+                  kernel_mm, psd_prediction$fwhm_pre, psd_prediction$fwhm_post),
+          quiet = opts$quiet)
+      msg(sprintf("PSD predicted ΔFWHM              : %.4f mm",
+                  psd_prediction$delta),
+          quiet = opts$quiet)
+    }
     return(invisible())
   }
 
@@ -764,24 +856,40 @@ main <- function() {
   msg(sprintf("Using %s calibration (%s smoother, %s blurring).",
               method_label, toupper(opts$smoother), scenario_label),
       quiet = opts$quiet)
-  pre_nif <- read_nifti(opts$pre)
-  post_nif <- read_nifti(opts$post)
-  pre_arr <- ensure_4d(pre_nif$data)
-  post_arr <- ensure_4d(post_nif$data)
-  mask_arr <- build_mask(opts$mask, dim(pre_arr), opts$automask, pre_arr)
-  if (!all(dim(post_arr)[1:3] == dim(mask_arr))) {
-    die("Post dataset dims %s do not match pre/mask dims %s",
-        paste(dim(post_arr)[1:3], collapse = "x"),
-        paste(dim(mask_arr), collapse = "x"))
-  }
+  need_data_compare <- (opts$method != "acf") || opts$use_internal_acf
+  pre_nif <- read_nifti(opts$pre, opts$max_volumes, label = "pre",
+                        quiet = opts$quiet, load_data = need_data_compare)
+  post_nif <- read_nifti(opts$post, opts$max_volumes, label = "post",
+                         quiet = opts$quiet, load_data = need_data_compare)
   if (any(abs(post_nif$pixdim[1:3] - pre_nif$pixdim[1:3]) > 1e-6)) {
     die("Pre/post voxel sizes differ.")
   }
+  if (!all(post_nif$spatial_dim == pre_nif$spatial_dim)) {
+    die("Pre/post spatial dimensions differ.")
+  }
+  pre_mat <- post_mat <- mask_arr <- NULL
+  if (need_data_compare) {
+    pre_mat <- pre_nif$data
+    post_mat <- post_nif$data
+    mask_arr <- build_mask(opts$mask, pre_nif$spatial_dim, opts$automask, pre_mat)
+    if (!all(dim(mask_arr) == pre_nif$spatial_dim)) {
+      die("Mask dims %s do not match data dims %s",
+          paste(dim(mask_arr), collapse = "x"),
+          paste(pre_nif$spatial_dim, collapse = "x"))
+    }
+    if (!all(dim(mask_arr) == post_nif$spatial_dim)) {
+      die("Post dataset dims %s do not match pre/mask dims %s",
+          paste(post_nif$spatial_dim, collapse = "x"),
+          paste(dim(mask_arr), collapse = "x"))
+    }
+  }
 
   if (opts$method == "psd") {
-    pre_meas <- run_estimation(pre_arr, pre_nif$pixdim, mask_arr, 0, opts,
+    pre_meas <- run_estimation(pre_mat, pre_nif$pixdim, mask_arr, 0, opts,
+                               dims_spat = pre_nif$spatial_dim,
                                label = "pre", save_fits = !is.null(opts$exgauss_out))
-    post_meas <- run_estimation(post_arr, post_nif$pixdim, mask_arr, 0, opts,
+    post_meas <- run_estimation(post_mat, post_nif$pixdim, mask_arr, 0, opts,
+                                dims_spat = post_nif$spatial_dim,
                                 label = "post", save_fits = !is.null(opts$exgauss_out))
     if (!is.null(opts$exgauss_out)) {
       write_exgauss(pre_meas$fits, paste0(opts$exgauss_out, ".pre.csv"))
@@ -790,22 +898,26 @@ main <- function() {
     measured_pre <- pre_meas$fwhm_pre
     measured_post <- post_meas$fwhm_pre
   } else if (opts$method == "acf" && !opts$use_internal_acf) {
-    meas_pre <- measure_acf_external(opts$pre, opts, label = "pre")
-    meas_post <- measure_acf_external(opts$post, opts, label = "post")
+    pre_path <- afni_limit_path(opts$pre, pre_nif$total_volumes, pre_nif$used_volumes)
+    post_path <- afni_limit_path(opts$post, post_nif$total_volumes, post_nif$used_volumes)
+    meas_pre <- measure_acf_external(pre_path, opts, label = "pre")
+    meas_post <- measure_acf_external(post_path, opts, label = "post")
     measured_pre <- meas_pre$value
     measured_post <- meas_post$value
   } else {
-    pre_proc <- prepare_classic_data(pre_arr, mask_arr, opts)
-    post_proc <- prepare_classic_data(post_arr, mask_arr, opts)
+    pre_proc <- prepare_classic_data(pre_mat, mask_arr, opts)
+    post_proc <- prepare_classic_data(post_mat, mask_arr, opts)
     meas_pre <- if (opts$method == "classic")
-      measure_classic(pre_proc, mask_arr, pre_nif$pixdim)
+      measure_classic(pre_proc, mask_arr, pre_nif$pixdim, pre_nif$spatial_dim)
     else
       measure_acf_internal(pre_proc, mask_arr, pre_nif$pixdim, opts,
+                           dims_spat = pre_nif$spatial_dim,
                            use_cpp = use_cpp_acf)
     meas_post <- if (opts$method == "classic")
-      measure_classic(post_proc, mask_arr, post_nif$pixdim)
+      measure_classic(post_proc, mask_arr, post_nif$pixdim, post_nif$spatial_dim)
     else
       measure_acf_internal(post_proc, mask_arr, post_nif$pixdim, opts,
+                           dims_spat = post_nif$spatial_dim,
                            use_cpp = use_cpp_acf)
     measured_pre <- meas_pre$value
     measured_post <- meas_post$value

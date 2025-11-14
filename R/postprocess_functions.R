@@ -1089,6 +1089,7 @@ resample_template_to_img <- function(
     interpolation = "nearest",
     install_dependencies = TRUE,
     overwrite = FALSE) {
+  checkmate::assert_string(in_file)
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(output, null.ok = TRUE)
   checkmate::assert_string(suffix)
