@@ -189,12 +189,11 @@ volume_limit <- function(nt, max_volumes) {
   max(1L, min(nt, as.integer(max_volumes)))
 }
 
-afni_limit_path <- function(path, total_volumes, used_volumes) {
-  if (is.null(path) || !nzchar(path)) return(path)
-  if (!is.finite(total_volumes) || total_volumes <= 1L) return(path)
-  if (!is.finite(used_volumes) || used_volumes <= 0) return(path)
-  if (used_volumes >= total_volumes) return(path)
-  paste0(path, "[0..", used_volumes - 1L, "]")
+afni_selector <- function(total_volumes, used_volumes) {
+  if (!is.finite(total_volumes) || total_volumes <= 1L) return("")
+  if (!is.finite(used_volumes) || used_volumes <= 0) return("")
+  if (used_volumes >= total_volumes) return("")
+  sprintf("[0..%d]", used_volumes - 1L)
 }
 
 read_nifti <- function(path, max_volumes = Inf, label = NULL, quiet = FALSE,
@@ -681,7 +680,7 @@ parse_fwhmx_stdout <- function(lines) {
   NULL
 }
 
-run_3dfwhmx_acf <- function(dset_path, opts, label = "input") {
+run_3dfwhmx_acf <- function(dset_path, opts, label = "input", selector = "") {
   bin <- Sys.which("3dFWHMx")
   if (!nzchar(bin)) {
     die("3dFWHMx executable not found in PATH (needed for ACF external mode).")
@@ -690,6 +689,7 @@ run_3dfwhmx_acf <- function(dset_path, opts, label = "input") {
     die("[%s] Dataset '%s' not found for 3dFWHMx.",
         label, if (is.null(dset_path)) "<NULL>" else dset_path)
   }
+  input_arg <- if (nzchar(selector)) paste0(dset_path, selector) else dset_path
   args <- character()
   if (!is.null(opts$mask)) {
     args <- c(args, "-mask", opts$mask)
@@ -698,7 +698,7 @@ run_3dfwhmx_acf <- function(dset_path, opts, label = "input") {
   }
   detrend_order <- max(0L, opts$polydeg)
   args <- c(args, "-detrend", as.character(detrend_order))
-  args <- c(args, "-acf", "NULL", "-overwrite", "-input", dset_path)
+  args <- c(args, "-acf", "NULL", "-overwrite", "-input", input_arg)
   res <- tryCatch(
     system2(bin, args, stdout = TRUE, stderr = TRUE),
     error = function(e) {
@@ -725,8 +725,8 @@ run_3dfwhmx_acf <- function(dset_path, opts, label = "input") {
        stdout = out_lines, stderr = err_lines)
 }
 
-measure_acf_external <- function(dset_path, opts, label = "input") {
-  res <- run_3dfwhmx_acf(dset_path, opts, label = label)
+measure_acf_external <- function(dset_path, opts, label = "input", selector = "") {
+  res <- run_3dfwhmx_acf(dset_path, opts, label = label, selector = selector)
   list(value = res$fwhm, details = res)
 }
 
@@ -815,8 +815,9 @@ main <- function() {
       }
       if (psd_sigma > 0) psd_prediction <- res
     } else if (opts$method == "acf" && !opts$use_internal_acf) {
-      dset_path <- afni_limit_path(opts$input, nif$total_volumes, nif$used_volumes)
-      meas <- measure_acf_external(dset_path, opts, label = "input")
+      selector <- afni_selector(nif$total_volumes, nif$used_volumes)
+      meas <- measure_acf_external(opts$input, opts, label = "input",
+                                   selector = selector)
       value <- meas$value
     } else {
       proc <- prepare_classic_data(data_mat, mask_arr, opts)
@@ -898,10 +899,12 @@ main <- function() {
     measured_pre <- pre_meas$fwhm_pre
     measured_post <- post_meas$fwhm_pre
   } else if (opts$method == "acf" && !opts$use_internal_acf) {
-    pre_path <- afni_limit_path(opts$pre, pre_nif$total_volumes, pre_nif$used_volumes)
-    post_path <- afni_limit_path(opts$post, post_nif$total_volumes, post_nif$used_volumes)
-    meas_pre <- measure_acf_external(pre_path, opts, label = "pre")
-    meas_post <- measure_acf_external(post_path, opts, label = "post")
+    pre_sel <- afni_selector(pre_nif$total_volumes, pre_nif$used_volumes)
+    post_sel <- afni_selector(post_nif$total_volumes, post_nif$used_volumes)
+    meas_pre <- measure_acf_external(opts$pre, opts, label = "pre",
+                                     selector = pre_sel)
+    meas_post <- measure_acf_external(opts$post, opts, label = "post",
+                                      selector = post_sel)
     measured_pre <- meas_pre$value
     measured_post <- meas_post$value
   } else {
