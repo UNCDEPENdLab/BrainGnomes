@@ -301,7 +301,7 @@ tracking_df_to_tree <- function(tracking_df) {
       node$job_id <- job$job_id
       node$scheduler <- job$scheduler
       node$wall_time <- job$wall_time
-      node$status <- job$status
+      node$status <- job$status 
       node$time_submitted <- job$time_submitted
       node$time_started <- job$time_started
       node$time_ended <- job$time_ended
