@@ -1,6 +1,15 @@
 # Changelog
 
+## BrainGnomes 0.7-4 (DEVELOPMENT)
+
+- Add log messages for key R calls in pipeline, such as
+  lmfit_residuals_4d
+- Implement log levels to allow user to control log detail when calling
+  run_project
+
 ## BrainGnomes 0.7-3
+
+Released 2025-11-11
 
 - bugfix: correctly handle unsigned integer data types in NIfTIs
 - lmfit_residuals_4d now handles partial (ala fsl_regfilt) and full

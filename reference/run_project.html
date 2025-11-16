@@ -53,7 +53,8 @@
 <span>  postprocess_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  force <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  force <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  log_level <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"INFO"</span>, <span class="st">"DEBUG"</span>, <span class="st">"WARN"</span>, <span class="st">"ERROR"</span>, <span class="st">"TRACE"</span>, <span class="st">"FATAL"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,6 +99,11 @@ streams will be run.</p></dd>
 
 <dt id="arg-force">force<a class="anchor" aria-label="anchor" href="#arg-force"></a></dt>
 <dd><p>A logical value indicating whether to force the execution of all steps, regardless of their current status.</p></dd>
+
+
+<dt id="arg-log-level">log_level<a class="anchor" aria-label="anchor" href="#arg-log-level"></a></dt>
+<dd><p>Character string controlling log verbosity. One of
+<code>TRACE</code>, <code>DEBUG</code>, <code>INFO</code>, <code>WARN</code>, <code>ERROR</code>, or <code>FATAL</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

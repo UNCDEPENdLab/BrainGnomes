@@ -12,7 +12,8 @@ run_project(
   postprocess_streams = NULL,
   extract_streams = NULL,
   debug = FALSE,
-  force = FALSE
+  force = FALSE,
+  log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")
 )
 ```
 
@@ -62,6 +63,11 @@ run_project(
 
   A logical value indicating whether to force the execution of all
   steps, regardless of their current status.
+
+- log_level:
+
+  Character string controlling log verbosity. One of `TRACE`, `DEBUG`,
+  `INFO`, `WARN`, `ERROR`, or `FATAL`.
 
 ## Value
 
