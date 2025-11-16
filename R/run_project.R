@@ -18,6 +18,8 @@
 #' @param extract_streams Optional character vector specifying which ROI extraction streams should be run. If
 #'   `"extract_rois"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
 #'   streams will be run.
+#' @param log_level Character string controlling log verbosity. One of
+#'   `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, or `FATAL`.
 #' 
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
@@ -30,7 +32,8 @@
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
 run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
-  extract_streams = NULL, debug = FALSE, force = FALSE) {
+  extract_streams = NULL, debug = FALSE, force = FALSE,
+  log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_character(steps, null.ok = TRUE)
@@ -43,6 +46,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
+  valid_log_levels <- c("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL")
+  if (length(log_level) > 1L) log_level <- log_level[1L]
+  log_level <- toupper(log_level)
+  log_level <- match.arg(log_level, valid_log_levels)
   
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
@@ -105,9 +112,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     names(steps) <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
     for (s in user_steps) steps[s] <- TRUE
     
-    # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
+    scfg$log_level <- log_level
   } else {
     ids <- prompt_input(
       instruct = "Enter subject IDs to process, separated by spaces. Press enter to process all subjects.",
@@ -156,17 +163,19 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     # check whether to run in debug mode
     scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
     scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
-
-    # not currently used and would need to propagate the choice down to sbatch scripts through and environment variable (log_message)
-    # scfg$log_level <- prompt_input(
-    #   instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
-    #   type = "character", among=c("INFO", "ERROR", "DEBUG")
-    # )
+    scfg$log_level <- prompt_input(
+      instruct = "Select log level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)",
+      type = "character", among = valid_log_levels, default = log_level
+    )
   }
 
   if (isTRUE(scfg$force)) {
     if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
+  if (is.null(scfg$log_level)) scfg$log_level <- log_level
+  scfg$log_level <- toupper(scfg$log_level)
+  options(BrainGnomes.log_level = scfg$log_level)
+  try(lgr::get_logger_glue("BrainGnomes")$set_threshold(scfg$log_level), silent = TRUE)
   
   if (!any(steps)) stop("No processing steps were requested in run_project.")
 
@@ -236,7 +245,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     env_variables <- c(
       pkg_dir = find.package(package = "BrainGnomes"),
       R_HOME = R.home(),
-      snapshot_rds = snap_file
+      snapshot_rds = snap_file,
+      log_level = scfg$log_level
     )
     cluster_job_submit(
       sched_script,
@@ -469,7 +479,8 @@ submit_prefetch_templates <- function(scfg, steps) {
     prefetch_container = container_path,
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
-    templateflow_home = tf_home
+    templateflow_home = tf_home,
+    log_level = scfg$log_level
   )
 
   job_id <- cluster_job_submit(sched_script,

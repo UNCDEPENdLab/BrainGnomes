@@ -101,7 +101,15 @@ scrub_interpolate <- function(in_file, censor_file, out_file,
 
   # run 4D interpolation with Rcpp function
 
-  natural_spline_4d(in_file, t_interpolate = t_interpolate, edge_nn=TRUE, outfile = out_file, internal = TRUE)
+  run_logged(
+    natural_spline_4d,
+    infile = in_file,
+    t_interpolate = t_interpolate,
+    edge_nn = TRUE,
+    outfile = out_file,
+    internal = TRUE,
+    logger = lg
+  )
 
   if (length(confound_files) > 0 && length(t_interpolate) > 0) {
     good_idx <- which(censor == 1L)
@@ -177,7 +185,13 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
   }
 
   # run 4D interpolation with Rcpp function
-  remove_nifti_volumes(in_file, t_scrub, out_file)
+  run_logged(
+    remove_nifti_volumes,
+    infile = in_file,
+    remove_tpts = t_scrub,
+    outfile = out_file,
+    logger = lg
+  )
 
   if (length(confound_files) > 0 && length(t_scrub) > 0) {
     for (cf in confound_files) {
@@ -490,7 +504,7 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
     # Note that butterworth_filter_4d accepts frequency cutoffs -- anything below low_hz is cut (high-pass), anything above high_hz is cut (low-pass)
     bw_low <- if (is.infinite(high_pass_hz)) NULL else high_pass_hz
     bw_high <- if (is.infinite(low_pass_hz)) NULL else low_pass_hz
-    butterworth_filter_4d(infile = in_file, tr = tr, low_hz = bw_low, high_hz = bw_high, outfile = out_file)
+    butterworth_filter_4d(infile = in_file, tr = tr, low_hz = bw_low, high_hz = bw_high, outfile = out_file, lg = lg)
   }
   
   return(out_file)
@@ -580,18 +594,16 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
   mode_label <- if (exclusive_flag) "aggressive" else "non-aggressive"
 
   to_log(lg, "info", "Regressing {length(comp_idx)} AROMA noise components using {mode_label} internal lmfit implementation.")
-  tryCatch({
-    lmfit_residuals_4d(
-      infile = in_file,
-      X = mixing_mat,
-      include_rows = include_rows,
-      outfile = out_file,
-      regress_cols = comp_idx,
-      exclusive = exclusive_flag
-    )
-  }, error = function(e) {
-    to_log(lg, "fatal", "AROMA regression failed: {e$message}")
-  })
+  run_logged(
+    lmfit_residuals_4d,
+    infile = in_file,
+    X = mixing_mat,
+    include_rows = include_rows,
+    outfile = out_file,
+    regress_cols = comp_idx,
+    exclusive = exclusive_flag,
+    logger = lg
+  )
 
   return(out_file)
 }
@@ -980,7 +992,15 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
       if (sum(good_vols) < length(good_vols)) to_log(lg, "info", "Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
     }
     
-    lmfit_residuals_4d(in_file, X = as.matrix(Xmat), include_rows = good_vols, outfile = out_file, preserve_mean = TRUE)
+    run_logged(
+      lmfit_residuals_4d,
+      infile = in_file,
+      X = as.matrix(Xmat),
+      include_rows = good_vols,
+      outfile = out_file,
+      preserve_mean = TRUE,
+      logger = lg
+    )
   }
   
   return(out_file)
@@ -1180,10 +1200,12 @@ get_censor_file <- function(bids_info) {
 #' }
 #'
 #' @importFrom signal butter
+#' @param lg Optional logger for status and debug messages.
 #' @export
 butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
                                   outfile = "", internal = FALSE,
-                                  order = 2L, padtype = "even", use_zi = TRUE, demean = TRUE) {
+                                  order = 2L, padtype = "even", use_zi = TRUE, demean = TRUE,
+                                  lg = NULL) {
   checkmate::assert_file_exists(infile)
   checkmate::assert_number(tr, lower=0.01, upper = 100)
   checkmate::assert_number(low_hz, null.ok = TRUE)
@@ -1225,9 +1247,18 @@ butterworth_filter_4d <- function(infile, tr, low_hz = NULL, high_hz = NULL,
   a <- butter_coeff$a
 
   # Call C++ function for voxelwise filtering
-  butterworth_filter_cpp(infile = infile, b = b, a = a,
-                         outfile = outfile, internal = internal,
-                         padtype = padtype, use_zi = use_zi, demean=demean)
+  run_logged(
+    butterworth_filter_cpp,
+    infile = infile,
+    b = b,
+    a = a,
+    outfile = outfile,
+    internal = internal,
+    padtype = padtype,
+    use_zi = use_zi,
+    demean = demean,
+    logger = lg
+  )
 }
 
 #' iirnotch implementation in R (RBJ biquad design)

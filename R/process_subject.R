@@ -102,6 +102,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
 
     # shared components across specific jobs
     jobid_str <- ifelse(has_ses, glue("{name_tag}_sub-{sub_id}_ses-{ses_id}"), glue("{name_tag}_sub-{sub_id}"))
+    log_level_value <- resolve_log_level(scfg$log_level)
+    if (is.null(log_level_value)) log_level_value <- "INFO"
     env_variables <- c(
       debug_pipeline = scfg$debug,
       pkg_dir = find.package(package = "BrainGnomes"), # location of installed R package
@@ -109,7 +111,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       log_file = lg$appenders$subject_logger$destination, # write to same file as subject lgr
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
-      complete_file = complete_file
+      complete_file = complete_file,
+      log_level = log_level_value
     )
 
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
@@ -138,6 +141,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     }
 
     # launch submission function -- these all follow the same input argument structure
+    parent_txt <- if (!is.null(parent_ids) && length(parent_ids) > 0L) paste(parent_ids, collapse = ", ") else "<none>"
+    to_log(lg, "debug", "submit_{name_tag} will run from {dir} with parent IDs: {parent_txt}")
     to_log(lg, "debug", "Launching submit_{name_tag} for subject: {sub_id}")
     args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
     if (name == "postprocess") args$pp_stream <- pp_stream # populate the current postprocess config to run

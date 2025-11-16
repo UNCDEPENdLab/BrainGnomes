@@ -170,7 +170,7 @@ get_subject_logger <- function(scfg, sub_id) {
   if (!"subject_logger" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(file.path(sub_dir, glue("sub-{sub_id}_log.txt"))), name = "subject_logger")
   }
-
+  set_logger_threshold(lg, scfg$log_level)
   return(lg)
 }
 
@@ -726,7 +726,33 @@ get_pipeline_status <- function(scfg) {
   #   }
 }
 
-to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
+#' Resolve a desired log level
+#' @keywords internal
+#' @noRd
+resolve_log_level <- function(level = NULL) {
+  if (length(level) > 1L) level <- level[1L]
+  if (is.null(level) || is.na(level) || !nzchar(level)) {
+    level <- getOption("BrainGnomes.log_level", NULL)
+  }
+  if (is.null(level) || is.na(level) || !nzchar(level)) return(NULL)
+  toupper(level)
+}
+
+#' Ensure a logger honors the requested threshold
+#' @keywords internal
+#' @noRd
+set_logger_threshold <- function(logger, level = NULL) {
+  level <- resolve_log_level(level)
+  if (!is.null(level)) {
+    try(logger$set_threshold(level), silent = TRUE)
+  }
+  logger
+}
+
+#' Return an lgr LoggerGlue object with the configured threshold
+#' @keywords internal
+#' @noRd
+resolve_logger <- function(logger = NULL, level = NULL) {
   if (is.null(logger)) {
     logger <- lgr::get_logger_glue("BrainGnomes")
   } else if (checkmate::test_string(logger)) {
@@ -738,6 +764,96 @@ to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
   } else {
     checkmate::assert_class(logger, "LoggerGlue")
   }
+
+  set_logger_threshold(logger, level)
+}
+
+format_numeric_preview <- function(x, digits = 3L) {
+  out <- as.character(x)
+  non_missing <- !is.na(x)
+  if (any(non_missing)) {
+    out[non_missing] <- sprintf(paste0("%.", digits, "g"), x[non_missing])
+  }
+  out
+}
+
+format_arg_preview <- function(value, max_values = 3L) {
+  if (is.null(value)) return("NULL")
+  if (is.atomic(value) && length(value) == 1L) {
+    if (is.character(value)) return(glue::glue('"{truncate_str(value, 60)}"'))
+    if (is.numeric(value)) return(format_numeric_preview(value))
+    return(as.character(value))
+  }
+  if (is.atomic(value)) {
+    vals <- head(value, max_values)
+    if (is.numeric(vals)) {
+      vals_chr <- paste(format_numeric_preview(vals), collapse = ", ")
+    } else {
+      vals_chr <- paste(as.character(vals), collapse = ", ")
+    }
+    suffix <- if (length(value) > max_values) glue::glue(", ... len={length(value)}") else ""
+    return(glue::glue("c({vals_chr}{suffix})"))
+  }
+  if (is.matrix(value)) {
+    return(glue::glue("matrix[{nrow(value)}x{ncol(value)}]"))
+  }
+  if (is.data.frame(value)) {
+    return(glue::glue("data.frame[{nrow(value)}x{ncol(value)}]"))
+  }
+  if (inherits(value, "array")) {
+    dims <- paste(dim(value), collapse = "x")
+    return(glue::glue("array[{dims}]"))
+  }
+  if (is.list(value)) {
+    return(glue::glue("list(len={length(value)})"))
+  }
+  if (is.environment(value)) return("<environment>")
+  if (is.function(value)) return("<function>")
+  classes <- paste(class(value), collapse = ",")
+  glue::glue("<{classes}>")
+}
+
+run_logged <- function(fun, ..., logger = NULL, fun_label = NULL, log_level = "info") {
+  fun_obj <- match.fun(fun)
+  label <- if (!is.null(fun_label)) {
+    fun_label
+  } else if (is.character(fun)) {
+    fun
+  } else {
+    paste(deparse(substitute(fun)), collapse = "")
+  }
+  args <- list(...)
+  arg_names <- names(args)
+  arg_desc <- vapply(seq_along(args), function(ii) {
+    name <- arg_names[[ii]]
+    preview <- format_arg_preview(args[[ii]])
+    if (is.null(name) || !nzchar(name)) preview else glue::glue("{name}={preview}")
+  }, character(1), USE.NAMES = FALSE)
+  arg_text <- paste(arg_desc, collapse = ", ")
+  if (!nzchar(arg_text)) arg_text <- ""
+  to_log(logger, log_level, "Running {label}({arg_text})")
+  start_time <- Sys.time()
+  res <- tryCatch({
+    result <- fun_obj(...)
+    elapsed <- signif(as.numeric(difftime(Sys.time(), start_time, units = "secs")), 3)
+    to_log(logger, "debug", "{label} completed in {elapsed} seconds")
+    result
+  }, error = function(e) {
+    err_msg <- glue::glue("Error running {label}: {conditionMessage(e)}")
+    to_log(logger, "error", "{err_msg}")
+    current_level <- resolve_log_level()
+    if (!is.null(current_level) && current_level %in% c("DEBUG", "TRACE")) {
+      trace_lines <- format(sys.calls())
+      trace_lines <- paste(rev(trace_lines), collapse = "\n")
+      to_log(logger, "debug", "Stack trace for {label}:\n{trace_lines}")
+    }
+    stop(e)
+  })
+  res
+}
+
+to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
+  logger <- resolve_logger(logger)
 
   checkmate::assert_string(msg)
   checkmate::assert_string(condition)

@@ -300,11 +300,34 @@ function traperror () {
 }
 
 
+log_level_rank() {
+  local lvl=${1^^}
+  case "$lvl" in
+    TRACE) echo 600 ;;
+    DEBUG) echo 500 ;;
+    INFO) echo 400 ;;
+    WARN|WARNING) echo 300 ;;
+    ERROR) echo 200 ;;
+    FATAL|CRITICAL) echo 100 ;;
+    *) echo 400 ;;
+  esac
+}
+
 function log_message() {
   [[ $# -eq 0 ]] && echo "No arguments to log_message provided" && return 1
-  local level="$1"
+  local level=${1^^}
   shift
   local message="$*"
+
+  local threshold=${LOG_LEVEL:-${log_level:-INFO}}
+  threshold=${threshold^^}
+  local level_rank
+  local threshold_rank
+  level_rank=$(log_level_rank "$level")
+  threshold_rank=$(log_level_rank "$threshold")
+  if [[ $level_rank -gt $threshold_rank ]]; then
+    return 0
+  fi
   
   # Timestamp
   local timestamp

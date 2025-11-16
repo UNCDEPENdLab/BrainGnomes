@@ -35,14 +35,16 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   motion_filter_cfg <- cfg$motion_filter
   if (!is.null(motion_filter_cfg) && isTRUE(motion_filter_cfg$enable)) {
     motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
-    confounds <- notch_filter(
-        confounds,
-        tr = cfg$tr,
-        band_stop_min = motion_filter_cfg$band_stop_min,
-        band_stop_max = motion_filter_cfg$band_stop_max,
-        columns = motion_cols,
-        lg = lg
-      )
+    confounds <- run_logged(
+      notch_filter,
+      confounds_dt = confounds,
+      tr = cfg$tr,
+      band_stop_min = motion_filter_cfg$band_stop_min,
+      band_stop_max = motion_filter_cfg$band_stop_max,
+      columns = motion_cols,
+      lg = lg,
+      fun_label = "motion_notch_filter"
+    )
           
     if (all(motion_cols %in% names(confounds))) {
       head_radius <- cfg$scrubbing$head_radius
@@ -77,6 +79,9 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                         cfg$confound_calculate$columns))
   noproc_cols <- as.character(union(cfg$confound_regression$noproc_columns,
                                       cfg$confound_calculate$noproc_columns))
+  confound_cols_txt <- if (length(confound_cols) > 0L) paste(confound_cols, collapse = ", ") else "<none>"
+  noproc_cols_txt <- if (length(noproc_cols) > 0L) paste(noproc_cols, collapse = ", ") else "<none>"
+  to_log(lg, "debug", "Expanded confound columns: {confound_cols_txt}; noproc columns: {noproc_cols_txt}")
   if (any(noproc_cols %in% confound_cols)) {
     stop("Cannot handle overlaps in noproc_columns and columns for confounds")
   }
@@ -389,6 +394,12 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
       expr <- spike_volume[ii]
     }
 
+    expr_label <- if (!is.null(names(spike_volume)[ii]) && names(spike_volume)[ii] != "") {
+      names(spike_volume)[ii]
+    } else {
+      glue::glue("expr{ii}")
+    }
+
     spike_vec <- tryCatch(with(confounds_df, eval(parse(text = expr))), error = function(e) {
       to_log(lg, "error", "Problem evaluating spike expression: {expr}")
       return(NULL)
@@ -400,7 +411,12 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
     }
 
     which_spike <- which(spike_vec == TRUE)
-    if (length(which_spike) == 0L) return(NULL)
+    if (length(which_spike) == 0L) {
+      to_log(lg, "debug", "Spike expression {expr_label} matched zero volumes.")
+      return(NULL)
+    }
+    vol_txt <- paste(which_spike, collapse = ", ")
+    to_log(lg, "debug", "Spike expression {expr_label} flagged volumes: {vol_txt}")
 
     spike_df <- do.call(cbind, lapply(which_spike, function(xx) {
       vec <- rep(0, nrow(confounds_df))
@@ -425,11 +441,7 @@ compute_spike_regressors <- function(confounds_df = NULL, spike_volume = NULL, l
       spike_df <- cbind(spike_df, res)
     }
 
-    if (is.null(names(spike_volume)[ii]) || names(spike_volume)[ii] == "") {
-      colnames(spike_df) <- paste0("expr", ii, "_", colnames(spike_df))
-    } else {
-      colnames(spike_df) <- paste0(names(spike_volume)[ii], "_", colnames(spike_df))
-    }
+    colnames(spike_df) <- paste0(expr_label, "_", colnames(spike_df))
     spike_df
   }))
 

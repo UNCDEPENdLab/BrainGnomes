@@ -212,6 +212,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     # if cur_file input exists outside of output_dir, ensure that its result goes into output_dir
     if (dirname(cur_file) != cfg$output_dir) bids_info$directory <- cfg$output_dir
     out_file <- construct_bids_filename(bids_info, full.names = TRUE)
+    to_log(lg, "debug", "Step {step}: input {cur_file}, output {out_file}, prefix chain {prefix_chain}")
 
     # handle extant output
     if (file.exists(out_file) && !isTRUE(cfg$overwrite)) {
