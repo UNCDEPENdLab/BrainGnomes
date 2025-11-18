@@ -13,7 +13,8 @@ resample_template_to_img(
   extension = ".nii.gz",
   interpolation = "nearest",
   install_dependencies = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  lg = NULL
 )
 }
 \arguments{
@@ -37,6 +38,8 @@ required Python packages (nibabel, nilearn, templateflow) if they are missing fr
 If \code{FALSE}, the function will raise an error if dependencies are not found.}
 
 \item{overwrite}{Logical. If \code{TRUE}, overwrite the existing output file (if present).}
+
+\item{lg}{Optional lgr logger for emitting warnings/info to the postprocess log.}
 }
 \value{
 Invisibly returns \code{TRUE} on success. A new NIfTI file is written to \code{output}.

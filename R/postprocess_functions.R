@@ -1106,7 +1106,8 @@ resample_template_to_img <- function(
     extension = ".nii.gz",
     interpolation = "nearest",
     install_dependencies = TRUE,
-    overwrite = FALSE) {
+    overwrite = FALSE,
+    lg = NULL) {
   checkmate::assert_string(in_file)
   checkmate::assert_file_exists(in_file)
   checkmate::assert_string(output, null.ok = TRUE)
@@ -1117,10 +1118,57 @@ resample_template_to_img <- function(
   checkmate::assert_flag(install_dependencies)
   checkmate::assert_flag(overwrite)
 
+  f_info <- as.list(extract_bids_info(in_file))
+  template_spaces <- c( # https://www.templateflow.org/browse/
+    "Fischer344",
+    "MNI152Lin",
+    "MNI152NLin2009aAsym",
+    "MNI152NLin2009aSym",
+    "MNI152NLin2009bAsym",
+    "MNI152NLin2009bSym",
+    "MNI152NLin2009cAsym",
+    "MNI152NLin2009cSym",
+    "MNI152NLin6Asym",
+    "MNI152NLin6Sym",
+    "MNI305",
+    "MNIColin27",
+    "MNIInfant",
+    "MNIPediatricAsym",
+    "MouseIn",
+    "NKI",
+    "NMT31Sym",
+    "OASIS30ANTs",
+    "PNC",
+    "RESILIENT",
+    "SUIT",
+    "UNCInfant",
+    "VALiDATe29",
+    "WHS",
+    "dhcpAsym",
+    "dhcpSym",
+    "dhcpVol",
+    "fsLR",
+    "fsaverage",
+    "onavg"
+  )
+
   # default to same name as input file, but change suffix to templatemask
   if (is.null(output)) {
-    f_info <- as.list(extract_bids_info(in_file))
     output <- file.path(dirname(in_file), construct_bids_filename(modifyList(f_info, list(suffix = "templatemask"))))
+  }
+
+  # If we're in native/anatomical space, prefer the subject-specific fMRIPrep mask
+  template_space <- f_info$space
+  space_label <- if (is.null(template_space) || is.na(template_space)) "unknown" else template_space
+  is_template_space <- !is.null(template_space) && !is.na(template_space) && template_space %in% template_spaces
+  if (!is_template_space) {
+    native_mask <- file.path(
+      dirname(in_file),
+      construct_bids_filename(modifyList(f_info, list(desc = "brain", suffix = "mask")))
+    )
+    to_log(lg, "warn", "Requested template mask, but space '{space_label}' is not a TemplateFlow space. Using the run-specific brain mask instead.")
+    if (file.exists(native_mask)) return(invisible(native_mask))
+    to_log(lg, "error", "Cannot fetch a template mask for non-template space '{space_label}'. Expected subject mask at: {native_mask}")
   }
 
   if (file.exists(output) && !overwrite) {

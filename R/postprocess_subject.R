@@ -122,7 +122,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     apply_mask_file <- cfg$apply_mask$mask_file
     if (checkmate::test_string(apply_mask_file) && !is.na(apply_mask_file)) {
       if (apply_mask_file == "template") {
-        apply_mask_file <- resample_template_to_img(in_file)
+        apply_mask_file <- resample_template_to_img(in_file, lg = lg)
       } else if (!checkmate::test_file_exists(apply_mask_file)) {
         to_log(lg, "warn", "Cannot find apply_mask mask_file: {apply_mask_file}. This step will be skipped!")
         apply_mask_file <- NULL

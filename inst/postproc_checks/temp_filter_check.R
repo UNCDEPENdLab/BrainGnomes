@@ -1,34 +1,25 @@
 #!/usr/bin/env Rscript
 
-# lab_lib <- "/proj/mnhallqlab/lab_resources/lab_rpackages_v451"
-# 
-# install_if_missing <- function(pkg, lib=lab_lib) {
-#   if (!requireNamespace(pkg, quietly=TRUE, lib.loc=lib)) {
-#     cat("Package", pkg, "not found in", lib, ". Installing...\n")
-#     install.packages(pkg, lib=lib, repos="https://cloud.r-project.org")
-#   }
-#   suppressPackageStartupMessages(library(pkg, character.only=TRUE, lib.loc=lib))
-# }
-# 
-# # --- required packages ---
-# install_if_missing("RNifti")
-# install_if_missing("pracma")
-# install_if_missing("multitaper")
-# install_if_missing("psd")
-# install_if_missing("dplyr")
-# install_if_missing("signal")
-# install_if_missing("checkmate")
-# 
+## ----------------------------------------------------------
+##  MRI temporal filtering check via multitaper spectra
+##  - Compares pre/post-filter spectra
+##  - Exports multitaper spectra as CSVs
+##  - Produces two plots (spectrum + difference)
+##  - Computes bandpower inside/outside band
+##  - Issues PASS/FAIL QC based on simple thresholds
+## ----------------------------------------------------------
 
 suppressPackageStartupMessages({
-  library(pracma)
-  library(multitaper)
   library(RNifti)
+  library(multitaper)
   library(dplyr)
   library(ggplot2)
 })
 
-# Resolve the directory of the current script so we can source helpers reliably
+## ----------------------------------------------------------
+## Helpers: script location + sourced utilities
+## ----------------------------------------------------------
+
 get_script_dir <- function() {
   args_full <- commandArgs(trailingOnly = FALSE)
   file_arg <- grep("^--file=", args_full, value = TRUE)
@@ -37,11 +28,17 @@ get_script_dir <- function() {
 }
 
 script_dir <- tryCatch(get_script_dir(), error = function(e) getwd())
-# Pull in shared multitaper utilities that live alongside this script
+
+## These should provide:
+##   power_multitaper(y, dt, ...)
+##   mtm_bandpower(y, dt, bands, ..., psd = NULL)
 source(file.path(script_dir, "power_multitaper.R"))
 source(file.path(script_dir, "mtm_bandpower.R"))
 
-# Guard against constant or non-finite time series before running spectral routines
+## ----------------------------------------------------------
+## Core utility functions (validity, extraction, averaging)
+## ----------------------------------------------------------
+
 .is_valid_series <- function(x, tol = 2 * .Machine$double.eps) {
   all(is.finite(x)) && stats::var(x) > tol
 }
@@ -54,26 +51,18 @@ source(file.path(script_dir, "mtm_bandpower.R"))
     n_voxels,
     var_tol = 2 * .Machine$double.eps) {
 
-  candidate_positions <- seq_along(mask_idx)
-
-  if (is.null(n_voxels) || is.na(n_voxels)) {
-    valid_mask <- vapply(
-      candidate_positions,
-      function(pos) {
-        .is_valid_series(get_pre_ts(pos), tol = var_tol) &&
-          .is_valid_series(get_post_ts(pos), tol = var_tol)
-      },
-      logical(1)
-    )
-    valid_positions <- candidate_positions[valid_mask]
-    if (!length(valid_positions)) stop("No non-constant voxels available in both pre and post series.")
-    return(list(indices = mask_idx[valid_positions], positions = valid_positions))
+  if (is.null(n_voxels) || is.na(n_voxels) || n_voxels <= 0) {
+    n_voxels <- length(mask_idx)
+  }
+  if (n_voxels > length(mask_idx)) {
+    n_voxels <- length(mask_idx)
   }
 
-  candidate_order <- sample(candidate_positions, length(candidate_positions))
+  candidate_positions <- seq_along(mask_idx)
   valid_positions <- integer(n_voxels)
   found <- 0L
-  for (pos in candidate_order) {
+
+  for (pos in sample(candidate_positions)) {
     if (.is_valid_series(get_pre_ts(pos), tol = var_tol) &&
         .is_valid_series(get_post_ts(pos), tol = var_tol)) {
       found <- found + 1L
@@ -81,9 +70,19 @@ source(file.path(script_dir, "mtm_bandpower.R"))
       if (found == n_voxels) break
     }
   }
-  if (found < n_voxels) {
-    stop("Fewer than ", n_voxels, " non-constant voxels available in both pre and post series.")
+
+  if (found == 0L) {
+    stop("No non-constant voxels available in both pre and post series.")
   }
+
+  if (found < n_voxels) {
+    cat("Requested", n_voxels,
+        "voxels; found only", found,
+        "with sufficient variance in pre and post series.\n")
+  }
+
+  valid_positions <- valid_positions[seq_len(found)]
+
   list(indices = mask_idx[valid_positions], positions = valid_positions)
 }
 
@@ -127,404 +126,740 @@ source(file.path(script_dir, "mtm_bandpower.R"))
 .extract_psd_linear <- function(spec_df) {
   psd <- attr(spec_df, "psd_linear")
   if (is.null(psd) || is.null(psd$freq) || is.null(psd$spec)) {
-    stop("Multitaper spectrum is missing its `psd_linear` attribute; update power_multitaper().")
+    stop("Multitaper spectrum is missing its `psd_linear` attribute; ",
+         "update power_multitaper().")
   }
   psd
 }
 
-# ----------------------------
-# Parse command-line arguments
-# ----------------------------
-args <- commandArgs(trailingOnly = TRUE)
-get_arg <- function(flag, default = NULL) {
-  val <- grep(paste0("^", flag, "="), args, value = TRUE)
-  if (length(val) == 0) return(default)
-  sub(paste0("^", flag, "="), "", val)
+# Human-friendly formatting for QC outputs
+.format_stopband_reduction <- function(val) {
+  if (is.null(val) || is.na(val)) return("NA")
+  formatted <- signif(val, 4)
+  if (val < 0) {
+    return(paste0(
+      formatted,
+      " (WARNING: stopband went *up* in power by this amount!)"
+    ))
+  }
+  as.character(formatted)
 }
 
-get_bool_flag <- function(flag, default = FALSE) {
-  matches <- grep(paste0("^", flag, "(=|$)"), args, value = TRUE)
-  if (!length(matches)) return(default)
-  last <- matches[length(matches)]
-  if (identical(last, flag)) return(TRUE)
-  value <- tolower(sub(paste0("^", flag, "="), "", last))
-  if (value %in% c("1", "true", "t", "yes", "y")) return(TRUE)
-  if (value %in% c("0", "false", "f", "no", "n")) return(FALSE)
-  stop("Argument '", flag, "' must be a boolean (one of 1/0/true/false/yes/no).")
+.format_passband_change <- function(val) {
+  if (is.null(val) || is.na(val)) return("NA")
+  sprintf("%+.4g", signif(val, 4))
 }
 
-pre_path   <- get_arg("--pre")
-post_path  <- get_arg("--post")
-mask_path  <- get_arg("--mask")
-dt         <- as.numeric(get_arg("--dt"))
-subnum     <- get_arg("--subnum")
-save_plots <- get_bool_flag("--save_plots")
-save_spectrum <- get_bool_flag("--save_spectrum")
-seed_arg   <- get_arg("--seed")
-band_low_arg  <- get_arg("--band_low")
-band_high_arg <- get_arg("--band_high")
-log_output <- get_bool_flag("--log")
-band_low  <- if (is.null(band_low_arg)) NA_real_ else as.numeric(band_low_arg)
-band_high <- if (is.null(band_high_arg)) NA_real_ else as.numeric(band_high_arg)
-seed <- if (is.null(seed_arg)) NA_integer_ else suppressWarnings(as.integer(seed_arg))
-if (!is.null(seed_arg) && is.na(seed)) {
-  stop("Argument '--seed' must be an integer.")
+## ----------------------------------------------------------
+## Argument parsing + logging
+## ----------------------------------------------------------
+
+parse_args <- function() {
+  args <- commandArgs(trailingOnly = TRUE)
+
+  print_help <- function() {
+    cat("MRI Temporal Filtering QC\n")
+    cat("Usage:\n")
+    cat("  Rscript temp_filter_new.R --pre=pre.nii.gz --post=post.nii.gz ",
+        "--mask=mask.nii.gz --dt=TR --subnum=ID ",
+        "[--save_plots] [--save_spectrum] ",
+        "[--band_low=Hz] [--band_high=Hz] [--seed=INT] [--log] ",
+        "[--min_stopband_reduction_db=NUM] [--max_passband_reduction_db=NUM]\n",
+        sep = "")
+    cat(
+      "\nArguments:",
+      "  --pre=PATH                      Pre-filter 4D NIfTI",
+      "  --post=PATH                     Post-filter 4D NIfTI",
+      "  --mask=PATH                     Brain mask (matches pre/post dims)",
+      "  --dt=NUM                        TR (seconds)",
+      "  --subnum=ID                     Subject identifier used in outputs",
+      "  --band_low=NUM                  Low cutoff frequency (Hz)",
+      "  --band_high=NUM                 High cutoff frequency (Hz)",
+      "  --min_stopband_reduction_db=NUM Minimum acceptable stopband reduction (dB, default 10)",
+      "  --max_passband_reduction_db=NUM Maximum acceptable passband reduction (dB, default 3)",
+      "  --save_plots                    Save PNG plots",
+      "  --save_spectrum                 Save multitaper spectra CSVs",
+      "  --seed=INT                      Seed for voxel sampling",
+      "  --log                           Write log to file",
+      "  --help                          Show this message",
+      sep = "\n"
+    )
+  }
+
+  if ("--help" %in% args || "-h" %in% args || length(args) == 0) {
+    print_help()
+    quit(status = 0)
+  }
+
+  get_arg <- function(flag, default = NULL) {
+    val <- grep(paste0("^", flag, "="), args, value = TRUE)
+    if (length(val) == 0) return(default)
+    sub(paste0("^", flag, "="), "", val)
+  }
+
+  get_bool_flag <- function(flag, default = FALSE) {
+    matches <- grep(paste0("^", flag, "(=|$)"), args, value = TRUE)
+    if (!length(matches)) return(default)
+    last <- matches[length(matches)]
+    if (identical(last, flag)) return(TRUE)
+    value <- tolower(sub(paste0("^", flag, "="), "", last))
+    if (value %in% c("1", "true", "t", "yes", "y")) return(TRUE)
+    if (value %in% c("0", "false", "f", "no", "n")) return(FALSE)
+    stop("Argument '", flag,
+         "' must be a boolean (one of 1/0/true/false/yes/no).")
+  }
+
+  pre_path      <- get_arg("--pre")
+  post_path     <- get_arg("--post")
+  mask_path     <- get_arg("--mask")
+  dt_arg        <- get_arg("--dt")
+  subnum        <- get_arg("--subnum")
+  save_plots    <- get_bool_flag("--save_plots")
+  save_spectrum <- get_bool_flag("--save_spectrum")
+  seed_arg      <- get_arg("--seed")
+  band_low_arg  <- get_arg("--band_low")
+  band_high_arg <- get_arg("--band_high")
+  log_output    <- get_bool_flag("--log")
+  stopband_thresh_arg <- get_arg("--min_stopband_reduction_db")
+  passband_thresh_arg <- get_arg("--max_passband_reduction_db")
+
+  dt <- suppressWarnings(as.numeric(dt_arg))
+  if (is.null(dt_arg) || is.na(dt) || dt <= 0) dt <- NA_real_
+
+  band_low  <- if (is.null(band_low_arg)) NA_real_ else as.numeric(band_low_arg)
+  band_high <- if (is.null(band_high_arg)) NA_real_ else as.numeric(band_high_arg)
+
+  min_stopband_reduction_db <- if (is.null(stopband_thresh_arg)) {
+    10
+  } else {
+    val <- suppressWarnings(as.numeric(stopband_thresh_arg))
+    if (is.na(val)) {
+      stop("Argument '--min_stopband_reduction_db' must be numeric.")
+    }
+    val
+  }
+
+  max_passband_reduction_db <- if (is.null(passband_thresh_arg)) {
+    3
+  } else {
+    val <- suppressWarnings(as.numeric(passband_thresh_arg))
+    if (is.na(val)) {
+      stop("Argument '--max_passband_reduction_db' must be numeric.")
+    }
+    val
+  }
+
+  seed <- if (is.null(seed_arg)) {
+    NA_integer_
+  } else {
+    s <- suppressWarnings(as.integer(seed_arg))
+    if (is.na(s)) stop("Argument '--seed' must be an integer.")
+    s
+  }
+
+  if (is.null(pre_path) || is.null(post_path) || is.na(dt) || is.null(subnum)) {
+    print_help()
+    quit(status = 1)
+  }
+
+  list(
+    pre_path = pre_path,
+    post_path = post_path,
+    mask_path = mask_path,
+    dt = dt,
+    subnum = subnum,
+    save_plots = save_plots,
+    save_spectrum = save_spectrum,
+    band_low = band_low,
+    band_high = band_high,
+    seed = seed,
+    log_output = log_output,
+    min_stopband_reduction_db = min_stopband_reduction_db,
+    max_passband_reduction_db = max_passband_reduction_db
+  )
 }
 
-if (!is.na(seed)) {
-  set.seed(seed)
-  cat("Sampling seed set to", seed, "\n")
-}
+setup_logging <- function(subnum, log_output) {
+  if (!log_output) return(NULL)
 
-# #For testing
-# pre_path   <- "/proj/mnhallqlab/studies/momentum/data_curation/fMRI_MRI/Brain_Gnomes_Final/data_postproc/sub-540104/sub-540104_task-ridl_run-01_space-MNI152NLin2009cAsym_desc-asmPostproc_bold.nii.gz"
-# post_path  <- "/proj/mnhallqlab/studies/momentum/data_curation/fMRI_MRI/Brain_Gnomes_Final/data_postproc/sub-540104/sub-540104_task-ridl_run-01_space-MNI152NLin2009cAsym_desc-fasmPostproc_bold.nii.gz"
-# mask_path  <- "/proj/mnhallqlab/studies/momentum/data/fMRI_MRI/pre_proc/sub-540104/func/sub-540104_task-ridl_run-01_space-MNI152NLin2009cAsym_desc-preproc_templatemask.nii.gz"
-# dt         <- .635
-# subnum     <- 540104
-# save_plots <- TRUE
-# save_spectrum <- TRUE
-
-
-if (is.null(pre_path) || is.null(post_path) || is.na(dt) || is.null(subnum)) {
-  cat("Usage:\n")
-  cat("  Rscript temp_filter_check.R --pre=pre.nii.gz --post=post.nii.gz --mask=mask.nii.gz \\\n")
-  cat("    --dt=TR --subnum=ID [--save_plots] [--save_spectrum] [--band_low=Hz] [--band_high=Hz] [--seed=INT] [--log]\n")
-  quit(status = 1)
-}
-
-log_file <- NULL
-if (log_output) {
   log_file <- paste0("filter_check_", subnum, ".txt")
   prev_sink_depth <- sink.number()
-  # Mirror console output to a persistent log for QC records
+
   sink(log_file, split = TRUE)
-  on.exit({
-    while (sink.number() > prev_sink_depth) sink()
-  }, add = TRUE)
+
+  list(file = log_file, depth = prev_sink_depth)
 }
 
-cat("----- MRI Temporal Filtering Check Log -----\n")
-cat("Started:", format(Sys.time()), "\n\n")
+## ----------------------------------------------------------
+## Image / mask loading and voxel sampling
+## ----------------------------------------------------------
 
-if (log_output) {
-  cat("Logging all output to", log_file, "\n\n")
-}
+load_images_and_mask <- function(pre_path, post_path, mask_path) {
+  cat("Loading NIfTI images...\n")
 
-cat("Subject:", subnum, "\n")
-cat("Pre path:", pre_path, "\n")
-cat("Post path:", post_path, "\n")
-cat("Mask path:", mask_path, "\n")
-cat("TR (dt):", dt, "\n")
-cat("Save plots:", save_plots, "\n")
-cat("Save spectrum:", save_spectrum, "\n\n")
-cat("Band low (Hz):", ifelse(is.na(band_low), "NA", band_low), "\n")
-cat("Band high (Hz):", ifelse(is.na(band_high), "NA", band_high), "\n\n")
-
-
-# ---- Load pre NIfTI ----
-cat("Loading NIfTI images...\n")
-pre_img  <- RNifti::readNifti(pre_path)
-pre_img_dims <- dim(pre_img)
-if (length(pre_img_dims) == 3L) {
-  # Promote 3D images to 4D so downstream indexing code can assume a time axis
-  pre_img_dims <- c(pre_img_dims, 1L) # treat 3D as 1 timepoint
-  dim(pre_img) <- pre_img_dims
-}
-pre_n_t <- pre_img_dims[4]
-pre_n_vox <- prod(pre_img_dims[1:3])
-
-mask_idx <- NULL
-mask_dims <- NULL
-
-# ---- Extract pre voxel time series ----
-if (!is.null(mask_path)) {
-  mask <- RNifti::readNifti(mask_path)
-  mask_dims <- dim(mask)
-  if (!all(mask_dims == pre_img_dims[1:3])) stop("Mask dimensions do not match image.")
-  mask_logical <- (mask != 0) & is.finite(mask)
-  n_mask_vox <- sum(mask_logical)
-  if (n_mask_vox == 0) stop("Mask contains no voxels.")
-  mask_idx <- which(mask_logical)
-  rm(mask)
-} else {
-  mask_idx <- seq_len(pre_n_vox)
-  mask_dims <- pre_img_dims[1:3]
-}
-# Convert linear indices into i/j/k coordinates used by the extractor closures
-mask_coords <- arrayInd(mask_idx, pre_img_dims[1:3], useNames = FALSE)
-
-# ---- Load post NIfTI ----
-post_img  <- RNifti::readNifti(post_path)
-post_img_dims <- dim(post_img)
-if (length(post_img_dims) == 3L) {
-  post_img_dims <- c(post_img_dims, 1L)
-  dim(post_img) <- post_img_dims
-}
-post_n_t <- post_img_dims[4]
-post_n_vox <- prod(post_img_dims[1:3])
-
-# ---- Extract post voxel time series ----
-if (!is.null(mask_path) && !all(mask_dims == post_img_dims[1:3])) {
-  stop("Mask dimensions do not match post image.")
-}
-if (pre_n_t != post_n_t) stop("Pre and post series must have the same number of timepoints.")
-if (pre_n_vox != post_n_vox) stop("Pre and post images must have the same spatial dimensions.")
-
-var_tol <- if (is.null(mask_path)) 1e-3 else 2 * .Machine$double.eps
-default_sample_size <- 30L
-voxels_to_sample <- if (length(mask_idx) <= default_sample_size) length(mask_idx) else default_sample_size
-get_pre_ts <- .make_ts_extractor(pre_img, mask_coords)
-get_post_ts <- .make_ts_extractor(post_img, mask_coords)
-# Identify a reproducible set of voxels to summarise spectral behaviour
-selection <- .select_nonconstant_voxels(
-  mask_idx = mask_idx,
-  get_pre_ts = get_pre_ts,
-  get_post_ts = get_post_ts,
-  n_voxels = voxels_to_sample,
-  var_tol = var_tol
-)
-selected_idx <- selection$indices
-selected_positions <- selection$positions
-if (is.null(mask_path)) {
-  cat(
-    "Mask not provided; randomly selected",
-    length(selected_idx),
-    "non-constant voxels with variance >",
-    signif(var_tol, 3),
-    "for multitaper averaging.\n"
-  )
-} else {
-  cat("Selected", length(selected_idx), "non-constant voxels for multitaper averaging.\n")
-}
-
-cat("Estimating smoothed multitaper spectra...\n")
-# Compute per-voxel multitaper spectra and aggregate them for comparison
-pre_spectra <- lapply(
-  selected_positions,
-  function(pos) power_multitaper(
-    get_pre_ts(pos),
-    dt = dt,
-    nw = 4,
-    pad_factor = 2
-  )
-)
-post_spectra <- lapply(
-  selected_positions,
-  function(pos) power_multitaper(
-    get_post_ts(pos),
-    dt = dt,
-    nw = 4,
-    pad_factor = 2
-  )
-)
-pre_psd <- lapply(pre_spectra, .extract_psd_linear)
-post_psd <- lapply(post_spectra, .extract_psd_linear)
-
-rm(pre_img, post_img) # cleanup big objects
-
-mt_pre <- .average_multitaper_spectra(pre_spectra)
-mt_post <- .average_multitaper_spectra(post_spectra)
-
-file_prefix <- paste0("multitaper_spectrum_", subnum)
-pre_out_file_mtap <- paste0(file_prefix, "_pre.csv")
-post_out_file_mtap <- paste0(file_prefix, "_post.csv")
-
-mt_diff <- mt_pre %>%
-  inner_join(mt_post, by = "freq", suffix = c("_pre", "_post")) %>%
-  mutate(power_diff_db = power_db_pre - power_db_post)
-
-diff_out_file <- paste0(file_prefix, "_diff.csv")
-
-if (save_spectrum) {
-  # Persist the averaged spectra and their difference for downstream inspection
-  write.csv(mt_pre, pre_out_file_mtap, row.names = FALSE)
-  write.csv(mt_post, post_out_file_mtap, row.names = FALSE)
-  write.csv(mt_diff, diff_out_file, row.names = FALSE)
-  cat("Saved multitaper spectra to", pre_out_file_mtap, "and", post_out_file_mtap, "\n")
-  cat("Saved multitaper difference to", diff_out_file, "\n")
-} else {
-  cat("Skipping multitaper spectrum export (use --save_spectrum to enable).\n")
-}
-
-if (save_plots) {
-  spectrum_out_file <- paste0(file_prefix, "_pre_post.png")
-  spectrum_df <- dplyr::bind_rows(
-    dplyr::mutate(mt_pre, series = "Pre-filter"),
-    dplyr::mutate(mt_post, series = "Post-filter")
-  )
-  spectrum_plot <- ggplot(spectrum_df, aes(x = freq, y = power_db, color = series)) +
-    geom_line(linewidth = 1) +
-    labs(
-      title = paste("Smoothed Multitaper Spectrum | Subject", subnum),
-      x = "Frequency (Hz)",
-      y = "Power (dB)",
-      color = NULL
-    ) +
-    scale_color_manual(values = c("Pre-filter" = "steelblue", "Post-filter" = "firebrick")) +
-    theme_minimal(base_size = 14) +
-    theme(legend.position = "top")
-  cutoff_freqs <- c(
-    if (!is.na(band_low)) band_low else NULL,
-    if (!is.na(band_high)) band_high else NULL
-  )
-  if (length(cutoff_freqs) > 0) {
-    # Overlay vertical markers where the temporal filter is expected to act
-    spectrum_plot <- spectrum_plot +
-      geom_vline(xintercept = cutoff_freqs, linetype = "dashed", color = "gray40", linewidth = 0.7)
+  pre_img <- RNifti::readNifti(pre_path)
+  pre_dims <- dim(pre_img)
+  if (length(pre_dims) == 3L) {
+    pre_dims <- c(pre_dims, 1L)  # treat 3D as 1 timepoint
+    dim(pre_img) <- pre_dims
   }
-  ggsave(filename = spectrum_out_file, plot = spectrum_plot, width = 8, height = 6, units = "in", dpi = 300)
-  cat("Saved multitaper spectrum plot to", spectrum_out_file, "\n")
+  pre_n_t   <- pre_dims[4]
+  pre_n_vox <- prod(pre_dims[1:3])
 
-  diff_plot_out_file <- paste0(file_prefix, "_diff.png")
-  diff_plot <- ggplot(mt_diff, aes(x = freq, y = power_diff_db)) +
-    geom_line(color = "navy", linewidth = 1) +
-    geom_hline(yintercept = 0, color = "gray70", linetype = "dotted") +
-    labs(
-      title = paste("Multitaper Power Difference (Pre - Post) | Subject", subnum),
-      x = "Frequency (Hz)",
-      y = "Power Difference (dB)"
-    ) +
-    theme_minimal(base_size = 14)
-  if (length(cutoff_freqs) > 0) {
-    diff_plot <- diff_plot +
-      geom_vline(xintercept = cutoff_freqs, linetype = "dashed", color = "gray40", linewidth = 0.7)
+  mask_idx  <- NULL
+  mask_dims <- NULL
+
+  if (!is.null(mask_path)) {
+    mask <- RNifti::readNifti(mask_path)
+    mask_dims <- dim(mask)
+    if (!all(mask_dims == pre_dims[1:3])) {
+      stop("Mask dimensions do not match pre image.")
+    }
+    mask_logical <- (mask != 0) & is.finite(mask)
+    n_mask_vox <- sum(mask_logical)
+    if (n_mask_vox == 0) stop("Mask contains no voxels.")
+    mask_idx <- which(mask_logical)
+    rm(mask)
+  } else {
+    mask_idx <- seq_len(pre_n_vox)
+    mask_dims <- pre_dims[1:3]
   }
-  ggsave(filename = diff_plot_out_file, plot = diff_plot, width = 8, height = 6, units = "in", dpi = 300)
-  cat("Saved multitaper power difference plot to", diff_plot_out_file, "\n")
-} else {
-  cat("Skipping plot export (use --save_plots to enable).\n")
-}
 
-nyquist <- 1 / (2 * dt)
-outside_bands <- list()
-bandpower_results <- list()
-if (!is.na(band_low) && band_low > 0) {
-  outside_bands$below <- c(0, max(0, band_low))
-}
-if (!is.na(band_high) && band_high < nyquist) {
-  outside_bands$above <- c(min(band_high, nyquist), nyquist)
-}
+  # Convert linear indices into i/j/k coordinates used by the extractor closures
+  mask_coords <- arrayInd(mask_idx, pre_dims[1:3], useNames = FALSE)
 
-if (length(outside_bands) > 0) {
-  cat("Computing band power outside filter bounds...\n")
-  pre_bp_list <- lapply(pre_psd, function(psd) {
-    # Quantify how much energy remains outside the intended stop bands
-    mtm_bandpower(
-      y = NULL,
-      dt = dt,
-      bands = outside_bands,
-      detrend = "linear",
-      exclude_dc = TRUE,
-      total_band = c(0, nyquist),
-      psd = psd
-    )
-  })
-  post_bp_list <- lapply(post_psd, function(psd) {
-    mtm_bandpower(
-      y = NULL,
-      dt = dt,
-      bands = outside_bands,
-      detrend = "linear",
-      exclude_dc = TRUE,
-      total_band = c(0, nyquist),
-      psd = psd
-    )
-  })
+  post_img <- RNifti::readNifti(post_path)
+  post_dims <- dim(post_img)
+  if (length(post_dims) == 3L) {
+    post_dims <- c(post_dims, 1L)
+    dim(post_img) <- post_dims
+  }
+  post_n_t   <- post_dims[4]
+  post_n_vox <- prod(post_dims[1:3])
 
-  pre_bp_avg <- .average_bandpower(pre_bp_list)
-  post_bp_avg <- .average_bandpower(post_bp_list)
+  if (!is.null(mask_path) && !all(mask_dims == post_dims[1:3])) {
+    stop("Mask dimensions do not match post image.")
+  }
+  if (pre_n_t != post_n_t) {
+    stop("Pre and post series must have the same number of timepoints.")
+  }
+  if (pre_n_vox != post_n_vox) {
+    stop("Pre and post images must have the same spatial dimensions.")
+  }
 
-  bandpower_diff <- pre_bp_avg %>%
-    select(label, low, high, power_db_pre = power_db, relative_power_pre = relative_power) %>%
-    inner_join(post_bp_avg %>%
-                 select(label, low, high, power_db_post = power_db, relative_power_post = relative_power),
-               by = c("label", "low", "high")) %>%
-    mutate(
-      power_db_change = power_db_post - power_db_pre,
-      relative_power_change = relative_power_post - relative_power_pre,
-      band_type = "outside"
-    )
-
-  avg_reduction <- mean(bandpower_diff$power_db_pre - bandpower_diff$power_db_post, na.rm = TRUE)
-  bandpower_results$outside <- bandpower_diff
-  cat("Average power reduction outside bands (dB):", signif(avg_reduction, 4), "\n")
-} else {
-  cat("Filter bounds not provided or cover entire spectrum; skipping bandpower computation.\n")
-}
-
-passband_low <- if (!is.na(band_low)) max(0, band_low) else 0
-passband_high <- if (!is.na(band_high)) min(nyquist, band_high) else nyquist
-has_passband_bounds <- (!is.na(band_low) || !is.na(band_high)) && passband_high > passband_low
-
-if (has_passband_bounds) {
-  cat("Computing band power within passband...\n")
-  passband <- list(passband = c(passband_low, passband_high))
-  pre_pass_list <- lapply(pre_psd, function(psd) {
-    # Within-band comparisons help confirm signal preservation where it matters
-    mtm_bandpower(
-      y = NULL,
-      dt = dt,
-      bands = passband,
-      detrend = "linear",
-      exclude_dc = TRUE,
-      total_band = c(0, nyquist),
-      psd = psd
-    )
-  })
-  post_pass_list <- lapply(post_psd, function(psd) {
-    mtm_bandpower(
-      y = NULL,
-      dt = dt,
-      bands = passband,
-      detrend = "linear",
-      exclude_dc = TRUE,
-      total_band = c(0, nyquist),
-      psd = psd
-    )
-  })
-
-  pre_pass_avg <- .average_bandpower(pre_pass_list)
-  post_pass_avg <- .average_bandpower(post_pass_list)
-
-  passband_diff <- pre_pass_avg %>%
-    select(label, low, high, power_db_pre = power_db, relative_power_pre = relative_power) %>%
-    inner_join(post_pass_avg %>%
-                 select(label, low, high, power_db_post = power_db, relative_power_post = relative_power),
-               by = c("label", "low", "high")) %>%
-    mutate(
-      power_db_change = power_db_post - power_db_pre,
-      relative_power_change = relative_power_post - relative_power_pre,
-      band_type = "passband"
-    )
-
-  power_changes <- passband_diff$power_db_change
-  avg_change_db <- if (all(is.na(power_changes))) NA_real_ else mean(power_changes, na.rm = TRUE)
-  bandpower_results$passband <- passband_diff
-  cat(
-    "Average power change within passband (dB):",
-    if (is.na(avg_change_db)) "NA" else signif(avg_change_db, 4),
-    "\n"
+  list(
+    pre_img = pre_img,
+    post_img = post_img,
+    pre_dims = pre_dims,
+    post_dims = post_dims,
+    mask_idx = mask_idx,
+    mask_coords = mask_coords,
+    mask_dims = mask_dims,
+    n_t = pre_n_t
   )
-  
-  if (!is.na(avg_change_db) && is.finite(avg_change_db) && avg_change_db < -3) {
-    cat("WARNING: Detected a large power change within the passband. Review filtering parameters.\n")
+}
+
+sample_voxels_for_spectra <- function(pre_img, post_img, mask_idx,
+                                      mask_coords, mask_path) {
+  var_tol <- if (is.null(mask_path)) 1e-3 else 2 * .Machine$double.eps
+  default_sample_size <- 100L
+
+  voxels_to_sample <- if (length(mask_idx) <= default_sample_size) {
+    length(mask_idx)
+  } else {
+    default_sample_size
   }
-} else {
-  cat("Passband bounds not provided; skipping passband power comparison.\n")
+
+  get_pre_ts  <- .make_ts_extractor(pre_img, mask_coords)
+  get_post_ts <- .make_ts_extractor(post_img, mask_coords)
+
+  selection <- .select_nonconstant_voxels(
+    mask_idx = mask_idx,
+    get_pre_ts = get_pre_ts,
+    get_post_ts = get_post_ts,
+    n_voxels = voxels_to_sample,
+    var_tol = var_tol
+  )
+
+  selected_idx       <- selection$indices
+  selected_positions <- selection$positions
+
+  if (is.null(mask_path)) {
+    cat("Mask not provided; randomly selected",
+        length(selected_idx),
+        "non-constant voxels with variance >",
+        signif(var_tol, 3),
+        "for multitaper averaging.\n")
+  } else {
+    cat("Selected", length(selected_idx),
+        "mask voxels with variance >", signif(var_tol, 3),
+        "for multitaper averaging.\n")
+  }
+
+  list(
+    selected_idx = selected_idx,
+    selected_positions = selected_positions,
+    get_pre_ts = get_pre_ts,
+    get_post_ts = get_post_ts
+  )
 }
 
-if (length(bandpower_results) > 0) {
-  combined_bandpower <- dplyr::bind_rows(bandpower_results) %>%
-    select(
-      band_type, label, low, high,
-      power_db_pre, relative_power_pre,
-      power_db_post, relative_power_post,
-      power_db_change, relative_power_change
+## ----------------------------------------------------------
+## Multitaper spectra, plots, CSV export
+## ----------------------------------------------------------
+
+compute_multitaper_spectra <- function(selected_positions,
+                                       get_pre_ts, get_post_ts,
+                                       dt, subnum,
+                                       save_spectrum, save_plots,
+                                       band_low, band_high) {
+
+  cat("Computing multitaper spectra for", length(selected_positions),
+      "voxels...\n")
+
+  pre_spectra <- lapply(
+    selected_positions,
+    function(pos) power_multitaper(
+      get_pre_ts(pos),
+      dt = dt,
+      nw = 4,
+      pad_factor = 2
     )
-  bandpower_file <- paste0("bandpower_", subnum, ".csv")
-  write.csv(combined_bandpower, bandpower_file, row.names = FALSE)
-  cat("Bandpower details saved to", bandpower_file, "\n")
+  )
+  post_spectra <- lapply(
+    selected_positions,
+    function(pos) power_multitaper(
+      get_post_ts(pos),
+      dt = dt,
+      nw = 4,
+      pad_factor = 2
+    )
+  )
+
+  pre_psd  <- lapply(pre_spectra, .extract_psd_linear)
+  post_psd <- lapply(post_spectra, .extract_psd_linear)
+
+  mt_pre  <- .average_multitaper_spectra(pre_spectra)
+  mt_post <- .average_multitaper_spectra(post_spectra)
+
+  file_prefix       <- paste0("multitaper_spectrum_", subnum)
+  pre_out_file_mtap <- paste0(file_prefix, "_pre.csv")
+  post_out_file_mtap <- paste0(file_prefix, "_post.csv")
+
+  mt_diff <- mt_pre %>%
+    inner_join(mt_post, by = "freq", suffix = c("_pre", "_post")) %>%
+    mutate(power_diff_db = power_db_pre - power_db_post)
+
+  diff_out_file <- paste0(file_prefix, "_diff.csv")
+
+  if (save_spectrum) {
+    write.csv(mt_pre,  pre_out_file_mtap,  row.names = FALSE)
+    write.csv(mt_post, post_out_file_mtap, row.names = FALSE)
+    write.csv(mt_diff, diff_out_file,      row.names = FALSE)
+    cat("Saved multitaper spectra to", pre_out_file_mtap, "and",
+        post_out_file_mtap, "\n")
+    cat("Saved multitaper difference to", diff_out_file, "\n")
+  } else {
+    cat("Skipping multitaper spectrum export (use --save_spectrum to enable).\n")
+  }
+
+  if (save_plots) {
+    spectrum_out_file <- paste0(file_prefix, "_pre_post.png")
+    spectrum_df <- dplyr::bind_rows(
+      dplyr::mutate(mt_pre,  series = "Pre-filter"),
+      dplyr::mutate(mt_post, series = "Post-filter")
+    )
+
+    spectrum_plot <- ggplot(spectrum_df,
+                            aes(x = freq, y = power_db, color = series)) +
+      geom_line(linewidth = 1) +
+      labs(
+        title = paste("Smoothed Multitaper Spectrum | Subject", subnum),
+        x = "Frequency (Hz)",
+        y = "Power (dB)",
+        color = NULL
+      ) +
+      scale_color_manual(values = c(
+        "Pre-filter"  = "steelblue",
+        "Post-filter" = "firebrick"
+      )) +
+      theme_minimal(base_size = 14) +
+      theme(legend.position = "top")
+
+    cutoff_freqs <- c(
+      if (!is.na(band_low)) band_low else NULL,
+      if (!is.na(band_high)) band_high else NULL
+    )
+
+    if (length(cutoff_freqs) > 0) {
+      spectrum_plot <- spectrum_plot +
+        geom_vline(xintercept = cutoff_freqs,
+                   linetype = "dashed",
+                   color = "gray40",
+                   linewidth = 0.7)
+    }
+
+    ggsave(filename = spectrum_out_file, plot = spectrum_plot,
+           width = 8, height = 6, units = "in", dpi = 300)
+    cat("Saved multitaper spectrum plot to", spectrum_out_file, "\n")
+
+    diff_plot_out_file <- paste0(file_prefix, "_diff.png")
+    diff_plot <- ggplot(mt_diff, aes(x = freq, y = power_diff_db)) +
+      geom_line(color = "navy", linewidth = 1) +
+      geom_hline(yintercept = 0,
+                 color = "gray70",
+                 linetype = "dotted") +
+      labs(
+        title = paste("Multitaper Power Difference (Pre - Post) | Subject",
+                      subnum),
+        x = "Frequency (Hz)",
+        y = "Power Difference (dB)"
+      ) +
+      theme_minimal(base_size = 14)
+
+    if (length(cutoff_freqs) > 0) {
+      diff_plot <- diff_plot +
+        geom_vline(xintercept = cutoff_freqs,
+                   linetype = "dashed",
+                   color = "gray40",
+                   linewidth = 0.7)
+    }
+
+    ggsave(filename = diff_plot_out_file, plot = diff_plot,
+           width = 8, height = 6, units = "in", dpi = 300)
+    cat("Saved multitaper power difference plot to", diff_plot_out_file, "\n")
+  } else {
+    cat("Skipping plot export (use --save_plots to enable).\n")
+  }
+
+  list(pre_psd = pre_psd, post_psd = post_psd)
 }
 
-cat("\nCompleted:", format(Sys.time()), "\n")
+## ----------------------------------------------------------
+## Bandpower summaries + QC metrics
+## ----------------------------------------------------------
+
+compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
+                                        band_low, band_high) {
+  nyquist <- 1 / (2 * dt)
+  outside_bands <- list()
+  bandpower_results <- list()
+  metrics <- list(
+    outside_avg_reduction_db = NA_real_,
+    passband_avg_change_db = NA_real_
+  )
+
+  if (!is.na(band_low) && band_low > 0) {
+    outside_bands$below <- c(0, max(0, band_low))
+  }
+  if (!is.na(band_high) && band_high < nyquist) {
+    outside_bands$above <- c(min(band_high, nyquist), nyquist)
+  }
+
+  if (length(outside_bands) > 0) {
+    cat("Computing band power outside filter bounds...\n")
+
+    pre_bp_list <- lapply(pre_psd, function(psd) {
+      mtm_bandpower(
+        y = NULL,
+        dt = dt,
+        bands = outside_bands,
+        detrend = "linear",
+        exclude_dc = TRUE,
+        total_band = c(0, nyquist),
+        psd = psd
+      )
+    })
+
+    post_bp_list <- lapply(post_psd, function(psd) {
+      mtm_bandpower(
+        y = NULL,
+        dt = dt,
+        bands = outside_bands,
+        detrend = "linear",
+        exclude_dc = TRUE,
+        total_band = c(0, nyquist),
+        psd = psd
+      )
+    })
+
+    pre_bp_avg  <- .average_bandpower(pre_bp_list)
+    post_bp_avg <- .average_bandpower(post_bp_list)
+
+    bandpower_diff <- pre_bp_avg %>%
+      select(label, low, high,
+             power_db_pre = power_db,
+             relative_power_pre = relative_power) %>%
+      inner_join(
+        post_bp_avg %>%
+          select(label, low, high,
+                 power_db_post = power_db,
+                 relative_power_post = relative_power),
+        by = c("label", "low", "high")
+      ) %>%
+      mutate(
+        power_db_change = power_db_post - power_db_pre,
+        relative_power_change = relative_power_post - relative_power_pre,
+        band_type = "outside"
+      )
+
+    avg_reduction <- mean(
+      bandpower_diff$power_db_pre - bandpower_diff$power_db_post,
+      na.rm = TRUE
+    )
+
+    metrics$outside_avg_reduction_db <- if (is.nan(avg_reduction)) NA_real_ else avg_reduction
+    bandpower_results$outside <- bandpower_diff
+
+    cat("Average power reduction outside bands (dB):",
+        .format_stopband_reduction(metrics$outside_avg_reduction_db), "\n")
+  } else {
+    cat("Filter bounds not provided or cover entire spectrum; ",
+        "skipping outside-band bandpower computation.\n", sep = "")
+  }
+
+  passband_low  <- if (!is.na(band_low)) max(0, band_low) else 0
+  passband_high <- if (!is.na(band_high)) min(nyquist, band_high) else nyquist
+  has_passband_bounds <- (!is.na(band_low) || !is.na(band_high)) &&
+    passband_high > passband_low
+
+  if (has_passband_bounds) {
+    cat("Computing band power within passband...\n")
+    passband <- list(passband = c(passband_low, passband_high))
+
+    pre_pass_list <- lapply(pre_psd, function(psd) {
+      mtm_bandpower(
+        y = NULL,
+        dt = dt,
+        bands = passband,
+        detrend = "linear",
+        exclude_dc = TRUE,
+        total_band = c(0, nyquist),
+        psd = psd
+      )
+    })
+
+    post_pass_list <- lapply(post_psd, function(psd) {
+      mtm_bandpower(
+        y = NULL,
+        dt = dt,
+        bands = passband,
+        detrend = "linear",
+        exclude_dc = TRUE,
+        total_band = c(0, nyquist),
+        psd = psd
+      )
+    })
+
+    pre_pass_avg  <- .average_bandpower(pre_pass_list)
+    post_pass_avg <- .average_bandpower(post_pass_list)
+
+    passband_diff <- pre_pass_avg %>%
+      select(label, low, high,
+             power_db_pre = power_db,
+             relative_power_pre = relative_power) %>%
+      inner_join(
+        post_pass_avg %>%
+          select(label, low, high,
+                 power_db_post = power_db,
+                 relative_power_post = relative_power),
+        by = c("label", "low", "high")
+      ) %>%
+      mutate(
+        power_db_change = power_db_post - power_db_pre,
+        relative_power_change = relative_power_post - relative_power_pre,
+        band_type = "passband"
+      )
+
+    power_changes <- passband_diff$power_db_change
+    avg_change_db <- if (all(is.na(power_changes))) {
+      NA_real_
+    } else {
+      mean(power_changes, na.rm = TRUE)
+    }
+
+    metrics$passband_avg_change_db <- avg_change_db
+    bandpower_results$passband <- passband_diff
+
+    cat("Average power change within passband (dB):",
+        .format_passband_change(avg_change_db), "\n")
+  } else {
+    cat("Passband bounds not provided; skipping passband power comparison.\n")
+  }
+
+  list(results = bandpower_results, metrics = metrics)
+}
+
+## ----------------------------------------------------------
+## QC: automated PASS/FAIL based on bandpower metrics
+## ----------------------------------------------------------
+
+evaluate_filter_qc <- function(metrics,
+                               min_stopband_reduction_db = 10,
+                               max_passband_reduction_db = 3) {
+  status <- "PASS"
+  messages <- character()
+
+  outside_red <- metrics$outside_avg_reduction_db
+  passband_chg <- metrics$passband_avg_change_db
+
+  if (!is.null(outside_red) && is.finite(outside_red)) {
+    if (outside_red < min_stopband_reduction_db) {
+      status <- "FAIL"
+      messages <- c(
+        messages,
+        sprintf(
+          "Insufficient attenuation outside band: average reduction %s dB (threshold %.1f dB).",
+          .format_stopband_reduction(outside_red), min_stopband_reduction_db
+        )
+      )
+    }
+  } else {
+    messages <- c(
+      messages,
+      "Stopband attenuation could not be estimated (no frequencies outside band or NA values)."
+    )
+  }
+
+  if (!is.null(passband_chg) && is.finite(passband_chg)) {
+    if (passband_chg < -max_passband_reduction_db) {
+      status <- "FAIL"
+      messages <- c(
+        messages,
+        sprintf(
+          "Excessive attenuation in passband: average change %s dB (max allowed reduction %.1f dB).",
+          .format_passband_change(passband_chg), max_passband_reduction_db
+        )
+      )
+    }
+  } else {
+    messages <- c(
+      messages,
+      "Passband change could not be estimated (no passband bounds or NA values)."
+    )
+  }
+
+  list(status = status, messages = messages)
+}
+
+## ----------------------------------------------------------
+## Main driver
+## ----------------------------------------------------------
+
+main <- function() {
+  args <- parse_args()
+
+  if (!is.na(args$seed)) {
+    set.seed(args$seed)
+    cat("Sampling seed set to", args$seed, "\n")
+  }
+
+  log_info <- setup_logging(args$subnum, args$log_output)
+  log_file <- NULL
+
+  if (!is.null(log_info)) {
+    log_file <- log_info$file
+    on.exit({
+      # Ensure sinks are restored to the prior depth even if the script errors
+      while (sink.number() > log_info$depth) sink()
+    }, add = TRUE)
+  }
+
+  cat("----- MRI Temporal Filtering Check Log -----\n")
+  cat("Started:", format(Sys.time()), "\n\n")
+
+  if (!is.null(log_file)) {
+    cat("Logging all output to", log_file, "\n\n")
+  }
+
+  cat("Subject:", args$subnum, "\n")
+  cat("Pre path:", args$pre_path, "\n")
+  cat("Post path:", args$post_path, "\n")
+  cat("Mask path:", ifelse(is.null(args$mask_path), "None", args$mask_path), "\n")
+  cat("TR (dt):", args$dt, "\n")
+  cat("Save plots:", args$save_plots, "\n")
+  cat("Save spectrum:", args$save_spectrum, "\n")
+  cat("Band low (Hz):", ifelse(is.na(args$band_low), "NA", args$band_low), "\n")
+  cat("Band high (Hz):", ifelse(is.na(args$band_high), "NA", args$band_high), "\n")
+  cat("Min stopband reduction (dB):", args$min_stopband_reduction_db, "\n")
+  cat("Max passband reduction (dB):", args$max_passband_reduction_db, "\n\n")
+
+  img_info <- load_images_and_mask(
+    pre_path = args$pre_path,
+    post_path = args$post_path,
+    mask_path = args$mask_path
+  )
+
+  voxel_info <- sample_voxels_for_spectra(
+    pre_img = img_info$pre_img,
+    post_img = img_info$post_img,
+    mask_idx = img_info$mask_idx,
+    mask_coords = img_info$mask_coords,
+    mask_path = args$mask_path
+  )
+
+  spectra <- compute_multitaper_spectra(
+    selected_positions = voxel_info$selected_positions,
+    get_pre_ts = voxel_info$get_pre_ts,
+    get_post_ts = voxel_info$get_post_ts,
+    dt = args$dt,
+    subnum = args$subnum,
+    save_spectrum = args$save_spectrum,
+    save_plots = args$save_plots,
+    band_low = args$band_low,
+    band_high = args$band_high
+  )
+
+  bp <- compute_bandpower_summaries(
+    pre_psd = spectra$pre_psd,
+    post_psd = spectra$post_psd,
+    dt = args$dt,
+    band_low = args$band_low,
+    band_high = args$band_high
+  )
+
+  bandpower_results <- bp$results
+  metrics <- bp$metrics
+
+  if (length(bandpower_results) > 0) {
+    combined_bandpower <- dplyr::bind_rows(bandpower_results) %>%
+      dplyr::select(
+        band_type, label, low, high,
+        power_db_pre, relative_power_pre,
+        power_db_post, relative_power_post,
+        power_db_change, relative_power_change
+      )
+
+    bandpower_file <- paste0("bandpower_", args$subnum, ".csv")
+    write.csv(combined_bandpower, bandpower_file, row.names = FALSE)
+    cat("Bandpower details saved to", bandpower_file, "\n")
+  }
+
+  qc <- evaluate_filter_qc(
+    metrics = metrics,
+    min_stopband_reduction_db = args$min_stopband_reduction_db,
+    max_passband_reduction_db = args$max_passband_reduction_db
+  )
+
+  cat("\n----- FILTER QC SUMMARY -----\n")
+  cat("Overall QC status:", qc$status, "\n")
+  cat("Average stopband reduction (dB):",
+      .format_stopband_reduction(metrics$outside_avg_reduction_db), "\n")
+  cat("Average passband change (dB):",
+      .format_passband_change(metrics$passband_avg_change_db), "\n")
+
+  if (length(qc$messages)) {
+    cat("\nQC Notes:\n")
+    for (m in qc$messages) cat("  -", m, "\n")
+  }
+
+  cat("\nCompleted:", format(Sys.time()), "\n")
+
+  exit_code <- if (identical(qc$status, "PASS")) 0L else 1L
+  invisible(exit_code)
+}
+
+if (sys.nframe() == 0L) {
+  status <- main()
+  quit(status = status)
+}
