@@ -163,7 +163,7 @@ parse_args <- function() {
     cat("  Rscript temp_filter_new.R --pre=pre.nii.gz --post=post.nii.gz ",
         "--mask=mask.nii.gz --dt=TR --subnum=ID ",
         "[--save_plots] [--save_spectrum] ",
-        "[--band_low=Hz] [--band_high=Hz] [--seed=INT] [--log] ",
+        "[--passband_low=Hz] [--passband_high=Hz] [--seed=INT] [--log] ",
         "[--min_stopband_reduction_db=NUM] [--max_passband_reduction_db=NUM]\n",
         sep = "")
     cat(
@@ -173,8 +173,8 @@ parse_args <- function() {
       "  --mask=PATH                     Brain mask (matches pre/post dims)",
       "  --dt=NUM                        TR (seconds)",
       "  --subnum=ID                     Subject identifier used in outputs",
-      "  --band_low=NUM                  Low cutoff frequency (Hz)",
-      "  --band_high=NUM                 High cutoff frequency (Hz)",
+      "  --passband_low=NUM              Low edge of retained passband (Hz)",
+      "  --passband_high=NUM             High edge of retained passband (Hz)",
       "  --min_stopband_reduction_db=NUM Minimum acceptable stopband reduction (dB, default 10)",
       "  --max_passband_reduction_db=NUM Maximum acceptable passband reduction (dB, default 3)",
       "  --save_plots                    Save PNG plots",
@@ -217,17 +217,30 @@ parse_args <- function() {
   save_plots    <- get_bool_flag("--save_plots")
   save_spectrum <- get_bool_flag("--save_spectrum")
   seed_arg      <- get_arg("--seed")
-  band_low_arg  <- get_arg("--band_low")
-  band_high_arg <- get_arg("--band_high")
+  passband_low_arg  <- get_arg("--passband_low")
+  passband_high_arg <- get_arg("--passband_high")
   log_output    <- get_bool_flag("--log")
   stopband_thresh_arg <- get_arg("--min_stopband_reduction_db")
   passband_thresh_arg <- get_arg("--max_passband_reduction_db")
 
+  if (any(grepl("^--band_low(=|$)", args))) {
+    stop("Flag '--band_low' has been removed; use '--passband_low'.")
+  }
+  if (any(grepl("^--band_high(=|$)", args))) {
+    stop("Flag '--band_high' has been removed; use '--passband_high'.")
+  }
+
   dt <- suppressWarnings(as.numeric(dt_arg))
   if (is.null(dt_arg) || is.na(dt) || dt <= 0) dt <- NA_real_
 
-  band_low  <- if (is.null(band_low_arg)) NA_real_ else as.numeric(band_low_arg)
-  band_high <- if (is.null(band_high_arg)) NA_real_ else as.numeric(band_high_arg)
+  passband_low  <- if (is.null(passband_low_arg)) NA_real_ else as.numeric(passband_low_arg)
+  passband_high <- if (is.null(passband_high_arg)) NA_real_ else as.numeric(passband_high_arg)
+  if (!is.na(passband_low) && passband_low < 0) {
+    stop("Argument '--passband_low' must be non-negative.")
+  }
+  if (!is.na(passband_high) && passband_high < 0) {
+    stop("Argument '--passband_high' must be non-negative.")
+  }
 
   min_stopband_reduction_db <- if (is.null(stopband_thresh_arg)) {
     10
@@ -270,8 +283,8 @@ parse_args <- function() {
     subnum = subnum,
     save_plots = save_plots,
     save_spectrum = save_spectrum,
-    band_low = band_low,
-    band_high = band_high,
+    passband_low = passband_low,
+    passband_high = passband_high,
     seed = seed,
     log_output = log_output,
     min_stopband_reduction_db = min_stopband_reduction_db,
@@ -412,7 +425,7 @@ compute_multitaper_spectra <- function(selected_positions,
                                        get_pre_ts, get_post_ts,
                                        dt, subnum,
                                        save_spectrum, save_plots,
-                                       band_low, band_high) {
+                                       passband_low, passband_high) {
 
   cat("Computing multitaper spectra for", length(selected_positions),
       "voxels...\n")
@@ -470,8 +483,38 @@ compute_multitaper_spectra <- function(selected_positions,
       dplyr::mutate(mt_post, series = "Post-filter")
     )
 
+    max_freq <- max(c(mt_pre$freq, mt_post$freq), na.rm = TRUE)
+    stopband_ranges <- list()
+    if (!is.na(passband_low) && passband_low > 0) {
+      stopband_ranges[[length(stopband_ranges) + 1L]] <- c(0, passband_low)
+    }
+    if (!is.na(passband_high) && passband_high < max_freq) {
+      stopband_ranges[[length(stopband_ranges) + 1L]] <- c(passband_high, max_freq)
+    }
+    stopband_df <- if (length(stopband_ranges)) {
+      data.frame(
+        xmin = vapply(stopband_ranges, function(x) x[1], numeric(1)),
+        xmax = vapply(stopband_ranges, function(x) x[2], numeric(1))
+      )
+    } else {
+      NULL
+    }
+    caption_text <- if (is.null(stopband_df)) {
+      NULL
+    } else {
+      "Gray shading indicates specified stopband frequencies (filtered out)."
+    }
+
     spectrum_plot <- ggplot(spectrum_df,
                             aes(x = freq, y = power_db, color = series)) +
+      {
+        if (is.null(stopband_df)) NULL else
+          geom_rect(data = stopband_df,
+                    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+                    inherit.aes = FALSE,
+                    fill = "gray90",
+                    alpha = 0.6)
+      } +
       geom_line(linewidth = 1) +
       labs(
         title = paste("Smoothed Multitaper Spectrum | Subject", subnum),
@@ -487,8 +530,8 @@ compute_multitaper_spectra <- function(selected_positions,
       theme(legend.position = "top")
 
     cutoff_freqs <- c(
-      if (!is.na(band_low)) band_low else NULL,
-      if (!is.na(band_high)) band_high else NULL
+      if (!is.na(passband_low)) passband_low else NULL,
+      if (!is.na(passband_high)) passband_high else NULL
     )
 
     if (length(cutoff_freqs) > 0) {
@@ -498,6 +541,9 @@ compute_multitaper_spectra <- function(selected_positions,
                    color = "gray40",
                    linewidth = 0.7)
     }
+    if (!is.null(caption_text)) {
+      spectrum_plot <- spectrum_plot + labs(caption = caption_text)
+    }
 
     ggsave(filename = spectrum_out_file, plot = spectrum_plot,
            width = 8, height = 6, units = "in", dpi = 300)
@@ -505,6 +551,14 @@ compute_multitaper_spectra <- function(selected_positions,
 
     diff_plot_out_file <- paste0(file_prefix, "_diff.png")
     diff_plot <- ggplot(mt_diff, aes(x = freq, y = power_diff_db)) +
+      {
+        if (is.null(stopband_df)) NULL else
+          geom_rect(data = stopband_df,
+                    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+                    inherit.aes = FALSE,
+                    fill = "gray90",
+                    alpha = 0.5)
+      } +
       geom_line(color = "navy", linewidth = 1) +
       geom_hline(yintercept = 0,
                  color = "gray70",
@@ -524,6 +578,9 @@ compute_multitaper_spectra <- function(selected_positions,
                    color = "gray40",
                    linewidth = 0.7)
     }
+    if (!is.null(caption_text)) {
+      diff_plot <- diff_plot + labs(caption = caption_text)
+    }
 
     ggsave(filename = diff_plot_out_file, plot = diff_plot,
            width = 8, height = 6, units = "in", dpi = 300)
@@ -540,7 +597,7 @@ compute_multitaper_spectra <- function(selected_positions,
 ## ----------------------------------------------------------
 
 compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
-                                        band_low, band_high) {
+                                        passband_low, passband_high) {
   nyquist <- 1 / (2 * dt)
   outside_bands <- list()
   bandpower_results <- list()
@@ -548,15 +605,24 @@ compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
     outside_avg_reduction_db = NA_real_,
     passband_avg_change_db = NA_real_
   )
-
-  if (!is.na(band_low) && band_low > 0) {
-    outside_bands$below <- c(0, max(0, band_low))
+  format_band <- function(low, high) {
+    paste0("[", signif(low, 4), ", ", signif(high, 4), "] Hz")
   }
-  if (!is.na(band_high) && band_high < nyquist) {
-    outside_bands$above <- c(min(band_high, nyquist), nyquist)
+
+  if (!is.na(passband_low) && passband_low > 0) {
+    outside_bands$below <- c(0, max(0, passband_low))
+  }
+  if (!is.na(passband_high) && passband_high < nyquist) {
+    outside_bands$above <- c(min(passband_high, nyquist), nyquist)
   }
 
   if (length(outside_bands) > 0) {
+    stopband_desc <- vapply(
+      outside_bands,
+      function(b) format_band(b[1], b[2]),
+      character(1)
+    )
+    cat("Stopband segments: ", paste(stopband_desc, collapse = "; "), "\n", sep = "")
     cat("Computing band power outside filter bounds...\n")
 
     pre_bp_list <- lapply(pre_psd, function(psd) {
@@ -614,18 +680,25 @@ compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
     cat("Average power reduction outside bands (dB):",
         .format_stopband_reduction(metrics$outside_avg_reduction_db), "\n")
   } else {
-    cat("Filter bounds not provided or cover entire spectrum; ",
+    cat("No stopband segments derived from input cutoffs; ",
         "skipping outside-band bandpower computation.\n", sep = "")
   }
 
-  passband_low  <- if (!is.na(band_low)) max(0, band_low) else 0
-  passband_high <- if (!is.na(band_high)) min(nyquist, band_high) else nyquist
-  has_passband_bounds <- (!is.na(band_low) || !is.na(band_high)) &&
-    passband_high > passband_low
+  passband_low_adj  <- if (!is.na(passband_low)) max(0, passband_low) else 0
+  passband_high_adj <- if (!is.na(passband_high)) min(nyquist, passband_high) else nyquist
+  has_passband_bounds <- (!is.na(passband_low) || !is.na(passband_high)) &&
+    passband_high_adj > passband_low_adj
+  passband_label <- format_band(passband_low_adj, passband_high_adj)
+  if (is.na(passband_low) && is.na(passband_high)) {
+    cat("Passband segment: ", passband_label,
+        " (full spectrum; no cutoffs provided)\n", sep = "")
+  } else {
+    cat("Passband segment: ", passband_label, "\n", sep = "")
+  }
 
   if (has_passband_bounds) {
     cat("Computing band power within passband...\n")
-    passband <- list(passband = c(passband_low, passband_high))
+    passband <- list(passband = c(passband_low_adj, passband_high_adj))
 
     pre_pass_list <- lapply(pre_psd, function(psd) {
       mtm_bandpower(
@@ -779,8 +852,8 @@ main <- function() {
   cat("TR (dt):", args$dt, "\n")
   cat("Save plots:", args$save_plots, "\n")
   cat("Save spectrum:", args$save_spectrum, "\n")
-  cat("Band low (Hz):", ifelse(is.na(args$band_low), "NA", args$band_low), "\n")
-  cat("Band high (Hz):", ifelse(is.na(args$band_high), "NA", args$band_high), "\n")
+  cat("Passband low (Hz):", ifelse(is.na(args$passband_low), "NA", args$passband_low), "\n")
+  cat("Passband high (Hz):", ifelse(is.na(args$passband_high), "NA", args$passband_high), "\n")
   cat("Min stopband reduction (dB):", args$min_stopband_reduction_db, "\n")
   cat("Max passband reduction (dB):", args$max_passband_reduction_db, "\n\n")
 
@@ -806,16 +879,16 @@ main <- function() {
     subnum = args$subnum,
     save_spectrum = args$save_spectrum,
     save_plots = args$save_plots,
-    band_low = args$band_low,
-    band_high = args$band_high
+    passband_low = args$passband_low,
+    passband_high = args$passband_high
   )
 
   bp <- compute_bandpower_summaries(
     pre_psd = spectra$pre_psd,
     post_psd = spectra$post_psd,
     dt = args$dt,
-    band_low = args$band_low,
-    band_high = args$band_high
+    passband_low = args$passband_low,
+    passband_high = args$passband_high
   )
 
   bandpower_results <- bp$results
@@ -840,13 +913,28 @@ main <- function() {
     min_stopband_reduction_db = args$min_stopband_reduction_db,
     max_passband_reduction_db = args$max_passband_reduction_db
   )
+  stopband_change_db <- if (is.null(metrics$outside_avg_reduction_db)) {
+    NA_real_
+  } else {
+    -metrics$outside_avg_reduction_db  # post - pre (expect negative if attenuated)
+  }
+  stopband_pass <- !is.null(metrics$outside_avg_reduction_db) &&
+    is.finite(metrics$outside_avg_reduction_db) &&
+    metrics$outside_avg_reduction_db >= args$min_stopband_reduction_db
+
+  passband_change_db <- metrics$passband_avg_change_db
+  passband_pass <- !is.null(passband_change_db) &&
+    is.finite(passband_change_db) &&
+    passband_change_db >= -args$max_passband_reduction_db
 
   cat("\n----- FILTER QC SUMMARY -----\n")
   cat("Overall QC status:", qc$status, "\n")
-  cat("Average stopband reduction (dB):",
-      .format_stopband_reduction(metrics$outside_avg_reduction_db), "\n")
+  cat("Average stopband change (dB):",
+      .format_passband_change(stopband_change_db),
+      if (stopband_pass) "(PASS)" else "(FAIL)", "\n")
   cat("Average passband change (dB):",
-      .format_passband_change(metrics$passband_avg_change_db), "\n")
+      .format_passband_change(passband_change_db),
+      if (passband_pass) "(PASS)" else "(FAIL)", "\n")
 
   if (length(qc$messages)) {
     cat("\nQC Notes:\n")
