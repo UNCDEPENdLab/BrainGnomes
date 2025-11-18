@@ -58,7 +58,8 @@ to match the resolution and spatial dimensions of an fMRIPrep BOLD image.</p>
 <span>  extension <span class="op">=</span> <span class="st">".nii.gz"</span>,</span>
 <span>  interpolation <span class="op">=</span> <span class="st">"nearest"</span>,</span>
 <span>  install_dependencies <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  lg <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -103,6 +104,10 @@ If <code>FALSE</code>, the function will raise an error if dependencies are not 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, overwrite the existing output file (if present).</p></dd>
+
+
+<dt id="arg-lg">lg<a class="anchor" aria-label="anchor" href="#arg-lg"></a></dt>
+<dd><p>Optional lgr logger for emitting warnings/info to the postprocess log.</p></dd>
 
 </dl></div>
     <div class="section level2">

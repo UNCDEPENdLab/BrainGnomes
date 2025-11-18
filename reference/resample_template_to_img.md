@@ -16,7 +16,8 @@ resample_template_to_img(
   extension = ".nii.gz",
   interpolation = "nearest",
   install_dependencies = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  lg = NULL
 )
 ```
 
@@ -63,6 +64,10 @@ resample_template_to_img(
 - overwrite:
 
   Logical. If `TRUE`, overwrite the existing output file (if present).
+
+- lg:
+
+  Optional lgr logger for emitting warnings/info to the postprocess log.
 
 ## Value
 
