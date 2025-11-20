@@ -2,6 +2,7 @@
 
 * Add log messages for key R calls in pipeline, such as lmfit_residuals_4d
 * Implement log levels to allow user to control log detail when calling run_project
+* bug fixes for cases where confound calculate or confound regression are enabled, but no columns are specified
 
 # BrainGnomes 0.7-3
 

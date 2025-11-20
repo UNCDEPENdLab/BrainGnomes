@@ -173,6 +173,11 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     lg = lg
   )
 
+  if (isTRUE(cfg$confound_regression$enable) && is.null(to_regress)) {
+    to_log(lg, "warn", "Confound regression was requested but no regressors were generated; skipping confound_regression step.")
+    processing_sequence <- processing_sequence[processing_sequence != "confound_regression"]
+  }
+
   # expected censor file for scrubbing
   censor_file <- get_censor_file(output_bids_info)
 
