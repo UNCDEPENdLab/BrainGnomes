@@ -417,7 +417,7 @@ truncate_str <- function(x, max_chars = 100, continuation = "...") {
 #' run_fsl_command("fslhd input.nii.gz", intern = TRUE)
 #' }
 #'
-#' @importFrom lgr AppenderConsole AppenderFile get_logger
+#' @importFrom lgr AppenderConsole AppenderFile get_logger_glue
 #' @importFrom checkmate assert_string assert_character assert_flag assert_directory_exists assert_file_exists
 #' @export
 run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE, stop_on_fail=TRUE, log_file=NULL, use_lgr=TRUE, fsl_img=NULL, bind_paths=NULL) {
@@ -436,7 +436,8 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   checkmate::assert_character(bind_paths, null.ok = TRUE)
 
   if (use_lgr) {
-    lg <- lgr::get_logger("run_fsl_command", reset = TRUE) # always get clean config
+    lg <- lgr::get_logger_glue("run_fsl_command")
+    lg$config(NULL) # clear any previous appenders/config to avoid conflicts
     lg$set_propagate(FALSE) # avoid inherited console output
     if (echo) lg$add_appender(lgr::AppenderConsole$new(), name = "console")
     if (!is.null(log_file)) lg$add_appender(lgr::AppenderFile$new(log_file), name = "file")
@@ -757,6 +758,8 @@ resolve_logger <- function(logger = NULL, level = NULL) {
     logger <- lgr::get_logger_glue("BrainGnomes")
   } else if (checkmate::test_string(logger)) {
     logger <- lgr::get_logger_glue(logger)
+  } else if (inherits(logger, "LoggerGlue")) {
+    # already a LoggerGlue; keep configuration as-is
   } else if (inherits(logger, "Logger")) {
     logger_name <- logger$name
     if (is.null(logger_name) || !nzchar(logger_name)) logger_name <- "BrainGnomes"

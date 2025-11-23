@@ -218,14 +218,14 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 #' [`filtfilt_cpp()`] (zero-phase), and optionally writes the updated
 #' confounds table to disk.
 #'
-#' @param confounds_dt A data.table containing confound regressors to filter
+#' @param confounds_df A data frame containing confound regressors to filter.
 #' @param tr The repetition time of the scan sequence in seconds. Used
 #'  to check that the stop band falls within the
 #' @param band_stop_min Lower bound of the notch stop-band, in breaths
 #'  per minute. This will be converted to Hz internally.
 #' @param band_stop_max Upper bound of the notch stop-band, in breaths
 #'  per minute. This will be converted to Hz internally.
-#' @param columns Columns in `confounds_dt` to filter. Defaults to the standard six
+#' @param columns Columns in `confounds_df` to filter. Defaults to the standard six
 #'   rigid-body parameters: `rot_x`, `rot_y`, `rot_z`, `trans_x`,
 #'   `trans_y`, `trans_z`.
 #' @param out_file Optional output path. When provided, the filtered
@@ -242,18 +242,18 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 #' @param lg Optional `Logger` (from `lgr`) used for status messages.
 #'
 #' @return If `out_file` is `NULL`, the filtered confounds are returned
-#'   as a `data.table`. Otherwise the path to `out_file` is returned
+#'   as a data frame. Otherwise the path to `out_file` is returned
 #'   invisibly.
 #'
 #' @keywords internal
 #' @importFrom checkmate assert_file_exists assert_number assert_character assert_string assert_choice assert_flag
 #' @importFrom data.table fread fwrite
-notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, band_stop_max = NULL,
+notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, band_stop_max = NULL,
     columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"), add_poly = TRUE,
     out_file = NULL, padtype = "constant",  padlen = NULL, use_zi = TRUE, lg = NULL) {
 
   # cf. https://github.com/PennLINC/xcp_d/blob/f1d779e842708312df62bb595e870c91b34edd99/xcp_d/utils/confounds.py#L169
-  checkmate::assert_data_table(confounds_dt)
+  checkmate::assert_data_frame(confounds_df, all.missing = TRUE)
   checkmate::assert_number(tr, lower = 0.01)
   checkmate::assert_number(band_stop_min, lower = 0)
   checkmate::assert_number(band_stop_max, lower = 0)
@@ -291,7 +291,7 @@ notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, b
     df
   }
 
-  available_cols <- intersect(columns, names(confounds_dt))
+  available_cols <- intersect(columns, names(confounds_df))
   missing_cols <- setdiff(columns, available_cols)
   if (length(missing_cols) > 0L) {
     to_log(lg, "fatal", "Missing motion columns in confounds: {paste(missing_cols, collapse = ', ')}")
@@ -318,24 +318,24 @@ notch_filter <- function(confounds_dt = NULL, tr = NULL, band_stop_min = NULL, b
   to_log(lg, "info", "Applying notch filter centred at {round(f0, 4)} Hz (Q = {round(Q, 2)}) to {length(available_cols)} motion columns.")
 
   for (col_name in columns) {
-    series <- as.numeric(confounds_dt[[col_name]])
+    series <- as.numeric(confounds_df[[col_name]])
     if (anyNA(series)) {
       to_log(lg, "warn", "Column {col_name} contains missing values; replacing NAs with zeros before filtering.")
       series[is.na(series)] <- 0
     }
     filtered <- filtfilt_cpp(series, b = coeffs$b, a = coeffs$a, padlen = padlen_val, padtype = padtype, use_zi = use_zi)
-    confounds_dt[[col_name]] <- filtered
+    confounds_df[[col_name]] <- filtered
   }
 
   # always recompute derivatives and quadratics after filtering
-  if (add_poly) confounds_dt <- poly_expand(confounds_dt, columns)
+  if (add_poly) confounds_df <- poly_expand(confounds_df, columns)
 
   if (!is.null(out_file)) {
-    data.table::fwrite(confounds_dt, file = out_file, sep = "\t", na = "n/a")
+    data.table::fwrite(confounds_df, file = out_file, sep = "\t", na = "n/a")
     return(invisible(out_file))
   }
 
-  return(confounds_dt)
+  return(confounds_df)
 }
 
 #' Compute framewise displacement from motion parameters
@@ -1083,6 +1083,7 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #'   required Python packages (nibabel, nilearn, templateflow) if they are missing from the active environment.
 #'   If \code{FALSE}, the function will raise an error if dependencies are not found.
 #' @param overwrite Logical. If \code{TRUE}, overwrite the existing output file (if present).
+#' @param lg Optional lgr logger for emitting warnings/info to the postprocess log.
 #'
 #' @details
 #' The appropriate template is inferred from the `space-` entity of the BIDS-formatted input filename.
@@ -1096,6 +1097,7 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #' @return Invisibly returns \code{TRUE} on success. A new NIfTI file is written to \code{output}.
 #'
 #' @importFrom reticulate source_python py_module_available py_install
+#' @importFrom filelock unlock lock
 #' @export
 resample_template_to_img <- function(
     in_file,
@@ -1175,18 +1177,62 @@ resample_template_to_img <- function(
     return(invisible(output)) # don't recreate existing image
   }
 
+  # based on postprocess log, determine log root for parking lock file
+  logger_logs_dir <- function(logger) {
+    log_dir <- path.expand("~") # this is the fallback if the logger doesn't match expectations
+    if (!checkmate::test_class(logger, "Logger")) return(log_dir)
+    primary_dest <- tryCatch(logger$appenders$postprocess_log$destination, error = function(...) NULL)
+    if (!is.null(primary_dest) && nzchar(primary_dest)) {
+      return(tryCatch(
+        suppressWarnings(normalizePath(dirname(primary_dest), winslash = "/", mustWork = FALSE)),
+        error = function(...) {
+          to_log(lg, "warn", "Cannot find log root for lock file based on {primary_dest}")
+          log_dir
+        }
+      ))
+    } else {
+      # fall back to user home directory
+      return(log_dir)
+    }
+  }
+
   required_modules <- c("nibabel", "nilearn", "templateflow")
   missing <- required_modules[!vapply(required_modules, reticulate::py_module_available, logical(1))]
 
   if (length(missing) > 0) {
     if (install_dependencies) {
+      project_logs_dir <- logger_logs_dir(lg)
+      if (!dir.exists(project_logs_dir)) dir.create(project_logs_dir, recursive = TRUE, showWarnings = FALSE)
+
+      lock_file <- file.path(project_logs_dir, "resample_template_to_img.lock")
+      lock_handle <- NULL
+      release_lock <- function() {
+        if (!is.null(lock_handle)) {
+          filelock::unlock(lock_handle)
+          lock_handle <<- NULL
+        }
+      }
+      lock_timeout <- getOption("BrainGnomes.py_install_lock_timeout", 600)
+      lock_handle <- tryCatch(
+        filelock::lock(lock_file, timeout = lock_timeout),
+        error = function(e) {
+          err_msg <- glue(
+            "Unable to acquire dependency installation lock at {lock_file}. ",
+            "Another process may still be installing Python packages. ",
+            "Increase option 'BrainGnomes.py_install_lock_timeout' to wait longer if needed. ",
+            "Original error: {conditionMessage(e)}"
+          )
+          to_log(lg, "error", err_msg)
+        }
+      )
+      on.exit(release_lock(), add = TRUE)
       message("Installing missing Python packages into the active environment...")
       reticulate::py_install(missing)
+      release_lock()
     } else {
-      stop(
-        "The following required Python modules are missing: ", paste(missing, collapse = ", "), "\n",
-        "Please install them in your Python environment (e.g., with pip or reticulate::virtualenv_install).",
-        call. = FALSE
+      to_log(lg, "error",
+        glue("The following required Python modules are missing: {paste(missing, collapse = ', ')}. ",
+        "Please install them in your Python environment (e.g., with pip or reticulate::virtualenv_install).")
       )
     }
   }

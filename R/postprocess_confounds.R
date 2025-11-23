@@ -29,7 +29,9 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   # read confounds file
-  confounds <- data.table::fread(proc_files$confounds, na.strings = c("n/a", "NA", "."))
+  confounds <- data.table::fread(proc_files$confounds,
+                                 na.strings = c("n/a", "NA", "."),
+                                 data.table = FALSE)
 
   # handle filtering of motion parameters for respiratory artifacts, recalculation of framewise_displacement
   motion_filter_cfg <- cfg$motion_filter
@@ -37,7 +39,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
     confounds <- run_logged(
       notch_filter,
-      confounds_dt = confounds,
+      confounds_df = confounds,
       tr = cfg$tr,
       band_stop_min = motion_filter_cfg$band_stop_min,
       band_stop_max = motion_filter_cfg$band_stop_max,
@@ -45,16 +47,15 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       lg = lg,
       fun_label = "motion_notch_filter"
     )
-          
     if (all(motion_cols %in% names(confounds))) {
       head_radius <- cfg$scrubbing$head_radius
       if (is.null(head_radius)) head_radius <- 50
       fd <- framewise_displacement(
-        motion = confounds[, motion_cols, with = FALSE],
+        motion = confounds[, motion_cols, drop = FALSE],
         head_radius = head_radius,
         columns = motion_cols
       )
-      confounds[, framewise_displacement := fd]
+      confounds$framewise_displacement <- fd
       to_log(lg, "info", "Updated framewise_displacement after notch filtering ({motion_filter_cfg$band_stop_min}-{motion_filter_cfg$band_stop_max} BPM).")
     } else {
       to_log(lg, "warn", "Filtered motion parameters available but required columns are missing; cannot recompute framewise displacement.")
@@ -192,7 +193,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     filtered_confounds <- setNames(filtered_confounds, confound_cols)
   } else {
     to_log(lg, "info", "No confound columns were selected; downstream outputs will include only noproc columns (if any).")
-    filtered_confounds <- as.data.frame(confounds[, integer(0), drop = FALSE])
+    filtered_confounds <- confounds[, integer(0), drop = FALSE]
   }
 
   if (isTRUE(cfg$confound_calculate$enable)) {
@@ -207,9 +208,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       df <- filtered_confounds[, integer(0), drop = FALSE]
     }
 
-    if (!is.null(cfg$confound_calculate$noproc_columns) && !is.na(cfg$confound_calculate$noproc_columns)) {
-      present_cols <- intersect(cfg$confound_calculate$noproc_columns, names(confounds))
-      missing_cols <- setdiff(cfg$confound_calculate$noproc_columns, names(confounds))
+    calc_noproc <- cfg$confound_calculate$noproc_columns
+    has_calc_noproc <- !is.null(calc_noproc) && length(calc_noproc) > 0L && any(!is.na(calc_noproc))
+    if (has_calc_noproc) {
+      present_cols <- intersect(calc_noproc, names(confounds))
+      missing_cols <- setdiff(calc_noproc, names(confounds))
 
       if (length(missing_cols) > 0L) {
         to_log(lg, "warn", "The following confound_calculate$noproc_columns were not found in the confounds file and will be ignored: {paste(missing_cols, collapse = ', ')}")
@@ -226,7 +229,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     # timepoints anyhow (since then the spike regressors would be all zero)
     if (isTRUE(cfg$scrubbing$enable) && !isTRUE(cfg$scrubbing$apply) && isTRUE(cfg$scrubbing$add_to_confounds) 
       && exists("spike_mat") && !is.null(spike_mat)) {
-      to_log(lg, "debug", "Adding spike_mat ({ncol(spike_mat) columns) from scrubbing calculation to confounds file")
+      to_log(lg, "debug", "Adding spike_mat ({ncol(spike_mat)} columns) from scrubbing calculation to confounds file")
       df <- cbind(df, spike_mat)
     }
 
@@ -260,9 +263,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       df <- filtered_confounds[, integer(0), drop = FALSE]
     }
 
-    if (!is.null(cfg$confound_regression$noproc_columns) && !is.na(cfg$confound_regression$noproc_columns)) {
-      present_cols <- intersect(cfg$confound_regression$noproc_columns, names(confounds))
-      missing_cols <- setdiff(cfg$confound_regression$noproc_columns, names(confounds))
+    reg_noproc <- cfg$confound_regression$noproc_columns
+    has_reg_noproc <- !is.null(reg_noproc) && length(reg_noproc) > 0L && any(!is.na(reg_noproc))
+    if (has_reg_noproc) {
+      present_cols <- intersect(reg_noproc, names(confounds))
+      missing_cols <- setdiff(reg_noproc, names(confounds))
 
       if (length(missing_cols) > 0L) {
         to_log(lg, "warn", "The following confound_regression$noproc_columns were not found in the confounds file and will be ignored: {paste(missing_cols, collapse = ', ')}")

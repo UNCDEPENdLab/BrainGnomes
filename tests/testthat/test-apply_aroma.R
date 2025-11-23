@@ -28,7 +28,7 @@ test_that("apply_aroma differentiates aggressive and non-aggressive denoising fo
   mixing <- build_mixing_matrix(100L)
   noise_ics <- c(2L, 4L) # regress only a subset of the available components
   mix_path <- file.path(tmpdir, "mixing.tsv")
-  data.table::fwrite(mixing, mix_path, sep = "\t", col.names = FALSE)
+  data.table::fwrite(as.data.frame(mixing), mix_path, sep = "\t", col.names = FALSE)
 
   signal <- 1000 +
     35 * mixing[, 2] +
@@ -87,7 +87,7 @@ test_that("apply_aroma removes AROMA components from confounds using lmfit_resid
   mixing <- build_mixing_matrix(90L)
   noise_ics <- c(2L, 4L)
   mix_path <- file.path(tmpdir, "mixing.tsv")
-  data.table::fwrite(mixing, mix_path, sep = "\t", col.names = FALSE)
+  data.table::fwrite(as.data.frame(mixing), mix_path, sep = "\t", col.names = FALSE)
 
   conf_df <- data.frame(
     conf_a = mixing[, 2] + 0.3 * mixing[, 5] + rnorm(nrow(mixing), sd = 0.05),

@@ -5,7 +5,7 @@
 \title{Notch filter regressors (esp. motion parameters) from the confounds file}
 \usage{
 notch_filter(
-  confounds_dt = NULL,
+  confounds_df = NULL,
   tr = NULL,
   band_stop_min = NULL,
   band_stop_max = NULL,
@@ -19,7 +19,7 @@ notch_filter(
 )
 }
 \arguments{
-\item{confounds_dt}{A data.table containing confound regressors to filter}
+\item{confounds_df}{A data frame containing confound regressors to filter.}
 
 \item{tr}{The repetition time of the scan sequence in seconds. Used
 to check that the stop band falls within the}
@@ -30,7 +30,7 @@ per minute. This will be converted to Hz internally.}
 \item{band_stop_max}{Upper bound of the notch stop-band, in breaths
 per minute. This will be converted to Hz internally.}
 
-\item{columns}{Columns in \code{confounds_dt} to filter. Defaults to the standard six
+\item{columns}{Columns in \code{confounds_df} to filter. Defaults to the standard six
 rigid-body parameters: \code{rot_x}, \code{rot_y}, \code{rot_z}, \code{trans_x},
 \code{trans_y}, \code{trans_z}.}
 
@@ -53,7 +53,7 @@ steady-state conditions (the default in \code{filtfilt_cpp()}).}
 }
 \value{
 If \code{out_file} is \code{NULL}, the filtered confounds are returned
-as a \code{data.table}. Otherwise the path to \code{out_file} is returned
+as a data frame. Otherwise the path to \code{out_file} is returned
 invisibly.
 }
 \description{
