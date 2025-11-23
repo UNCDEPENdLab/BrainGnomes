@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,10 +40,13 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.7-4" id="braingnomes-07-4-development">BrainGnomes 0.7-4 (DEVELOPMENT)<a class="anchor" aria-label="anchor" href="#braingnomes-07-4-development"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.7-4" id="braingnomes-07-4">BrainGnomes 0.7-4<a class="anchor" aria-label="anchor" href="#braingnomes-07-4"></a></h2>
+<p>Released 2025-11-23</p>
 <ul><li>Add log messages for key R calls in pipeline, such as lmfit_residuals_4d</li>
 <li>Implement log levels to allow user to control log detail when calling run_project</li>
 <li>bug fixes for cases where confound calculate or confound regression are enabled, but no columns are specified</li>
+<li>Add file lock mechanism to avoid race condition on reticulate setup in resample_template_to_img</li>
+<li>bug fix for logger glue in run_fsl_command</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-3" id="braingnomes-07-3">BrainGnomes 0.7-3<a class="anchor" aria-label="anchor" href="#braingnomes-07-3"></a></h2>

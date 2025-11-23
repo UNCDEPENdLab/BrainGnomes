@@ -15,7 +15,7 @@ confounds table to disk."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +59,7 @@ confounds table to disk.</p>
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">notch_filter</span><span class="op">(</span></span>
-<span>  confounds_dt <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  confounds_df <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tr <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  band_stop_min <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  band_stop_max <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -77,8 +77,8 @@ confounds table to disk.</p>
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-confounds-dt">confounds_dt<a class="anchor" aria-label="anchor" href="#arg-confounds-dt"></a></dt>
-<dd><p>A data.table containing confound regressors to filter</p></dd>
+<dl><dt id="arg-confounds-df">confounds_df<a class="anchor" aria-label="anchor" href="#arg-confounds-df"></a></dt>
+<dd><p>A data frame containing confound regressors to filter.</p></dd>
 
 
 <dt id="arg-tr">tr<a class="anchor" aria-label="anchor" href="#arg-tr"></a></dt>
@@ -97,7 +97,7 @@ per minute. This will be converted to Hz internally.</p></dd>
 
 
 <dt id="arg-columns">columns<a class="anchor" aria-label="anchor" href="#arg-columns"></a></dt>
-<dd><p>Columns in <code>confounds_dt</code> to filter. Defaults to the standard six
+<dd><p>Columns in <code>confounds_df</code> to filter. Defaults to the standard six
 rigid-body parameters: <code>rot_x</code>, <code>rot_y</code>, <code>rot_z</code>, <code>trans_x</code>,
 <code>trans_y</code>, <code>trans_z</code>.</p></dd>
 
@@ -132,7 +132,7 @@ steady-state conditions (the default in <code><a href="filtfilt_cpp.html">filtfi
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>If <code>out_file</code> is <code>NULL</code>, the filtered confounds are returned
-as a <code>data.table</code>. Otherwise the path to <code>out_file</code> is returned
+as a data frame. Otherwise the path to <code>out_file</code> is returned
 invisibly.</p>
     </div>
 

@@ -10,13 +10,13 @@ Source:
 [`DESCRIPTION`](https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/DESCRIPTION)
 
 Hallquist M (2025). *BrainGnomes: An R package for preprocessing and
-analyzing fMRI data*. R package version 0.7-3,
+analyzing fMRI data*. R package version 0.7-4,
 <https://uncdependlab.github.io/BrainGnomes/>.
 
     @Manual{,
       title = {BrainGnomes: An R package for preprocessing and analyzing fMRI data},
       author = {Michael Hallquist},
       year = {2025},
-      note = {R package version 0.7-3},
+      note = {R package version 0.7-4},
       url = {https://uncdependlab.github.io/BrainGnomes/},
     }

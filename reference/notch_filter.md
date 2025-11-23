@@ -10,7 +10,7 @@ parameters. The function filters the requested columns with
 
 ``` r
 notch_filter(
-  confounds_dt = NULL,
+  confounds_df = NULL,
   tr = NULL,
   band_stop_min = NULL,
   band_stop_max = NULL,
@@ -26,9 +26,9 @@ notch_filter(
 
 ## Arguments
 
-- confounds_dt:
+- confounds_df:
 
-  A data.table containing confound regressors to filter
+  A data frame containing confound regressors to filter.
 
 - tr:
 
@@ -47,7 +47,7 @@ notch_filter(
 
 - columns:
 
-  Columns in `confounds_dt` to filter. Defaults to the standard six
+  Columns in `confounds_df` to filter. Defaults to the standard six
   rigid-body parameters: `rot_x`, `rot_y`, `rot_z`, `trans_x`,
   `trans_y`, `trans_z`.
 
@@ -85,5 +85,5 @@ notch_filter(
 
 ## Value
 
-If `out_file` is `NULL`, the filtered confounds are returned as a
-`data.table`. Otherwise the path to `out_file` is returned invisibly.
+If `out_file` is `NULL`, the filtered confounds are returned as a data
+frame. Otherwise the path to `out_file` is returned invisibly.

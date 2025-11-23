@@ -1,6 +1,8 @@
 # Changelog
 
-## BrainGnomes 0.7-4 (DEVELOPMENT)
+## BrainGnomes 0.7-4
+
+Released 2025-11-23
 
 - Add log messages for key R calls in pipeline, such as
   lmfit_residuals_4d
@@ -8,6 +10,9 @@
   run_project
 - bug fixes for cases where confound calculate or confound regression
   are enabled, but no columns are specified
+- Add file lock mechanism to avoid race condition on reticulate setup in
+  resample_template_to_img
+- bug fix for logger glue in run_fsl_command
 
 ## BrainGnomes 0.7-3
 
