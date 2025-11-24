@@ -25,14 +25,12 @@ diagnose_pipeline <- function(input) {
         "Provided directory does not exist: {.path {input}}"
       )
     }
-    # if input is path to project directory
     proj_dir <- input
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     sqlite_db <- file.path(input, grep(".sqlite", proj_files, value = TRUE))
     input_is_scfg <- FALSE
   }
   else if (checkmate::test_class(input, "bg_project_cfg")) {
-    # if input is scfg object
     proj_dir <- input$metadata$project_directory
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     sqlite_db <- file.path(
@@ -47,7 +45,6 @@ diagnose_pipeline <- function(input) {
   }
 
   if (checkmate::test_file_exists(sqlite_db)) {
-    # make sure job tracking table exists in database
     if (isFALSE(sqlite_table_exists(sqlite_db, "job_tracking"))) {
       cli::cli_abort(
         c("Job tracking table does not exist in SQLite database.",
@@ -80,19 +77,127 @@ diagnose_pipeline <- function(input) {
     )
   }
 
-  ss <- prompt_input(
-    prompt = "Enter which pipeline run to diagnose. The default is the most recent.",
-    default = n_sequences,
+  cli::cli_inform(
+    c("Would you like to view a summary by subject or examine a specific sequence ID?")
+  )
+  
+  view_options <- c(
+    "subject" = cli::col_cyan("View summary by subject (across all runs)"),
+    "sequence" = cli::col_cyan("Examine a specific sequence ID")
+  )
+  
+  cli::cli_ol(view_options)
+  
+  view_choice <- prompt_input(
+    prompt = "Enter 1 for subject summary or 2 for sequence ID",
     type = "integer",
-    lower = min(n_sequences, 1),
-    upper = n_sequences,
+    lower = 1,
+    upper = 2,
+    required = TRUE,
     len = 1
   )
   
-  this_sequence_id <- sequence_ids[ss]
-
-  # find sequence in SQLite database & make sure job was tracked
-  tracking_df <- get_tracked_job_status(sequence_id = this_sequence_id, sqlite_db = sqlite_db)
+  selected_view <- names(view_options)[view_choice]
+  
+  if (selected_view == "subject") {
+    con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+    on.exit(DBI::dbDisconnect(con))
+    all_tracking_df <- DBI::dbGetQuery(con, "SELECT * FROM job_tracking")
+    if (nrow(all_tracking_df) > 0L && "job_obj" %in% names(all_tracking_df)) {
+      all_tracking_df$job_obj <- lapply(all_tracking_df$job_obj, function(x) {
+        if (!is.null(x)) unserialize(x) else NULL
+      })
+    }
+    on.exit(NULL)
+    
+    all_job_names <- unique(all_tracking_df$job_name)
+    subjects <- unique(regmatches(all_job_names, regexpr("sub-[^_]+", all_job_names)))
+    subjects <- subjects[!is.na(subjects) & subjects != ""]
+    subjects <- sort(subjects)
+    
+    if (length(subjects) == 0) {
+      cli::cli_abort("No subjects found in job tracking table.")
+    }
+    
+    cli::cli_inform(
+      c("Found {length(subjects)} subject(s) across all runs.")
+    )
+    
+    cli::cli_ol(paste0(cli::col_green(subjects)))
+    
+    sub_choice <- prompt_input(
+      prompt = "Enter the number corresponding to the subject you want to view",
+      type = "integer",
+      lower = 1,
+      upper = length(subjects),
+      required = TRUE,
+      len = 1
+    )
+    
+    selected_subject <- subjects[sub_choice]
+    
+    subject_jobs_df <- all_tracking_df[grepl(selected_subject, all_tracking_df$job_name), ]
+    
+    if (nrow(subject_jobs_df) == 0) {
+      cli::cli_abort("No jobs found for subject {.val {selected_subject}}")
+    }
+    
+    cli::cli_h3(cli::style_bold(cli::col_cyan("Subject Summary: {selected_subject}")))
+    print_subject_summary_tree(subject_jobs_df, selected_subject)
+    
+    cli::cli_inform(
+      c("Would you like to examine any of these jobs more closely?",
+        "i" = "Type 'yes' to continue, or 'no' to exit now.")
+    )
+    continue <- prompt_input(
+      type = "flag",
+      required = TRUE
+    )
+    
+    if (isFALSE(continue)) {
+      return(invisible(NULL))
+    }
+    
+    subject_sequences <- unique(subject_jobs_df$sequence_id)
+    subject_sequences <- subject_sequences[!is.na(subject_sequences)]
+    
+    if (length(subject_sequences) == 0) {
+      cli::cli_abort("No sequence IDs found for subject {.val {selected_subject}}")
+    }
+    
+    cli::cli_inform(
+      c("Which sequence ID would you like to examine for {.val {selected_subject}}?",
+        "i" = "Found {length(subject_sequences)} sequence ID(s) containing this subject.")
+    )
+    
+    cli::cli_ol(paste0("Sequence ", cli::col_cyan(subject_sequences)))
+    
+    seq_choice <- prompt_input(
+      prompt = "Enter the number corresponding to the sequence ID",
+      type = "integer",
+      lower = 1,
+      upper = length(subject_sequences),
+      required = TRUE,
+      len = 1
+    )
+    
+    this_sequence_id <- subject_sequences[seq_choice]
+    tracking_df <- get_tracked_job_status(sequence_id = this_sequence_id, sqlite_db = sqlite_db)
+    
+  } else {
+    ss <- prompt_input(
+      prompt = "Enter which pipeline run to diagnose. The default is the most recent.",
+      default = n_sequences,
+      type = "integer",
+      lower = min(n_sequences, 1),
+      upper = n_sequences,
+      len = 1
+    )
+    
+    this_sequence_id <- sequence_ids[ss]
+    tracking_df <- get_tracked_job_status(sequence_id = this_sequence_id, sqlite_db = sqlite_db)
+  }
+  
   retrieval_time <- Sys.time()
   
   if (isTRUE(nrow(tracking_df) == 0)) {
@@ -101,7 +206,6 @@ diagnose_pipeline <- function(input) {
     )
   }
   
-  # convert tracking data.frame to data.tree object
   this_sequence_tree <- tracking_df_to_tree(tracking_df)[[this_sequence_id]]
   n_chains <- this_sequence_tree$count
   
@@ -109,7 +213,6 @@ diagnose_pipeline <- function(input) {
     "The run you selected had {n_chains} top-level job{?s}:"
   )
   
-  # Print tree structure
   cli::cli_h3(cli::style_bold(cli::col_cyan("Sequence {this_sequence_id}")))
   print_step_tree_by_type(this_sequence_tree)
   cli::cli_end(id = "sequence_summary")
@@ -132,14 +235,11 @@ diagnose_pipeline <- function(input) {
     return(this_sequence_tree)
   }
 
-  # Build a flat list of all jobs with their display numbers
   job_list <- list()
   counter <- 1
   
-  # Recursive function to number all jobs
   number_jobs <- function(node, level = 0) {
     if (grepl("^Sequence_", node$name) && node$level == 1) {
-      # Skip root, recurse into children
       if (node$count > 0) {
         for (child in node$children) {
           number_jobs(child, level = 0)
@@ -148,11 +248,9 @@ diagnose_pipeline <- function(input) {
       return()
     }
     
-    # Add this job to the list
     job_list[[counter]] <<- list(node = node, level = level, number = counter)
     counter <<- counter + 1
     
-    # Recurse into children
     if (node$count > 0) {
       for (child in node$children) {
         number_jobs(child, level = level + 1)
@@ -178,12 +276,10 @@ diagnose_pipeline <- function(input) {
   
   this_job <- job_list[[job_choice]]$node
   
-  # Job info
   this_job_name <- this_job$name
   this_job_title <- get_step_title(this_job)
   this_job_status <- this_job$status
   
-  # Build status message
   if (this_job_status == "COMPLETED") {
     status_list <- c(
       "...was submitted at {this_job$time_submitted}",
@@ -239,7 +335,6 @@ diagnose_pipeline <- function(input) {
     }
   }
   
-  # Downstream summary (jobs that depend on this one)
   all_nodes <- this_job$root$Get("parent_id", filterFun = data.tree::isNotRoot)
   downstream_nodes <- names(all_nodes[!is.na(all_nodes) & all_nodes == this_job$id])
   n_downstream <- length(downstream_nodes)
@@ -248,12 +343,10 @@ diagnose_pipeline <- function(input) {
     "...had {cli::no(n_downstream)} downstream (dependent) job{?s}"
   )
   
-  # Children summary
   children_message <- c(
     "...had {cli::no(this_job$count)} child job{?s}"
   )
   
-  # Print detailed status
   cli::cli_h3("Job {.code {this_job_name}}...")
   cli::cli_ul(id = "job_summary")
   cli::cli_li(status_list)
@@ -266,9 +359,8 @@ diagnose_pipeline <- function(input) {
     cli::cli_end(ds)
   }
   cli::cli_li(children_message)
-  cli::cli_end("job_summary")
+    cli::cli_end("job_summary")
   
-  # Show children details if they exist
   if (this_job$count > 0) {
     children_status <- sapply(this_job$children, function(x) x$status)
     tab <- table(children_status)
@@ -286,10 +378,7 @@ diagnose_pipeline <- function(input) {
       cli::cli_end(id = "children_list")
     }
   }
-  
 
-
-  # Extract subject folder from job name
   subject_folder <- sub(".*(sub-\\d+).*", "\\1", this_job_name)
   logs_dir <- file.path(proj_dir, "logs", subject_folder)
 
@@ -297,7 +386,6 @@ diagnose_pipeline <- function(input) {
     cli::cli_warn("Logs directory not found for subject {.val {subject_folder}} at {.path {logs_dir}}")
     logs_dir <- NULL
   } else {
-    # Search by job ID (always unique)
     job_id <- this_job$job_id
     
     out_candidates <- list.files(
@@ -328,7 +416,6 @@ diagnose_pipeline <- function(input) {
       "exit" = cli::col_cyan("Exit")
     )
     
-    # spacing
     cli::cli_inform("")
 
     cli::cli_inform("Further diagnosis...")
@@ -393,6 +480,131 @@ diagnose_pipeline <- function(input) {
   return(invisible(NULL))
 }
 
+#' helper for getting job type from job name
+#'
+#' @param job_name Character string job name
+#' @return Character string job type
+#'
+#' @keywords internal
+get_job_type <- function(job_name) {
+  if (grepl("^fsaverage", job_name)) {
+    return("Setup")
+  } else if (grepl("^bids_conversion", job_name)) {
+    return("BIDS Conversion")
+  } else if (grepl("^bids_validation", job_name)) {
+    return("BIDS Validation")
+  } else if (grepl("^mriqc", job_name)) {
+    return("MRIQC")
+  } else if (grepl("^fmriprep", job_name)) {
+    return("fMRIPrep")
+  } else if (grepl("^aroma", job_name)) {
+    return("ICA-AROMA")
+  } else if (grepl("^extract_rois", job_name)) {
+    return("ROI Extraction")
+  } else if (grepl("^postprocess_", job_name)) {
+    stream_match <- regmatches(job_name, regexpr("^postprocess_[^_]+", job_name))
+    return(paste0("Postprocess ", sub("^postprocess_", "", stream_match)))
+  } else {
+    return("Other")
+  }
+}
+
+#' helper for printing subject summary with tree structure showing best status across runs
+#'
+#' @param subject_jobs_df A data.frame of jobs for a specific subject across all sequence IDs
+#' @param subject_id The subject ID being summarized
+#'
+#' @keywords internal
+print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
+  if (nrow(subject_jobs_df) == 0) {
+    cli::cli_inform("No jobs found for this subject.")
+    return(invisible(NULL))
+  }
+  
+  status_priority <- c("COMPLETED" = 5, "STARTED" = 4, "QUEUED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
+  
+  job_summary <- list()
+  
+  for (i in seq_len(nrow(subject_jobs_df))) {
+    job <- subject_jobs_df[i, ]
+    job_name <- job$job_name
+    
+    if (grepl("^fsaverage", job_name)) {
+      next
+    }
+    
+    job_type <- get_job_type(job_name)
+    
+    if (grepl("^postprocess_", job_name)) {
+      stream_match <- regmatches(job_name, regexpr("^postprocess_[^_]+", job_name))
+      group_key <- paste0("Postprocess ", sub("^postprocess_", "", stream_match))
+    } else {
+      group_key <- job_type
+    }
+    
+    if (is.null(job_summary[[group_key]])) {
+      job_summary[[group_key]] <- list()
+    }
+    
+    if (is.null(job_summary[[group_key]][[job_name]])) {
+      job_summary[[group_key]][[job_name]] <- list(
+        statuses = character(),
+        job_ids = character()
+      )
+    }
+    
+    job_summary[[group_key]][[job_name]]$statuses <- c(
+      job_summary[[group_key]][[job_name]]$statuses,
+      as.character(job$status)
+    )
+    job_summary[[group_key]][[job_name]]$job_ids <- c(
+      job_summary[[group_key]][[job_name]]$job_ids,
+      as.character(job$job_id)
+    )
+  }
+  
+  step_order <- c(
+    "BIDS Conversion", "BIDS Validation",
+    "MRIQC", "fMRIPrep", "ICA-AROMA", "ROI Extraction"
+  )
+  
+  ordered_types <- intersect(step_order, names(job_summary))
+  remaining_types <- setdiff(names(job_summary), ordered_types)
+  remaining_types <- setdiff(remaining_types, "Setup")
+  remaining_types <- sort(remaining_types)
+  all_types <- c(ordered_types, remaining_types)
+  
+  cli::cli_h2(cli::col_green("Subject: {subject_id}"))
+  
+  for (type in all_types) {
+    if (is.null(job_summary[[type]])) next
+    
+    cli::cli_text("── {.strong {type}}")
+    cli::cli_ul()
+    
+    for (job_name in names(job_summary[[type]])) {
+      job_info <- job_summary[[type]][[job_name]]
+      
+      status_priorities <- status_priority[job_info$statuses]
+      status_priorities <- status_priorities[!is.na(status_priorities)]
+      
+      if (length(status_priorities) == 0) {
+        best_status <- "UNKNOWN"
+      } else {
+        best_status <- names(status_priority)[status_priority == max(status_priorities)][1]
+      }
+      
+      rep_job_id <- job_info$job_ids[1]
+      
+      sym <- get_status_symbol(best_status)
+      status_colored <- get_status_color(best_status)
+      cli::cli_li("{sym} {job_name} (job {rep_job_id}) [{status_colored}]")
+    }
+    
+    cli::cli_end()
+  }
+}
+
 #' helper for printing step summaries organized by subject then job type
 #'
 #' @param tree_root The root node of the sequence tree
@@ -404,7 +616,6 @@ print_step_tree_by_type <- function(tree_root) {
     return(invisible(NULL))
   }
 
-  # Recursively flatten the tree
   get_all_nodes <- function(node) {
     res <- list(node)
     if (node$count > 0) {
@@ -417,32 +628,6 @@ print_step_tree_by_type <- function(tree_root) {
 
   all_nodes <- unlist(lapply(tree_root$children, get_all_nodes), recursive = FALSE)
 
-  # Map job name → type/section
-  get_job_type <- function(job_name) {
-    if (grepl("^fsaverage", job_name)) {
-      return("Setup")
-    } else if (grepl("^bids_conversion", job_name)) {
-      return("BIDS Conversion")
-    } else if (grepl("^bids_validation", job_name)) {
-      return("BIDS Validation")
-    } else if (grepl("^mriqc", job_name)) {
-      return("MRIQC")
-    } else if (grepl("^fmriprep", job_name)) {
-      return("fMRIPrep")
-    } else if (grepl("^aroma", job_name)) {
-      return("ICA-AROMA")
-    } else if (grepl("^extract_rois", job_name)) {
-      return("ROI Extraction")
-    } else if (grepl("^postprocess_", job_name)) {
-      # Anything starting with postprocess_ gets its own section
-      stream_match <- regmatches(job_name, regexpr("^postprocess_[^_]+", job_name))
-      return(paste0("Postprocess ", sub("^postprocess_", "", stream_match)))
-    } else {
-      return("Other")
-    }
-  }
-
-  # First, collect all fsaverage_setup jobs (global jobs)
   fsaverage_jobs <- list()
   for (job in all_nodes) {
     job_name <- job$name
@@ -451,7 +636,6 @@ print_step_tree_by_type <- function(tree_root) {
     }
   }
 
-  # Organize by subject and section
   subject_jobs <- list()
   for (job in all_nodes) {
     job_name <- job$name
@@ -466,21 +650,17 @@ print_step_tree_by_type <- function(tree_root) {
     subject_jobs[[sub_id]][[type]][[length(subject_jobs[[sub_id]][[type]]) + 1]] <- job
   }
 
-  # Add fsaverage_setup jobs to each subject's Setup section (only if fsaverage jobs exist)
   if (length(fsaverage_jobs) > 0) {
     for (sub_id in names(subject_jobs)) {
       if (is.null(subject_jobs[[sub_id]][["Setup"]])) {
         subject_jobs[[sub_id]][["Setup"]] <- list()
       }
-      # Prepend fsaverage jobs to Setup section
       subject_jobs[[sub_id]][["Setup"]] <- c(fsaverage_jobs, subject_jobs[[sub_id]][["Setup"]])
     }
   }
 
-  # Track jobs shown as children to avoid duplicates
   shown_as_children <- character()
 
-  # Print
   for (sub_id in sort(names(subject_jobs))) {
     cli::cli_h2(cli::col_green("Subject: {sub_id}"))
     job_types <- subject_jobs[[sub_id]]
@@ -494,15 +674,12 @@ print_step_tree_by_type <- function(tree_root) {
     all_types <- c(ordered_types, remaining_types)
 
     for (type in all_types) {
-      # Check if there are any jobs to show in this section
       jobs_to_show <- list()
       for (job in job_types[[type]]) {
-        # Skip if already shown as a child
         if (job$name %in% shown_as_children) {
           next
         }
 
-        # Only print parent postprocess jobs at top level
         if (grepl("^postprocess_", job$name) &&
             !is.null(job$parent) &&
             grepl("^postprocess_", job$parent$name)) {
@@ -512,7 +689,6 @@ print_step_tree_by_type <- function(tree_root) {
         jobs_to_show[[length(jobs_to_show) + 1]] <- job
       }
 
-      # Only show section if there are jobs to display
       if (length(jobs_to_show) == 0) {
         next
       }
@@ -524,18 +700,15 @@ print_step_tree_by_type <- function(tree_root) {
         status_colored <- get_status_color(job$status)
         cli::cli_li("{sym} {job$name} (job {job$job_id}) [{status_colored}]")
 
-        # Recursively print children that match parent prefix
         print_children <- function(parent, indent = "  └─ ") {
           parent_parts <- strsplit(parent$name, "_")[[1]]
           if (parent_parts[1] == "postprocess") {
-            # For postprocess, match any postprocess_ child
             parent_pref <- "postprocess"
           } else {
             parent_pref <- parent_parts[1]
           }
           
           for (child in parent$children) {
-            # Only show children that start with parent prefix followed by underscore
             if (startsWith(child$name, paste0(parent_pref, "_"))) {
               sym_c <- get_status_symbol(child$status)
               status_colored_c <- get_status_color(child$status)
@@ -586,7 +759,7 @@ get_status_color <- Vectorize(
            "STARTED" = cli::col_yellow(status),
            "FAILED" = cli::col_red(status),
            "FAILED_BY_EXT" = cli::col_red(status),
-           status) # default: return as-is
+           status)
   },
   USE.NAMES = FALSE
   )
