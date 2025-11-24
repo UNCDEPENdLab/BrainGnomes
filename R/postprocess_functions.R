@@ -1166,7 +1166,7 @@ resample_template_to_img <- function(
   if (!is_template_space) {
     native_mask <- file.path(
       dirname(in_file),
-      construct_bids_filename(modifyList(f_info, list(desc = "brain", suffix = "mask")))
+      construct_bids_filename(modifyList(f_info, list(description = "brain", suffix = "mask")))
     )
     to_log(lg, "warn", "Requested template mask, but space '{space_label}' is not a TemplateFlow space. Using the run-specific brain mask instead.")
     if (file.exists(native_mask)) return(invisible(native_mask))
