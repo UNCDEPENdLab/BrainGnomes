@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.7-4/DESCRIPTION)
 
 Hallquist M (2025). *BrainGnomes: An R package for preprocessing and
 analyzing fMRI data*. R package version 0.7-4,
