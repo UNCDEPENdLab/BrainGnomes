@@ -28,7 +28,6 @@ diagnose_pipeline <- function(input) {
     proj_dir <- input
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     sqlite_db <- file.path(input, grep(".sqlite", proj_files, value = TRUE))
-    input_is_scfg <- FALSE
   }
   else if (checkmate::test_class(input, "bg_project_cfg")) {
     proj_dir <- input$metadata$project_directory
@@ -37,7 +36,6 @@ diagnose_pipeline <- function(input) {
       proj_dir,
       grep(".sqlite", proj_files, value = TRUE)
     )
-    input_is_scfg <- TRUE
   } else {
     cli::cli_abort(
       "Input must be either a path to a project directory or an scfg object."
