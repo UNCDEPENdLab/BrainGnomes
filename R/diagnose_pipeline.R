@@ -549,7 +549,8 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
     if (is.null(job_summary[[group_key]][[job_name]])) {
       job_summary[[group_key]][[job_name]] <- list(
         statuses = character(),
-        job_ids = character()
+        job_ids = character(),
+        sequence_ids = character()
       )
     }
     
@@ -560,6 +561,10 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
     job_summary[[group_key]][[job_name]]$job_ids <- c(
       job_summary[[group_key]][[job_name]]$job_ids,
       as.character(job$job_id)
+    )
+    job_summary[[group_key]][[job_name]]$sequence_ids <- c(
+      job_summary[[group_key]][[job_name]]$sequence_ids,
+      as.character(job$sequence_id)
     )
   }
   
@@ -590,15 +595,19 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
       
       if (length(status_priorities) == 0) {
         best_status <- "UNKNOWN"
+        rep_job_id <- job_info$job_ids[1]
+        rep_sequence_id <- job_info$sequence_ids[1]
       } else {
-        best_status <- names(status_priority)[status_priority == max(status_priorities)][1]
+        best_priority <- max(status_priorities)
+        best_status <- names(status_priority)[status_priority == best_priority][1]
+        best_idx <- which(status_priorities == best_priority)[1]
+        rep_job_id <- job_info$job_ids[best_idx]
+        rep_sequence_id <- job_info$sequence_ids[best_idx]
       }
-      
-      rep_job_id <- job_info$job_ids[1]
       
       sym <- get_status_symbol(best_status)
       status_colored <- get_status_color(best_status)
-      cli::cli_li("{sym} {job_name} (job {rep_job_id}) [{status_colored}]")
+      cli::cli_li("{sym} {job_name} (job {cli::col_cyan(rep_job_id)}, sequence {cli::col_magenta(rep_sequence_id)}) [{status_colored}]")
     }
     
     cli::cli_end()
