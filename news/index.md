@@ -1,5 +1,10 @@
 # Changelog
 
+## BrainGnomes 0.7-5
+
+- Use the `scratch_directory` for postprocessing images to avoid
+  collisions and ensure that intermediates do not clog the output folder
+
 ## BrainGnomes 0.7-4
 
 Released 2025-11-23

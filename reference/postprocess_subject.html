@@ -13,7 +13,7 @@ a filtered confounds file for downstream analyses."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -42,7 +42,7 @@ a filtered confounds file for downstream analyses."></head><body>
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Postprocess a single fMRI BOLD image using a configured pipeline</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.7-4/R/postprocess_subject.R" class="external-link"><code>R/postprocess_subject.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/postprocess_subject.R" class="external-link"><code>R/postprocess_subject.R</code></a></small>
       <div class="d-none name"><code>postprocess_subject.Rd</code></div>
     </div>
 
@@ -80,12 +80,14 @@ and logging to a subject-level log file.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The processing sequence can be enforced by the user (<code>force_processing_order = TRUE</code>) or determined dynamically based
-on the <code>enable</code> flags in the configuration. Intermediate NIfTI and confound files may be deleted to save disk space,
-depending on the <code>keep_intermediates</code> setting. Logging is handled via the <code>lgr</code> package and is directed to subject-specific
-log files inferred from BIDS metadata.</p>
+on the <code>enable</code> flags in the configuration. Intermediate NIfTI and confound files are staged in a scratch workspace
+(under <code>cfg$scratch_directory</code>) and final outputs are written or moved to the postprocessing output directory. Logging is
+handled via the <code>lgr</code> package and is directed to subject-specific log files inferred from BIDS metadata.</p>
 <p>Required <code>cfg</code> entries:</p><ul><li><p><code>tr</code>: Repetition time in seconds.</p></li>
 <li><p><code>bids_desc</code>: A BIDS-compliant <code>desc</code> label for the output filename.</p></li>
 <li><p><code>processing_steps</code>: Optional character vector specifying processing order (if <code>force_processing_order = TRUE</code>).</p></li>
+<li><p><code>scratch_directory</code>: Optional directory used for staging intermediate files (defaults to <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code> if unset).</p></li>
+<li><p><code>project_name</code>: Optional project label used to organize scratch workspaces.</p></li>
 </ul><p>Optional steps controlled by <code>cfg$&lt;step&gt;$enable</code>:</p><ul><li><p><code>apply_mask</code></p></li>
 <li><p><code>spatial_smooth</code></p></li>
 <li><p><code>apply_aroma</code></p></li>
