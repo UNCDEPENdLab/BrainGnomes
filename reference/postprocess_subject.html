@@ -80,13 +80,13 @@ and logging to a subject-level log file.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The processing sequence can be enforced by the user (<code>force_processing_order = TRUE</code>) or determined dynamically based
-on the <code>enable</code> flags in the configuration. Intermediate NIfTI and confound files are staged in a scratch workspace
-(under <code>cfg$scratch_directory</code>) and final outputs are written or moved to the postprocessing output directory. Logging is
-handled via the <code>lgr</code> package and is directed to subject-specific log files inferred from BIDS metadata.</p>
+on the <code>enable</code> flags in the configuration. Intermediate NIfTI and confound files are staged inside a scratch workspace
+(located under <code>cfg$scratch_directory</code>) and final outputs are written or moved into the postprocessing output directory.
+Logging is handled via the <code>lgr</code> package and is directed to subject-specific log files inferred from BIDS metadata.</p>
 <p>Required <code>cfg</code> entries:</p><ul><li><p><code>tr</code>: Repetition time in seconds.</p></li>
 <li><p><code>bids_desc</code>: A BIDS-compliant <code>desc</code> label for the output filename.</p></li>
 <li><p><code>processing_steps</code>: Optional character vector specifying processing order (if <code>force_processing_order = TRUE</code>).</p></li>
-<li><p><code>scratch_directory</code>: Optional directory used for staging intermediate files (defaults to <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code> if unset).</p></li>
+<li><p><code>scratch_directory</code>: Optional directory for staging intermediate files (defaults to <code><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir()</a></code> if unset).</p></li>
 <li><p><code>project_name</code>: Optional project label used to organize scratch workspaces.</p></li>
 </ul><p>Optional steps controlled by <code>cfg$&lt;step&gt;$enable</code>:</p><ul><li><p><code>apply_mask</code></p></li>
 <li><p><code>spatial_smooth</code></p></li>

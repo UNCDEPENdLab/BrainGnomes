@@ -39,10 +39,11 @@ subject-level log file.
 The processing sequence can be enforced by the user
 (`force_processing_order = TRUE`) or determined dynamically based on the
 `enable` flags in the configuration. Intermediate NIfTI and confound
-files are staged in a scratch workspace (under `cfg$scratch_directory`)
-and final outputs are written or moved to the postprocessing output
-directory. Logging is handled via the `lgr` package and is directed to
-subject-specific log files inferred from BIDS metadata.
+files are staged inside a scratch workspace (located under
+`cfg$scratch_directory`) and final outputs are written or moved into the
+postprocessing output directory. Logging is handled via the `lgr`
+package and is directed to subject-specific log files inferred from BIDS
+metadata.
 
 Required `cfg` entries:
 
@@ -53,9 +54,9 @@ Required `cfg` entries:
 - `processing_steps`: Optional character vector specifying processing
   order (if `force_processing_order = TRUE`).
 
-- `scratch_directory`: Optional directory used for staging intermediate
-  files (defaults to [`tempdir()`](https://rdrr.io/r/base/tempfile.html)
-  if unset).
+- `scratch_directory`: Optional directory for staging intermediate files
+  (defaults to [`tempdir()`](https://rdrr.io/r/base/tempfile.html) if
+  unset).
 
 - `project_name`: Optional project label used to organize scratch
   workspaces.
