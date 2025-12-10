@@ -1,7 +1,7 @@
 Package: BrainGnomes
 Title: An R package for preprocessing and analyzing fMRI data
-Version: 0.7-4
-Date: 2025-11-23
+Version: 0.7-5
+Date: 2025-12-10
 Authors@R: 
     person("Michael", "Hallquist", email="michael.hallquist@gmail.com", role = c("aut", "cre"))
 Description: This R package handles preprocessing of fMRI data on HPC clusters.

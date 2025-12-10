@@ -494,6 +494,8 @@ submit_postprocess <- function(
   pp_cfg$fsl_img <- scfg$compute_environment$fsl_container
   pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
   pp_cfg$output_dir <- out_dir
+  pp_cfg$scratch_directory <- scfg$metadata$scratch_directory
+  pp_cfg$project_name <- scfg$metadata$project_name
   # drop postproc scheduling arguments from fields before converting to cli argument string for postprocess_cli.R
   pp_cfg$nhours <- pp_cfg$ncores <- pp_cfg$cli_options <- pp_cfg$sched_args <- pp_cfg$sched_args <- NULL
   postprocess_cli <- nested_list_to_args(pp_cfg, collapse = TRUE) # create command line for calling postprocessing R script

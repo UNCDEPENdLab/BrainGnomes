@@ -191,6 +191,9 @@ setup_postprocess_streams <- function(scfg = list(), fields = NULL) {
     if (!any(grepl("^postprocess/", fields))) return(scfg) # fields are present, but not relevant to postproc -- skip out
     
     postprocess_fields <- grep("^postprocess/", fields, value = TRUE)
+    # handle global enable separately to avoid treating it as a stream name
+    postprocess_fields <- setdiff(postprocess_fields, "postprocess/enable")
+    if (length(postprocess_fields) == 0L) return(scfg)
 
     # Extract stream and setting using sub()
     # stream_setting <- sub("^postprocess/", "", postprocess_fields)
