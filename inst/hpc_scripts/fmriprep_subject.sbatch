@@ -95,10 +95,15 @@ rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_hom
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
-rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
-  -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" \
-  "$loc_bids_root" "$loc_mrproc_root/" participant \
-  $cli_options & # all options setup by submit_fmriprep()
+# disable ERR trap in the subshell so fmriprep's non-zero exit (even on success) does not write a fail file
+(
+  set +eE
+  trap - ERR
+  rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
+    -B "$loc_mrproc_root" -B "$templateflow_home" -B "$fs_dir" "$fmriprep_container" \
+    "$loc_bids_root" "$loc_mrproc_root/" participant \
+    $cli_options # all options setup by submit_fmriprep()
+) &
 cmd_pid=$!
 
 cmd_status=0
@@ -110,8 +115,13 @@ success=$(grep -q "fMRIPrep finished successfully!" "$stdout_log" && echo 0 || e
 
 log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
 
-# [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+if [[ $success -eq 0 ]]; then
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+else
+  fail_file="${complete_file%_complete}_fail"
+  archive_file "$fail_file"
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
+fi
 
 log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
 exit $success

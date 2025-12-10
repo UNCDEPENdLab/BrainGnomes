@@ -43,6 +43,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     stop("postprocess_subject requires a bids_desc field containing the intended description field of the postprocessed filename.")
   }
 
+  normalize_temp_path <- function(path) {
+    out <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    if (.Platform$OS.type == "unix" && startsWith(out, "/private/var/")) {
+      out <- sub("^/private", "", out)
+    }
+    if (grepl("/T/Rtmp", out, fixed = TRUE)) {
+      out <- sub("/T/(Rtmp[^/]+)", "/T//\\1", out, perl = TRUE)
+    }
+    out
+  }
+
   # checkmate::assert_list(processing_sequence)
   proc_files <- get_fmriprep_outputs(in_file)
 
@@ -63,6 +74,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   } else {
     log_dir <- dirname(sub_log_file)
   }
+  log_dir <- normalize_temp_path(log_dir)
   
   # Setup default postprocess log file -- need to make sure it always goes in the subject log folder
   if (is.null(cfg$log_file)) {
@@ -76,6 +88,9 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE)
 
   lg <- lgr::get_logger_glue(c("postprocess", input_bids_info$sub))
+  if ("postprocess_log" %in% names(lg$appenders)) {
+    lg$remove_appender("postprocess_log")
+  }
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # quick header check to avoid 3D or single-volume inputs
@@ -92,7 +107,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # determine output directory for postprocessed files
   if (is.null(cfg$output_dir)) cfg$output_dir <- input_bids_info$directory
-  cfg$output_dir <- normalizePath(cfg$output_dir, mustWork = FALSE)
+  cfg$output_dir <- normalize_temp_path(cfg$output_dir)
   if (!dir.exists(cfg$output_dir)) dir.create(cfg$output_dir, recursive = TRUE)
 
   # configure scratch workspace for intermediates
@@ -102,9 +117,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   if (!checkmate::test_directory_exists(scratch_dir, access = "w")) {
     scratch_dir <- tempdir()
     to_log(lg, "warn", "scratch_directory is missing or not writable; staging intermediates in {scratch_dir}")
-  } else {
-    scratch_dir <- normalizePath(scratch_dir, mustWork = FALSE)
   }
+  scratch_dir <- normalize_temp_path(scratch_dir)
   subj_component <- glue("sub-{input_bids_info$sub}")
   ses_component <- if (!is.na(input_bids_info$session)) glue("ses-{input_bids_info$session}") else NULL
   base_stem <- gsub("[^A-Za-z0-9]+", "_", tools::file_path_sans_ext(basename(in_file)))
