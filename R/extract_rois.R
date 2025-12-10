@@ -244,7 +244,19 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
               to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
             }
 
-            if (write_file) data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+            zero_roi <- ncol(cmat) == 0L || nrow(cmat) == 0L
+            if (write_file) {
+              dir.create(dirname(cor_file), recursive = TRUE, showWarnings = FALSE)
+              if (zero_roi) {
+                to_log(lg, "warn", "No usable ROIs remain after filtering; creating an empty file at {cor_file}")
+                if (file.exists(cor_file)) unlink(cor_file)
+                file.create(cor_file)
+              } else {
+                data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+              }
+            } else if (zero_roi) {
+              to_log(lg, "warn", "No usable ROIs remain after filtering; correlations not written because overwrite=FALSE for {cor_file}")
+            }
 
             cor_file
           })

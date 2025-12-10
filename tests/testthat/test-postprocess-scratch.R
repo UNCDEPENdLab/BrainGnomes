@@ -1,17 +1,29 @@
+norm_path <- function(path, mustWork = FALSE) normalizePath(path, winslash = "/", mustWork = mustWork)
+
 test_that("postprocess_subject stages outputs in scratch workspace", {
-  bold_dir <- file.path(tempdir(), "pp-bold", "sub-TEST", "func")
+  tmp_dir <- norm_path(tempfile("pp-scratch-"), mustWork = FALSE)
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(tmp_dir, "logs", "sub-TEST")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  old_log <- Sys.getenv("log_file")
+  on.exit(Sys.setenv(log_file = old_log), add = TRUE)
+  Sys.setenv(log_file = file.path(log_dir, "postprocess.log"))
+
+  bold_dir <- file.path(tmp_dir, "pp-bold", "sub-TEST", "func")
   dir.create(bold_dir, recursive = TRUE, showWarnings = FALSE)
   bold_file <- file.path(bold_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz")
   con <- gzfile(bold_file, "wb")
   writeChar("fake-bold", con, eos = NULL)
   close(con)
 
-  mask_file <- file.path(tempdir(), "pp-mask.nii.gz")
+  mask_file <- file.path(tmp_dir, "pp-mask.nii.gz")
   writeLines("mask", mask_file)
 
-  output_dir <- file.path(tempdir(), "pp-out", "sub-TEST")
+  output_dir <- file.path(tmp_dir, "pp-out", "sub-TEST")
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  scratch_dir <- file.path(tempdir(), "pp-scratch")
+  scratch_dir <- file.path(tmp_dir, "pp-scratch")
   dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
   workspace_dir <- file.path(
     scratch_dir, "demo_project", "sub-TEST",
@@ -56,10 +68,11 @@ test_that("postprocess_subject stages outputs in scratch workspace", {
     fake_copy_step(cur_file, out_file)
   }, postprocess_confounds = function(...) NULL)
 
-  expected_final <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz")
+  final_file <- norm_path(final_file, mustWork = TRUE)
+  expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
-  expect_identical(recorded_paths$apply_mask, expected_final)
+  expect_identical(norm_path(recorded_paths$apply_mask, mustWork = TRUE), expected_final)
   intermediate_file <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz")
   expect_false(file.exists(intermediate_file))
   staged_exists <- dir.exists(workspace_dir)
@@ -67,19 +80,29 @@ test_that("postprocess_subject stages outputs in scratch workspace", {
 })
 
 test_that("postprocess_subject moves intermediates when requested", {
-  bold_dir <- file.path(tempdir(), "pp-bold2", "sub-TEST", "func")
+  tmp_dir <- norm_path(tempfile("pp-scratch-"), mustWork = FALSE)
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(tmp_dir, "logs", "sub-TEST")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  old_log <- Sys.getenv("log_file")
+  on.exit(Sys.setenv(log_file = old_log), add = TRUE)
+  Sys.setenv(log_file = file.path(log_dir, "postprocess.log"))
+
+  bold_dir <- file.path(tmp_dir, "pp-bold2", "sub-TEST", "func")
   dir.create(bold_dir, recursive = TRUE, showWarnings = FALSE)
   bold_file <- file.path(bold_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz")
   con <- gzfile(bold_file, "wb")
   writeChar("fake-bold", con, eos = NULL)
   close(con)
 
-  mask_file <- file.path(tempdir(), "pp-mask2.nii.gz")
+  mask_file <- file.path(tmp_dir, "pp-mask2.nii.gz")
   writeLines("mask", mask_file)
 
-  output_dir <- file.path(tempdir(), "pp-out2", "sub-TEST")
+  output_dir <- file.path(tmp_dir, "pp-out2", "sub-TEST")
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-  scratch_dir <- file.path(tempdir(), "pp-scratch2")
+  scratch_dir <- file.path(tmp_dir, "pp-scratch2")
   dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
   workspace_dir <- file.path(
     scratch_dir, "demo_project2", "sub-TEST",
@@ -127,12 +150,13 @@ test_that("postprocess_subject moves intermediates when requested", {
     fake_copy_step(cur_file, out_file)
   }, postprocess_confounds = function(...) NULL)
 
-  expected_final <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz")
+  final_file <- norm_path(final_file, mustWork = TRUE)
+  expected_final <- norm_path(file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-postproc_bold.nii.gz"), mustWork = TRUE)
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
-  expect_identical(recorded_paths$intensity_normalize, expected_final)
-  expected_workspace_mask <- file.path(workspace_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz")
-  expect_identical(recorded_paths$apply_mask, expected_workspace_mask)
+  expect_identical(norm_path(recorded_paths$intensity_normalize, mustWork = TRUE), expected_final)
+  expected_workspace_mask <- norm_path(file.path(workspace_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz"))
+  expect_identical(norm_path(recorded_paths$apply_mask), expected_workspace_mask)
   intermediate_file <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz")
   expect_true(file.exists(intermediate_file))
   staged_exists <- dir.exists(workspace_dir)

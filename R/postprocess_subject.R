@@ -55,7 +55,10 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   sub_log_file <- Sys.getenv("log_file")
   if (!nzchar(sub_log_file)) {
     warning("Cannot find log_file as an environment variable. Logs may not appear in the expected location!")
-    attempt_dir <- normalizePath(file.path(dirname(in_file), glue("../../../logs/sub-{input_bids_info$sub}")))
+    attempt_dir <- normalizePath(
+      file.path(dirname(in_file), glue("../../../logs/sub-{input_bids_info$sub}")),
+      winslash = "/", mustWork = FALSE
+    )
     log_dir <- if (dir.exists(attempt_dir)) attempt_dir else dirname(in_file)
   } else {
     log_dir <- dirname(sub_log_file)
@@ -70,12 +73,13 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # force log file to be in the right directory
   log_file <- file.path(log_dir, basename(cfg$log_file))
+  dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE)
 
   lg <- lgr::get_logger_glue(c("postprocess", input_bids_info$sub))
   lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
 
   # quick header check to avoid 3D or single-volume inputs
-  hdr <- tryCatch(RNifti::niftiHeader(in_file), error = function(...) NULL)
+  hdr <- suppressWarnings(tryCatch(RNifti::niftiHeader(in_file), error = function(...) NULL))
   if (!is.null(hdr)) {
     dims <- hdr$dim
     is_3d <- !is.null(dims) && length(dims) >= 2 && dims[1] == 3

@@ -1,6 +1,6 @@
 test_that("is_external_path identifies directories", {
   proj <- tempfile("proj_")
-  dir.create(proj)
+  dir.create(proj, showWarnings = FALSE)
   inside <- file.path(proj, "data_fmriprep")
   outside <- tempfile("fmriprep_")
   expect_false(is_external_path(inside, proj))
@@ -8,7 +8,9 @@ test_that("is_external_path identifies directories", {
 })
 
 test_that("process_subject checks complete file for internal fmriprep", {
-  root <- tempdir()
+  root <- tempfile("proj_int_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
   proj_dir <- file.path(root, "proj_int"); dir.create(proj_dir)
   log_dir <- file.path(proj_dir, "logs"); dir.create(log_dir)
   bids_dir <- file.path(proj_dir, "bids"); dir.create(bids_dir)
@@ -47,7 +49,9 @@ test_that("process_subject checks complete file for internal fmriprep", {
 })
 
 test_that("process_subject accepts external fmriprep without complete file", {
-  root <- tempdir()
+  root <- tempfile("proj_ext_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
   proj_dir <- file.path(root, "proj_ext"); dir.create(proj_dir)
   log_dir <- file.path(proj_dir, "logs"); dir.create(log_dir)
   bids_dir <- file.path(proj_dir, "bids"); dir.create(bids_dir)

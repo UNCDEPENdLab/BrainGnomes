@@ -25,16 +25,16 @@ a filtered confounds file for downstream analyses.
 }
 \details{
 The processing sequence can be enforced by the user (\code{force_processing_order = TRUE}) or determined dynamically based
-on the \code{enable} flags in the configuration. Intermediate NIfTI and confound files are staged in a scratch workspace
-(under \code{cfg$scratch_directory}) and final outputs are written or moved to the postprocessing output directory. Logging is
-handled via the \code{lgr} package and is directed to subject-specific log files inferred from BIDS metadata.
+on the \code{enable} flags in the configuration. Intermediate NIfTI and confound files are staged inside a scratch workspace
+(located under \code{cfg$scratch_directory}) and final outputs are written or moved into the postprocessing output directory.
+Logging is handled via the \code{lgr} package and is directed to subject-specific log files inferred from BIDS metadata.
 
 Required \code{cfg} entries:
 \itemize{
 \item \code{tr}: Repetition time in seconds.
 \item \code{bids_desc}: A BIDS-compliant \code{desc} label for the output filename.
 \item \code{processing_steps}: Optional character vector specifying processing order (if \code{force_processing_order = TRUE}).
-\item \code{scratch_directory}: Optional directory used for staging intermediate files (defaults to \code{tempdir()} if unset).
+\item \code{scratch_directory}: Optional directory for staging intermediate files (defaults to \code{tempdir()} if unset).
 \item \code{project_name}: Optional project label used to organize scratch workspaces.
 }
 
