@@ -85,13 +85,34 @@ postprocess_subject <- function(in_file, cfg=NULL) {
 
   # force log file to be in the right directory
   log_file <- file.path(log_dir, basename(cfg$log_file))
-  dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE)
+  log_dir_exists <- dir.create(dirname(log_file), recursive = TRUE, showWarnings = FALSE) || dir.exists(dirname(log_file))
+  if (!log_dir_exists || file.access(dirname(log_file), 2) != 0) {
+    # fall back to a writable temp directory if the requested log dir is unavailable
+    log_dir <- file.path(tempdir(), "postprocess_logs", glue("sub-{input_bids_info$sub}"))
+    dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+    log_file <- file.path(log_dir, basename(cfg$log_file))
+  }
+  if (!file.exists(log_file)) file.create(log_file)
 
   lg <- lgr::get_logger_glue(c("postprocess", input_bids_info$sub))
-  if ("postprocess_log" %in% names(lg$appenders)) {
-    lg$remove_appender("postprocess_log")
+  existing_appenders <- names(lg$appenders)
+  stale_appenders <- existing_appenders[grepl("^postprocess_log", existing_appenders)]
+  if (length(stale_appenders) > 0) {
+    for (app_name in stale_appenders) {
+      try(lg$appenders[[app_name]]$close(), silent = TRUE)
+      try(lg$remove_appender(app_name), silent = TRUE)
+    }
   }
-  lg$add_appender(lgr::AppenderFile$new(log_file), name = "postprocess_log")
+  appender <- tryCatch(
+    lgr::AppenderFile$new(log_file),
+    error = function(e) {
+      fallback <- file.path(tempdir(), basename(log_file))
+      dir.create(dirname(fallback), recursive = TRUE, showWarnings = FALSE)
+      if (!file.exists(fallback)) file.create(fallback)
+      lgr::AppenderFile$new(fallback)
+    }
+  )
+  lg$add_appender(appender, name = "postprocess_log")
 
   # quick header check to avoid 3D or single-volume inputs
   hdr <- suppressWarnings(tryCatch(RNifti::niftiHeader(in_file), error = function(...) NULL))
