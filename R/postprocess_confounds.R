@@ -87,6 +87,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     stop("Cannot handle overlaps in noproc_columns and columns for confounds")
   }
 
+  confounds_to_filt <- NULL
   if (isTRUE(cfg$scrubbing$enable)) {
     to_log(lg, "info", "Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
     spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
@@ -108,6 +109,17 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   has_confounds <- !is.null(confound_cols) && length(confound_cols) > 0L
   has_noproc <- !is.null(noproc_cols) && length(noproc_cols) > 0L
 
+  # verify that requested confound columns exist
+  if (has_confounds) {
+    confounds_to_filt <- subset(confounds, select = confound_cols)
+
+    if (ncol(confounds_to_filt) == 0L || nrow(confounds_to_filt) == 0L) {
+      to_log(lg, "warn", "Confound columns were requested but no usable data were found in {proc_files$confounds}; skipping confound filtering.")
+      has_confounds <- FALSE
+      confound_cols <- character()
+    }
+  }
+
   if (!has_confounds && !has_noproc) {
     if (isTRUE(cfg$confound_calculate$enable) || isTRUE(cfg$confound_regression$enable)) {
       to_log(lg, "info", "Confound postprocessing skipped; no confound columns matched the request and no noproc columns were supplied.")
@@ -118,8 +130,6 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   }
 
   if (has_confounds) {
-    confounds_to_filt <- subset(confounds, select = confound_cols)
-
     # generate NIfTI with confound timeseries
     confounds_bids <- extract_bids_info(proc_files$confounds)
     tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
@@ -202,10 +212,19 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     )
 
     calc_cols <- cfg$confound_calculate$columns
+    df <- filtered_confounds[, integer(0), drop = FALSE]
+
     if (!is.null(calc_cols) && length(calc_cols) > 0L) {
-      df <- subset(filtered_confounds, select = calc_cols)
-    } else {
-      df <- filtered_confounds[, integer(0), drop = FALSE]
+      present_cols <- intersect(calc_cols, names(filtered_confounds))
+      missing_cols <- setdiff(calc_cols, names(filtered_confounds))
+
+      if (length(missing_cols) > 0L) {
+        to_log(lg, "warn", "Requested confound_calculate columns were not available after filtering and will be skipped: {paste(missing_cols, collapse = ', ')}")
+      }
+
+      if (length(present_cols) > 0L) {
+        df <- cbind(df, filtered_confounds[, present_cols, drop = FALSE])
+      }
     }
 
     calc_noproc <- cfg$confound_calculate$noproc_columns
@@ -254,13 +273,19 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
   if (isTRUE(cfg$confound_regression$enable)) {
     reg_cols <- cfg$confound_regression$columns
+    df <- filtered_confounds[, integer(0), drop = FALSE]
     if (!is.null(reg_cols) && length(reg_cols) > 0L) {
-      df <- subset(filtered_confounds, select = reg_cols)
-      if (ncol(df) > 0L) {
+      present_cols <- intersect(reg_cols, names(filtered_confounds))
+      missing_cols <- setdiff(reg_cols, names(filtered_confounds))
+
+      if (length(missing_cols) > 0L) {
+        to_log(lg, "warn", "Requested confound_regression columns were not available after filtering and will be skipped: {paste(missing_cols, collapse = ', ')}")
+      }
+
+      if (length(present_cols) > 0L) {
+        df <- filtered_confounds[, present_cols, drop = FALSE]
         df <- as.data.frame(lapply(df, function(cc) cc - mean(cc, na.rm = TRUE)))
       }
-    } else {
-      df <- filtered_confounds[, integer(0), drop = FALSE]
     }
 
     reg_noproc <- cfg$confound_regression$noproc_columns

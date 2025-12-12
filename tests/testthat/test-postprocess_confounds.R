@@ -247,3 +247,128 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
     replace(conf_df$csf, is.na(conf_df$csf), 0)
   )
 })
+
+test_that("postprocess_confounds skips processing when confound data are empty", {
+  skip_if_not_installed("RNifti")
+
+  tmpdir <- tempfile("postproc_confounds_empty_")
+  dir.create(tmpdir)
+  on.exit(unlink(tmpdir, recursive = TRUE), add = TRUE)
+
+  conf_df <- data.frame(rot_x = numeric(0))
+  conf_path <- file.path(tmpdir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
+  data.table::fwrite(conf_df, conf_path, sep = "\t")
+
+  cfg <- list(
+    motion_filter = list(enable = FALSE),
+    scrubbing = list(enable = FALSE, apply = FALSE, add_to_confounds = FALSE),
+    confound_regression = list(enable = TRUE, columns = "rot_x", noproc_columns = NULL, prefix = "r"),
+    confound_calculate = list(enable = FALSE, columns = NULL, noproc_columns = NULL, demean = TRUE),
+    apply_aroma = list(enable = FALSE, nonaggressive = TRUE),
+    temporal_filter = list(low_pass_hz = NULL, high_pass_hz = NULL, method = "butterworth"),
+    bids_desc = "pp",
+    tr = 1,
+    overwrite = TRUE
+  )
+
+  output_bids_info <- list(
+    subject = "01",
+    task = "rest",
+    description = "denoise",
+    suffix = "bold",
+    ext = ".nii.gz",
+    directory = tmpdir
+  )
+
+  proc_files <- list(
+    confounds = conf_path,
+    melodic_mix = NULL,
+    noise_ics = integer(0)
+  )
+
+  expect_warning(
+    regress_path <- postprocess_confounds(
+      proc_files = proc_files,
+      cfg = cfg,
+      processing_sequence = character(0),
+      output_bids_info = output_bids_info,
+      fsl_img = NULL,
+      lg = NULL
+    ),
+    "Confound columns were requested but no usable data were found",
+    fixed = TRUE
+  )
+
+  expect_null(regress_path)
+
+  reg_file <- construct_bids_filename(
+    modifyList(output_bids_info, list(suffix = "regressors", ext = ".tsv")),
+    full.names = TRUE
+  )
+  expect_false(file.exists(reg_file))
+})
+
+test_that("postprocess_confounds handles empty confound data with calc/reg enabled", {
+  skip_if_not_installed("RNifti")
+
+  tmpdir <- tempfile("postproc_confounds_empty_calc_")
+  dir.create(tmpdir)
+  on.exit(unlink(tmpdir, recursive = TRUE), add = TRUE)
+
+  conf_df <- data.frame(rot_x = numeric(0), framewise_displacement = numeric(0))
+  conf_path <- file.path(tmpdir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
+  data.table::fwrite(conf_df, conf_path, sep = "\t")
+
+  cfg <- list(
+    motion_filter = list(enable = FALSE),
+    scrubbing = list(enable = FALSE, apply = FALSE, add_to_confounds = FALSE),
+    confound_regression = list(enable = TRUE, columns = "rot_x", noproc_columns = NULL, prefix = "r"),
+    confound_calculate = list(enable = TRUE, columns = "framewise_displacement", noproc_columns = NULL, demean = TRUE),
+    apply_aroma = list(enable = FALSE, nonaggressive = TRUE),
+    temporal_filter = list(low_pass_hz = NULL, high_pass_hz = NULL, method = "butterworth"),
+    bids_desc = "pp",
+    tr = 1,
+    overwrite = TRUE
+  )
+
+  output_bids_info <- list(
+    subject = "01",
+    task = "rest",
+    description = "denoise",
+    suffix = "bold",
+    ext = ".nii.gz",
+    directory = tmpdir
+  )
+
+  proc_files <- list(
+    confounds = conf_path,
+    melodic_mix = NULL,
+    noise_ics = integer(0)
+  )
+
+  expect_warning(
+    regress_path <- postprocess_confounds(
+      proc_files = proc_files,
+      cfg = cfg,
+      processing_sequence = character(0),
+      output_bids_info = output_bids_info,
+      fsl_img = NULL,
+      lg = NULL
+    ),
+    "Confound columns were requested but no usable data were found",
+    fixed = TRUE
+  )
+
+  expect_null(regress_path)
+
+  reg_file <- construct_bids_filename(
+    modifyList(output_bids_info, list(suffix = "regressors", ext = ".tsv")),
+    full.names = TRUE
+  )
+  confound_file <- construct_bids_filename(
+    modifyList(output_bids_info, list(suffix = "confounds", ext = ".tsv")),
+    full.names = TRUE
+  )
+  expect_false(file.exists(reg_file))
+  expect_false(file.exists(confound_file))
+})
