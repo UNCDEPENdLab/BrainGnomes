@@ -766,6 +766,29 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
     )
   }
 
+  # if enabled but no columns were supplied, warn and offer to re-enter or disable
+  reg_cols <- ppcfg$confound_regression$columns
+  reg_noproc <- ppcfg$confound_regression$noproc_columns
+  no_reg_cols <- is.null(reg_cols) || length(reg_cols) == 0L || all(is.na(reg_cols)) || all(trimws(reg_cols) == "")
+  no_reg_noproc <- is.null(reg_noproc) || length(reg_noproc) == 0L || all(is.na(reg_noproc)) || all(trimws(reg_noproc) == "")
+
+  if (isTRUE(ppcfg$confound_regression$enable) && no_reg_cols && no_reg_noproc) {
+    message("confound_regression is enabled but no columns were specified; this step would have no effect.")
+    if (prompt_input("Would you like to enter confound columns now?", type = "flag", default = TRUE)) {
+      ppcfg$confound_regression$columns <- prompt_input(
+        prompt = "Confounds that will be filtered",
+        type = "character", split = "\\s+", required = FALSE
+      )
+      ppcfg$confound_regression$noproc_columns <- prompt_input(
+        prompt = "Confounds that will not be filtered",
+        type = "character", split = "\\s+", required = FALSE
+      )
+    } else {
+      message("Disabling confound_regression because no columns were supplied.")
+      ppcfg$confound_regression$enable <- FALSE
+    }
+  }
+
   return(ppcfg)
 }
 
@@ -1005,6 +1028,29 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
   
   if ("postprocess/confound_calculate/demean" %in% fields) {
     ppcfg$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
+  }
+
+  # if enabled but no columns were supplied, warn and offer to re-enter or disable
+  calc_cols <- ppcfg$confound_calculate$columns
+  calc_noproc <- ppcfg$confound_calculate$noproc_columns
+  no_calc_cols <- is.null(calc_cols) || length(calc_cols) == 0L || all(is.na(calc_cols)) || all(trimws(calc_cols) == "")
+  no_calc_noproc <- is.null(calc_noproc) || length(calc_noproc) == 0L || all(is.na(calc_noproc)) || all(trimws(calc_noproc) == "")
+
+  if (isTRUE(ppcfg$confound_calculate$enable) && no_calc_cols && no_calc_noproc) {
+    message("confound_calculate is enabled but no columns were specified; this step would have no effect.")
+    if (prompt_input("Would you like to enter confound columns now?", type = "flag", default = TRUE)) {
+      ppcfg$confound_calculate$columns <- prompt_input(
+        prompt="Confounds that will be filtered",
+        type = "character", split = "\\s+", required = FALSE
+      )
+      ppcfg$confound_calculate$noproc_columns <- prompt_input(
+        prompt="Confounds that will not be filtered",
+        type = "character", split = "\\s+", required = FALSE
+      )
+    } else {
+      message("Disabling confound_calculate because no columns were supplied.")
+      ppcfg$confound_calculate$enable <- FALSE
+    }
   }
 
   return(ppcfg)
