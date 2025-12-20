@@ -210,10 +210,10 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     cfg$processing_steps <- tolower(cfg$processing_steps) # avoid case issues
 
     # handle small glitches in nomenclature
-    cfg$processing_steps <- sub("spatial_smoothing", "spatial_smooth", cfg$processing_steps, fixed=TRUE)
-    cfg$processing_steps <- sub("temporal_filtering", "temporal_filter", cfg$processing_steps, fixed=TRUE)
-    cfg$processing_steps <- sub("confound_regress", "confound_regression", cfg$processing_steps, fixed = TRUE)
-    cfg$processing_steps <- sub("intensity_normalization", "intensity_normalize", cfg$processing_steps, fixed = TRUE)
+    cfg$processing_steps <- sub("^spatial_smoothing$", "spatial_smooth", cfg$processing_steps, fixed = TRUE)
+    cfg$processing_steps <- sub("^temporal_filtering$", "temporal_filter", cfg$processing_steps, fixed = TRUE)
+    cfg$processing_steps <- sub("^confound_regress$", "confound_regression", cfg$processing_steps, fixed = TRUE)
+    cfg$processing_steps <- sub("^intensity_normalization$", "intensity_normalize", cfg$processing_steps, fixed = TRUE)
 
     processing_sequence <- cfg$processing_steps
     to_log(lg, "info", "We will follow the user-specified processing order, with no guarantees on data validity.")

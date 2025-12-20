@@ -1,6 +1,7 @@
 # BrainGnomes 0.7-5
 
 * Use the `scratch_directory` for postprocessing images to avoid collisions and ensure that intermediates do not clog the output folder
+* bugfix: more complete handling of cases where confound calculate/regress is enabled, but no columns are specified.
 
 # BrainGnomes 0.7-4
 
