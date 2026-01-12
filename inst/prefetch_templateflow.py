@@ -475,6 +475,44 @@ def build_queries_legacy(
     return queries
 
 
+def _template_names_from_tokens(tokens: List[str]) -> List[str]:
+    """Extract unique template names from output-space tokens."""
+    templates: List[str] = []
+    seen: Set[str] = set()
+    for token in tokens:
+        if token in SKIP_TOKENS:
+            continue
+        template, _, is_surface = parse_output_space_token(token)
+        if is_surface or template in SKIP_TOKENS:
+            continue
+        if template in seen:
+            continue
+        seen.add(template)
+        templates.append(template)
+    return templates
+
+
+def add_default_t2w_queries(queries: List[TemplateQuery], tokens: List[str]) -> List[TemplateQuery]:
+    """Ensure T2w res-01 templates are prefetched for each template space."""
+    templates = _template_names_from_tokens(tokens)
+    if not templates:
+        return queries
+
+    existing: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = {
+        _freeze_query(template, params) for template, params, _ in queries
+    }
+    augmented = list(queries)
+    for template in templates:
+        params = {"suffix": "T2w", "resolution": 1}
+        fingerprint = _freeze_query(template, params)
+        if fingerprint in existing:
+            continue
+        existing.add(fingerprint)
+        label = f"{template} (T2w res-01)"
+        augmented.append((template, params, label))
+    return augmented
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Prefetch TemplateFlow resources needed for the configured fMRIPrep output spaces."
@@ -546,6 +584,7 @@ def main() -> int:
     if not queries:
         print("No TemplateFlow queries were resolved; nothing to prefetch.")
         return 0
+    queries = add_default_t2w_queries(queries, spaces)
 
     # Determine where TemplateFlow will place fetched files
     tf_home = os.environ.get("TEMPLATEFLOW_HOME")
