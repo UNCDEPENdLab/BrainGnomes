@@ -9,6 +9,8 @@
   implementation)
 - [`butterworth_filter_4d()`](https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_4d.md)
   : Apply a Butterworth Filter to a 4D NIfTI Image
+- [`calculate_motion_outliers()`](https://uncdependlab.github.io/BrainGnomes/reference/calculate_motion_outliers.md)
+  : Summarize framewise displacement outliers across runs
 - [`cluster_job_submit()`](https://uncdependlab.github.io/BrainGnomes/reference/cluster_job_submit.md)
   : This function submits a single script to a high-performance cluster
   using a scheduler (Slurm or TORQUE). It accepts a vector of arguments
