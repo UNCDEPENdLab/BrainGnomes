@@ -2,10 +2,28 @@
 
 ## BrainGnomes 0.7-5
 
+- Add `calculate_motion_outliers` function to calculate motion outliers
+  in a BIDS dataset
 - Use the `scratch_directory` for postprocessing images to avoid
   collisions and ensure that intermediates do not clog the output folder
+- Check that python packages directory is writable prior to attempting
+  to resample a stereotaxic template to an image; fall back to a managed
+  `reticulate` environment if not.
+- More robust postprocess logging (fallback log directory if requested
+  location is unavailable) and clearer reporting of retained volumes
+  during confound regression.
+- bugfix: 0 values for temporal filter cutoffs now disable the
+  corresponding low/high-pass filter components.
 - bugfix: more complete handling of cases where confound
   calculate/regress is enabled, but no columns are specified.
+- bugfix: ROI extraction now writes empty connectivity outputs (with
+  warnings) when all ROIs are dropped after filtering.
+- bugfix: add T2w to template pre-fetch so that fmriprep does not try to
+  obtain this when users have T2w images
+- bugfix: correct regex in postprocessing step substitution when using
+  user-specified order
+- bugfix: prevent spurious failure files for fMRIPrep/AROMA jobs that
+  return non-zero exit codes despite successful completion
 
 ## BrainGnomes 0.7-4
 
