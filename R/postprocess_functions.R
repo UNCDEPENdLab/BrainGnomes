@@ -989,7 +989,13 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
     good_vols <- rep(TRUE, nrow(Xmat))
     if (checkmate::test_file_exists(censor_file)) {
       good_vols <- as.logical(as.integer(readLines(censor_file))) # bad timepoints are 0 in the censor file
-      if (sum(good_vols) < length(good_vols)) to_log(lg, "info", "Fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes.")
+      if (sum(good_vols) < length(good_vols)) {
+        to_log(
+          lg,
+          "info",
+          "Censor file {censor_file} excludes {length(good_vols) - sum(good_vols)} volumes; fitting confound regression with {sum(good_vols)} of {length(good_vols)} volumes (all volumes are retained in the output)."
+        )
+      }
     }
     
     run_logged(
