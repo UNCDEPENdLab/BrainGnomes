@@ -3,7 +3,7 @@ power_multitaper <- function(
     nw = 3, k = NULL,
     pad_factor = 0.5,
     detrend = TRUE,
-    centre = "Slepian", adaptive = TRUE, jackknife = FALSE,
+    center = "Slepian", adaptive = TRUE, jackknife = FALSE,
     smooth_psd = TRUE
 ) {
   stopifnot(is.numeric(y), length(dt) == 1, is.finite(dt), dt > 0)
@@ -38,7 +38,7 @@ power_multitaper <- function(
   
   out <- multitaper::spec.mtm(
     y, k = k, nw = nw, nFFT = n_fft,
-    centre = centre, adaptive = adaptive, jackknife = jackknife,
+    centre = center, adaptive = adaptive, jackknife = jackknife,
     plot = FALSE, returnZeroFreq = TRUE, deltat=dt
   )
   
@@ -64,7 +64,7 @@ power_multitaper <- function(
       nw = nw,
       k = k,
       pad_factor = pad_factor,
-      centre = centre,
+      center = center,
       adaptive = adaptive,
       jackknife = jackknife,
       detrend = detrend_method,

@@ -3,7 +3,7 @@ mtm_bandpower <- function(
     bands,                       # data.frame with low/high[/label], or named list of length-2 numerics
     nw = 4, k = NULL,
     detrend = c("none","linear"),
-    centre = TRUE,
+    center = TRUE,
     adaptive = TRUE, jackknife = FALSE,
     pad_factor = 2,              # padding for nicer grids; doesn't change variance
     exclude_dc = TRUE,           # drop f=0
@@ -47,7 +47,7 @@ mtm_bandpower <- function(
     y <- as.numeric(y)
     if (na_rm) y <- y[is.finite(y)]
     if (!length(y)) stop("All values are NA/Inf after filtering.")
-    if (centre) y <- y - mean(y)
+    if (center) y <- y - mean(y)
     if (detrend == "linear" && length(y) > 2) {
       t <- seq_along(y)
       y <- resid(stats::lm(y ~ t))
@@ -68,7 +68,7 @@ mtm_bandpower <- function(
       k = k, nw = nw,
       nFFT = n_fft,
       deltat = dt,                 # frequency in Hz
-      centreWithSlepians = TRUE,   # Slepian centering
+      centre = "Slepian",          # Slepian centering
       adaptive = adaptive,
       jackknife = jackknife,
       plot = FALSE,
@@ -84,8 +84,7 @@ mtm_bandpower <- function(
       k = k,
       adaptive = adaptive,
       jackknife = jackknife,
-      centred = centre,
-      centre = centre,
+      centered = center,
       detrend = detrend,
       pad_factor = pad_factor
     )
@@ -180,12 +179,12 @@ mtm_bandpower <- function(
     NA_real_
   }
   
-  centre_meta <- if (!is.null(psd_meta_raw$centred)) {
-    psd_meta_raw$centred
-  } else if (!is.null(psd_meta_raw$centre)) {
-    psd_meta_raw$centre
+  center_meta <- if (!is.null(psd_meta_raw$centered)) {
+    psd_meta_raw$centered
+  } else if (!is.null(psd_meta_raw$center)) {
+    psd_meta_raw$center
   } else {
-    centre
+    center
   }
   psd_meta_out <- list(
     dt = dt,
@@ -195,7 +194,7 @@ mtm_bandpower <- function(
     k = if (!is.null(psd_meta_raw$k)) psd_meta_raw$k else k,
     adaptive = if (!is.null(psd_meta_raw$adaptive)) psd_meta_raw$adaptive else adaptive,
     jackknife = if (!is.null(psd_meta_raw$jackknife)) psd_meta_raw$jackknife else jackknife,
-    centred = centre_meta,
+    centered = center_meta,
     detrend = if (!is.null(psd_meta_raw$detrend)) psd_meta_raw$detrend else detrend,
     pad_factor = if (!is.null(psd_meta_raw$pad_factor)) psd_meta_raw$pad_factor else pad_factor,
     exclude_dc = exclude_dc

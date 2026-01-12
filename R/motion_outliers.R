@@ -23,18 +23,20 @@
 #'   Either `"notch"` (band-stop, in breaths per minute) or `"lowpass"` (Hz).
 #' @param tr Repetition time in seconds, required when `include_filtered = TRUE`.
 #' @param band_stop_min Lower notch stop-band bound in breaths per minute
-#'   (required for `filter_method = "notch"`).
+#'   (default 12; used when `filter_method = "notch"`).
 #' @param band_stop_max Upper notch stop-band bound in breaths per minute
-#'   (required for `filter_method = "notch"`).
+#'   (default 18; used when `filter_method = "notch"`).
 #' @param low_pass_hz Low-pass cutoff in Hz (required for
 #'   `filter_method = "lowpass"`).
 #' @param filter_order Integer filter order for low-pass filtering (default 2).
 #' @param motion_cols Motion parameter columns used to recompute FD.
 #' @param rot_units Rotation unit for motion parameters (`"rad"` or `"deg"`).
+#' @param output_file Optional path to write results as a tab-separated file.
+#'   If provided, results are written using `data.table::fwrite()`.
 #'
-#' @return A data.frame with subject, session, confounds file location, max FD,
-#'   and outlier percentages for each threshold (filtered columns are included
-#'   when requested).
+#' @return A data.frame with subject, session, task, run, confounds file location,
+#'   max FD, mean FD, and outlier percentages for each threshold (filtered columns
+#'   are included when requested).
 #'
 #' @examples
 #' \dontrun{
@@ -55,7 +57,7 @@
 #' @importFrom checkmate assert_class assert_directory_exists assert_character
 #' @importFrom checkmate assert_numeric assert_flag assert_number
 #' @importFrom checkmate assert_integerish
-#' @importFrom data.table fread
+#' @importFrom data.table fread fwrite
 #' @export
 calculate_motion_outliers <- function(scfg = NULL,
                                       input_dir = NULL,
@@ -64,12 +66,13 @@ calculate_motion_outliers <- function(scfg = NULL,
                                       include_filtered = FALSE,
                                       filter_method = c("notch", "lowpass"),
                                       tr = NULL,
-                                      band_stop_min = NULL,
-                                      band_stop_max = NULL,
+                                      band_stop_min = 12,
+                                      band_stop_max = 18,
                                       low_pass_hz = NULL,
                                       filter_order = 2L,
                                       motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
-                                      rot_units = c("rad", "deg")) {
+                                      rot_units = c("rad", "deg"),
+                                      output_file = NULL) {
   if (!is.null(confounds_files)) {
     checkmate::assert_character(confounds_files, min.len = 1L, any.missing = FALSE)
     missing <- confounds_files[!file.exists(confounds_files)]
@@ -107,6 +110,9 @@ calculate_motion_outliers <- function(scfg = NULL,
     if (filter_method == "notch") {
       checkmate::assert_number(band_stop_min, lower = 0)
       checkmate::assert_number(band_stop_max, lower = 0)
+      if (band_stop_max <= band_stop_min) {
+        stop("band_stop_max (", band_stop_max, ") must be greater than band_stop_min (", band_stop_min, ").")
+      }
     } else {
       checkmate::assert_number(low_pass_hz, lower = 0)
       checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
@@ -130,12 +136,20 @@ calculate_motion_outliers <- function(scfg = NULL,
     max(x, na.rm = TRUE)
   }
 
+  calc_mean <- function(x) {
+    if (length(x) == 0L || all(is.na(x))) return(NA_real_)
+    mean(x, na.rm = TRUE)
+  }
+
   empty_out <- function() {
     base <- data.frame(
       subject = character(),
       session = character(),
+      task = character(),
+      run = character(),
       confounds_file = character(),
       fd_max = numeric(),
+      fd_mean = numeric(),
       stringsAsFactors = FALSE
     )
     labels <- vapply(thresholds, format_threshold, character(1))
@@ -144,6 +158,7 @@ calculate_motion_outliers <- function(scfg = NULL,
     }
     if (include_filtered) {
       base[["fd_filt_max"]] <- numeric()
+      base[["fd_filt_mean"]] <- numeric()
       for (lbl in labels) {
         base[[paste0("fd_filt_gt_", lbl)]] <- numeric()
       }
@@ -187,8 +202,7 @@ calculate_motion_outliers <- function(scfg = NULL,
 
   labels <- vapply(thresholds, format_threshold, character(1))
   res <- lapply(confounds_files, function(cf) {
-    confounds <- data.table::fread(cf, showProgress = FALSE, na.strings = c("n/a", "NA", "NaN"))
-    if (!is.data.frame(confounds)) confounds <- as.data.frame(confounds)
+    confounds <- data.table::fread(cf, showProgress = FALSE, na.strings = c("n/a", "NA", "NaN"), data.table = FALSE)
 
     bids_info <- as.list(extract_bids_info(cf))
     motion_ok <- all(motion_cols %in% names(confounds))
@@ -212,8 +226,11 @@ calculate_motion_outliers <- function(scfg = NULL,
     row <- list(
       subject = bids_info$subject,
       session = bids_info$session,
+      task = bids_info$task,
+      run = bids_info$run,
       confounds_file = cf,
-      fd_max = calc_max(fd)
+      fd_max = calc_max(fd),
+      fd_mean = calc_mean(fd)
     )
     for (ii in seq_along(thresholds)) {
       row[[paste0("fd_gt_", labels[[ii]])]] <- calc_pct(fd, thresholds[[ii]])
@@ -222,27 +239,24 @@ calculate_motion_outliers <- function(scfg = NULL,
     if (include_filtered) {
       if (!motion_ok) {
         filtered_fd <- rep(NA_real_, length(fd))
-      } else if (filter_method == "notch") {
-        filtered <- notch_filter(
-          confounds_df = confounds,
-          tr = tr,
-          band_stop_min = band_stop_min,
-          band_stop_max = band_stop_max,
-          columns = motion_cols,
-          add_poly = FALSE,
-          out_file = NULL,
-          padtype = "constant",
-          padlen = NULL,
-          use_zi = TRUE,
-          lg = NULL
-        )
-        filtered_fd <- framewise_displacement(
-          motion = filtered[, motion_cols, drop = FALSE],
-          columns = motion_cols,
-          rot_units = rot_units
-        )
       } else {
-        filtered <- lowpass_filter_motion(confounds)
+        if (filter_method == "notch") {
+          filtered <- notch_filter(
+            confounds_df = confounds,
+            tr = tr,
+            band_stop_min = band_stop_min,
+            band_stop_max = band_stop_max,
+            columns = motion_cols,
+            add_poly = FALSE,
+            out_file = NULL,
+            padtype = "constant",
+            padlen = NULL,
+            use_zi = TRUE,
+            lg = NULL
+          )
+        } else {
+          filtered <- lowpass_filter_motion(confounds)
+        }
         filtered_fd <- framewise_displacement(
           motion = filtered[, motion_cols, drop = FALSE],
           columns = motion_cols,
@@ -251,6 +265,7 @@ calculate_motion_outliers <- function(scfg = NULL,
       }
 
       row[["fd_filt_max"]] <- calc_max(filtered_fd)
+      row[["fd_filt_mean"]] <- calc_mean(filtered_fd)
       for (ii in seq_along(thresholds)) {
         row[[paste0("fd_filt_gt_", labels[[ii]])]] <- calc_pct(filtered_fd, thresholds[[ii]])
       }
@@ -259,5 +274,19 @@ calculate_motion_outliers <- function(scfg = NULL,
     as.data.frame(row, stringsAsFactors = FALSE)
   })
 
-  do.call(rbind, res)
+  result <- do.call(rbind, res)
+
+  if (!is.null(output_file)) {
+    checkmate::assert_string(output_file)
+    out_dir <- dirname(output_file)
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+    }
+    # Handle .csv, .tsv, .csv.gz, .tsv.gz extensions
+    base_lower <- tolower(output_file)
+    sep <- if (grepl("\\.csv(\\.gz)?$", base_lower)) "," else "\t"
+    data.table::fwrite(result, file = output_file, sep = sep, compress = "auto")
+  }
+
+  result
 }

@@ -315,7 +315,7 @@ notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, b
   coeffs <- iirnotch_r(f0 = f0, Q = Q, fs = fs)
   padlen_val <- if (is.null(padlen)) -1L else as.integer(padlen)
 
-  to_log(lg, "info", "Applying notch filter centred at {round(f0, 4)} Hz (Q = {round(Q, 2)}) to {length(available_cols)} motion columns.")
+  to_log(lg, "info", "Applying notch filter centerd at {round(f0, 4)} Hz (Q = {round(Q, 2)}) to {length(available_cols)} motion columns.")
 
   for (col_name in columns) {
     series <- as.numeric(confounds_df[[col_name]])
