@@ -18,12 +18,13 @@ calculate_motion_outliers(
   include_filtered = FALSE,
   filter_method = c("notch", "lowpass"),
   tr = NULL,
-  band_stop_min = NULL,
-  band_stop_max = NULL,
+  band_stop_min = 12,
+  band_stop_max = 18,
   low_pass_hz = NULL,
   filter_order = 2L,
   motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
-  rot_units = c("rad", "deg")
+  rot_units = c("rad", "deg"),
+  output_file = NULL
 )
 ```
 
@@ -70,13 +71,13 @@ calculate_motion_outliers(
 
 - band_stop_min:
 
-  Lower notch stop-band bound in breaths per minute (required for
-  `filter_method = "notch"`).
+  Lower notch stop-band bound in breaths per minute (default 12; used
+  when `filter_method = "notch"`).
 
 - band_stop_max:
 
-  Upper notch stop-band bound in breaths per minute (required for
-  `filter_method = "notch"`).
+  Upper notch stop-band bound in breaths per minute (default 18; used
+  when `filter_method = "notch"`).
 
 - low_pass_hz:
 
@@ -94,11 +95,17 @@ calculate_motion_outliers(
 
   Rotation unit for motion parameters (`"rad"` or `"deg"`).
 
+- output_file:
+
+  Optional path to write results as a tab-separated file. If provided,
+  results are written using
+  [`data.table::fwrite()`](https://rdatatable.gitlab.io/data.table/reference/fwrite.html).
+
 ## Value
 
-A data.frame with subject, session, confounds file location, max FD, and
-outlier percentages for each threshold (filtered columns are included
-when requested).
+A data.frame with subject, session, task, run, confounds file location,
+max FD, mean FD, and outlier percentages for each threshold (filtered
+columns are included when requested).
 
 ## Examples
 

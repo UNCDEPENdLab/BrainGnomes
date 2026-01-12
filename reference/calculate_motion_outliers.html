@@ -69,12 +69,13 @@ postprocessing stream.</p>
 <span>  include_filtered <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  filter_method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"notch"</span>, <span class="st">"lowpass"</span><span class="op">)</span>,</span>
 <span>  tr <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  band_stop_min <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  band_stop_max <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  band_stop_min <span class="op">=</span> <span class="fl">12</span>,</span>
+<span>  band_stop_max <span class="op">=</span> <span class="fl">18</span>,</span>
 <span>  low_pass_hz <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  filter_order <span class="op">=</span> <span class="fl">2L</span>,</span>
 <span>  motion_cols <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rot_x"</span>, <span class="st">"rot_y"</span>, <span class="st">"rot_z"</span>, <span class="st">"trans_x"</span>, <span class="st">"trans_y"</span>, <span class="st">"trans_z"</span><span class="op">)</span>,</span>
-<span>  rot_units <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rad"</span>, <span class="st">"deg"</span><span class="op">)</span></span>
+<span>  rot_units <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rad"</span>, <span class="st">"deg"</span><span class="op">)</span>,</span>
+<span>  output_file <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -120,12 +121,12 @@ Either <code>"notch"</code> (band-stop, in breaths per minute) or <code>"lowpass
 
 <dt id="arg-band-stop-min">band_stop_min<a class="anchor" aria-label="anchor" href="#arg-band-stop-min"></a></dt>
 <dd><p>Lower notch stop-band bound in breaths per minute
-(required for <code>filter_method = "notch"</code>).</p></dd>
+(default 12; used when <code>filter_method = "notch"</code>).</p></dd>
 
 
 <dt id="arg-band-stop-max">band_stop_max<a class="anchor" aria-label="anchor" href="#arg-band-stop-max"></a></dt>
 <dd><p>Upper notch stop-band bound in breaths per minute
-(required for <code>filter_method = "notch"</code>).</p></dd>
+(default 18; used when <code>filter_method = "notch"</code>).</p></dd>
 
 
 <dt id="arg-low-pass-hz">low_pass_hz<a class="anchor" aria-label="anchor" href="#arg-low-pass-hz"></a></dt>
@@ -144,12 +145,17 @@ Either <code>"notch"</code> (band-stop, in breaths per minute) or <code>"lowpass
 <dt id="arg-rot-units">rot_units<a class="anchor" aria-label="anchor" href="#arg-rot-units"></a></dt>
 <dd><p>Rotation unit for motion parameters (<code>"rad"</code> or <code>"deg"</code>).</p></dd>
 
+
+<dt id="arg-output-file">output_file<a class="anchor" aria-label="anchor" href="#arg-output-file"></a></dt>
+<dd><p>Optional path to write results as a tab-separated file.
+If provided, results are written using <code><a href="https://rdatatable.gitlab.io/data.table/reference/fwrite.html" class="external-link">data.table::fwrite()</a></code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data.frame with subject, session, confounds file location, max FD,
-and outlier percentages for each threshold (filtered columns are included
-when requested).</p>
+    <p>A data.frame with subject, session, task, run, confounds file location,
+max FD, mean FD, and outlier percentages for each threshold (filtered columns
+are included when requested).</p>
     </div>
 
     <div class="section level2">
