@@ -1,4 +1,13 @@
-norm_path <- function(path, mustWork = FALSE) normalizePath(path, winslash = "/", mustWork = mustWork)
+norm_path <- function(path, mustWork = FALSE) {
+  out <- normalizePath(path, winslash = "/", mustWork = mustWork)
+  if (.Platform$OS.type == "unix" && startsWith(out, "/private/var/")) {
+    out <- sub("^/private", "", out)
+  }
+  if (grepl("/T/Rtmp", out, fixed = TRUE)) {
+    out <- sub("/T/(Rtmp[^/]+)", "/T//\\1", out, perl = TRUE)
+  }
+  out
+}
 
 test_that("postprocess_subject stages outputs in scratch workspace", {
   tmp_dir <- norm_path(tempfile("pp-scratch-"), mustWork = FALSE)
@@ -25,6 +34,7 @@ test_that("postprocess_subject stages outputs in scratch workspace", {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   scratch_dir <- file.path(tmp_dir, "pp-scratch")
   dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+  scratch_dir <- norm_path(scratch_dir, mustWork = TRUE)
   workspace_dir <- file.path(
     scratch_dir, "demo_project", "sub-TEST",
     gsub("[^A-Za-z0-9]+", "_", tools::file_path_sans_ext(basename(bold_file)))
@@ -104,6 +114,7 @@ test_that("postprocess_subject moves intermediates when requested", {
   dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
   scratch_dir <- file.path(tmp_dir, "pp-scratch2")
   dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+  scratch_dir <- norm_path(scratch_dir, mustWork = TRUE)
   workspace_dir <- file.path(
     scratch_dir, "demo_project2", "sub-TEST",
     gsub("[^A-Za-z0-9]+", "_", tools::file_path_sans_ext(basename(bold_file)))
