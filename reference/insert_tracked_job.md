@@ -14,3 +14,11 @@ insert_tracked_job(sqlite_db, job_id, tracking_args = list())
 - sqlite_db:
 
   Path to SQLite database used for tracking
+
+- job_id:
+
+  Character string job ID
+
+- tracking_args:
+
+  List of tracking arguments for SQLite database

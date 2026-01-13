@@ -46,6 +46,9 @@
 - [`insert_df_sqlite()`](https://uncdependlab.github.io/BrainGnomes/reference/insert_df_sqlite.md)
   : helper function to insert a keyed data.frame into the sqlite storage
   database
+- [`insert_tracked_job()`](https://uncdependlab.github.io/BrainGnomes/reference/insert_tracked_job.md)
+  : Internal helper funciton to insert a job into the tracking SQLite
+  database
 - [`lmfit_residuals_4d`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
   : Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear
   Models

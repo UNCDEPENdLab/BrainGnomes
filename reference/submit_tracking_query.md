@@ -6,7 +6,7 @@ database
 ## Usage
 
 ``` r
-submit_tracking_query(str, sqlite_db, params = NULL)
+submit_tracking_query(str, sqlite_db, param = NULL)
 ```
 
 ## Arguments
@@ -19,6 +19,6 @@ submit_tracking_query(str, sqlite_db, params = NULL)
 
   Path to SQLite database used for tracking
 
-- params:
+- param:
 
   List of parameters/arguments to be used in query

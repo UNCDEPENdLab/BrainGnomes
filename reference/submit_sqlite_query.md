@@ -8,8 +8,9 @@ helper function to establish sqlite connection and submit query
 submit_sqlite_query(
   str = NULL,
   sqlite_db = NULL,
-  params = NULL,
-  busy_timeout = 10
+  param = NULL,
+  busy_timeout = 10,
+  return_result = FALSE
 )
 ```
 
@@ -23,7 +24,7 @@ submit_sqlite_query(
 
   Character path to SQLite database
 
-- params:
+- param:
 
   Optional list of parameters to pass to statement
 
@@ -31,6 +32,7 @@ submit_sqlite_query(
 
   Time (in s) after which to retry write operations; default is 10 s
 
-## Value
+- return_result:
 
-description
+  Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
+  Only use if expecting something in return for your query

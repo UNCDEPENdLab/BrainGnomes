@@ -36,7 +36,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Preprocess a single subject</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.7-5/R/process_subject.R" class="external-link"><code>R/process_subject.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/process_subject.R" class="external-link"><code>R/process_subject.R</code></a></small>
       <div class="d-none name"><code>process_subject.Rd</code></div>
     </div>
 
@@ -46,14 +46,15 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">process_subject</span><span class="op">(</span></span>
-<span>  <span class="va">scfg</span>,</span>
-<span>  sub_cfg <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  steps <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  postprocess_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  parent_ids <span class="op">=</span> <span class="cn">NULL</span></span>
-<span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre><code>process_subject(
+  scfg,
+  sub_cfg = NULL,
+  steps = NULL,
+  postprocess_streams = NULL,
+  extract_streams = NULL,
+  parent_ids = NULL
+  sequence_id = NULL
+)</code></pre></div>
     </div>
 
     <div class="section level2">
@@ -84,6 +85,10 @@ all available extraction streams will be run.</p></dd>
 
 <dt id="arg-parent-ids">parent_ids<a class="anchor" aria-label="anchor" href="#arg-parent-ids"></a></dt>
 <dd><p>An optional character vector of HPC job ids that must complete before this subject is run.</p></dd>
+
+
+<dt id="arg-sequence-id">sequence_id<a class="anchor" aria-label="anchor" href="#arg-sequence-id"></a></dt>
+<dd><p>An identifying ID for a set of jobs in a sequence used for job tracking</p></dd>
 
 </dl></div>
     <div class="section level2">

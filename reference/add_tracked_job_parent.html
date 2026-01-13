@@ -36,7 +36,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Add parent/child id relationship to tracking database</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.7-5/R/job_tracking_functions.R" class="external-link"><code>R/job_tracking_functions.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/job_tracking_functions.R" class="external-link"><code>R/job_tracking_functions.R</code></a></small>
       <div class="d-none name"><code>add_tracked_job_parent.Rd</code></div>
     </div>
 
@@ -46,7 +46,12 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">add_tracked_job_parent</span><span class="op">(</span>sqlite_db <span class="op">=</span> <span class="cn">NULL</span>, job_id <span class="op">=</span> <span class="cn">NULL</span>, parent_job_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">add_tracked_job_parent</span><span class="op">(</span></span>
+<span>  sqlite_db <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  job_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  parent_job_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  child_level <span class="op">=</span> <span class="fl">1</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -63,6 +68,10 @@
 
 <dt id="arg-parent-job-id">parent_job_id<a class="anchor" aria-label="anchor" href="#arg-parent-job-id"></a></dt>
 <dd><p>Job id of the parent job to job_id</p></dd>
+
+
+<dt id="arg-child-level">child_level<a class="anchor" aria-label="anchor" href="#arg-child-level"></a></dt>
+<dd><p>Level of child; currently supports two levels</p></dd>
 
 </dl></div>
 
