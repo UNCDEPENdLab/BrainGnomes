@@ -9,8 +9,8 @@
 \item{X}{A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 Typically includes motion parameters, physiological noise, etc.}
 
-\item{include_rows}{Logical vector indicating which timepoints to include in model fitting (e.g., uncensored).
-Must be the same length as the number of timepoints in the image and the number of rows in \code{X}.}
+\item{include_rows}{Optional logical vector identifying the timepoints used when estimating the model
+(e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}; when \code{NULL}, all timepoints are used.}
 
 \item{add_intercept}{Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.}
 
@@ -22,6 +22,12 @@ Must be the same length as the number of timepoints in the image and the number 
 
 \item{set_mean}{Optional numeric value; if specified, all residual time series will be shifted to have this mean
 (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.}
+
+\item{regress_cols}{Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.
+When omitted, all non-constant columns are removed unless \code{exclusive = TRUE}.}
+
+\item{exclusive}{Logical; if \code{TRUE}, only the columns listed in \code{regress_cols} (and an intercept, if present)
+are used to estimate the model. This allows for partial regression that preserves other effects.}
 }
 \value{
 A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
@@ -37,7 +43,7 @@ to valid (non-censored) timepoints to prevent bias, but the resulting model is a
 dataset including censored timepoints (e.g., for continuity or interpolation).
 
 Constant columns in the design matrix are automatically removed. If an intercept column (all ones) is present,
-it is preserved; otherwise, an intercept will be added if \code{add_intercept = TRUE}.
+it is preserved. If \code{add_intercept = TRUE}, an intercept column will be added (if not present).
 }
 \examples{
 \dontrun{

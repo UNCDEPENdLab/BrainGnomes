@@ -40,6 +40,12 @@ for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
   }
 }
 
+log_level_env <- toupper(Sys.getenv("log_level", unset = ""))
+if (nzchar(log_level_env)) {
+  options(BrainGnomes.log_level = log_level_env)
+  try(lgr::get_logger_glue("BrainGnomes")$set_threshold(log_level_env), silent = TRUE)
+}
+
 # for debugging and testing
 # args <- paste(c(
 #   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask/enable='FALSE'",

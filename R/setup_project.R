@@ -675,8 +675,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 #' Configure ICA-AROMA denoising
 #'
 #' This function configures the ICA-AROMA (Independent Component Analysis-based Automatic Removal Of Motion Artifacts)
-#' step for post-fMRIPrep processing. It sets scheduling and resource parameters that will be used to apply
-#' AROMA-based denoising to BOLD fMRI data using FSL's `fsl_regfilt` or an equivalent wrapper.
+#' step for post-fMRIPrep processing.
 #'
 #' @param scfg A project configuration object, as produced by `load_project()` or `setup_project()`.
 #' @param fields A character vector of field names to prompt for. If `NULL`, all fields related to AROMA will be prompted.
@@ -841,7 +840,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     if (nzchar(fw_path)) {
       use_fw <- prompt_input(
         instruct = glue("Found Flywheel CLI at {fw_path}"),
-        prompt = "Use this location?",
+        prompt = "Use this to run flywheel?",
         type = "flag",
         default = TRUE
       )

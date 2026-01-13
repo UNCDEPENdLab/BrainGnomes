@@ -18,6 +18,8 @@
 #' @param extract_streams Optional character vector specifying which ROI extraction streams should be run. If
 #'   `"extract_rois"`` is included in `steps`, then this setting lets the user choose streams. If NULL, all extraction
 #'   streams will be run.
+#' @param log_level Character string controlling log verbosity. One of
+#'   `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, or `FATAL`.
 #' 
 #' @return A logical value indicating whether the processing pipeline was successfully run.
 #' @export
@@ -30,7 +32,8 @@
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
 run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
-  extract_streams = NULL, debug = FALSE, force = FALSE) {
+  extract_streams = NULL, debug = FALSE, force = FALSE,
+  log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_character(steps, null.ok = TRUE)
@@ -43,6 +46,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
+  valid_log_levels <- c("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL")
+  if (length(log_level) > 1L) log_level <- log_level[1L]
+  log_level <- toupper(log_level)
+  log_level <- match.arg(log_level, valid_log_levels)
   
   if (is.null(scfg$metadata$project_name)) stop("Cannot run a nameless project. Have you run setup_project() yet?")
   if (is.null(scfg$metadata$project_directory)) stop("Cannot run a project lacking a project directory. Have you run setup_project() yet?")
@@ -105,9 +112,9 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     names(steps) <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
     for (s in user_steps) steps[s] <- TRUE
     
-    # scfg$log_level <- "INFO" # how much detail to park in logs
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
+    scfg$log_level <- log_level
   } else {
     ids <- prompt_input(
       instruct = "Enter subject IDs to process, separated by spaces. Press enter to process all subjects.",
@@ -156,17 +163,19 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     # check whether to run in debug mode
     scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
     scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
-
-    # not currently used and would need to propagate the choice down to sbatch scripts through and environment variable (log_message)
-    # scfg$log_level <- prompt_input(
-    #   instruct = "What level of detail would you like in logs? Options are INFO, DEBUG, ERROR.",
-    #   type = "character", among=c("INFO", "ERROR", "DEBUG")
-    # )
+    scfg$log_level <- prompt_input(
+      instruct = "Select log level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)",
+      type = "character", among = valid_log_levels, default = log_level
+    )
   }
 
   if (isTRUE(scfg$force)) {
     if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
+  if (is.null(scfg$log_level)) scfg$log_level <- log_level
+  scfg$log_level <- toupper(scfg$log_level)
+  options(BrainGnomes.log_level = scfg$log_level)
+  try(lgr::get_logger_glue("BrainGnomes")$set_threshold(scfg$log_level), silent = TRUE)
   
   if (!any(steps)) stop("No processing steps were requested in run_project.")
 
@@ -193,6 +202,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # generate sequence ID for job tracking
   sequence_id <- uuid::UUIDgenerate()
+  scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
 
   flywheel_id <- NULL
   if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
@@ -204,6 +214,13 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   fsaverage_id <- NULL
   if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg, sequence_id)
 
+  # Prefetch TemplateFlow templates when needed so downstream runs can disable networking
+  # This avoids socket errors in Python multiprocessing: https://github.com/nipreps/mriqc/issues/1170
+  prefetch_id <- NULL
+  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps)
+
+  parent_ids <- c(fsaverage_id, prefetch_id)
+
   # If flywheel sync is requested, defer subject scheduling to a dependent controller job
   # This ensures that downstream steps see all data synched from flywheel (e.g., new subjects)
   if (isTRUE(steps["flywheel_sync"])) {
@@ -213,7 +230,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       subject_filter = subject_filter,
       postprocess_streams = postprocess_streams,
       extract_streams = extract_streams,
-      parent_ids = fsaverage_id
+      parent_ids = parent_ids
     )
     snap_file <- file.path(scfg$metadata$log_directory, "run_project_snapshot.rds")
     dir.create(dirname(snap_file), showWarnings = FALSE, recursive = TRUE)
@@ -230,7 +247,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     env_variables <- c(
       pkg_dir = find.package(package = "BrainGnomes"),
       R_HOME = R.home(),
-      snapshot_rds = snap_file
+      snapshot_rds = snap_file,
+      log_level = scfg$log_level
     )
     cluster_job_submit(
       sched_script,
@@ -246,7 +264,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
     scfg = scfg, steps = steps, subject_filter = subject_filter, postprocess_streams = postprocess_streams, 
-    extract_streams = extract_streams, parent_ids = fsaverage_id, sequence_id = sequence_id
+    extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id
   )
   return(invisible(TRUE))
 }
@@ -375,8 +393,8 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 
-  lg$info("Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
-  lg$debug("Full command: {attr(job_id, 'cmd')}")
+  to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
+  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
 
   return(job_id)
 }
@@ -436,3 +454,103 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   return(job_id)
 }
 
+# helper for handling the problem of multi
+submit_prefetch_templates <- function(scfg, steps) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  checkmate::assert_logical(steps, any.missing = FALSE)
+
+  # run the python script for fetching within the fmriprep container to ensure templateflow presence and alignment
+  container_path <- scfg$compute_environment$fmriprep_container
+  if (!checkmate::test_file_exists(container_path)) {
+    warning("Skipping TemplateFlow prefetch because the fMRIPrep container is missing.")
+    return(NULL)
+  }
+
+  tf_home <- scfg$metadata$templateflow_home
+  if (!checkmate::test_string(tf_home) || !nzchar(tf_home)) {
+    tf_home <- file.path(Sys.getenv("HOME"), ".cache", "templateflow")
+  }
+
+  tf_home <- normalizePath(tf_home, mustWork = FALSE)
+  if (!dir.exists(tf_home)) dir.create(tf_home, showWarnings = FALSE, recursive = TRUE)
+
+  spaces <- scfg$fmriprep$output_spaces
+  if (isTRUE(steps["aroma"]) && (is.null(spaces) || !grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE))) {
+    spaces <- trimws(paste(spaces, "MNI152NLin6Asym:res-2"))
+  }
+
+  # make sure that at least fmriprep's default space is included
+  if (is.null(spaces) || !nzchar(trimws(spaces))) spaces <- "MNI152NLin2009cAsym"
+
+  # pull out non-template output spaces
+  spaces_vec <- unique(strsplit(trimws(spaces), "\\s+")[[1]])
+  skip_spaces <- c("anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6", "T1w", "T2w", "func")
+  fetch_spaces <- setdiff(spaces_vec, skip_spaces)
+  if (length(fetch_spaces) == 0L) return(NULL)
+
+  script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
+  if (!checkmate::test_file_exists(script_path)) {
+    warning("Cannot locate TemplateFlow prefetch helper script; skipping prefetch step.")
+    return(NULL)
+  }
+
+  # default resource allocation requirements
+  scfg$prefetch_templates <- list(nhours = 0.5, memgb = 16, ncores = 1)
+  
+  log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
+  stdout_log <- glue::glue("{scfg$metadata$log_directory}/prefetch_templates_jobid-%j_{log_stamp}.out")
+  stderr_log <- sub("\\.out$", ".err", stdout_log)
+  sched_args <- get_job_sched_args(scfg, "prefetch_templates", stdout_log = stdout_log, stderr_log = stderr_log)
+  sched_script <- get_job_script(scfg, "prefetch_templates", subject_suffix = FALSE)
+
+  # run TemplateFlow prefetch inside fmriprep container
+  spaces_arg <- paste(fetch_spaces, collapse = " ")
+  log_file <- file.path(scfg$metadata$log_directory, "prefetch_templates_log.txt")
+  env_variables <- c(
+    pkg_dir = find.package(package = "BrainGnomes"),
+    debug_pipeline = scfg$debug,
+    log_file = log_file,
+    stdout_log = stdout_log,
+    stderr_log = stderr_log,
+    prefetch_container = container_path,
+    prefetch_script = script_path,
+    prefetch_spaces = spaces_arg,
+    templateflow_home = tf_home,
+    log_level = scfg$log_level
+  )
+
+  job_id <- cluster_job_submit(sched_script,
+    scheduler = scfg$compute_environment$scheduler,
+    sched_args = sched_args,
+    env_variables = env_variables,
+    echo = FALSE
+  )
+
+  return(job_id)
+}
+
+ensure_aroma_output_space <- function(scfg, require_aroma = isTRUE(scfg$aroma$enable), verbose = TRUE) {
+  checkmate::assert_class(scfg, "bg_project_cfg")
+  if (!isTRUE(require_aroma)) return(scfg)
+
+  if (is.null(scfg$fmriprep$auto_added_aroma_space)) scfg$fmriprep$auto_added_aroma_space <- FALSE
+
+  spaces <- scfg$fmriprep$output_spaces
+  has_required_space <- !is.null(spaces) && grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE)
+  if (has_required_space) return(scfg)
+
+  addition <- "MNI152NLin6Asym:res-2"
+  if (is.null(spaces) || !nzchar(trimws(spaces))) {
+    scfg$fmriprep$output_spaces <- addition
+  } else {
+    scfg$fmriprep$output_spaces <- trimws(paste(spaces, addition))
+  }
+
+  if (isTRUE(verbose)) {
+    message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+  }
+
+  scfg$fmriprep$auto_added_aroma_space <- TRUE
+
+  return(scfg)
+}

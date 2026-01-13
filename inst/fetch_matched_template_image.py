@@ -45,6 +45,12 @@ def resample_template_to_bold(in_file, output, template_resolution=1, template_s
         extension=extension
     )
 
+    if isinstance(image_path, (list, tuple)):
+        if len(image_path) == 1:
+            image_path = image_path[0]
+        else:
+            raise ValueError(f"TemplateFlow returned multiple files for template={template_space}, desc={desc}, resolution={template_resolution}")
+
     template_img = nib.load(image_path)
     # https://nilearn.github.io/stable/auto_examples/06_manipulating_images/plot_resample_to_template.html
     resampled_mask = resample_to_img(

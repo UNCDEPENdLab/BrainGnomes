@@ -107,6 +107,9 @@ setup_extract_streams <- function(scfg = list(), fields = NULL) {
     if (!any(grepl("^extract_rois/", fields))) return(scfg) # if fields are passed, but none relate to extract rois, skip out
 
     extract_fields <- grep("^extract_rois/", fields, value = TRUE)
+    # drop global enable so it isn't treated as a stream name
+    extract_fields <- setdiff(extract_fields, "extract_rois/enable")
+    if (length(extract_fields) == 0L) return(scfg)
 
     # extract_rois stream and setting using sub()
     stream_split <- strsplit(extract_fields, "/", fixed = TRUE)
@@ -141,7 +144,7 @@ setup_extract_stream <- function(scfg, fields = NULL, stream_name = NULL) {
   }
 
   if (!is.null(stream_name)) {
-    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n"))
+    cat(glue("\n--- Specifying extraction stream: {stream_name} ---\n", .trim = FALSE))
   }
 
   defaults <- list(

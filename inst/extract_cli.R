@@ -38,6 +38,12 @@ for (pkg in c("glue", "checkmate", "data.table", "yaml")) {
   }
 }
 
+log_level_env <- toupper(Sys.getenv("log_level", unset = ""))
+if (nzchar(log_level_env)) {
+  options(BrainGnomes.log_level = log_level_env)
+  try(lgr::get_logger_glue("BrainGnomes")$set_threshold(log_level_env), silent = TRUE)
+}
+
 # parse CLI inputs into a nested list, if relevant
 cli_args <- BrainGnomes::parse_cli_args(args)
 

@@ -282,7 +282,10 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<doubl
   NiftiImage image(infile); // read input
   int datatype = image->datatype;
   
-  if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64) {
+  // convert signed and unsigned integers to float to avoid boundary errors where new value in a voxel
+  // exceeds the bounds of the integer data type.
+  if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64 ||
+      datatype == DT_UINT8 || datatype == DT_UINT16 || datatype == DT_UINT32 || datatype == DT_UINT64) {
     NiftiImageData float_data(image.data(), DT_FLOAT32);
     image.replaceData(float_data);
     float_data.disown();

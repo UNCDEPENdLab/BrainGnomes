@@ -1,60 +1,5 @@
 #!/bin/bash
 
-#Helper function that converts a set of environment variables into a comma-separated key-value list of
-#variables and values. This is used to pass environment variables to qsub -v without having to type out a lot of details
-#  Example: envpass qsub_allocation heudiconv_walltime
-#  Result:  This will lookup the values of these variables in the environment
-#           and result in something like fsl_module=mnh5174_c_g_sc_default,heudiconv_walltime=2:00:00
-#  Consider whether we should be quoting the values in case they have weird characters
-function envpass() {
-  npar=$#
-  [ $npar -eq 0 ] && return #nothing to do
-  env_names=$@
-  local vpass_string=
-  for inputName in $env_names; do
-    #check whether value contains an equals sign, in which case treat it as a verbatim key-value pair
-    if [[ "$inputName" == *"="* ]]; then
-      vpass_string="$vpass_string'$inputName',"
-    else
-      inputVal=${!inputName}
-      [ -z "${inputVal}" ] && echo "$inputName is empty" # && exit 1
-      vpass_string="$vpass_string$inputName='$inputVal',"
-    fi
-  done
-  vpass_string=$(echo $vpass_string | sed 's/.$//') #trim trailing comma
-  echo $vpass_string
-}
-
-#looks for qsub_email and qsub_allocation in environment
-#accepts positional parameters thereafter that all get converted to -l arguments
-function build_qsub_string() {
-  local qsub_string=
-  if [ -n "$qsub_allocation" ]; then
-    qsub_string="${qsub_string} -A $qsub_allocation"
-  else
-    qsub_string="${qsub_string} -A open" #default to open queue if not specified
-  fi
-
-  if [ -n "$qsub_email" ]; then qsub_string="${qsub_string} -M $qsub_email"; fi
-
-  local nargs=$#
-  if [ $nargs -gt 0 ]; then
-    local env_names=$@
-    for inputName in $env_names; do
-      #check whether value contains an equals sign, in which case treat it as a verbatim key-value pair
-      if [[ "$inputName" == *"="* ]]; then
-        qsub_string="$qsub_string -l $inputName"
-      else
-        inputVal=${!inputName} #use the value of the environment variable
-        if [ -n "${inputVal}" ]; then
-          qsub_string="$qsub_string -l $inputName='$inputVal'"
-        fi
-      fi
-    done
-  fi
-  echo $qsub_string
-}
-
 # rel is shorthand for "run, echo, log". It looks for the environment $log_file and will write outputs there if specified.
 # 
 # Initial arguments specify what to do, including
@@ -169,45 +114,6 @@ function rel() {
   return $cmdExit  #exit status of command
 }
 
-# this function extracts the jobID number from a qsub job listing and intelligently constructs the desired dependency string
-# expects input like: afterok <qsub job listing> afterany <qsub job listing> ...
-function build_depend_string() {
-  local base="-W depend="
-  local args=""
-  while [[ $# -gt 0 ]]; do
-    if [[ ! -z $2 && $2 != "\"\"" ]]; then
-      args=${args}$(link_job_listings ${1}:${2})
-    fi
-
-    shift
-    shift
-  done
-
-  args=$(echo $args | sed 's/,$//')
-
-  if [[ -z args ]]; then
-    echo ""
-  else
-    echo ${base}${args}
-  fi
-}
-
-# parses out the pure qsub job number
-# links a list of these together
-# NOTE: leaves a trailing comma
-function link_job_listings() {
-
-  base=""
-  for arg in $@; do
-    arg=$(echo $arg | sed -e 's/\.torque01\.[a-z0-9\.]*edu//g') # get just the number
-    base=${base}${arg},
-  done
-
-  #base=$(echo $base | sed -e 's/,$//')
-
-  echo $base
-}
-
 
 function trap_job_failure() {
   local step="$1"
@@ -300,11 +206,34 @@ function traperror () {
 }
 
 
+log_level_rank() {
+  local lvl=${1^^}
+  case "$lvl" in
+    TRACE) echo 600 ;;
+    DEBUG) echo 500 ;;
+    INFO) echo 400 ;;
+    WARN|WARNING) echo 300 ;;
+    ERROR) echo 200 ;;
+    FATAL|CRITICAL) echo 100 ;;
+    *) echo 400 ;;
+  esac
+}
+
 function log_message() {
   [[ $# -eq 0 ]] && echo "No arguments to log_message provided" && return 1
-  local level="$1"
+  local level=${1^^}
   shift
   local message="$*"
+
+  local threshold=${LOG_LEVEL:-${log_level:-INFO}}
+  threshold=${threshold^^}
+  local level_rank
+  local threshold_rank
+  level_rank=$(log_level_rank "$level")
+  threshold_rank=$(log_level_rank "$threshold")
+  if [[ $level_rank -gt $threshold_rank ]]; then
+    return 0
+  fi
   
   # Timestamp
   local timestamp

@@ -1,5 +1,7 @@
 test_that("get_project_status reports completion", {
-  root <- tempdir()
+  root <- tempfile("status-")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
   log_dir <- file.path(root, "logs"); dir.create(log_dir)
   bids_dir <- file.path(root, "bids"); dir.create(bids_dir)
   fmriprep_dir <- tempfile("fmriprep_"); dir.create(fmriprep_dir)

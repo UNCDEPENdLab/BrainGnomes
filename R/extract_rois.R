@@ -112,146 +112,166 @@ extract_rois <- function(bold_file, atlas_files, out_dir, log_file = NULL,
   # loop over atlases
   for (atlas in atlas_files) {
     checkmate::assert_file_exists(atlas)
-    atlas_img <- RNifti::readNifti(atlas)
-
     atlas_name <- sub("\\.nii(\\.gz)?$", "", basename(atlas))
-    out_dir_atlas <- file.path(out_dir, atlas_name)
-    if (!dir.exists(out_dir_atlas)) dir.create(out_dir_atlas, recursive = TRUE)
-    
-    # expected timeseries file
-    ts_bids <- modifyList(bids_info, list(rois = bids_camelcase(atlas_name), suffix = "timeseries", ext = ".tsv"))
-    ts_file <- file.path(out_dir_atlas, construct_bids_filename(ts_bids, full.names = FALSE))
 
-    # compare dimensions of atlas and image
-    if (!identical(dim(atlas_img)[1:3], dim_img[1:3])) {
-      to_log(lg, "fatal", "Atlas '{atlas}' spatial dimensions {paste(dim(atlas_img)[1:3], collapse = 'x')}
-           do not match BOLD grid {paste(dim_img[1:3], collapse = 'x')}.
-           Resample atlas or BOLD to a common grid.")
-    }
+    atlas_result <- run_logged(
+      function(atlas_path, atlas_label) {
+        atlas_img <- RNifti::readNifti(atlas_path)
+        out_dir_atlas <- file.path(out_dir, atlas_label)
+        if (!dir.exists(out_dir_atlas)) dir.create(out_dir_atlas, recursive = TRUE)
 
-    atlas_vec <- as.vector(atlas_img)
+        ts_bids <- modifyList(bids_info, list(rois = bids_camelcase(atlas_label), suffix = "timeseries", ext = ".tsv"))
+        ts_file <- file.path(out_dir_atlas, construct_bids_filename(ts_bids, full.names = FALSE))
 
-    if (!checkmate::test_integerish(atlas_vec, tol = 1e-6)) stop("Atlas ", atlas, " contains non-integer labels (outside tolerance).")
-    roi_vals <- sort(unique(atlas_vec[atlas_vec > 0 & mask_vec]))
-
-    # ROI reduction
-    ts_mat <- sapply(roi_vals, function(lbl) {
-      roi_voxels <- sum(atlas_vec == lbl)
-      required_vox <- compute_min_vox_required(min_vox_spec, roi_voxels)
-      roi_idx <- which((atlas_vec == lbl) & mask_vec) # get voxel positions for this ROI in the brain mask
-      if (length(roi_idx) < required_vox) {
-        req_txt <- as.character(format_min_vox_requirement(min_vox_spec, roi_voxels))
-        to_log(lg, "info", "ROI {lbl} has {length(roi_idx)} usable voxels but requires {req_txt}. Dropping")
-        rep(NA_real_, n_time)
-      } else {
-        roi_vox <- t(mat[roi_idx, , drop = FALSE]) # time x voxels
-        if (roi_reduce == "pca") {
-          pc <- stats::prcomp(roi_vox, scale. = TRUE)$x[, 1]
-          mn <- rowMeans(roi_vox) # because direction of eigenvector is arbitrary, ensure it scales positively with the mean
-          if (stats::cor(pc, mn) < 0) pc <- -pc
-          pc
-        } else if (roi_reduce == "median") {
-          apply(roi_vox, 1, median)
-        } else if (roi_reduce == "huber") {
-          apply(roi_vox, 1, function(x) huber(x)$mu)
-        } else { # mean
-          rowMeans(roi_vox)
+        if (!identical(dim(atlas_img)[1:3], dim_img[1:3])) {
+          to_log(lg, "fatal", "Atlas '{atlas_path}' spatial dimensions {paste(dim(atlas_img)[1:3], collapse = 'x')}\n           do not match BOLD grid {paste(dim_img[1:3], collapse = 'x')}.\n           Resample atlas or BOLD to a common grid.")
         }
-      }
-    })
 
-    ts_df <- as.data.frame(ts_mat)
-    colnames(ts_df) <- paste0("roi", roi_vals)
-    ts_df$volume <- seq_len(n_time)
-    ts_df <- ts_df[, c("volume", paste0("roi", roi_vals))] # volume x rois
+        atlas_vec <- as.vector(atlas_img)
 
-    # apply censor file
-    censor_file <- get_censor_file(bids_info)
-    if (file.exists(censor_file)) {
-      censor <- as.integer(readLines(censor_file))
-      to_drop <- which(1L - censor == 1L) # bad timepoints are 0 in the censor file
-      if (any(to_drop)) {
-        to_log(lg, "info", "Dropping volumes {paste(to_drop, collapse=', ')}")
-        ts_df <- ts_df[-to_drop, , drop = FALSE]
-        ts_mat <- ts_mat[-to_drop, , drop = FALSE]
-      }
-    }
+        if (!checkmate::test_integerish(atlas_vec, tol = 1e-6)) stop("Atlas ", atlas_path, " contains non-integer labels (outside tolerance).")
+        roi_vals <- sort(unique(atlas_vec[atlas_vec > 0 & mask_vec]))
 
-    if (isTRUE(save_ts)) {
-      if (file.exists(ts_file) && isFALSE(overwrite)) {
-        to_log(lg, "info", "Not overwriting existing time series file {ts_file}")
-      } else {
-        if (file.exists(ts_file)) {
-          to_log(lg, "info", "Overwriting subject {sub_id} extracted time series: {ts_file}")
-        } else {
-          to_log(lg, "info", "Writing subject {sub_id} extracted time series to {ts_file}")
-        }
-        data.table::fwrite(ts_df, ts_file, sep = "\t")
-      }
-    } else {
-      ts_file <- NULL
-    }
-    
-    enough_timepoints <- TRUE
-    if (nrow(ts_mat) < 20L) {
-      to_log(lg, "warn", "Only {nrow(ts_mat)} timepoints in timeseries. Cannot compute valid correlations")
-      enough_timepoints <- FALSE
-    }
-
-    cor_files <- NULL
-    if (enough_timepoints && compute_correlation) {
-      cor_files <- lapply(cor_method, function(cmeth) {
-        nacols <- which(apply(ts_mat, 2, function(col) all(is.na(col))))
-        ts_use <- if (length(nacols) > 0L) ts_mat[, -nacols, drop = FALSE] else ts_mat
-
-        if (ncol(ts_use) == 0L) {
-          cmat <- matrix(NA_real_, 0, 0)
-        } else {
-          cmat <- if (cmeth == "cor.shrink") {
-            corpcor::cor.shrink(ts_use)
+        ts_mat <- sapply(roi_vals, function(lbl) {
+          roi_voxels <- sum(atlas_vec == lbl)
+          required_vox <- compute_min_vox_required(min_vox_spec, roi_voxels)
+          roi_idx <- which((atlas_vec == lbl) & mask_vec)
+          if (length(roi_idx) < required_vox) {
+            req_txt <- as.character(format_min_vox_requirement(min_vox_spec, roi_voxels))
+            to_log(lg, "info", "ROI {lbl} has {length(roi_idx)} usable voxels but requires {req_txt}. Dropping")
+            rep(NA_real_, n_time)
           } else {
-            stats::cor(ts_use, method = cmeth, use = "pairwise.complete.obs")
+            roi_vox <- t(mat[roi_idx, , drop = FALSE])
+            if (roi_reduce == "pca") {
+              pc <- stats::prcomp(roi_vox, scale. = TRUE)$x[, 1]
+              mn <- rowMeans(roi_vox)
+              if (stats::cor(pc, mn) < 0) pc <- -pc
+              pc
+            } else if (roi_reduce == "median") {
+              apply(roi_vox, 1, median)
+            } else if (roi_reduce == "huber") {
+              apply(roi_vox, 1, function(x) huber(x)$mu)
+            } else {
+              rowMeans(roi_vox)
+            }
           }
+        })
+        if (is.null(dim(ts_mat))) ts_mat <- matrix(ts_mat, ncol = 1L)
 
-          if (isTRUE(rtoz)) {
-            to_log(lg, "debug", "Applying the Fisher z transformation to correlation coefficients.")
-            cmat <- atanh(cmat)
-            diag(cmat) <- NA_real_ # avoid confusing Inf on diagonal since atanh(1) is Inf
-          }
+        ts_df <- as.data.frame(ts_mat)
+        colnames(ts_df) <- paste0("roi", roi_vals)
+        ts_df$volume <- seq_len(n_time)
+        ts_df <- ts_df[, c("volume", paste0("roi", roi_vals))]
+        surviving_idx <- which(colSums(!is.na(ts_mat)) > 0L)
+        surviving_labels <- if (length(surviving_idx) > 0L) paste(head(paste0("roi", roi_vals[surviving_idx]), 5L), collapse = ", ") else "<none>"
+        to_log(lg, "debug", "Atlas {atlas_label}: retained {length(surviving_idx)} of {length(roi_vals)} ROIs after masking/min_vox (examples: {surviving_labels})")
 
-          if (length(nacols) > 0L) {
-            full <- matrix(NA_real_, ncol(ts_mat), ncol(ts_mat))
-            keep <- setdiff(seq_len(ncol(ts_mat)), nacols)
-            full[keep, keep] <- cmat
-            cmat <- full
+        censor_file <- get_censor_file(bids_info)
+        if (file.exists(censor_file)) {
+          censor <- as.integer(readLines(censor_file))
+          to_drop <- which(1L - censor == 1L)
+          if (any(to_drop)) {
+            to_log(lg, "info", "Dropping volumes {paste(to_drop, collapse=', ')}")
+            ts_df <- ts_df[-to_drop, , drop = FALSE]
+            ts_mat <- ts_mat[-to_drop, , drop = FALSE]
           }
         }
 
-        cor_bids <- modifyList(bids_info, list(
-          rois = bids_camelcase(atlas_name), correlation = cmeth, suffix = "connectivity", ext = ".tsv"
-        ))
-
-        cor_file <- file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))
-        write_file <- TRUE
-        if (file.exists(cor_file)) {
-          if (overwrite) {
-            to_log(lg, "info", "Overwriting subject {sub_id} {cmeth} correlations to {cor_file}")
+        if (isTRUE(save_ts)) {
+          if (file.exists(ts_file) && isFALSE(overwrite)) {
+            to_log(lg, "info", "Not overwriting existing time series file {ts_file}")
           } else {
-            write_file <- FALSE
-            to_log(lg, "info", "Not writing subject {sub_id} {cmeth} correlations to {cor_file} because file exists and overwrite=FALSE")
+            if (file.exists(ts_file)) {
+              to_log(lg, "info", "Overwriting subject {sub_id} extracted time series: {ts_file}")
+            } else {
+              to_log(lg, "info", "Writing subject {sub_id} extracted time series to {ts_file}")
+            }
+            data.table::fwrite(ts_df, ts_file, sep = "\t")
           }
         } else {
-          to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
+          ts_file <- NULL
         }
-        
-        if (write_file) data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
-        
-        cor_file
-      })
-      names(cor_files) <- cor_method
-    }
 
-    outputs[[atlas_name]] <- list(timeseries = ts_file, correlation = cor_files)
+        enough_timepoints <- TRUE
+        if (nrow(ts_mat) < 20L) {
+          to_log(lg, "warn", "Only {nrow(ts_mat)} timepoints in timeseries. Cannot compute valid correlations")
+          enough_timepoints <- FALSE
+        }
+
+        cor_files <- NULL
+        if (enough_timepoints && compute_correlation) {
+          cor_files <- lapply(cor_method, function(cmeth) {
+            nacols <- which(apply(ts_mat, 2, function(col) all(is.na(col))))
+            ts_use <- if (length(nacols) > 0L) ts_mat[, -nacols, drop = FALSE] else ts_mat
+
+            if (ncol(ts_use) == 0L) {
+              cmat <- matrix(NA_real_, 0, 0)
+            } else {
+              cmat <- if (cmeth == "cor.shrink") {
+                corpcor::cor.shrink(ts_use)
+              } else {
+                stats::cor(ts_use, method = cmeth, use = "pairwise.complete.obs")
+              }
+
+              if (isTRUE(rtoz)) {
+                to_log(lg, "debug", "Applying the Fisher z transformation to correlation coefficients.")
+                cmat <- atanh(cmat)
+                diag(cmat) <- NA_real_
+              }
+
+              if (length(nacols) > 0L) {
+                full <- matrix(NA_real_, ncol(ts_mat), ncol(ts_mat))
+                keep <- setdiff(seq_len(ncol(ts_mat)), nacols)
+                full[keep, keep] <- cmat
+                cmat <- full
+              }
+            }
+
+            cor_bids <- modifyList(bids_info, list(
+              rois = bids_camelcase(atlas_label), correlation = cmeth, suffix = "connectivity", ext = ".tsv"
+            ))
+
+            cor_file <- file.path(out_dir_atlas, construct_bids_filename(cor_bids, full.names = FALSE))
+            write_file <- TRUE
+            if (file.exists(cor_file)) {
+              if (overwrite) {
+                to_log(lg, "info", "Overwriting subject {sub_id} {cmeth} correlations to {cor_file}")
+              } else {
+                write_file <- FALSE
+                to_log(lg, "info", "Not writing subject {sub_id} {cmeth} correlations to {cor_file} because file exists and overwrite=FALSE")
+              }
+            } else {
+              to_log(lg, "info", "Writing subject {sub_id} {cmeth} correlations to {cor_file}")
+            }
+
+            zero_roi <- ncol(cmat) == 0L || nrow(cmat) == 0L
+            if (write_file) {
+              dir.create(dirname(cor_file), recursive = TRUE, showWarnings = FALSE)
+              if (zero_roi) {
+                to_log(lg, "warn", "No usable ROIs remain after filtering; creating an empty file at {cor_file}")
+                if (file.exists(cor_file)) unlink(cor_file)
+                file.create(cor_file)
+              } else {
+                data.table::fwrite(as.data.frame(cmat), cor_file, sep = "\t")
+              }
+            } else if (zero_roi) {
+              to_log(lg, "warn", "No usable ROIs remain after filtering; correlations not written because overwrite=FALSE for {cor_file}")
+            }
+
+            cor_file
+          })
+          names(cor_files) <- cor_method
+        }
+
+        list(timeseries = ts_file, correlation = cor_files)
+      },
+      atlas_path = atlas,
+      atlas_label = atlas_name,
+      logger = lg,
+      fun_label = glue::glue("extract_rois[{atlas_name}]")
+    )
+
+    outputs[[atlas_name]] <- atlas_result
   }
 
   return(outputs)

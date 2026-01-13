@@ -14,7 +14,8 @@ butterworth_filter_4d(
   order = 2L,
   padtype = "even",
   use_zi = TRUE,
-  demean = TRUE
+  demean = TRUE,
+  lg = NULL
 )
 }
 \arguments{
@@ -39,6 +40,8 @@ if TRUE, returns a minimal metadata internal object (see RNifti).}
 
 \item{demean}{Logical. Whether to demean the timeseries prior to filtering. Usually a good to remove
 DC (mean) component (default = true).}
+
+\item{lg}{Optional logger for status and debug messages.}
 }
 \value{
 A 4D NIfTI image, either written to \code{outfile} or returned as an object.

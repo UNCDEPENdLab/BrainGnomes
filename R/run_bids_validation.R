@@ -30,6 +30,9 @@ run_bids_validation <- function(scfg, outfile = NULL) {
   if (!"bids_validation_log" %in% names(lg$appenders)) {
     lg$add_appender(lgr::AppenderFile$new(log_file), name = "bids_validation_log")
   }
+  log_level_value <- resolve_log_level(scfg$log_level)
+  if (is.null(log_level_value)) log_level_value <- "INFO"
+  set_logger_threshold(lg, log_level_value)
 
   env_variables <- c(
     debug_pipeline = scfg$debug,
@@ -37,7 +40,8 @@ run_bids_validation <- function(scfg, outfile = NULL) {
     R_HOME = R.home(),
     log_file = log_file,
     stdout_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-    stderr_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
+    stderr_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+    log_level = log_level_value
   )
 
   sched_script <- get_job_script(scfg, "bids_validation")

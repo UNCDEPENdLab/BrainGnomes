@@ -393,18 +393,41 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate temporal filtering
   if (is.null(ppcfg$temporal_filter$enable)) gaps <- c(gaps, "postprocess/temporal_filter/enable")
   if ("temporal_filter" %in% names(ppcfg) && isTRUE(ppcfg$temporal_filter$enable)) {
-    if (!checkmate::test_number(ppcfg$temporal_filter$low_pass_hz, lower=0)) {
+    lp <- ppcfg$temporal_filter$low_pass_hz
+    hp <- ppcfg$temporal_filter$high_pass_hz
+
+    # treat missing/blank entries as "disabled" (Inf/-Inf), matching setup_temporal_filter()
+    if (is.null(lp) || (length(lp) == 1L && is.na(lp))) lp <- Inf
+    if (is.null(hp) || (length(hp) == 1L && is.na(hp))) hp <- -Inf
+
+    if (!checkmate::test_number(lp, finite = FALSE)) {
       if (!quiet) message(glue("Missing low_pass_hz in $postprocess${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "postprocess/temporal_filter/low_pass_hz")
-      ppcfg$temporal_filter$low_pass_hz <- NULL
+      lp <- NULL
+    } else if (is.finite(lp) && lp <= 0) {
+      if (!quiet) message(glue("low_pass_hz <= 0 in $postprocess${cfg_name}; treating as disabled (no low-pass filter)."))
+      lp <- Inf
     }
-    if (!checkmate::test_number(ppcfg$temporal_filter$high_pass_hz, lower = 0)) {
+
+    if (!checkmate::test_number(hp, finite = FALSE)) {
       if (!quiet) message(glue("Missing high_pass_hz in $postprocess${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "postprocess/temporal_filter/high_pass_hz")
-      ppcfg$temporal_filter$high_pass_hz <- NULL
+      hp <- NULL
+    } else if (is.finite(hp) && hp <= 0) {
+      if (!quiet) message(glue("high_pass_hz <= 0 in $postprocess${cfg_name}; treating as disabled (no high-pass filter)."))
+      hp <- -Inf
     }
-    if (!is.null(ppcfg$temporal_filter$low_pass_hz) && !is.null(ppcfg$temporal_filter$high_pass_hz) &&
-        ppcfg$temporal_filter$high_pass_hz > ppcfg$temporal_filter$low_pass_hz) {
+
+    ppcfg$temporal_filter$low_pass_hz <- lp
+    ppcfg$temporal_filter$high_pass_hz <- hp
+
+    if (is.null(lp) && is.null(hp)) {
+      # both invalid values
+      gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
+    } else if (is.infinite(lp) && is.infinite(hp)) {
+      if (!quiet) message(glue("Both low_pass_hz and high_pass_hz are disabled in $postprocess${cfg_name}$temporal_filter. Provide at least one cutoff or disable the step."))
+      gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
+    } else if (is.finite(lp) && is.finite(hp) && hp > lp) {
       if (!quiet) message(glue("high_pass_hz is greater than low_pass_hz $postprocess${cfg_name}$temporal_filter. You will be asked to respecify valid values."))
       gaps <- unique(c(gaps, "postprocess/temporal_filter/low_pass_hz", "postprocess/temporal_filter/high_pass_hz"))
       ppcfg$temporal_filter$low_pass_hz <- NULL

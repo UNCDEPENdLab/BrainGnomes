@@ -221,7 +221,7 @@ args_to_df <- function(arg_vec = NULL) {
   checkmate::assert_character(arg_vec)
   results <- list()
   # require that each element of arg_vec begins with a hyphen (or two)
-  hyp_start <- grepl("\\s*-{1,2}", arg_vec, perl=TRUE)
+  hyp_start <- grepl("^\\s*-{1,2}", arg_vec, perl = TRUE)
   if (!all(hyp_start)) stop("args_to_df requires that each element of the input vector start with one or two hyphens")
   
   # Split the string by whitespace to get individual arguments
@@ -233,28 +233,29 @@ args_to_df <- function(arg_vec = NULL) {
     while (j <= length(tokens)) {
       token <- tokens[j]
       nhyphens <- ifelse(grepl("^--", token), 2, ifelse(grepl("^-", token), 1, 0))
-      if (nhyphens > 0L) {
-        token_naked <- sub("^--?", "", token)
-        
-        if (grepl("=", token_naked)) {
-          has_equals <- TRUE
-          parts <- strsplit(token_naked, "=", fixed = TRUE)[[1]]
-          lhs <- parts[1]
-          rhs_vals <- if (length(parts) > 1) paste(parts[-1], collapse = "=") else ""
-          #to_parse <- c(parts[2], tokens)
-        } else {
-          has_equals <- FALSE
-          lhs <- token_naked
-          rhs_vals <- character(0)
-        }
+      if (nhyphens == 0L) {
+        j <- j + 1
+        next
       }
-      
-      # Gather all following tokens until next one starts with "-" or end of input
-      while (j + 1 <= length(tokens) && !grepl("^-", tokens[j + 1])) {
+
+      token_naked <- sub("^--?", "", token)
+
+      if (grepl("=", token_naked, fixed = TRUE)) {
+        has_equals <- TRUE
+        parts <- strsplit(token_naked, "=", fixed = TRUE)[[1]]
+        lhs <- parts[1]
+        rhs_vals <- if (length(parts) > 1) paste(parts[-1], collapse = "=") else ""
+      } else {
+        has_equals <- FALSE
+        lhs <- token_naked
+        rhs_vals <- character(0)
+      }
+
+      while (j + 1 <= length(tokens) && !grepl("^\\s*-", tokens[j + 1])) {
         rhs_vals <- c(rhs_vals, tokens[j + 1])
         j <- j + 1
       }
-      
+
       rhs <- if (length(rhs_vals) > 0) paste(rhs_vals, collapse = " ") else NA
       
       # add result to data.frame

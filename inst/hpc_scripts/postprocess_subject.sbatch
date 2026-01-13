@@ -81,7 +81,7 @@ log_message DEBUG Looking for files to postprocess using "$cmd"
 files=($(find "$input_dir" -regextype posix-extended -regex "$full_regex"))
 
 if [[ ${#files[@]} -eq 0 ]]; then
-  log_message DEBUG No files to postprocess found in $out_dir.
+  log_message INFO "No files to postprocess found in $input_dir using input_regex '$input_regex' (stream $stream_name)."
   exit 0
 fi
 

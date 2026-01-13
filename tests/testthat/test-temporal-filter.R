@@ -108,3 +108,92 @@ test_that("validate_postprocess_config_single flags reversed band-pass", {
   expect_true("postprocess/temporal_filter/low_pass_hz" %in% res$gaps)
   expect_true("postprocess/temporal_filter/high_pass_hz" %in% res$gaps)
 })
+
+test_that("validate_postprocess_config_single allows high-pass only", {
+  cfg <- list(
+    input_regex = "regex:.*",
+    bids_desc = "desc",
+    keep_intermediates = FALSE,
+    overwrite = FALSE,
+    tr = 2,
+    temporal_filter = list(
+      enable = TRUE,
+      low_pass_hz = 0,        # treat as disabled
+      high_pass_hz = 0.008,
+      prefix = "f",
+      method = "fslmaths"
+    ),
+    spatial_smooth = list(enable = FALSE),
+    intensity_normalize = list(enable = FALSE),
+    confound_calculate = list(enable = FALSE),
+    scrubbing = list(enable = FALSE),
+    confound_regression = list(enable = FALSE),
+    apply_mask = list(enable = FALSE),
+    apply_aroma = list(enable = FALSE),
+    force_processing_order = FALSE
+  )
+
+  res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
+  expect_false(any(grepl("postprocess/temporal_filter", res$gaps, fixed = TRUE)))
+  expect_true(is.infinite(res$postprocess$temporal_filter$low_pass_hz))
+  expect_equal(res$postprocess$temporal_filter$high_pass_hz, 0.008)
+})
+
+test_that("validate_postprocess_config_single allows low-pass only", {
+  cfg <- list(
+    input_regex = "regex:.*",
+    bids_desc = "desc",
+    keep_intermediates = FALSE,
+    overwrite = FALSE,
+    tr = 2,
+    temporal_filter = list(
+      enable = TRUE,
+      low_pass_hz = 0.1,
+      high_pass_hz = 0,       # treat as disabled
+      prefix = "f",
+      method = "fslmaths"
+    ),
+    spatial_smooth = list(enable = FALSE),
+    intensity_normalize = list(enable = FALSE),
+    confound_calculate = list(enable = FALSE),
+    scrubbing = list(enable = FALSE),
+    confound_regression = list(enable = FALSE),
+    apply_mask = list(enable = FALSE),
+    apply_aroma = list(enable = FALSE),
+    force_processing_order = FALSE
+  )
+
+  res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
+  expect_false(any(grepl("postprocess/temporal_filter", res$gaps, fixed = TRUE)))
+  expect_equal(res$postprocess$temporal_filter$low_pass_hz, 0.1)
+  expect_true(is.infinite(res$postprocess$temporal_filter$high_pass_hz))
+})
+
+test_that("validate_postprocess_config_single flags both cutoffs missing", {
+  cfg <- list(
+    input_regex = "regex:.*",
+    bids_desc = "desc",
+    keep_intermediates = FALSE,
+    overwrite = FALSE,
+    tr = 2,
+    temporal_filter = list(
+      enable = TRUE,
+      low_pass_hz = NULL,
+      high_pass_hz = NULL,
+      prefix = "f",
+      method = "fslmaths"
+    ),
+    spatial_smooth = list(enable = FALSE),
+    intensity_normalize = list(enable = FALSE),
+    confound_calculate = list(enable = FALSE),
+    scrubbing = list(enable = FALSE),
+    confound_regression = list(enable = FALSE),
+    apply_mask = list(enable = FALSE),
+    apply_aroma = list(enable = FALSE),
+    force_processing_order = FALSE
+  )
+
+  res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
+  expect_true("postprocess/temporal_filter/low_pass_hz" %in% res$gaps)
+  expect_true("postprocess/temporal_filter/high_pass_hz" %in% res$gaps)
+})

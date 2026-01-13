@@ -13,7 +13,8 @@ resample_template_to_img(
   extension = ".nii.gz",
   interpolation = "nearest",
   install_dependencies = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  lg = NULL
 )
 }
 \arguments{
@@ -34,9 +35,14 @@ resample_template_to_img(
 
 \item{install_dependencies}{Logical. If \code{TRUE} (default), attempts to automatically install
 required Python packages (nibabel, nilearn, templateflow) if they are missing from the active environment.
+When the active Python environment is not writable, BrainGnomes will fall back to a managed
+reticulate environment; set \code{options(BrainGnomes.py_force_managed_env = TRUE)} to always
+prefer the managed environment.
 If \code{FALSE}, the function will raise an error if dependencies are not found.}
 
 \item{overwrite}{Logical. If \code{TRUE}, overwrite the existing output file (if present).}
+
+\item{lg}{Optional lgr logger for emitting warnings/info to the postprocess log.}
 }
 \value{
 Invisibly returns \code{TRUE} on success. A new NIfTI file is written to \code{output}.

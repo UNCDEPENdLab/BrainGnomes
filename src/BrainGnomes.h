@@ -1,6 +1,7 @@
 #ifndef _braingnomes_BRAINGNOMES_h
 #define _braingnomes_BRAINGNOMES_h
 
+#define ARMA_WARN_LEVEL 1 // disable warnings about approximate solutions for rank-deficient regressions
 #define ARMA_NO_DEBUG
 
 #define RNIFTI_NIFTILIB_VERSION 2
@@ -27,7 +28,12 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
 // helper function to remove volumes from a nifti input
 void remove_nifti_volumes(std::string infile, const std::vector<int>& remove_tpts, std::string outfile);
 
-Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat &X, const LogicalVector &include_rows, bool add_intercept, std::string outfile, bool internal);
+Rcpp::RObject lmfit_residuals_4d(std::string infile, const arma::mat &X,
+                                 const Rcpp::Nullable<Rcpp::LogicalVector>& include_rows,
+                                 bool add_intercept, std::string outfile, bool internal,
+                                 bool preserve_mean, double set_mean,
+                                 const Rcpp::Nullable<Rcpp::IntegerVector>& regress_cols,
+                                 bool exclusive);
 Rcpp::RObject butterworth_filter_4d(std::string infile, const std::vector<double>& b, const std::vector<double>& a,
                                      std::string outfile, bool internal, std::string padtype, int padlen, bool use_zi);
   

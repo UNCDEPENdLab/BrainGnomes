@@ -1,3 +1,50 @@
+# BrainGnomes 0.7-5
+
+Released 2026-01-13
+
+* Add `calculate_motion_outliers` function to calculate motion outliers in a BIDS dataset
+  - Returns mean FD alongside max FD
+  - Includes task and run columns from BIDS info
+  - Supports optional `output_file` argument to write results (CSV or TSV, with gzip support)
+  - Defaults for notch filter: `band_stop_min = 12`, `band_stop_max = 18` BPM
+* Use the `scratch_directory` for postprocessing images to avoid collisions and ensure that intermediates do not clog the output folder
+* Check that python packages directory is writable prior to attempting to resample a stereotaxic template to an image; fall back to
+    a managed `reticulate` environment if not.
+* More robust postprocess logging (fallback log directory if requested location is unavailable) and clearer reporting of retained
+    volumes during confound regression.
+* bugfix: 0 values for temporal filter cutoffs now disable the corresponding low/high-pass filter components.
+* bugfix: more complete handling of cases where confound calculate/regress is enabled, but no columns are specified.
+* bugfix: ROI extraction now writes empty connectivity outputs (with warnings) when all ROIs are dropped after filtering.
+* bugfix: add T2w to template pre-fetch so that fmriprep does not try to obtain this when users have T2w images
+* bugfix: correct regex in postprocessing step substitution when using user-specified order
+* bugfix: prevent spurious failure files for fMRIPrep/AROMA jobs that return non-zero exit codes despite successful completion
+
+# BrainGnomes 0.7-4
+
+Released 2025-11-23
+
+* Add log messages for key R calls in pipeline, such as lmfit_residuals_4d
+* Implement log levels to allow user to control log detail when calling run_project
+* bug fixes for cases where confound calculate or confound regression are enabled, but no columns are specified
+* Add file lock mechanism to avoid race condition on reticulate setup in resample_template_to_img
+* bug fix for logger glue in run_fsl_command
+
+# BrainGnomes 0.7-3
+
+Released 2025-11-11
+
+* bugfix: correctly handle unsigned integer data types in NIfTIs
+* lmfit_residuals_4d now handles partial (ala fsl_regfilt) and full regression and is used for applying AROMA
+* Nonaggressive and aggressive AROMA now supported
+* fsl_regfilt.R wrapper script removed from pipeline -- all regression now happens with lmfit_residuals_4d
+* bugfix: args_to_df now tolerate multiple arguments after a hyphen
+* Added pre-fetch step for TemplateFlow files so that network access can be turned off inside singularity containers,
+    avoiding socket errors that crop up within python's multiprocessing module.
+* Amended PBS scripts to match current pipeline
+* TemplateFlow prefetch now runs via dedicated Slurm/PBS scripts that mirror other steps, including trapping and logging
+* bugfix: confound regression does not crash when scrubbing is disabled
+* bugfix: incorporate additional BIDS entities into location of confounds file
+
 # BrainGnomes 0.7-2
 
 Released 2025-10-09
