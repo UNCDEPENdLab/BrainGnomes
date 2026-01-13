@@ -2,8 +2,16 @@
 
 ## BrainGnomes 0.7-5
 
+Released 2026-01-13
+
 - Add `calculate_motion_outliers` function to calculate motion outliers
   in a BIDS dataset
+  - Returns mean FD alongside max FD
+  - Includes task and run columns from BIDS info
+  - Supports optional `output_file` argument to write results (CSV or
+    TSV, with gzip support)
+  - Defaults for notch filter: `band_stop_min = 12`,
+    `band_stop_max = 18` BPM
 - Use the `scratch_directory` for postprocessing images to avoid
   collisions and ensure that intermediates do not clog the output folder
 - Check that python packages directory is writable prior to attempting
