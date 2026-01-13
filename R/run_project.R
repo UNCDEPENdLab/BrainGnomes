@@ -411,7 +411,7 @@ submit_fsaverage_setup <- function(scfg) {
 
   # copy fsaverage from fmriprep's instance of freesurfer to the output destination
   cmd <- glue::glue("singularity exec --cleanenv --containall -B '{scfg$metadata$fmriprep_directory}' '{scfg$compute_environment$fmriprep_container}' \\
-    rsync --mkpath -a /opt/freesurfer/subjects/fsaverage '{scfg$metadata$fmriprep_directory}/sourcedata/freesurfer'")
+    rsync --mkpath -a --no-owner --no-group /opt/freesurfer/subjects/fsaverage '{scfg$metadata$fmriprep_directory}/sourcedata/freesurfer'")
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 
