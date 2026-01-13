@@ -200,6 +200,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     stop("Cannot run postprocessing without a valid FSL container.")
   }
 
+  # generate sequence ID for job tracking
+  sequence_id <- uuid::UUIDgenerate()
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
 
   flywheel_id <- NULL
@@ -210,7 +212,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # Submit fsaverage setup early (used by fmriprep) to avoid race conditions
   fsaverage_id <- NULL
-  if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg)
+  if (isTRUE(steps["fmriprep"])) fsaverage_id <- submit_fsaverage_setup(scfg, sequence_id)
 
   # Prefetch TemplateFlow templates when needed so downstream runs can disable networking
   # This avoids socket errors in Python multiprocessing: https://github.com/nipreps/mriqc/issues/1170
@@ -261,8 +263,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
-    scfg = scfg, steps = steps, subject_filter = subject_filter,
-    postprocess_streams = postprocess_streams, extract_streams = extract_streams, parent_ids = parent_ids
+    scfg = scfg, steps = steps, subject_filter = subject_filter, postprocess_streams = postprocess_streams, 
+    extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id
   )
   return(invisible(TRUE))
 }
@@ -274,12 +276,13 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #' @param postprocess_streams Optional character vector of postprocess streams
 #' @param extract_streams Optional character vector of extraction streams
 #' @param parent_ids Optional character vector of job IDs to depend on
+#' @param sequence_id An identifying ID for a set of jobs in a sequence used for job tracking
 #' @details 
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
 #' @keywords internal
 submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
-  extract_streams = NULL, parent_ids = NULL) {
+  extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
 
   # look for subject directories in the DICOM directory
   subject_dicom_dirs <- data.frame(
@@ -343,7 +346,7 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
     process_subject(
       scfg, subject_dirs[[ss]], steps,
       postprocess_streams = postprocess_streams, extract_streams = extract_streams,
-      parent_ids = parent_ids
+      parent_ids = parent_ids, sequence_id = sequence_id
     )
   }
 
@@ -398,22 +401,55 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
 
 # helper for avoiding race condition in setting up fsaverage folder in data_fmriprep
 # avoid race condition in setting up fsaverage folder: https://github.com/nipreps/fmriprep/issues/3492
-submit_fsaverage_setup <- function(scfg) {
+submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   checkmate::assert_directory_exists(scfg$metadata$fmriprep_directory)
   checkmate::assert_file_exists(scfg$compute_environment$fmriprep_container)
 
-  # get resource allocation request
+  env_variables <- c(
+    debug_pipeline = scfg$debug,
+    pkg_dir = find.package(package = "BrainGnomes"), # location of installed R package
+    R_HOME = R.home(), # populate location of R installation so that it can be used by any child R jobs
+    stdout_log = glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
+    stderr_log = glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
+    add_parent_path = system.file("add_parent.R", package = "BrainGnomes"),
+    loc_mrproc_root = scfg$metadata$fmriprep_directory,
+    fmriprep_container = scfg$compute_environment$fmriprep_container
+  )
+  
+  # get resource allocation request & scheduler arguments
   scfg$fsaverage <- list(nhours = 0.15, memgb = 8, ncores = 1) # fake top-level job to let get_job_sched_args work
-  log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
-  stdout_log <- glue::glue("{scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{log_stamp}.out")
-  stderr_log <- glue::glue("{scfg$metadata$log_directory}/cp_fsaverage_jobid-%j_{log_stamp}.err")
-  sched_args <- get_job_sched_args(scfg, "fsaverage", stdout_log = stdout_log, stderr_log = stderr_log)
+  sched_args <- c(get_job_sched_args(scfg, "fsaverage"))
+  sched_args <- set_cli_options( # setup files for stdout and stderr, job name
+    sched_args,
+    c(
+      glue("--job-name=fsaverage_setup"),
+      glue("--output={env_variables['stdout_log']}"),
+      glue("--error={env_variables['stderr_log']}")
+    )
+  )
+  ext <- ifelse(scfg$compute_environment$scheduler == "torque", "pbs", "sbatch")
+  sched_script <- system.file(glue("hpc_scripts/fsaverage_setup.{ext}"), package = "BrainGnomes")
+  
+  # tracking info
+  tracking_args <- list(
+    job_name = "fsaverage_setup",
+    sequence_id = sequence_id,
+    n_nodes = 1,
+    n_cpus = scfg[["fsaverage"]]$ncores,
+    wall_time = hours_to_dhms(scfg[["fsaverage"]]$nhours),
+    mem_total = scfg[["fsaverage"]]$memgb,
+    scheduler = scfg$compute_environment$scheduler,
+    scheduler_options = scfg[["fsaverage"]]$sched_args
+  )
+  tracking_sqlite_db <- scfg$metadata$sqlite_db
 
-  # copy fsaverage from fmriprep's instance of freesurfer to the output destination
-  cmd <- glue::glue("singularity exec --cleanenv --containall -B '{scfg$metadata$fmriprep_directory}' '{scfg$compute_environment$fmriprep_container}' \\
-    rsync --mkpath -a --no-owner --no-group --no-times --no-perms /opt/freesurfer/subjects/fsaverage '{scfg$metadata$fmriprep_directory}/sourcedata/freesurfer'")
-
-  job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+  job_id <- cluster_job_submit(sched_script,
+                               scheduler = scfg$compute_environment$scheduler,
+                               sched_args = sched_args, env_variables = env_variables,
+                               echo = FALSE, tracking_sqlite_db = tracking_sqlite_db, 
+                               tracking_args = tracking_args
+  )
 
   return(job_id)
 }

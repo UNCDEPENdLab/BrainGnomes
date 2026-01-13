@@ -7,8 +7,9 @@
 submit_sqlite_query(
   str = NULL,
   sqlite_db = NULL,
-  params = NULL,
-  busy_timeout = 10
+  param = NULL,
+  busy_timeout = 10,
+  return_result = FALSE
 )
 }
 \arguments{
@@ -16,12 +17,12 @@ submit_sqlite_query(
 
 \item{sqlite_db}{Character path to SQLite database}
 
-\item{params}{Optional list of parameters to pass to statement}
+\item{param}{Optional list of parameters to pass to statement}
 
 \item{busy_timeout}{Time (in s) after which to retry write operations; default is 10 s}
-}
-\value{
-description
+
+\item{return_result}{Logical. If TRUE submits DBI::dbGetQuery instead of DBI::dbExecute;
+Only use if expecting something in return for your query}
 }
 \description{
 helper function to establish sqlite connection and submit query

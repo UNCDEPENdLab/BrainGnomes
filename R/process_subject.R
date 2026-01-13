@@ -21,21 +21,14 @@ null_empty <- function(x) {
 #' @param sub_cfg A data.frame of subject configuration settings
 #' @param steps A named logical vector indicating which steps to run
 #' @param postprocess_streams Optional character vector of postprocess configuration names to run. If NULL,
-#'   all available postprocessing streams will be run.
-#' @param extract_streams Optional character vector of ROI extraction configuration names to run. If NULL,
-#'   all available extraction streams will be run.
+#'   all available streams will be run.
 #' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
+#' @param sequence_id An identifying ID for a set of jobs in a sequence used for job tracking
 #' @return A logical value indicating whether the preprocessing was successful
-#' @details
-#' When postprocessing is requested without running `fmriprep`, the function verifies
-#' that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
-#' outside the project directory, only the existence of the subject's directory is
-#' required. For fMRIPrep directories inside the project directory, a `.complete`
-#' file in the project's log directory is still necessary.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -51,21 +44,21 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   checkmate::assert_character(extract_streams, null.ok = TRUE, any.missing = FALSE)
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
-
+  
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
   lg <- get_subject_logger(scfg, sub_id)
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- extract_ids <- NULL
-
+  
   # BIDS conversion and postprocessing are session-specific, so we need to check for the session ID
   # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
-
+  
   # .*complete files should always be placed in the subject BIDS directory
   # determine status of processing -- seems like we could swap in queries from job tracker
   submit_step <- function(name, row_idx = 1L, parent_ids = NULL, pp_stream = NULL, ex_stream = NULL) {
     session_level <- name %in% c("bids_conversion", "postprocess") # only these two are session-level
-
+    
     name_tag <- name # identifier for this step used in complete file and job names
     if (name == "postprocess") {
       if (is.null(pp_stream)) {
@@ -83,7 +76,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
     complete_file <- file.path(sub_dir, glue(".{name_tag}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
-
+    
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
     if (!isTRUE(steps[[name]])) {
@@ -93,15 +86,23 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       to_log(lg, "info", "Skipping {name_tag} for {sub_id} because {complete_file} already exists and force = FALSE.")
       return(job_id)
     }
-
+    
     # clear existing complete file if we are starting over on this step
     if (file_exists) {
       to_log(lg, "info", "Removing existing .complete file: {complete_file}")
       unlink(complete_file)
     }
-
+    
     # shared components across specific jobs
     jobid_str <- ifelse(has_ses, glue("{name_tag}_sub-{sub_id}_ses-{ses_id}"), glue("{name_tag}_sub-{sub_id}"))
+    
+    tracking_args <- list(
+      job_name = jobid_str, 
+      sequence_id = sequence_id, 
+      n_nodes = 1
+      )
+    tracking_sqlite_db <- scfg$metadata$sqlite_db
+    
     log_level_value <- resolve_log_level(scfg$log_level)
     if (is.null(log_level_value)) log_level_value <- "INFO"
     env_variables <- c(
@@ -112,25 +113,50 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/{jobid_str}_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
       complete_file = complete_file,
+      insert_tracked_job_path = system.file("insert_tracked_job.R", package = "BrainGnomes"),
+      upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
+      add_parent_path = system.file("add_parent.R", package = "BrainGnomes"),
       log_level = log_level_value
     )
-
+    
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
     sched_call <- list(job_name = name, jobid_str = jobid_str, stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
     if (name == "postprocess") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$postprocess <- scfg$postprocess[[pp_stream]]
       sched_call$scfg <- scfg_tmp
+      tracking_args <- c(
+        tracking_args,
+        n_cpus = scfg_tmp[[name]]$ncores,
+        wall_time = hours_to_dhms(scfg_tmp[[name]]$nhours),
+        mem_total = scfg_tmp[[name]]$memgb,
+        scheduler = scfg_tmp$compute_environment$scheduler
+      )
     } else if (name == "extract_rois") {
       scfg_tmp <- scfg # postprocessing has a nested structure, with multiple configurations -- use the one currently requested
       scfg_tmp$extract_rois <- scfg$extract_rois[[ex_stream]]
       sched_call$scfg <- scfg_tmp
+      tracking_args <- c(
+        tracking_args,
+        n_cpus = scfg_tmp[[name]]$ncores,
+        wall_time = hours_to_dhms(scfg_tmp[[name]]$nhours),
+        mem_total = scfg_tmp[[name]]$memgb,
+        scheduler = scfg_tmp$compute_environment$scheduler
+      )
     } else {
       sched_call$scfg <- scfg
+      tracking_args <- c(
+        tracking_args,
+        n_cpus = scfg[[name]]$ncores,
+        wall_time = hours_to_dhms(scfg[[name]]$nhours),
+        mem_total = scfg[[name]]$memgb,
+        scheduler = scfg$compute_environment$scheduler
+      )
     }
-
+    
     sched_args <- do.call(get_job_sched_args, sched_call)
-
+    tracking_args$scheduler_options <- sched_args
+    
     # determine the directory to use for the job submission
     if (session_level && has_ses) {
       # if it's a session-level process and we have a valid session-level input, use the session directory
@@ -139,16 +165,16 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       # if it's a subject-level process or we don't have a valid session-level input, use the subject directory
       dir <- ifelse(name == "bids_conversion", sub_cfg$dicom_sub_dir[row_idx], sub_cfg$bids_sub_dir[row_idx])
     }
-
+    
     # launch submission function -- these all follow the same input argument structure
     parent_txt <- if (!is.null(parent_ids) && length(parent_ids) > 0L) paste(parent_ids, collapse = ", ") else "<none>"
     to_log(lg, "debug", "submit_{name_tag} will run from {dir} with parent IDs: {parent_txt}")
     to_log(lg, "debug", "Launching submit_{name_tag} for subject: {sub_id}")
-    args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg)
+    args <- list(scfg, dir, sub_id, ses_id, env_variables, sched_script, sched_args, parent_ids, lg, tracking_sqlite_db, tracking_args)
     if (name == "postprocess") args$pp_stream <- pp_stream # populate the current postprocess config to run
     if (name == "extract_rois") args$ex_stream <- ex_stream # populate the current extract_rois config to run
     job_id <- do.call(glue("submit_{name}"), args)
-
+    
     return(job_id)
   }
 
@@ -157,7 +183,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   ## Handle BIDS conversion -- session-level
   n_inputs <- nrow(sub_cfg)
-
+  
   # need unlist because NULL will be returned for jobs not submitted -- yielding a weird list of NULLs
   bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx, parent_ids = parent_ids)))
   
@@ -168,14 +194,14 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     # and the expected directory is created. If conversion fails, the dependent jobs should automatically fail.
     bids_sub_dir <- file.path(scfg$metadata$bids_directory, glue("sub-{sub_cfg$sub_id[1L]}"))
     bids_ses_dir <- if (multi_session) file.path(scfg$metadata$bids_directory, glue("sub-{sub_cfg$sub_id}"), glue("ses-{sub_cfg$ses_id}")) else rep(NA_character_, nrow(sub_cfg))
-
+    
     # When bids_sub_dir and bids_ses_dir exist, do they match these expectations?
     extant_bids <- !is.na(sub_cfg$bids_sub_dir)
     if (!identical(sub_cfg$bids_sub_dir[extant_bids], bids_sub_dir[extant_bids])) {
       to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS directory does not match: {bids_sub_dir}")
       return(TRUE)
     }
-
+    
     extant_bids_ses <- !is.na(sub_cfg$bids_ses_dir)
     if (multi_session && !identical(sub_cfg$bids_ses_dir[extant_bids_ses], bids_ses_dir[extant_bids_ses])) {
       to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS session directory does not match: {bids_ses_dir[1L]}")
@@ -186,27 +212,27 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     to_log(lg, "warn", "Exiting process_subject for {sub_id} because expected BIDS directory does not exist: {bids_sub_dir}")
     return(TRUE)
   }
-
+  
   # N.B. Everything after BIDS conversion depends on the BIDS directory existing
-
+  
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = c(parent_ids, bids_conversion_ids))
-
+  
   ## Handle fmriprep
   fmriprep_id <- submit_step("fmriprep", parent_ids = c(parent_ids, bids_conversion_ids))
-
+  
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id))
-
+  
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
   if (isTRUE(steps["postprocess"])) {
     ## If postprocessing is requested without running fmriprep, validate that the expected fmriprep outputs exist before scheduling jobs
     if (!isTRUE(steps["fmriprep"])) {
       if (is_external_path(scfg$metadata$fmriprep_directory,
-        scfg$metadata$project_directory)) {
+                           scfg$metadata$project_directory)) {
         fp_dir <- file.path(scfg$metadata$fmriprep_directory,
-          glue("sub-{sub_id}"))
+                            glue("sub-{sub_id}"))
         if (!checkmate::test_directory_exists(fp_dir)) {
           to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
           return(TRUE)
@@ -219,7 +245,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         }
       }
     }
-
+    
     all_streams <- get_postprocess_stream_names(scfg)
     if (is.null(postprocess_streams)) {
       if (is.null(all_streams)) {
@@ -229,7 +255,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         postprocess_streams <- all_streams # run all
       }
     }
-
+    
     # loop over inputs and processing streams
     postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
       unlist(lapply(postprocess_streams, function(pp_nm) {
@@ -237,7 +263,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       }))
     }))
   }
-
+  
   if (isTRUE(steps["extract_rois"])) {
     all_extract_streams <- get_extract_stream_names(scfg)
     if (is.null(extract_streams)) {
@@ -248,20 +274,21 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         extract_streams <- all_extract_streams # run all
       }
     }
-
+    
     # loop over inputs and extraction streams
     extract_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
       unlist(lapply(extract_streams, function(ex_nm) {
         submit_step("extract_rois", row_idx = idx, parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id, aroma_id, postprocess_ids), ex_stream = ex_nm)
       }))
     }))
-
+    
   }
-
+  
   return(TRUE) # nothing interesting for now
 }
 
-submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+
+submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   # heudiconv  --files dicom/219/itbs/*/*.dcm -o Nifti -f Nifti/code/heuristic1.py -s 219 -ss itbs -c dcm2niix -b --minmeta --overwrite
 
   env_variables <- c(
@@ -286,7 +313,8 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE, 
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   # log submission command
@@ -297,7 +325,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
 
 }
 
-submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   
   env_variables <- c(
     env_variables,
@@ -310,7 +338,8 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -319,7 +348,7 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
   return(job_id)
 }
 
-submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   checkmate::assert_list(scfg)
   checkmate::assert_character(parent_ids, null.ok = TRUE)
 
@@ -364,7 +393,8 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -374,7 +404,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
 }
 
 
-submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
+submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
    if (!validate_exists(scfg$compute_environment$mriqc_container)) {
     message(glue("Skipping MRIQC in {sub_dir} because could not find MRIQC container {scfg$compute_environment$mriqc_container}"))
     return(NULL)
@@ -408,7 +438,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -417,8 +448,8 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL) {
-  if (!validate_exists(scfg$compute_environment$aroma_container)) {
+submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
+   if (!validate_exists(scfg$compute_environment$aroma_container)) {
     message(glue("Skipping AROMA in {sub_dir} because could not find AROMA container {scfg$compute_environment$aroma_container}"))
     return(NULL)
   }
@@ -464,7 +495,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
@@ -473,10 +505,8 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
   return(job_id)
 }
 
-submit_postprocess <- function(
-    scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL,
-    sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL) {
-
+submit_postprocess <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL, 
+sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
   if (is.null(pp_stream)) stop("Cannot submit a postprocessing job without specifying a pp_stream")
 
   postprocess_rscript <- system.file("postprocess_cli.R", package = "BrainGnomes")
@@ -517,7 +547,8 @@ submit_postprocess <- function(
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")

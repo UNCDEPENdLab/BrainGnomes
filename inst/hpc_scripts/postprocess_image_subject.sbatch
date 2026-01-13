@@ -65,11 +65,17 @@ start_time=$(date +%s)
 
 log_message INFO Starting postprocessing for image $input_file in $out_dir with mem: $mem
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &
 cmd_pid=$!
 
 cmd_status=0
 wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+
+[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
+
 
 log_message INFO Finished postprocessing for image $input_file "(time elapsed: $(time_elapsed))"
 exit $cmd_status

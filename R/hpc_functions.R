@@ -109,6 +109,11 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   }
 
   #pass through environment variables
+  if (!is.null(tracking_sqlite_db)) {
+    env_variables["sqlite_db"] <- tracking_sqlite_db
+  } else {
+    env_variables["sqlite_db"] <- NA
+  }
   if (!is.null(env_variables)) {
     env_variables <- paste_args(env_variables) #convert to appropriate name-value pairs
     if (scheduler == "qsub") {
@@ -204,23 +209,16 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     if (!is.null(tracking_args)) tracking_args$status <- "QUEUED" # on successful submission, tracking status defaults to "QUEUED"
   }
 
-  if (!is.null(tracking_args)) {
-    # populate tracking arguments that are undefined and can be defined at this point
-    tracking_args <- populate_list_arg(tracking_args, "batch_file", script)
-    tracking_args <- populate_list_arg(tracking_args, "scheduler", scheduler)
-    tracking_args <- populate_list_arg(tracking_args, "scheduler_options", sched_args, append = TRUE)
-  }
-
   # once a job_id has been generated, we add it to the tracking db
   # if a job has a NULL id or the tracking_sqlite_db arg is NULL, the function will return invisible NULL
   insert_tracked_job(sqlite_db = tracking_sqlite_db, job_id = jobid, tracking_args = tracking_args)
 
   if (!is.null(wait_jobs)) {
     # add any parent jobs using the wait_jobs argument (defaults to last parent id in list)
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)])
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)], child_level = 1)
   } else if (!is.null(tracking_args$parent_job_id)) {
     # in the case that a parent job id is passed in through the tracking_args list
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id)
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id, child_level = 1)
   }
   
   if (!is.null(jobid)) attr(jobid, "cmd") <- cmd # add the command executed as an attribute

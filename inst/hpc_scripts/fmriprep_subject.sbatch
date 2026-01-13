@@ -94,6 +94,8 @@ log_message INFO Starting fmriprep for subject $sub_id $ses_str in $out_dir with
 rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home" # set the environment variable for templateflow in the singularity container
 rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set the environment variable for freesurfer license in the singularity container
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 # disable ERR trap in the subshell so fmriprep's non-zero exit (even on success) does not write a fail file
 (
@@ -117,10 +119,12 @@ log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
 
 if [[ $success -eq 0 ]]; then
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 else
   fail_file="${complete_file%_complete}_fail"
   archive_file "$fail_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 fi
 
 log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"

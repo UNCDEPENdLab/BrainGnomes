@@ -77,6 +77,7 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
 # protect existing sub-<id>.html file
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
 # at present, fmripost-aroma does not support an offline mode, so we have to tolerate the risk of a race condition.
 # rel $rel_flag $log_flag singularity run --cleanenv --containall --net --network none -B "$loc_bids_root" -B "$loc_scratch" \
 
@@ -105,16 +106,19 @@ log_message DEBUG "Exit status of fmripost-aroma is $cmd_status, success is $suc
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_aroma.html"
 [ -f "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html" "${loc_mrproc_root}/sub-${sub_id}.html"
 # [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+
 if [[ $success -eq 0 ]]; then
   if [[ "$aroma_cleanup" == "TRUE" || "$aroma_cleanup" -eq 1 ]]; then
     log_message INFO "Removing unneeded AROMA NIfTI/JSON files"
     rel $rel_flag $log_flag find "$out_dir" -type f -name "*space-MNI152NLin6Asym_res-2*" -delete
   fi
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 else
   fail_file="${complete_file%_complete}_fail"
   archive_file "$fail_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 fi
 
 log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"

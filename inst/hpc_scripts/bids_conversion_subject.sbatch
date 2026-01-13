@@ -84,6 +84,8 @@ start_time=$(date +%s)
 
 log_message INFO Starting heudiconv for subject $sub_id $ses_str in $out_dir with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 # we now use --files to specify the dicoms to convert rather than -d since we don't want to assume
 # the dicoms are in a specific directory structure (esp. in terms of level of nesting).
@@ -98,6 +100,9 @@ wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
 # write complete file if the command was successful and debug_pipeline is not set
 [[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+
 
 log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
 exit $cmd_status
