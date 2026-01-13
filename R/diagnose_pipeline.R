@@ -2,7 +2,6 @@
 #'
 #' @param input A character path to an scfg object or an scfg object itself.
 #'
-#' @importFrom dplyr bind_rows
 #' @importFrom cli cli_abort cli_warn cli_inform cli_alert no qty
 #' @export
 #'
@@ -582,7 +581,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
   for (type in all_types) {
     if (is.null(job_summary[[type]])) next
     
-    cli::cli_text("── {.strong {type}}")
+    cli::cli_text("\u2500\u2500 {.strong {type}}")
     cli::cli_ul()
     
     for (job_name in names(job_summary[[type]])) {
@@ -700,14 +699,14 @@ print_step_tree_by_type <- function(tree_root) {
         next
       }
 
-      cli::cli_text("── {.strong {type}}")
+      cli::cli_text("\u2500\u2500 {.strong {type}}")
       cli::cli_ul()
       for (job in jobs_to_show) {
         sym <- get_status_symbol(job$status)
         status_colored <- get_status_color(job$status)
         cli::cli_li("{sym} {job$name} (job {job$job_id}) [{status_colored}]")
 
-        print_children <- function(parent, indent = "  └─ ") {
+        print_children <- function(parent, indent = "  \u2514\u2500 ") {
           parent_parts <- strsplit(parent$name, "_")[[1]]
           if (parent_parts[1] == "postprocess") {
             parent_pref <- "postprocess"

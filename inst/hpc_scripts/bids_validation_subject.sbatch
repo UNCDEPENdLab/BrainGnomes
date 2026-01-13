@@ -53,8 +53,11 @@ log_message INFO Starting bids validation for subject $sub_id in $bids_dir
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile}
-success=$?
+rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile} &
+cmd_pid=$!
+
+success=0
+wait $cmd_pid || success=$?
 [[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${bids_dir}/.bids_validation_complete
 [[ $success -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 [[ $success -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade

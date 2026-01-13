@@ -66,6 +66,8 @@ export out_dir
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 ### Pass forward only scheduler args that don't conflict with child arguments
 sanitize_sched_args() {
   local args=($1)
@@ -148,6 +150,8 @@ for f in "${files[@]}"; do
     "R_HOME=$R_HOME"
     "debug_pipeline=$debug_pipeline"
     "ses_id=$ses_id"
+    "sqlite_db=$sqlite_db"
+    "upd_job_status_path=$upd_job_status_path"
   )
   vlist=$(IFS=, ; echo "${vars[*]}")
 
@@ -159,6 +163,9 @@ for f in "${files[@]}"; do
     -e "$postprocess_stderr_log" \
     -v "$vlist" \
     "$postprocess_image_sched_script")
+
+  "${R_HOME}/bin/Rscript" "$insert_tracked_job_path" --sqlite_db "$sqlite_db" --job_id "$jid" --job_name "$jobname" --scheduler "torque" --scheduler_options "$sched_args"
+  "${R_HOME}/bin/Rscript" "$add_parent_path" --sqlite_db "$sqlite_db" --job_id "$jid" --parent_job_id "$PBS_JOBID" --child_level 2
 
   log_message INFO Submitted postprocessing job $jid for $(basename "$f") in $out_dir
   job_ids+=("$jid")
@@ -198,6 +205,8 @@ for jid in "${job_ids[@]}"; do
 done
 
 [[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+[[ $failed -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $failed -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 
 log_message INFO Finished postprocessing for subject $sub_id $ses_str
 exit $failed

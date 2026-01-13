@@ -10,7 +10,7 @@ process_subject(
   steps = NULL,
   postprocess_streams = NULL,
   extract_streams = NULL,
-  parent_ids = NULL
+  parent_ids = NULL,
   sequence_id = NULL
 )
 }
@@ -22,10 +22,7 @@ process_subject(
 \item{steps}{A named logical vector indicating which steps to run}
 
 \item{postprocess_streams}{Optional character vector of postprocess configuration names to run. If NULL,
-all available postprocessing streams will be run.}
-
-\item{extract_streams}{Optional character vector of ROI extraction configuration names to run. If NULL,
-all available extraction streams will be run.}
+all available streams will be run.}
 
 \item{parent_ids}{An optional character vector of HPC job ids that must complete before this subject is run.}
 
@@ -36,12 +33,5 @@ A logical value indicating whether the preprocessing was successful
 }
 \description{
 Preprocess a single subject
-}
-\details{
-When postprocessing is requested without running \code{fmriprep}, the function verifies
-that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
-outside the project directory, only the existence of the subject's directory is
-required. For fMRIPrep directories inside the project directory, a \code{.complete}
-file in the project's log directory is still necessary.
 }
 \keyword{internal}

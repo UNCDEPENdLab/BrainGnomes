@@ -48,7 +48,7 @@ test_that("submit_fmriprep binds external BIDS directory", {
   ns <- asNamespace("BrainGnomes")
   orig <- get("cluster_job_submit", envir = ns)
   unlockBinding("cluster_job_submit", ns)
-  assign("cluster_job_submit", function(sched_script, scheduler, sched_args, env_variables, wait_jobs, echo) {
+  assign("cluster_job_submit", function(sched_script, scheduler, sched_args, env_variables, wait_jobs, echo, ...) {
     captured <<- env_variables
     structure("1", cmd = "cmd")
   }, envir = ns)

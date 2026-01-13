@@ -18,11 +18,42 @@ submit_tracking_query = function(str, sqlite_db, param = NULL) {
   
   if (isFALSE(table_exists)) {
     create_tracking_db(sqlite_db)
+  } else {
+    ensure_tracking_db_schema(sqlite_db)
   }
   
   # open sqlite connection and execute query
   submit_sqlite_query(str = str, sqlite_db = sqlite_db, param = param)
   
+}
+
+ensure_tracking_db_schema <- function(sqlite_db) {
+  con <- dbConnect(RSQLite::SQLite(), sqlite_db)
+  on.exit(dbDisconnect(con), add = TRUE)
+  sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
+  cols <- dbGetQuery(con, "PRAGMA table_info(job_tracking)")
+  col_names <- cols$name
+  if (!"sequence_id" %in% col_names) {
+    tryCatch(
+      dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN sequence_id VARCHAR"),
+      error = function(e) {
+        if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
+          stop(e)
+        }
+      }
+    )
+  }
+  if (!"child_level" %in% col_names) {
+    tryCatch(
+      dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN child_level INTEGER DEFAULT 0"),
+      error = function(e) {
+        if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
+          stop(e)
+        }
+      }
+    )
+  }
+  invisible(NULL)
 }
 
 #' Internal helper function to reset tracking SQLite database
@@ -280,7 +311,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
   }
   
   con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-  df <- dbGetQuery(con, str, param = param)
+  df <- dbGetQuery(con, str, params = param)
   
   # rehydrate job_obj back into R6 class
   if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))

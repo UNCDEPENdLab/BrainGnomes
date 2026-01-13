@@ -16,8 +16,10 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
     checkmate,
+    cli,
     corpcor,
     data.table,
+    data.tree,
     DBI,
     glue,
     filelock,
@@ -28,6 +30,7 @@ Imports:
     RNifti,
     RSQLite,
     signal,
+    uuid,
     yaml
 Suggests: 
     testthat (>= 3.0.0),

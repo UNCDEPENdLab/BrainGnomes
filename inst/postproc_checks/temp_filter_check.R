@@ -12,7 +12,6 @@
 suppressPackageStartupMessages({
   library(RNifti)
   library(multitaper)
-  library(dplyr)
   library(ggplot2)
 })
 
@@ -38,6 +37,26 @@ source(file.path(script_dir, "mtm_bandpower.R"))
 ## ----------------------------------------------------------
 ## Core utility functions (validity, extraction, averaging)
 ## ----------------------------------------------------------
+
+.bind_rows <- function(data_list, id_name = NULL) {
+  if (!length(data_list)) return(data.frame())
+  df_list <- lapply(seq_along(data_list), function(i) {
+    df <- data_list[[i]]
+    if (is.null(df)) return(NULL)
+    df <- as.data.frame(df)
+    if (!is.null(id_name)) {
+      id_val <- names(data_list)[i]
+      if (is.null(id_val) || !nzchar(id_val)) id_val <- as.character(i)
+      df[[id_name]] <- id_val
+    }
+    df
+  })
+  df_list <- Filter(Negate(is.null), df_list)
+  if (!length(df_list)) return(data.frame())
+  res <- do.call(rbind, df_list)
+  rownames(res) <- NULL
+  res
+}
 
 .is_valid_series <- function(x, tol = 2 * .Machine$double.eps) {
   all(is.finite(x)) && stats::var(x) > tol
@@ -97,30 +116,27 @@ source(file.path(script_dir, "mtm_bandpower.R"))
 # Average multitaper spectra across voxels, keeping frequency grid intact
 .average_multitaper_spectra <- function(spec_list) {
   if (!length(spec_list)) stop("No spectra supplied for averaging.")
-  dplyr::bind_rows(spec_list, .id = "voxel") %>%
-    dplyr::rename(freq = f, power_db = power) %>%
-    dplyr::group_by(freq) %>%
-    dplyr::summarise(power_db = mean(power_db, na.rm = TRUE), .groups = "drop")
+  df <- .bind_rows(spec_list, id_name = "voxel")
+  names(df)[names(df) == "f"] <- "freq"
+  names(df)[names(df) == "power"] <- "power_db"
+  aggregate(power_db ~ freq, data = df, FUN = function(x) mean(x, na.rm = TRUE))
 }
 
 # Average bandpower summaries across voxels and convert back to dB space
 .average_bandpower <- function(bp_list) {
   if (!length(bp_list)) stop("No bandpower estimates supplied for averaging.")
-  dplyr::bind_rows(bp_list, .id = "voxel") %>%
-    dplyr::group_by(label, low, high) %>%
-    dplyr::summarise(
-      power_linear_mean = mean(power_linear, na.rm = TRUE),
-      relative_power = mean(relative_power, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    dplyr::mutate(
-      power_db = ifelse(
-        is.finite(power_linear_mean) & power_linear_mean > 0,
-        10 * log10(power_linear_mean),
-        NA_real_
-      )
-    ) %>%
-    dplyr::rename(power_linear = power_linear_mean)
+  df <- .bind_rows(bp_list, id_name = "voxel")
+  agg <- aggregate(
+    cbind(power_linear, relative_power) ~ label + low + high,
+    data = df,
+    FUN = function(x) mean(x, na.rm = TRUE)
+  )
+  agg$power_db <- ifelse(
+    is.finite(agg$power_linear) & agg$power_linear > 0,
+    10 * log10(agg$power_linear),
+    NA_real_
+  )
+  agg
 }
 
 .extract_psd_linear <- function(spec_df) {
@@ -459,9 +475,8 @@ compute_multitaper_spectra <- function(selected_positions,
   pre_out_file_mtap <- paste0(file_prefix, "_pre.csv")
   post_out_file_mtap <- paste0(file_prefix, "_post.csv")
 
-  mt_diff <- mt_pre %>%
-    inner_join(mt_post, by = "freq", suffix = c("_pre", "_post")) %>%
-    mutate(power_diff_db = power_db_pre - power_db_post)
+  mt_diff <- merge(mt_pre, mt_post, by = "freq", suffixes = c("_pre", "_post"))
+  mt_diff$power_diff_db <- mt_diff$power_db_pre - mt_diff$power_db_post
 
   diff_out_file <- paste0(file_prefix, "_diff.csv")
 
@@ -478,9 +493,9 @@ compute_multitaper_spectra <- function(selected_positions,
 
   if (save_plots) {
     spectrum_out_file <- paste0(file_prefix, "_pre_post.png")
-    spectrum_df <- dplyr::bind_rows(
-      dplyr::mutate(mt_pre,  series = "Pre-filter"),
-      dplyr::mutate(mt_post, series = "Post-filter")
+    spectrum_df <- rbind(
+      transform(mt_pre, series = "Pre-filter"),
+      transform(mt_post, series = "Post-filter")
     )
 
     max_freq <- max(c(mt_pre$freq, mt_post$freq), na.rm = TRUE)
@@ -652,22 +667,16 @@ compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
     pre_bp_avg  <- .average_bandpower(pre_bp_list)
     post_bp_avg <- .average_bandpower(post_bp_list)
 
-    bandpower_diff <- pre_bp_avg %>%
-      select(label, low, high,
-             power_db_pre = power_db,
-             relative_power_pre = relative_power) %>%
-      inner_join(
-        post_bp_avg %>%
-          select(label, low, high,
-                 power_db_post = power_db,
-                 relative_power_post = relative_power),
-        by = c("label", "low", "high")
-      ) %>%
-      mutate(
-        power_db_change = power_db_post - power_db_pre,
-        relative_power_change = relative_power_post - relative_power_pre,
-        band_type = "outside"
-      )
+    pre_sel <- pre_bp_avg[, c("label", "low", "high", "power_db", "relative_power")]
+    names(pre_sel)[names(pre_sel) == "power_db"] <- "power_db_pre"
+    names(pre_sel)[names(pre_sel) == "relative_power"] <- "relative_power_pre"
+    post_sel <- post_bp_avg[, c("label", "low", "high", "power_db", "relative_power")]
+    names(post_sel)[names(post_sel) == "power_db"] <- "power_db_post"
+    names(post_sel)[names(post_sel) == "relative_power"] <- "relative_power_post"
+    bandpower_diff <- merge(pre_sel, post_sel, by = c("label", "low", "high"))
+    bandpower_diff$power_db_change <- bandpower_diff$power_db_post - bandpower_diff$power_db_pre
+    bandpower_diff$relative_power_change <- bandpower_diff$relative_power_post - bandpower_diff$relative_power_pre
+    bandpower_diff$band_type <- "outside"
 
     avg_reduction <- mean(
       bandpower_diff$power_db_pre - bandpower_diff$power_db_post,
@@ -727,22 +736,16 @@ compute_bandpower_summaries <- function(pre_psd, post_psd, dt,
     pre_pass_avg  <- .average_bandpower(pre_pass_list)
     post_pass_avg <- .average_bandpower(post_pass_list)
 
-    passband_diff <- pre_pass_avg %>%
-      select(label, low, high,
-             power_db_pre = power_db,
-             relative_power_pre = relative_power) %>%
-      inner_join(
-        post_pass_avg %>%
-          select(label, low, high,
-                 power_db_post = power_db,
-                 relative_power_post = relative_power),
-        by = c("label", "low", "high")
-      ) %>%
-      mutate(
-        power_db_change = power_db_post - power_db_pre,
-        relative_power_change = relative_power_post - relative_power_pre,
-        band_type = "passband"
-      )
+    pre_sel <- pre_pass_avg[, c("label", "low", "high", "power_db", "relative_power")]
+    names(pre_sel)[names(pre_sel) == "power_db"] <- "power_db_pre"
+    names(pre_sel)[names(pre_sel) == "relative_power"] <- "relative_power_pre"
+    post_sel <- post_pass_avg[, c("label", "low", "high", "power_db", "relative_power")]
+    names(post_sel)[names(post_sel) == "power_db"] <- "power_db_post"
+    names(post_sel)[names(post_sel) == "relative_power"] <- "relative_power_post"
+    passband_diff <- merge(pre_sel, post_sel, by = c("label", "low", "high"))
+    passband_diff$power_db_change <- passband_diff$power_db_post - passband_diff$power_db_pre
+    passband_diff$relative_power_change <- passband_diff$relative_power_post - passband_diff$relative_power_pre
+    passband_diff$band_type <- "passband"
 
     power_changes <- passband_diff$power_db_change
     avg_change_db <- if (all(is.na(power_changes))) {
@@ -895,13 +898,13 @@ main <- function() {
   metrics <- bp$metrics
 
   if (length(bandpower_results) > 0) {
-    combined_bandpower <- dplyr::bind_rows(bandpower_results) %>%
-      dplyr::select(
-        band_type, label, low, high,
-        power_db_pre, relative_power_pre,
-        power_db_post, relative_power_post,
-        power_db_change, relative_power_change
-      )
+    combined_bandpower <- .bind_rows(bandpower_results)
+    combined_bandpower <- combined_bandpower[, c(
+      "band_type", "label", "low", "high",
+      "power_db_pre", "relative_power_pre",
+      "power_db_post", "relative_power_post",
+      "power_db_change", "relative_power_change"
+    ), drop = FALSE]
 
     bandpower_file <- paste0("bandpower_", args$subnum, ".csv")
     write.csv(combined_bandpower, bandpower_file, row.names = FALSE)

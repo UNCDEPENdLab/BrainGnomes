@@ -73,6 +73,8 @@ fi
 
 log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $ncores
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # protect existing sub-<id>.html file
 [ -f "${loc_mrproc_root}/sub-${sub_id}.html" ] && mv "${loc_mrproc_root}/sub-${sub_id}.html" "${loc_mrproc_root}/sub-${sub_id}_fmriprep.html"
 
@@ -108,10 +110,12 @@ if [[ $success -eq 0 ]]; then
     rel $rel_flag $log_flag find "$out_dir" -type f -name "*space-MNI152NLin6Asym_res-2*" -delete
   fi
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 else
   fail_file="${complete_file%_complete}_fail"
   archive_file "$fail_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 fi
 
 log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"

@@ -297,7 +297,14 @@ tracking_df_to_tree <- function(tracking_df) {
     # First, create all nodes without attaching
     for (i in seq_len(nrow(df))) {
       job <- df[i, ]
-      node <- data.tree::Node$new(job$job_name)
+      node_label <- if (!is.null(job$job_name) && !is.na(job$job_name) && nzchar(job$job_name)) {
+        job$job_name
+      } else if (!is.null(job$job_id) && !is.na(job$job_id) && nzchar(job$job_id)) {
+        paste0("job_", job$job_id)
+      } else {
+        paste0("job_", job$id)
+      }
+      node <- data.tree::Node$new(node_label)
       node$job_id <- job$job_id
       node$scheduler <- job$scheduler
       node$wall_time <- job$wall_time

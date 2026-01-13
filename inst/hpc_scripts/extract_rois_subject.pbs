@@ -69,12 +69,16 @@ start_time=$(date +%s)
 
 log_message INFO Starting ROI extraction for subject $sub_id in $out_dir with mem: $mem
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" $extract_cli &
 cmd_pid=$!
 
 cmd_status=0
 wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
+[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+
 log_message INFO Finished ROI extraction for subject $sub_id "(time elapsed: $(time_elapsed))"
 exit $cmd_status
-

@@ -560,7 +560,8 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
 
 submit_extract_rois <- function(
     scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env_variables = NULL,
-    sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, ex_stream = NULL) {
+    sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, ex_stream = NULL,
+    tracking_sqlite_db = NULL, tracking_args = NULL) {
   
   if (is.null(ex_stream)) stop("Cannot submit an ROI extraction job without specifying an ex_stream")
 
@@ -603,7 +604,8 @@ submit_extract_rois <- function(
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
-    wait_jobs = parent_ids, echo = FALSE
+    wait_jobs = parent_ids, echo = FALSE,
+    tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
   to_log(lg, "info", "Scheduled ROI extraction stream {ex_stream} job: {truncate_str(attr(job_id, 'cmd'))}")

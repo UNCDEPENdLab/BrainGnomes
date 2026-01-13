@@ -34,7 +34,7 @@ args <- BrainGnomes::parse_cli_args(tmp)
 # build tracking arguments link
 tracking_args <- list(
   job_name = args$job_name,
-  seqeuence_id = args$sequence_id, 
+  sequence_id = args$sequence_id, 
   n_nodes = args$n_nodes, 
   n_cpus = args$n_cpus, 
   wall_time = args$wall_time, 

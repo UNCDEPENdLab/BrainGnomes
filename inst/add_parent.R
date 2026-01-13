@@ -20,14 +20,15 @@ print_help <- function() {
 }
 
 #read in command line arguments
-tmp <- commandArgs(trailingOnly = FALSE)
+tmp <- commandArgs(trailingOnly = TRUE)
 
 args <- BrainGnomes::parse_cli_args(tmp)
 
 # convert string versions of NULL to regular NULL
-if (isTRUE(args$job_id == "NULL")) job_id <- NULL
-if (isTRUE(args$sqlite_db == "NULL")) sqlite_db <- NULL
-if (isTRUE(args$status == "NULL")) status <- NULL
+if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL
+if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
+if (isTRUE(args$parent_job_id == "NULL")) args$parent_job_id <- NULL
+if (isTRUE(args$child_level == "NULL")) args$child_level <- NULL
 
 BrainGnomes::add_tracked_job_parent(sqlite_db = args$sqlite_db,
                                     job_id = args$job_id,

@@ -10,7 +10,8 @@ submit_subjects(
   subject_filter = NULL,
   postprocess_streams = NULL,
   extract_streams = NULL,
-  parent_ids = NULL
+  parent_ids = NULL,
+  sequence_id = NULL
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ submit_subjects(
 \item{extract_streams}{Optional character vector of extraction streams}
 
 \item{parent_ids}{Optional character vector of job IDs to depend on}
+
+\item{sequence_id}{An identifying ID for a set of jobs in a sequence used for job tracking}
 }
 \description{
 Schedule subject-level processing
