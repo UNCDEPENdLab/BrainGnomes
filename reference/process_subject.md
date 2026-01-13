@@ -4,15 +4,17 @@ Preprocess a single subject
 
 ## Usage
 
-    process_subject(
-      scfg,
-      sub_cfg = NULL,
-      steps = NULL,
-      postprocess_streams = NULL,
-      extract_streams = NULL,
-      parent_ids = NULL
-      sequence_id = NULL
-    )
+``` r
+process_subject(
+  scfg,
+  sub_cfg = NULL,
+  steps = NULL,
+  postprocess_streams = NULL,
+  extract_streams = NULL,
+  parent_ids = NULL,
+  sequence_id = NULL
+)
+```
 
 ## Arguments
 
@@ -31,12 +33,7 @@ Preprocess a single subject
 - postprocess_streams:
 
   Optional character vector of postprocess configuration names to run.
-  If NULL, all available postprocessing streams will be run.
-
-- extract_streams:
-
-  Optional character vector of ROI extraction configuration names to
-  run. If NULL, all available extraction streams will be run.
+  If NULL, all available streams will be run.
 
 - parent_ids:
 
@@ -51,12 +48,3 @@ Preprocess a single subject
 ## Value
 
 A logical value indicating whether the preprocessing was successful
-
-## Details
-
-When postprocessing is requested without running `fmriprep`, the
-function verifies that the expected fMRIPrep outputs exist. If the
-configured fMRIPrep directory lies outside the project directory, only
-the existence of the subject's directory is required. For fMRIPrep
-directories inside the project directory, a `.complete` file in the
-project's log directory is still necessary.

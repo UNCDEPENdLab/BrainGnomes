@@ -20,6 +20,8 @@
   : Construct BIDS-Compatible Filenames from Extracted Entity Data
 - [`construct_bids_regex()`](https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_regex.md)
   : Construct a Regular Expression for Matching BIDS Filenames
+- [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  : Function for diagnosing errors in a run of the pipeline
 - [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)
   : Interactively edit a project configuration by field (field-guided)
 - [`extract_bids_info()`](https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.md)
@@ -34,6 +36,8 @@
   : Determine expected output files for a postprocessing stream
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
   : Get processing status for all subjects
+- [`get_step_title()`](https://uncdependlab.github.io/BrainGnomes/reference/get_step_title.md)
+  : helper for retrieving a human-readable title for a pipeline step
 - [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
   : Get processing status for a single subject
 - [`get_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_tracked_job_status.md)
@@ -80,6 +84,9 @@
   : summary method for project configuration object
 - [`summary(`*`<bg_status_df>`*`)`](https://uncdependlab.github.io/BrainGnomes/reference/summary.bg_status_df.md)
   : Summarize project status
+- [`tracking_df_to_tree()`](https://uncdependlab.github.io/BrainGnomes/reference/tracking_df_to_tree.md)
+  : helper for converting tracking data.frame into a multi-level
+  data.tree hierarchy
 - [`update_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.md)
   : Update Job Status in Tracking SQLite Database
 - [`wait_for_job()`](https://uncdependlab.github.io/BrainGnomes/reference/wait_for_job.md)
