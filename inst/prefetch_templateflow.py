@@ -33,6 +33,7 @@ SKIP_TOKENS = {
 
 TemplateQuery = Tuple[str, Dict[str, Any], str]
 DEBUG = False
+DEFAULT_RESOLUTION = 1
 
 
 def dbg(message: str) -> None:
@@ -115,6 +116,28 @@ def parse_output_space_token(token: str) -> Tuple[str, Optional[int], bool]:
                 is_surface = True
 
     return template, resolution, is_surface
+
+
+def resolution_preferences(tokens: List[str], override_res: Optional[int]) -> Dict[str, List[int]]:
+    """Resolve per-template resolution preferences from tokens or an explicit override."""
+    prefs: Dict[str, Set[int]] = {}
+    for token in tokens:
+        if token in SKIP_TOKENS:
+            continue
+        template, resolution, is_surface = parse_output_space_token(token)
+        if is_surface or template in SKIP_TOKENS:
+            continue
+        prefs.setdefault(template, set())
+        if resolution is not None:
+            prefs[template].add(resolution)
+
+    if override_res is not None:
+        return {template: [override_res] for template in prefs}
+
+    for template, res_set in prefs.items():
+        if not res_set:
+            res_set.add(DEFAULT_RESOLUTION)
+    return {template: sorted(res_set) for template, res_set in prefs.items()}
 
 
 def _paths_exist(result: Union[str, os.PathLike, Sequence[Union[str, os.PathLike]]]) -> bool:
@@ -238,6 +261,7 @@ def _normalize_query_dict(
     override_res: Optional[int],
     override_suffix: Optional[str],
     override_desc: Optional[str],
+    preferred_resolutions: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """Map SpatialReferences spec fields to TemplateFlow api.get keyword arguments."""
     spec_data = dict(spec)
@@ -257,7 +281,12 @@ def _normalize_query_dict(
         if not desc_values or desc_values == [None]:
             desc_values = ["brain"]
 
-    res_source = override_res if override_res is not None else _pop_any(spec_data, "resolutions", "resolution", "res")
+    if override_res is not None:
+        res_source = override_res
+    elif preferred_resolutions is not None:
+        res_source = list(preferred_resolutions)
+    else:
+        res_source = _pop_any(spec_data, "resolution", "res", "resolutions")
     res_values = _option_values(res_source, allow_none=True, transform=_coerce_resolution)
 
     atlas_values = _option_values(_pop_any(spec_data, "atlases", "atlas"), allow_none=True)
@@ -414,6 +443,7 @@ def build_queries_from_spatial_refs(
     dbg(f"Attempting SpatialReferences parsing for tokens: {tokens}")
     spatial_refs = _instantiate_spatial_references(tokens)
     entries = _iter_spatial_entries(spatial_refs)
+    preferred_resolutions = resolution_preferences(tokens, override_res)
     dbg(f"SpatialReferences returned {len(entries)} entry/entries.")
 
     queries: List[TemplateQuery] = []
@@ -423,10 +453,17 @@ def build_queries_from_spatial_refs(
         if not template_name:
             continue
         dbg(f"Processing template '{template_name}' (label='{label}') with {len(specs)} spec(s).")
+        template_resolutions = preferred_resolutions.get(template_name)
         for spec in specs:
             spec_dict = _spec_to_dict(spec)
             dbg(f"Spec dict: {spec_dict}")
-            query_variants = _normalize_query_dict(spec_dict, override_res, override_suffix, override_desc)
+            query_variants = _normalize_query_dict(
+                spec_dict,
+                override_res,
+                override_suffix,
+                override_desc,
+                preferred_resolutions=template_resolutions,
+            )
             if not query_variants:
                 dbg("Spec produced zero query variants.")
                 continue
@@ -458,6 +495,8 @@ def build_queries_legacy(
         if is_surface:
             continue
         res_arg = override_res if override_res is not None else resolution
+        if res_arg is None:
+            res_arg = DEFAULT_RESOLUTION
         suffix_values = [override_suffix] if override_suffix else ["T1w", "mask"]
         desc_values = [override_desc] if override_desc else (["brain"] if not override_suffix else [None])
 
@@ -492,16 +531,20 @@ def _template_names_from_tokens(tokens: List[str]) -> List[str]:
     return templates
 
 
-def add_default_t2w_queries(queries: List[TemplateQuery], tokens: List[str]) -> List[TemplateQuery]:
+def add_default_t2w_queries(
+    queries: List[TemplateQuery],
+    tokens: List[str],
+) -> Tuple[List[TemplateQuery], Set[Tuple[str, Tuple[Tuple[str, Any], ...]]]]:
     """Ensure T2w res-01 templates are prefetched for each template space."""
     templates = _template_names_from_tokens(tokens)
     if not templates:
-        return queries
+        return queries, set()
 
     existing: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = {
         _freeze_query(template, params) for template, params, _ in queries
     }
     augmented = list(queries)
+    optional: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = set()
     for template in templates:
         params = {"suffix": "T2w", "resolution": 1}
         fingerprint = _freeze_query(template, params)
@@ -510,7 +553,8 @@ def add_default_t2w_queries(queries: List[TemplateQuery], tokens: List[str]) -> 
         existing.add(fingerprint)
         label = f"{template} (T2w res-01)"
         augmented.append((template, params, label))
-    return augmented
+        optional.add(fingerprint)
+    return augmented, optional
 
 
 def main() -> int:
@@ -528,7 +572,7 @@ def main() -> int:
         default=None,
         help=(
             "Resolution to fetch (overrides any res-* in tokens). "
-            "If omitted, uses token-provided res when present; otherwise no resolution is passed."
+            "If omitted, uses token-provided res when present; otherwise defaults to res-01."
         ),
     )
     parser.add_argument(
@@ -584,7 +628,7 @@ def main() -> int:
     if not queries:
         print("No TemplateFlow queries were resolved; nothing to prefetch.")
         return 0
-    queries = add_default_t2w_queries(queries, spaces)
+    queries, optional_queries = add_default_t2w_queries(queries, spaces)
 
     # Determine where TemplateFlow will place fetched files
     tf_home = os.environ.get("TEMPLATEFLOW_HOME")
@@ -593,26 +637,47 @@ def main() -> int:
     print(f"TemplateFlow cache directory: {tf_home}")
 
     failures: List[str] = []
+    soft_failures: List[str] = []
     fetched: List[str] = []
     for template, params, label in queries:
         detail = _format_query_detail(template, params)
+        fingerprint = _freeze_query(template, params)
+        is_optional = fingerprint in optional_queries
         print(f"Fetching TemplateFlow resource for '{label}' ({detail}) ...")
 
         try:
             result = api.get(template=template, **params)
         except Exception as exc:  # pragma: no cover
-            print(f"Failed to fetch '{label}': {exc}", file=sys.stderr)
-            failures.append(label)
+            if is_optional:
+                print(f"Optional TemplateFlow resource failed to fetch '{label}': {exc}", file=sys.stderr)
+                soft_failures.append(label)
+            else:
+                print(f"Failed to fetch '{label}': {exc}", file=sys.stderr)
+                failures.append(label)
             continue
 
         if not _paths_exist(result):
-            print(
-                f"No files resolved for space '{label}' ({detail}).",
-                file=sys.stderr,
-            )
-            failures.append(label)
+            if is_optional:
+                print(
+                    f"Optional TemplateFlow resource unavailable for space '{label}' ({detail}).",
+                    file=sys.stderr,
+                )
+                soft_failures.append(label)
+            else:
+                print(
+                    f"No files resolved for space '{label}' ({detail}).",
+                    file=sys.stderr,
+                )
+                failures.append(label)
             continue
         fetched.append(label)
+
+    if soft_failures:
+        print(
+            "TemplateFlow prefetch completed with optional resources unavailable for: "
+            + ", ".join(soft_failures),
+            file=sys.stderr,
+        )
 
     if failures:
         print(
