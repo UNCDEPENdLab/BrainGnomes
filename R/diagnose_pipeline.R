@@ -477,6 +477,22 @@ diagnose_pipeline <- function(input) {
   return(invisible(NULL))
 }
 
+#' helper for recursively collecting all nodes from a tree
+#'
+#' @param node A data.tree Node object
+#' @return A list of all descendant nodes including the node itself
+#'
+#' @keywords internal
+get_all_nodes <- function(node) {
+  res <- list(node)
+  if (node$count > 0) {
+    for (child in node$children) {
+      res <- c(res, get_all_nodes(child))
+    }
+  }
+  return(res)
+}
+
 #' helper for getting job type from job name
 #'
 #' @param job_name Character string job name
@@ -520,73 +536,96 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
   
   status_priority <- c("COMPLETED" = 5, "STARTED" = 4, "QUEUED" = 3, "FAILED_BY_EXT" = 2, "FAILED" = 1)
   
-  job_summary <- list()
+  # Build trees to get hierarchy structure
+  trees <- tracking_df_to_tree(subject_jobs_df)
   
-  for (i in seq_len(nrow(subject_jobs_df))) {
-    job <- subject_jobs_df[i, ]
-    job_name <- job$job_name
-    
+  # Get all nodes from all trees to aggregate
+  all_nodes <- list()
+  for (tree_root in trees) {
+    all_nodes <- c(all_nodes, unlist(lapply(tree_root$children, get_all_nodes), recursive = FALSE))
+  }
+  
+  # Aggregate by job_name across sequences - pick best status
+  job_info_map <- list()
+  for (node in all_nodes) {
+    job_name <- node$name
     if (grepl("^fsaverage", job_name)) {
       next
     }
     
-    job_type <- get_job_type(job_name)
-    
-    if (grepl("^postprocess_", job_name)) {
-      stream_match <- regmatches(job_name, regexpr("^postprocess_[^_]+", job_name))
-      group_key <- paste0("Postprocess ", sub("^postprocess_", "", stream_match))
-    } else {
-      group_key <- job_type
-    }
-    
-    if (is.null(job_summary[[group_key]])) {
-      job_summary[[group_key]] <- list()
-    }
-    
-    if (is.null(job_summary[[group_key]][[job_name]])) {
-      job_summary[[group_key]][[job_name]] <- list(
+    if (!job_name %in% names(job_info_map)) {
+      job_info_map[[job_name]] <- list(
         statuses = character(),
         job_ids = character(),
-        sequence_ids = character()
+        sequence_ids = character(),
+        nodes = list()
       )
     }
+    job_info_map[[job_name]]$statuses <- c(job_info_map[[job_name]]$statuses, as.character(node$status))
+    job_info_map[[job_name]]$job_ids <- c(job_info_map[[job_name]]$job_ids, as.character(node$job_id))
+    job_info_map[[job_name]]$sequence_ids <- c(job_info_map[[job_name]]$sequence_ids, as.character(node$sequence_id))
+    job_info_map[[job_name]]$nodes <- c(job_info_map[[job_name]]$nodes, list(node))
+  }
+  
+  # Organize by job type using aggregated info
+  job_types <- list()
+  for (job_name in names(job_info_map)) {
+    job_info <- job_info_map[[job_name]]
+    # Use first node for hierarchy (all trees should have same structure)
+    node <- job_info$nodes[[1]]
     
-    job_summary[[group_key]][[job_name]]$statuses <- c(
-      job_summary[[group_key]][[job_name]]$statuses,
-      as.character(job$status)
-    )
-    job_summary[[group_key]][[job_name]]$job_ids <- c(
-      job_summary[[group_key]][[job_name]]$job_ids,
-      as.character(job$job_id)
-    )
-    job_summary[[group_key]][[job_name]]$sequence_ids <- c(
-      job_summary[[group_key]][[job_name]]$sequence_ids,
-      as.character(job$sequence_id)
-    )
+    type <- get_job_type(job_name)
+    if (is.null(job_types[[type]])) job_types[[type]] <- list()
+    job_types[[type]][[job_name]] <- job_info
   }
   
   step_order <- c(
-    "BIDS Conversion", "BIDS Validation",
+    "Setup", "BIDS Conversion", "BIDS Validation",
     "MRIQC", "fMRIPrep", "ICA-AROMA", "ROI Extraction"
   )
   
-  ordered_types <- intersect(step_order, names(job_summary))
-  remaining_types <- setdiff(names(job_summary), ordered_types)
+  ordered_types <- intersect(step_order, names(job_types))
+  remaining_types <- setdiff(names(job_types), ordered_types)
   remaining_types <- setdiff(remaining_types, "Setup")
   remaining_types <- sort(remaining_types)
   all_types <- c(ordered_types, remaining_types)
   
   cli::cli_h2(cli::col_green("Subject: {subject_id}"))
   
+  shown_as_children <- character()
+  
   for (type in all_types) {
-    if (is.null(job_summary[[type]])) next
+    jobs_to_show <- list()
+    for (job_name in names(job_types[[type]])) {
+      job_info <- job_types[[type]][[job_name]]
+      node <- job_info$nodes[[1]]
+      
+      if (job_name %in% shown_as_children) {
+        next
+      }
+      
+      # Skip postprocess children that have postprocess parents
+      if (grepl("^postprocess_", job_name) &&
+          !is.null(node$parent) &&
+          grepl("^postprocess_", node$parent$name)) {
+        next
+      }
+      
+      jobs_to_show[[job_name]] <- job_info
+    }
+    
+    if (length(jobs_to_show) == 0) {
+      next
+    }
     
     cli::cli_text("\u2500\u2500 {.strong {type}}")
     cli::cli_ul()
     
-    for (job_name in names(job_summary[[type]])) {
-      job_info <- job_summary[[type]][[job_name]]
+    for (job_name in names(jobs_to_show)) {
+      job_info <- jobs_to_show[[job_name]]
+      node <- job_info$nodes[[1]]
       
+      # Pick best status across sequences
       status_priorities <- status_priority[job_info$statuses]
       status_priorities <- status_priorities[!is.na(status_priorities)]
       
@@ -604,7 +643,74 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
       
       sym <- get_status_symbol(best_status)
       status_colored <- get_status_color(best_status)
-      cli::cli_li("{sym} {job_name} (job {cli::col_cyan(rep_job_id)}, sequence {cli::col_magenta(rep_sequence_id)}) [{status_colored}]")
+      
+      # Format sequence_id - skip if NA
+      seq_display <- if (!is.na(rep_sequence_id) && rep_sequence_id != "NA" && !is.null(rep_sequence_id)) {
+        paste0(", sequence ", cli::col_magenta(rep_sequence_id))
+      } else {
+        ""
+      }
+      
+      cli::cli_li("{sym} {job_name} (job {cli::col_cyan(rep_job_id)}{seq_display}) [{status_colored}]")
+      
+      # Print children recursively using tree hierarchy
+      print_children <- function(parent_node, parent_name, indent = "  \u2514\u2500 ") {
+        parent_parts <- strsplit(parent_name, "_")[[1]]
+        if (parent_parts[1] == "postprocess") {
+          parent_pref <- "postprocess"
+        } else {
+          parent_pref <- parent_parts[1]
+        }
+        
+        if (parent_node$count > 0) {
+          for (child_node in parent_node$children) {
+            child_name <- child_node$name
+            if (startsWith(child_name, paste0(parent_pref, "_"))) {
+              # Get aggregated info for child
+              if (child_name %in% names(job_info_map)) {
+                child_info <- job_info_map[[child_name]]
+                
+                # Pick best status for child across sequences
+                child_status_priorities <- status_priority[child_info$statuses]
+                child_status_priorities <- child_status_priorities[!is.na(child_status_priorities)]
+                
+                if (length(child_status_priorities) == 0) {
+                  child_best_status <- "UNKNOWN"
+                  child_rep_job_id <- child_info$job_ids[1]
+                  child_rep_sequence_id <- child_info$sequence_ids[1]
+                } else {
+                  child_best_priority <- max(child_status_priorities)
+                  child_best_status <- names(status_priority)[status_priority == child_best_priority][1]
+                  child_best_idx <- which(child_status_priorities == child_best_priority)[1]
+                  child_rep_job_id <- child_info$job_ids[child_best_idx]
+                  child_rep_sequence_id <- child_info$sequence_ids[child_best_idx]
+                }
+                
+                sym_c <- get_status_symbol(child_best_status)
+                status_colored_c <- get_status_color(child_best_status)
+                
+                child_seq_display <- if (!is.na(child_rep_sequence_id) && child_rep_sequence_id != "NA" && !is.null(child_rep_sequence_id)) {
+                  paste0(", sequence ", cli::col_magenta(child_rep_sequence_id))
+                } else {
+                  ""
+                }
+                
+                cli::cli_li(paste0(indent, sym_c, " ", child_name,
+                                   " (job ", child_rep_job_id, child_seq_display, ") [", status_colored_c, "]"))
+                shown_as_children <<- c(shown_as_children, child_name)
+                
+                if (child_node$count > 0) {
+                  print_children(child_node, child_name, indent = paste0("  ", indent))
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      if (node$count > 0) {
+        print_children(node, job_name)
+      }
     }
     
     cli::cli_end()
@@ -620,16 +726,6 @@ print_step_tree_by_type <- function(tree_root) {
   if (tree_root$count == 0) {
     cli::cli_inform("No jobs found in this sequence.")
     return(invisible(NULL))
-  }
-
-  get_all_nodes <- function(node) {
-    res <- list(node)
-    if (node$count > 0) {
-      for (child in node$children) {
-        res <- c(res, get_all_nodes(child))
-      }
-    }
-    return(res)
   }
 
   all_nodes <- unlist(lapply(tree_root$children, get_all_nodes), recursive = FALSE)
