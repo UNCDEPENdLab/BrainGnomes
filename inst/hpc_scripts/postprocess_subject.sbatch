@@ -142,7 +142,7 @@ for jid in "${job_ids[@]}"; do
   if [[ "$state" != "COMPLETED" || "$exit_main" != "0" ]]; then
     log_message ERROR "Child job $jid failed with state $state exit code $exit_code"
     failed=1
-    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
   fi
 done
 

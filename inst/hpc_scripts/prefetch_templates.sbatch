@@ -68,6 +68,8 @@ done
 
 log_message INFO "Prefetching TemplateFlow resources into $templateflow_home for spaces: $prefetch_spaces"
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 # export necessary environment variables for the container
 rel $rel_flag $log_flag export TEMPLATEFLOW_HOME="$templateflow_home"
 rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home"
@@ -79,6 +81,9 @@ cmd_pid=$!
 
 cmd_status=0
 wait $cmd_pid || cmd_status=$?
+
+[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 
 if [[ $cmd_status -eq 0 ]]; then
   log_message INFO "TemplateFlow prefetch completed successfully."

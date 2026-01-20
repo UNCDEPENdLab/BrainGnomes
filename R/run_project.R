@@ -389,9 +389,20 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     audit_str
   ), collapse = TRUE)
 
-  cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
+  sched_script <- get_job_script(scfg, "flywheel_sync", subject_suffix = FALSE)
+  
+  env_variables <- c(
+    pkg_dir = find.package(package = "BrainGnomes"),
+    R_HOME = R.home(),
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
+    sqlite_db = scfg$metadata$sqlite_db,
+    flywheel_cmd = scfg$compute_environment$flywheel,
+    flywheel_cli_options = cli_options,
+    flywheel_source_url = scfg$flywheel_sync$source_url,
+    flywheel_sync_directory = scfg$metadata$flywheel_sync_directory
+  )
 
-  job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args, env_variables = env_variables)
 
   to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
   to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
