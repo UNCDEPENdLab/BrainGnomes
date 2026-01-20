@@ -271,9 +271,10 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
 #' Query job status in tracking SQLite database
 #' 
 #' @param job_id The job id for which to retreive the status
-#' @param sqlite_db Character string of sqlite database
 #' @param return_children Return child jobs of this job
 #' @param return_parent Return parent jobs of this job
+#' @param sequence_id The sequence id to query instead of \code{job_id}
+#' @param sqlite_db Character string of sqlite database
 #' 
 #' @return An R data.frame version of the tracking database
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery

@@ -216,7 +216,7 @@ filter_confounds <- function(confounds_df = NULL,
                              bandstop_min_bpm = NULL,
                              bandstop_max_bpm = NULL,
                              low_pass_hz = NULL,
-                             filter_order = 2L,
+                             filter_order = NULL,
                              columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
                              add_poly = TRUE,
                              out_file = NULL,
@@ -265,6 +265,7 @@ filter_confounds <- function(confounds_df = NULL,
 
   fs <- 1 / tr
   nyquist <- fs / 2
+  nyquist_bpm <- nyquist * 60
   padlen_val <- if (is.null(padlen)) -1L else as.integer(padlen)
 
   if (filter_type == "notch") {
@@ -282,15 +283,30 @@ filter_confounds <- function(confounds_df = NULL,
     }
 
     stopband_hz <- c(bandstop_min_bpm, bandstop_max_bpm) / 60
+    stopband_hz_adjusted <- abs(stopband_hz - (floor((stopband_hz + nyquist) / fs) * fs))
+    stopband_adjusted <- stopband_hz_adjusted * 60
+    if (any(abs(stopband_adjusted - c(bandstop_min_bpm, bandstop_max_bpm)) > 1e-6)) {
+      to_log(lg, "warn", "One or both filter frequencies are above Nyquist frequency ({round(nyquist_bpm, 2)} BPM), so they have been changed ({round(bandstop_min_bpm, 2)} --> {round(stopband_adjusted[1], 2)}, {round(bandstop_max_bpm, 2)} --> {round(stopband_adjusted[2], 2)} BPM).")
+      bandstop_min_bpm <- stopband_adjusted[1]
+      bandstop_max_bpm <- stopband_adjusted[2]
+    }
+    if (bandstop_max_bpm <= bandstop_min_bpm) {
+      to_log(lg, "warn", "Adjusted notch band is invalid after Nyquist correction; skipping motion filtering.")
+      return(confounds_df)
+    }
+
+    stopband_hz <- c(bandstop_min_bpm, bandstop_max_bpm) / 60
     f0 <- mean(stopband_hz)
     bandwidth <- abs(diff(stopband_hz))
 
     if (bandwidth <= 0) {
-      to_log(lg, "fatal", "bandstop_min_bpm and bandstop_max_bpm must define a non-zero bandwidth in Hz (received {bandwidth}).")
+      to_log(lg, "warn", "Adjusted notch band has zero bandwidth; skipping motion filtering.")
+      return(confounds_df)
     }
 
     if (f0 >= nyquist) {
-      to_log(lg, "fatal", "Requested notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s.")
+      to_log(lg, "warn", "Adjusted notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s; skipping motion filtering.")
+      return(confounds_df)
     }
 
     Q <- f0 / bandwidth
@@ -299,12 +315,20 @@ filter_confounds <- function(confounds_df = NULL,
   } else {
     if (is.null(filter_order)) filter_order <- 2L
     checkmate::assert_number(low_pass_hz, lower = 0.001)
+    if (low_pass_hz >= nyquist) {
+      low_pass_hz_adjusted <- abs(low_pass_hz - (floor((low_pass_hz + nyquist) / fs) * fs))
+      if (abs(low_pass_hz_adjusted - low_pass_hz) > 1e-6) {
+        to_log(lg, "warn", "Low-pass filter frequency is above Nyquist frequency ({round(nyquist_bpm, 2)} BPM), so it has been changed ({round(low_pass_hz * 60, 2)} --> {round(low_pass_hz_adjusted * 60, 2)} BPM).")
+      }
+      low_pass_hz <- low_pass_hz_adjusted
+    }
+    if (low_pass_hz <= 0 || low_pass_hz >= nyquist) {
+      to_log(lg, "warn", "Adjusted low-pass cutoff is invalid for TR = {tr} s; skipping motion filtering.")
+      return(confounds_df)
+    }
     checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
     if (!requireNamespace("signal", quietly = TRUE)) {
       to_log(lg, "fatal", "The 'signal' package must be installed for low-pass filtering.")
-    }
-    if (low_pass_hz >= nyquist) {
-      to_log(lg, "fatal", "low_pass_hz must be less than the Nyquist frequency ({round(nyquist, 4)} Hz) for TR = {tr} s.")
     }
     filter_order <- as.integer(filter_order)
     if (filter_order %% 2L != 0L) {

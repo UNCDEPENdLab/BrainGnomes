@@ -5,6 +5,7 @@
 * feature: Improved error logging in HPC scripts so that success and failure are indicated more clearly
 * feature: Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps
 * feature: Added optional low-pass filtering of motion parameters, matching (Gratton)
+* feature: Gracefully adjust motion filtering parameters if they fall above Nyquist at this TR
 
 # BrainGnomes 0.7-5
 
