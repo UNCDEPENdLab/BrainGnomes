@@ -21,8 +21,9 @@ test_that("validate_postprocess_config_single accepts motion filter band", {
   cfg <- make_base_postprocess_cfg()
   cfg$motion_filter <- list(
     enable = TRUE,
-    band_stop_min = 12,
-    band_stop_max = 20
+    filter_type = "notch",
+    bandstop_min_bpm = 12,
+    bandstop_max_bpm = 20
   )
 
   res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
@@ -33,13 +34,14 @@ test_that("validate_postprocess_config_single flags inverted motion filter band"
   cfg <- make_base_postprocess_cfg()
   cfg$motion_filter <- list(
     enable = TRUE,
-    band_stop_min = 20,
-    band_stop_max = 15
+    filter_type = "notch",
+    bandstop_min_bpm = 20,
+    bandstop_max_bpm = 15
   )
 
   res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
-  expect_true("postprocess/motion_filter/band_stop_min" %in% res$gaps)
-  expect_true("postprocess/motion_filter/band_stop_max" %in% res$gaps)
+  expect_true("postprocess/motion_filter/bandstop_min_bpm" %in% res$gaps)
+  expect_true("postprocess/motion_filter/bandstop_max_bpm" %in% res$gaps)
 })
 
 test_that("motion-related confounds trigger motion_filter enable gap", {
@@ -53,4 +55,17 @@ test_that("motion-related confounds trigger motion_filter enable gap", {
 
   res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
   expect_true("postprocess/motion_filter/enable" %in% res$gaps)
+})
+
+test_that("validate_postprocess_config_single accepts low-pass motion filter", {
+  cfg <- make_base_postprocess_cfg()
+  cfg$motion_filter <- list(
+    enable = TRUE,
+    filter_type = "lowpass",
+    lowpass_bpm = 6,
+    filter_order = 4
+  )
+
+  res <- validate_postprocess_config_single(cfg, cfg_name = "test", quiet = TRUE)
+  expect_false(any(grepl("postprocess/motion_filter", res$gaps, fixed = TRUE)))
 })

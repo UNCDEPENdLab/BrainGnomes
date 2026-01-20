@@ -22,9 +22,9 @@
 #' @param filter_method Filtering strategy when `include_filtered = TRUE`.
 #'   Either `"notch"` (band-stop, in breaths per minute) or `"lowpass"` (Hz).
 #' @param tr Repetition time in seconds, required when `include_filtered = TRUE`.
-#' @param band_stop_min Lower notch stop-band bound in breaths per minute
+#' @param bandstop_min_bpm Lower notch stop-band bound in breaths per minute
 #'   (default 12; used when `filter_method = "notch"`).
-#' @param band_stop_max Upper notch stop-band bound in breaths per minute
+#' @param bandstop_max_bpm Upper notch stop-band bound in breaths per minute
 #'   (default 18; used when `filter_method = "notch"`).
 #' @param low_pass_hz Low-pass cutoff in Hz (required for
 #'   `filter_method = "lowpass"`).
@@ -49,8 +49,8 @@
 #'   include_filtered = TRUE,
 #'   filter_method = "notch",
 #'   tr = 2,
-#'   band_stop_min = 18,
-#'   band_stop_max = 24
+#'   bandstop_min_bpm = 18,
+#'   bandstop_max_bpm = 24
 #' )
 #' }
 #'
@@ -66,8 +66,8 @@ calculate_motion_outliers <- function(scfg = NULL,
                                       include_filtered = FALSE,
                                       filter_method = c("notch", "lowpass"),
                                       tr = NULL,
-                                      band_stop_min = 12,
-                                      band_stop_max = 18,
+                                      bandstop_min_bpm = 12,
+                                      bandstop_max_bpm = 18,
                                       low_pass_hz = NULL,
                                       filter_order = 2L,
                                       motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
@@ -108,13 +108,13 @@ calculate_motion_outliers <- function(scfg = NULL,
     filter_method <- match.arg(filter_method)
     checkmate::assert_number(tr, lower = 0.01)
     if (filter_method == "notch") {
-      checkmate::assert_number(band_stop_min, lower = 0)
-      checkmate::assert_number(band_stop_max, lower = 0)
-      if (band_stop_max <= band_stop_min) {
-        stop("band_stop_max (", band_stop_max, ") must be greater than band_stop_min (", band_stop_min, ").")
+      checkmate::assert_number(bandstop_min_bpm, lower = 0)
+      checkmate::assert_number(bandstop_max_bpm, lower = 0)
+      if (bandstop_max_bpm <= bandstop_min_bpm) {
+        stop("bandstop_max_bpm (", bandstop_max_bpm, ") must be greater than bandstop_min_bpm (", bandstop_min_bpm, ").")
       }
     } else {
-      checkmate::assert_number(low_pass_hz, lower = 0)
+      checkmate::assert_number(low_pass_hz, lower = 0.001)
       checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
     }
   }
@@ -172,34 +172,6 @@ calculate_motion_outliers <- function(scfg = NULL,
     return(empty_out())
   }
 
-  lowpass_filter_motion <- function(df) {
-    if (!requireNamespace("signal", quietly = TRUE)) {
-      stop("The 'signal' package must be installed for low-pass filtering.")
-    }
-    fs <- 1 / tr
-    nyq <- fs / 2
-    if (low_pass_hz <= 0) {
-      stop("low_pass_hz must be greater than 0.")
-    }
-    if (low_pass_hz >= nyq) {
-      stop("low_pass_hz must be less than the Nyquist frequency (", signif(nyq, 4), " Hz).")
-    }
-    coeffs <- signal::butter(filter_order, low_pass_hz / nyq, type = "low")
-    for (col_name in motion_cols) {
-      series <- as.numeric(df[[col_name]])
-      if (anyNA(series)) series[is.na(series)] <- 0
-      df[[col_name]] <- filtfilt_cpp(
-        series,
-        b = coeffs$b,
-        a = coeffs$a,
-        padlen = -1L,
-        padtype = "constant",
-        use_zi = TRUE
-      )
-    }
-    df
-  }
-
   labels <- vapply(thresholds, format_threshold, character(1))
   res <- lapply(confounds_files, function(cf) {
     confounds <- data.table::fread(cf, showProgress = FALSE, na.strings = c("n/a", "NA", "NaN"), data.table = FALSE)
@@ -240,23 +212,22 @@ calculate_motion_outliers <- function(scfg = NULL,
       if (!motion_ok) {
         filtered_fd <- rep(NA_real_, length(fd))
       } else {
-        if (filter_method == "notch") {
-          filtered <- notch_filter(
-            confounds_df = confounds,
-            tr = tr,
-            band_stop_min = band_stop_min,
-            band_stop_max = band_stop_max,
-            columns = motion_cols,
-            add_poly = FALSE,
-            out_file = NULL,
-            padtype = "constant",
-            padlen = NULL,
-            use_zi = TRUE,
-            lg = NULL
-          )
-        } else {
-          filtered <- lowpass_filter_motion(confounds)
-        }
+        filtered <- filter_confounds(
+          confounds_df = confounds,
+          tr = tr,
+          filter_type = filter_method,
+          bandstop_min_bpm = bandstop_min_bpm,
+          bandstop_max_bpm = bandstop_max_bpm,
+          low_pass_hz = low_pass_hz,
+          filter_order = filter_order,
+          columns = motion_cols,
+          add_poly = FALSE,
+          out_file = NULL,
+          padtype = "constant",
+          padlen = NULL,
+          use_zi = TRUE,
+          lg = NULL
+        )
         filtered_fd <- framewise_displacement(
           motion = filtered[, motion_cols, drop = FALSE],
           columns = motion_cols,

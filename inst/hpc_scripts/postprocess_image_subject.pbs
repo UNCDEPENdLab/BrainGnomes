@@ -68,12 +68,13 @@ log_message INFO Starting postprocessing for image $input_file in $out_dir with 
 
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$postprocess_rscript" --input="$input_file" $postprocess_cli &
 cmd_pid=$!
+run_bg_and_wait "$cmd_pid" cmd_status
 
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
-
-[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-log_message INFO Finished postprocessing for image $input_file "(time elapsed: $(time_elapsed))"
+if [[ $cmd_status -eq 0 ]]; then
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO Finished postprocessing for image $input_file "(time elapsed: $(time_elapsed))"
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "Postprocessing failed for image $input_file (exit code $cmd_status)"
+fi
 exit $cmd_status

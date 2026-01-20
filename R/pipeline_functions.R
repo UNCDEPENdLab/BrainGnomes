@@ -250,6 +250,7 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
     glue("sub-{sub_id}"),
     glue(".{name_tag}{sub_str}_complete")
   )
+  fail_file <- sub("_complete$", "_fail", complete_file)
 
   out_dir <- switch(step_name,
     bids_conversion = if (session_level && !is.null(ses_id)) {
@@ -284,8 +285,19 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
       }
   )
 
+  complete_exists <- checkmate::test_file_exists(complete_file)
+  fail_exists <- checkmate::test_file_exists(fail_file)
+  complete_newer_than_fail <- FALSE
+  if (complete_exists && fail_exists) {
+    complete_mtime <- file.info(complete_file)$mtime
+    fail_mtime <- file.info(fail_file)$mtime
+    if (!is.na(complete_mtime) && !is.na(fail_mtime)) {
+      complete_newer_than_fail <- complete_mtime > fail_mtime
+    }
+  }
+
   complete <- checkmate::test_directory_exists(out_dir) &&
-    checkmate::test_file_exists(complete_file)
+    complete_exists && (!fail_exists || complete_newer_than_fail)
 
   list(complete = complete, dir = out_dir, complete_file = complete_file)
 }

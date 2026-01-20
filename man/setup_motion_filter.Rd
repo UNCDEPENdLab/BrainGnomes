@@ -16,9 +16,10 @@ Modified \code{ppcfg} with \verb{$motion_filter} populated when applicable.
 }
 \description{
 If motion parameters are used in scrubbing expressions or included among the
-selected confound regressors, users can choose to apply a notch (band-stop)
-filter to the rigid-body motion time series prior to downstream processing.
-This mirrors the respiration filtering strategy used in tools such as xcp-d
-and helps mitigate respiration-induced spikes in framewise displacement.
+selected confound regressors, users can choose to filter the rigid-body motion
+time series prior to downstream processing (either with a notch/band-stop
+filter or a low-pass filter). This mirrors the respiration filtering strategy
+used in tools such as xcp-d and helps mitigate respiration-induced spikes in
+framewise displacement.
 }
 \keyword{internal}

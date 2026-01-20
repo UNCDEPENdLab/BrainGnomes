@@ -107,9 +107,7 @@ rel $rel_flag $log_flag export APPTAINERENV_FS_LICENSE="$fs_license_file" # set 
     $cli_options # all options setup by submit_fmriprep()
 ) &
 cmd_pid=$!
-
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+run_bg_and_wait "$cmd_pid" cmd_status
 
 # fmriprep somehow decides to throw a non-zero exit status even when it completes successfully.
 # fall back to looking for success string in fmriprep log file
@@ -118,14 +116,15 @@ success=$(grep -q "fMRIPrep finished successfully!" "$stdout_log" && echo 0 || e
 log_message DEBUG "Exit status of fmriprep is $cmd_status, success is $success"
 
 if [[ $success -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Finished fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
 else
   fail_file="${complete_file%_complete}_fail"
   archive_file "$fail_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "fmriprep failed for subject $sub_id $ses_str (exit status $cmd_status; success flag $success)"
 fi
-
-log_message INFO "Exiting fmriprep for subject $sub_id $ses_str (time elapsed: $(time_elapsed))"
 exit $success

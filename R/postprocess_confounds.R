@@ -36,16 +36,51 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
   # handle filtering of motion parameters for respiratory artifacts, recalculation of framewise_displacement
   motion_filter_cfg <- cfg$motion_filter
   if (!is.null(motion_filter_cfg) && isTRUE(motion_filter_cfg$enable)) {
+    deprecated_present <- !is.null(motion_filter_cfg$band_stop_min) ||
+      !is.null(motion_filter_cfg$band_stop_max)
+    if (deprecated_present) {
+      warned <- isTRUE(getOption("bg_warned_deprecated_motion_filter", FALSE))
+      if (!warned) {
+        warning(
+          "motion_filter$band_stop_min/band_stop_max are deprecated; use bandstop_min_bpm/bandstop_max_bpm instead.",
+          call. = FALSE
+        )
+        options(bg_warned_deprecated_motion_filter = TRUE)
+      }
+      if (is.null(motion_filter_cfg$bandstop_min_bpm) && !is.null(motion_filter_cfg$band_stop_min)) {
+        motion_filter_cfg$bandstop_min_bpm <- motion_filter_cfg$band_stop_min
+      }
+      if (is.null(motion_filter_cfg$bandstop_max_bpm) && !is.null(motion_filter_cfg$band_stop_max)) {
+        motion_filter_cfg$bandstop_max_bpm <- motion_filter_cfg$band_stop_max
+      }
+    }
+
     motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
+    filter_type <- motion_filter_cfg$filter_type
+    if (is.null(filter_type)) {
+      if (!is.null(motion_filter_cfg$lowpass_bpm)) {
+        filter_type <- "lowpass"
+      } else {
+        filter_type <- "notch"
+      }
+      motion_filter_cfg$filter_type <- filter_type
+    }
+    lowpass_hz <- NULL
+    if (!is.null(motion_filter_cfg$lowpass_bpm)) {
+      lowpass_hz <- motion_filter_cfg$lowpass_bpm / 60
+    }
     confounds <- run_logged(
-      notch_filter,
+      filter_confounds,
       confounds_df = confounds,
       tr = cfg$tr,
-      band_stop_min = motion_filter_cfg$band_stop_min,
-      band_stop_max = motion_filter_cfg$band_stop_max,
+      filter_type = filter_type,
+      bandstop_min_bpm = motion_filter_cfg$bandstop_min_bpm,
+      bandstop_max_bpm = motion_filter_cfg$bandstop_max_bpm,
+      low_pass_hz = lowpass_hz,
+      filter_order = motion_filter_cfg$filter_order,
       columns = motion_cols,
       lg = lg,
-      fun_label = "motion_notch_filter"
+      fun_label = "motion_filter"
     )
     if (all(motion_cols %in% names(confounds))) {
       head_radius <- cfg$scrubbing$head_radius
@@ -56,7 +91,13 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
         columns = motion_cols
       )
       confounds$framewise_displacement <- fd
-      to_log(lg, "info", "Updated framewise_displacement after notch filtering ({motion_filter_cfg$band_stop_min}-{motion_filter_cfg$band_stop_max} BPM).")
+      if (filter_type == "notch") {
+        to_log(lg, "info", "Updated framewise_displacement after notch filtering ({motion_filter_cfg$bandstop_min_bpm}-{motion_filter_cfg$bandstop_max_bpm} BPM).")
+      } else {
+        order_label <- motion_filter_cfg$filter_order
+        if (is.null(order_label)) order_label <- 2L
+        to_log(lg, "info", "Updated framewise_displacement after low-pass filtering (cutoff {motion_filter_cfg$lowpass_bpm} BPM, order {order_label}).")
+      }
     } else {
       to_log(lg, "warn", "Filtered motion parameters available but required columns are missing; cannot recompute framewise displacement.")
     }
@@ -135,7 +176,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     tmp_out <- construct_bids_filename(modifyList(confounds_bids, list(description = cfg$bids_desc, directory=tempdir(), ext=NA)), full.names=TRUE)
     confound_nii <- mat_to_nii(confounds_to_filt, ni_out = tmp_out)
 
-    # TODO: consider whether to worry about notch filtering AROMA components if motion parameters or FD are in confound regressors
+    # TODO: consider whether to worry about motion filtering AROMA components if motion parameters or FD are in confound regressors
     # Regress out AROMA components, if requested (overwrites file in place)
     if ("apply_aroma" %in% processing_sequence) {
       if (is.null(proc_files$melodic_mix) || !checkmate::test_file_exists(proc_files$melodic_mix)) {

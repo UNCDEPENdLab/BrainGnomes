@@ -133,6 +133,9 @@ done
 
 # Check exit status of child jobs using sacct
 failed=0
+failed_count=0
+total_children=${#job_ids[@]}
+failed_ids=()
 for jid in "${job_ids[@]}"; do
   # Get job state and exit code. sacct may return multiple lines; take the first
   state=$(sacct -n -j "$jid" -o State | head -n 1 | awk '{print $1}')
@@ -142,12 +145,22 @@ for jid in "${job_ids[@]}"; do
   if [[ "$state" != "COMPLETED" || "$exit_main" != "0" ]]; then
     log_message ERROR "Child job $jid failed with state $state exit code $exit_code"
     failed=1
+    failed_count=$((failed_count + 1))
+    failed_ids+=("$jid")
     "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
   fi
 done
 
-[[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-[[ $failed -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-
-log_message INFO Finished postprocessing for subject $sub_id $ses_str
+if [[ $failed -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Postprocessing completed for subject $sub_id $ses_str ($total_children/$total_children child jobs succeeded)."
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
+  log_message ERROR "Postprocessing failed for subject $sub_id $ses_str ($failed_count/$total_children child jobs failed)."
+  if [[ $failed_count -gt 0 ]]; then
+    log_message ERROR "Failed child job IDs: ${failed_ids[*]}"
+  fi
+fi
 exit $failed

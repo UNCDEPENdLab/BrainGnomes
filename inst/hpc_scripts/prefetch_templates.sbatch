@@ -76,9 +76,7 @@ rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_hom
 rel $rel_flag $log_flag singularity exec --cleanenv --containall "${bind_args[@]}" \
   "$prefetch_container" python "$prefetch_script" --output-spaces "$prefetch_spaces" &
 cmd_pid=$!
-
-cmd_status=0
-wait $cmd_pid || cmd_status=$?
+run_bg_and_wait "$cmd_pid" cmd_status
 
 if [[ $cmd_status -eq 0 ]]; then
   log_message INFO "TemplateFlow prefetch completed successfully."

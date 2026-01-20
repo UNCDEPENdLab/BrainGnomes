@@ -210,53 +210,23 @@ scrub_timepoints <- function(in_file, censor_file = NULL, out_file,
 
   return(out_file)
 }
-#' Notch filter regressors (esp. motion parameters) from the confounds file
-#'
-#' Uses `iirnotch_r()` to design a single-frequency notch filter that
-#' suppresses respiratory-related oscillations in the six rigid-body
-#' motion parameters. The function filters the requested columns with
-#' [`filtfilt_cpp()`] (zero-phase), and optionally writes the updated
-#' confounds table to disk.
-#'
-#' @param confounds_df A data frame containing confound regressors to filter.
-#' @param tr The repetition time of the scan sequence in seconds. Used
-#'  to check that the stop band falls within the
-#' @param band_stop_min Lower bound of the notch stop-band, in breaths
-#'  per minute. This will be converted to Hz internally.
-#' @param band_stop_max Upper bound of the notch stop-band, in breaths
-#'  per minute. This will be converted to Hz internally.
-#' @param columns Columns in `confounds_df` to filter. Defaults to the standard six
-#'   rigid-body parameters: `rot_x`, `rot_y`, `rot_z`, `trans_x`,
-#'   `trans_y`, `trans_z`.
-#' @param out_file Optional output path. When provided, the filtered
-#'   confounds table is written here (tab-delimited). If `NULL`, the
-#'   modified table is returned invisibly.
-#' @param padtype Passed to [`filtfilt_cpp()`]; governs how the edges are
-#'   padded before filtering. One of `"constant"`, `"odd"`, `"even"`, or
-#'   `"zero"`. Defaults to `"constant"` to match SciPy.
-#' @param padlen Optional integer pad length forwarded to
-#'   [`filtfilt_cpp()`]. If `NULL`, the default inside `filtfilt_cpp()`
-#'   (`-1L`) is used.
-#' @param use_zi Logical; whether to initialise the filter state using
-#'   steady-state conditions (the default in `filtfilt_cpp()`).
-#' @param lg Optional `Logger` (from `lgr`) used for status messages.
-#'
-#' @return If `out_file` is `NULL`, the filtered confounds are returned
-#'   as a data frame. Otherwise the path to `out_file` is returned
-#'   invisibly.
-#'
-#' @keywords internal
-#' @importFrom checkmate assert_file_exists assert_number assert_character assert_string assert_choice assert_flag
-#' @importFrom data.table fread fwrite
-notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, band_stop_max = NULL,
-    columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"), add_poly = TRUE,
-    out_file = NULL, padtype = "constant",  padlen = NULL, use_zi = TRUE, lg = NULL) {
-
-  # cf. https://github.com/PennLINC/xcp_d/blob/f1d779e842708312df62bb595e870c91b34edd99/xcp_d/utils/confounds.py#L169
+filter_confounds <- function(confounds_df = NULL,
+                             tr = NULL,
+                             filter_type = c("notch", "lowpass"),
+                             bandstop_min_bpm = NULL,
+                             bandstop_max_bpm = NULL,
+                             low_pass_hz = NULL,
+                             filter_order = 2L,
+                             columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
+                             add_poly = TRUE,
+                             out_file = NULL,
+                             padtype = "constant",
+                             padlen = NULL,
+                             use_zi = TRUE,
+                             lg = NULL) {
   checkmate::assert_data_frame(confounds_df, all.missing = TRUE)
   checkmate::assert_number(tr, lower = 0.01)
-  checkmate::assert_number(band_stop_min, lower = 0)
-  checkmate::assert_number(band_stop_max, lower = 0)
+  filter_type <- match.arg(filter_type)
   checkmate::assert_character(columns, any.missing = FALSE, min.len = 1L)
   checkmate::assert_flag(add_poly)
   checkmate::assert_string(out_file, null.ok = TRUE)
@@ -266,10 +236,6 @@ notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, b
 
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes")
-  }
-
-  if (band_stop_max <= band_stop_min) {
-    to_log(lg, "fatal", "band_stop_max ({band_stop_max}) must be greater than band_stop_min ({band_stop_min}).")
   }
 
   # polynomial expansion -- first derivatives and squares
@@ -299,23 +265,55 @@ notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, b
 
   fs <- 1 / tr
   nyquist <- fs / 2
-  stopband_hz <- c(band_stop_min, band_stop_max) / 60
-  f0 <- mean(stopband_hz)
-  bandwidth <- abs(diff(stopband_hz))
-
-  if (bandwidth <= 0) {
-    to_log(lg, "fatal", "band_stop_min and band_stop_max must define a non-zero bandwidth in Hz (received {bandwidth}).")
-  }
-
-  if (f0 >= nyquist) {
-    to_log(lg, "fatal", "Requested notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s.")
-  }
-
-  Q <- f0 / bandwidth
-  coeffs <- iirnotch_r(f0 = f0, Q = Q, fs = fs)
   padlen_val <- if (is.null(padlen)) -1L else as.integer(padlen)
 
-  to_log(lg, "info", "Applying notch filter centerd at {round(f0, 4)} Hz (Q = {round(Q, 2)}) to {length(available_cols)} motion columns.")
+  if (filter_type == "notch") {
+    checkmate::assert_number(bandstop_min_bpm, lower = 0)
+    checkmate::assert_number(bandstop_max_bpm, lower = 0)
+    if (is.null(filter_order)) filter_order <- 4L
+    checkmate::assert_integerish(filter_order, len = 1L, lower = 4L)
+    filter_order <- as.integer(filter_order)
+    if (filter_order %% 4L != 0L) {
+      to_log(lg, "fatal", "filter_order must be divisible by 4 for notch filtering; received {filter_order}.")
+    }
+    n_filter_applications <- filter_order %/% 4L
+    if (bandstop_max_bpm <= bandstop_min_bpm) {
+      to_log(lg, "fatal", "bandstop_max_bpm ({bandstop_max_bpm}) must be greater than bandstop_min_bpm ({bandstop_min_bpm}).")
+    }
+
+    stopband_hz <- c(bandstop_min_bpm, bandstop_max_bpm) / 60
+    f0 <- mean(stopband_hz)
+    bandwidth <- abs(diff(stopband_hz))
+
+    if (bandwidth <= 0) {
+      to_log(lg, "fatal", "bandstop_min_bpm and bandstop_max_bpm must define a non-zero bandwidth in Hz (received {bandwidth}).")
+    }
+
+    if (f0 >= nyquist) {
+      to_log(lg, "fatal", "Requested notch center {round(f0, 4)} Hz exceeds the Nyquist frequency {round(nyquist, 4)} Hz for TR = {tr} s.")
+    }
+
+    Q <- f0 / bandwidth
+    coeffs <- iirnotch_r(f0 = f0, Q = Q, fs = fs)
+    to_log(lg, "info", "Applying notch filter centerd at {round(f0, 4)} Hz (Q = {round(Q, 2)}, order {filter_order}, passes {n_filter_applications}) to {length(available_cols)} motion columns.")
+  } else {
+    if (is.null(filter_order)) filter_order <- 2L
+    checkmate::assert_number(low_pass_hz, lower = 0.001)
+    checkmate::assert_integerish(filter_order, len = 1L, lower = 2L)
+    if (!requireNamespace("signal", quietly = TRUE)) {
+      to_log(lg, "fatal", "The 'signal' package must be installed for low-pass filtering.")
+    }
+    if (low_pass_hz >= nyquist) {
+      to_log(lg, "fatal", "low_pass_hz must be less than the Nyquist frequency ({round(nyquist, 4)} Hz) for TR = {tr} s.")
+    }
+    filter_order <- as.integer(filter_order)
+    if (filter_order %% 2L != 0L) {
+      to_log(lg, "fatal", "filter_order must be divisible by 2 for low-pass filtering; received {filter_order}.")
+    }
+    n_filter_applications <- filter_order %/% 2L
+    coeffs <- signal::butter(n_filter_applications, low_pass_hz / nyquist, type = "low")
+    to_log(lg, "info", "Applying low-pass filter (cutoff {round(low_pass_hz, 4)} Hz, order {filter_order}, effective {n_filter_applications}) to {length(available_cols)} motion columns.")
+  }
 
   for (col_name in columns) {
     series <- as.numeric(confounds_df[[col_name]])
@@ -323,7 +321,28 @@ notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, b
       to_log(lg, "warn", "Column {col_name} contains missing values; replacing NAs with zeros before filtering.")
       series[is.na(series)] <- 0
     }
-    filtered <- filtfilt_cpp(series, b = coeffs$b, a = coeffs$a, padlen = padlen_val, padtype = padtype, use_zi = use_zi)
+    filtered <- series
+    if (filter_type == "notch") {
+      for (ii in seq_len(n_filter_applications)) {
+        filtered <- filtfilt_cpp(
+          filtered,
+          b = coeffs$b,
+          a = coeffs$a,
+          padlen = padlen_val,
+          padtype = padtype,
+          use_zi = use_zi
+        )
+      }
+    } else {
+      filtered <- filtfilt_cpp(
+        filtered,
+        b = coeffs$b,
+        a = coeffs$a,
+        padlen = padlen_val,
+        padtype = padtype,
+        use_zi = use_zi
+      )
+    }
     confounds_df[[col_name]] <- filtered
   }
 
@@ -336,6 +355,64 @@ notch_filter <- function(confounds_df = NULL, tr = NULL, band_stop_min = NULL, b
   }
 
   return(confounds_df)
+}
+
+#' Notch filter regressors (esp. motion parameters) from the confounds file
+#'
+#' Uses `iirnotch_r()` to design a single-frequency notch filter that
+#' suppresses respiratory-related oscillations in the six rigid-body
+#' motion parameters. The function filters the requested columns with
+#' [`filtfilt_cpp()`] (zero-phase), and optionally writes the updated
+#' confounds table to disk.
+#'
+#' @param confounds_df A data frame containing confound regressors to filter.
+#' @param tr The repetition time of the scan sequence in seconds. Used
+#'  to check that the stop band falls within the
+#' @param bandstop_min_bpm Lower bound of the notch stop-band, in breaths
+#'  per minute. This will be converted to Hz internally.
+#' @param bandstop_max_bpm Upper bound of the notch stop-band, in breaths
+#'  per minute. This will be converted to Hz internally.
+#' @param columns Columns in `confounds_df` to filter. Defaults to the standard six
+#'   rigid-body parameters: `rot_x`, `rot_y`, `rot_z`, `trans_x`,
+#'   `trans_y`, `trans_z`.
+#' @param out_file Optional output path. When provided, the filtered
+#'   confounds table is written here (tab-delimited). If `NULL`, the
+#'   modified table is returned invisibly.
+#' @param padtype Passed to [`filtfilt_cpp()`]; governs how the edges are
+#'   padded before filtering. One of `"constant"`, `"odd"`, `"even"`, or
+#'   `"zero"`. Defaults to `"constant"` to match SciPy.
+#' @param padlen Optional integer pad length forwarded to
+#'   [`filtfilt_cpp()`]. If `NULL`, the default inside `filtfilt_cpp()`
+#'   (`-1L`) is used.
+#' @param use_zi Logical; whether to initialise the filter state using
+#'   steady-state conditions (the default in `filtfilt_cpp()`).
+#' @param lg Optional `Logger` (from `lgr`) used for status messages.
+#'
+#' @return If `out_file` is `NULL`, the filtered confounds are returned
+#'   as a data frame. Otherwise the path to `out_file` is returned
+#'   invisibly.
+#'
+#' @keywords internal
+#' @importFrom checkmate assert_file_exists assert_number assert_character assert_string assert_choice assert_flag
+#' @importFrom data.table fread fwrite
+notch_filter <- function(confounds_df = NULL, tr = NULL, bandstop_min_bpm = NULL, bandstop_max_bpm = NULL,
+    columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"), add_poly = TRUE,
+    out_file = NULL, padtype = "constant",  padlen = NULL, use_zi = TRUE, lg = NULL) {
+
+  filter_confounds(
+    confounds_df = confounds_df,
+    tr = tr,
+    filter_type = "notch",
+    bandstop_min_bpm = bandstop_min_bpm,
+    bandstop_max_bpm = bandstop_max_bpm,
+    columns = columns,
+    add_poly = add_poly,
+    out_file = out_file,
+    padtype = padtype,
+    padlen = padlen,
+    use_zi = use_zi,
+    lg = lg
+  )
 }
 
 #' Compute framewise displacement from motion parameters

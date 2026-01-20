@@ -7,8 +7,8 @@
 notch_filter(
   confounds_df = NULL,
   tr = NULL,
-  band_stop_min = NULL,
-  band_stop_max = NULL,
+  bandstop_min_bpm = NULL,
+  bandstop_max_bpm = NULL,
   columns = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
   add_poly = TRUE,
   out_file = NULL,
@@ -24,10 +24,10 @@ notch_filter(
 \item{tr}{The repetition time of the scan sequence in seconds. Used
 to check that the stop band falls within the}
 
-\item{band_stop_min}{Lower bound of the notch stop-band, in breaths
+\item{bandstop_min_bpm}{Lower bound of the notch stop-band, in breaths
 per minute. This will be converted to Hz internally.}
 
-\item{band_stop_max}{Upper bound of the notch stop-band, in breaths
+\item{bandstop_max_bpm}{Upper bound of the notch stop-band, in breaths
 per minute. This will be converted to Hz internally.}
 
 \item{columns}{Columns in \code{confounds_df} to filter. Defaults to the standard six

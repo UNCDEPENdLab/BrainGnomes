@@ -43,3 +43,40 @@ test_that("get_project_status reports completion", {
   sm <- summary(res)
   expect_equal(sm$n_complete[sm$step == "bids_conversion_complete"], 1)
 })
+
+test_that("is_step_complete prefers newer complete over stale fail", {
+  root <- tempfile("status-logic-")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(root, "logs"); dir.create(log_dir)
+  postproc_dir <- file.path(root, "postproc"); dir.create(postproc_dir)
+
+  sub <- "01"
+  dir.create(file.path(log_dir, paste0("sub-", sub)))
+  dir.create(file.path(postproc_dir, paste0("sub-", sub)), recursive = TRUE)
+
+  complete_file <- file.path(log_dir, paste0("sub-", sub), paste0(".postprocess_stream1_sub-", sub, "_complete"))
+  fail_file <- file.path(log_dir, paste0("sub-", sub), paste0(".postprocess_stream1_sub-", sub, "_fail"))
+  cat("2025-01-02 00:00:00", file = complete_file)
+  cat("2025-01-01 00:00:00", file = fail_file)
+  Sys.setFileTime(complete_file, as.POSIXct("2025-01-02 00:00:00", tz = "UTC"))
+  Sys.setFileTime(fail_file, as.POSIXct("2025-01-01 00:00:00", tz = "UTC"))
+
+  scfg <- list(
+    metadata = list(log_directory = log_dir, postproc_directory = postproc_dir),
+    bids_conversion = list(enable = FALSE),
+    mriqc = list(enable = FALSE),
+    fmriprep = list(enable = FALSE),
+    aroma = list(enable = FALSE),
+    postprocess = list(enable = TRUE, stream1 = list())
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  res <- is_step_complete(scfg, sub_id = sub, step_name = "postprocess", pp_stream = "stream1")
+  expect_true(res$complete)
+
+  Sys.setFileTime(fail_file, as.POSIXct("2025-01-03 00:00:00", tz = "UTC"))
+  res_new_fail <- is_step_complete(scfg, sub_id = sub, step_name = "postprocess", pp_stream = "stream1")
+  expect_false(res_new_fail$complete)
+})

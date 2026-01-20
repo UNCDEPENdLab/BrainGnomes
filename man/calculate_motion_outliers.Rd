@@ -12,8 +12,8 @@ calculate_motion_outliers(
   include_filtered = FALSE,
   filter_method = c("notch", "lowpass"),
   tr = NULL,
-  band_stop_min = 12,
-  band_stop_max = 18,
+  bandstop_min_bpm = 12,
+  bandstop_max_bpm = 18,
   low_pass_hz = NULL,
   filter_order = 2L,
   motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
@@ -44,10 +44,10 @@ Either \code{"notch"} (band-stop, in breaths per minute) or \code{"lowpass"} (Hz
 
 \item{tr}{Repetition time in seconds, required when \code{include_filtered = TRUE}.}
 
-\item{band_stop_min}{Lower notch stop-band bound in breaths per minute
+\item{bandstop_min_bpm}{Lower notch stop-band bound in breaths per minute
 (default 12; used when \code{filter_method = "notch"}).}
 
-\item{band_stop_max}{Upper notch stop-band bound in breaths per minute
+\item{bandstop_max_bpm}{Upper notch stop-band bound in breaths per minute
 (default 18; used when \code{filter_method = "notch"}).}
 
 \item{low_pass_hz}{Low-pass cutoff in Hz (required for
@@ -86,8 +86,8 @@ out_filt <- calculate_motion_outliers(
   include_filtered = TRUE,
   filter_method = "notch",
   tr = 2,
-  band_stop_min = 18,
-  band_stop_max = 24
+  bandstop_min_bpm = 18,
+  bandstop_max_bpm = 24
 )
 }
 

@@ -180,7 +180,7 @@ test_that("calculate_motion_outliers handles multiple files", {
   expect_equal(result$fd_max, c(0.4, 0.8), tolerance = 1e-6)
 })
 
-test_that("calculate_motion_outliers validates band_stop_max > band_stop_min", {
+test_that("calculate_motion_outliers validates bandstop_max_bpm > bandstop_min_bpm", {
   skip_if_not_installed("data.table")
 
   tmp_dir <- tempfile("motion_test")
@@ -202,10 +202,10 @@ test_that("calculate_motion_outliers validates band_stop_max > band_stop_min", {
       include_filtered = TRUE,
       filter_method = "notch",
       tr = 2,
-      band_stop_min = 20,
-      band_stop_max = 15
+      bandstop_min_bpm = 20,
+      bandstop_max_bpm = 15
     ),
-    "band_stop_max.*must be greater than band_stop_min"
+    "bandstop_max_bpm.*must be greater than bandstop_min_bpm"
   )
 })
 

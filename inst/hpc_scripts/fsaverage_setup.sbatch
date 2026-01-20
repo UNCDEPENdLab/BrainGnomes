@@ -50,15 +50,15 @@ log_message INFO Starting fsaverage_setup with mem: $mem and cpus: $SLURM_JOB_CP
 rel $rel_flag singularity exec --cleanenv --containall -B "$loc_mrproc_root" "$fmriprep_container" \
     rsync --mkpath -a --no-owner --no-group --no-times --no-perms /opt/freesurfer/subjects/fsaverage "${loc_mrproc_root}/sourcedata/freesurfer"
 cmd_pid=$!
-
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+run_bg_and_wait "$cmd_pid" cmd_status
 
 log_message DEBUG "Exit status of fsaverage_setup is $cmd_status"
 
-[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-
-log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
+if [[ $cmd_status -eq 0 ]]; then
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Finished fsaverage setup (time elapsed: $(time_elapsed))"
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "fsaverage setup failed (exit code $cmd_status)"
+fi
 exit $cmd_status

@@ -447,6 +447,24 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate motion parameter filtering
   motion_filter_cfg <- ppcfg$motion_filter
   if (!is.list(motion_filter_cfg)) motion_filter_cfg <- list()
+  deprecated_present <- !is.null(motion_filter_cfg$band_stop_min) ||
+    !is.null(motion_filter_cfg$band_stop_max)
+  if (deprecated_present) {
+    warned <- isTRUE(getOption("bg_warned_deprecated_motion_filter", FALSE))
+    if (!quiet && !warned) {
+      warning(
+        "motion_filter$band_stop_min/band_stop_max are deprecated; use bandstop_min_bpm/bandstop_max_bpm instead.",
+        call. = FALSE
+      )
+      options(bg_warned_deprecated_motion_filter = TRUE)
+    }
+    if (is.null(motion_filter_cfg$bandstop_min_bpm) && !is.null(motion_filter_cfg$band_stop_min)) {
+      motion_filter_cfg$bandstop_min_bpm <- motion_filter_cfg$band_stop_min
+    }
+    if (is.null(motion_filter_cfg$bandstop_max_bpm) && !is.null(motion_filter_cfg$band_stop_max)) {
+      motion_filter_cfg$bandstop_max_bpm <- motion_filter_cfg$band_stop_max
+    }
+  }
 
   confound_candidates <- unlist(list(
     ppcfg$confound_regression$columns,
@@ -487,22 +505,66 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
 
     if (isTRUE(motion_filter_cfg$enable)) {
-      if (!checkmate::test_number(motion_filter_cfg$band_stop_min, lower = 1, upper = 80)) {
-        if (!quiet) message(glue("Invalid band_stop_min in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
-        gaps <- c(gaps, "postprocess/motion_filter/band_stop_min")
-        motion_filter_cfg$band_stop_min <- NULL
+      filter_type <- motion_filter_cfg$filter_type
+      if (is.null(filter_type)) {
+        if (!is.null(motion_filter_cfg$lowpass_bpm)) {
+          filter_type <- "lowpass"
+        } else if (!is.null(motion_filter_cfg$bandstop_min_bpm) || !is.null(motion_filter_cfg$bandstop_max_bpm)) {
+          filter_type <- "notch"
+        }
       }
-      if (!checkmate::test_number(motion_filter_cfg$band_stop_max, lower = 1, upper = 100)) {
-        if (!quiet) message(glue("Invalid band_stop_max in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
-        gaps <- c(gaps, "postprocess/motion_filter/band_stop_max")
-        motion_filter_cfg$band_stop_max <- NULL
+      if (!is.null(filter_type) && !filter_type %in% c("notch", "lowpass")) {
+        if (!quiet) message(glue("Invalid filter_type in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+        gaps <- c(gaps, "postprocess/motion_filter/filter_type")
+        motion_filter_cfg$filter_type <- NULL
+        filter_type <- NULL
       }
-      if (!is.null(motion_filter_cfg$band_stop_min) && !is.null(motion_filter_cfg$band_stop_max) &&
-          motion_filter_cfg$band_stop_max <= motion_filter_cfg$band_stop_min) {
-        if (!quiet) message(glue("band_stop_max must be greater than band_stop_min for $postprocess${cfg_name}$motion_filter. You will be asked for this."))
-        gaps <- unique(c(gaps, "postprocess/motion_filter/band_stop_min", "postprocess/motion_filter/band_stop_max"))
-        motion_filter_cfg$band_stop_min <- NULL
-        motion_filter_cfg$band_stop_max <- NULL
+      if (is.null(filter_type)) {
+        gaps <- c(gaps, "postprocess/motion_filter/filter_type")
+      } else {
+        motion_filter_cfg$filter_type <- filter_type
+      }
+
+      if (!is.null(filter_type) && filter_type == "notch") {
+        if (!checkmate::test_number(motion_filter_cfg$bandstop_min_bpm, lower = 1, upper = 80)) {
+          if (!quiet) message(glue("Invalid bandstop_min_bpm in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+          gaps <- c(gaps, "postprocess/motion_filter/bandstop_min_bpm")
+          motion_filter_cfg$bandstop_min_bpm <- NULL
+        }
+        if (!checkmate::test_number(motion_filter_cfg$bandstop_max_bpm, lower = 1, upper = 100)) {
+          if (!quiet) message(glue("Invalid bandstop_max_bpm in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+          gaps <- c(gaps, "postprocess/motion_filter/bandstop_max_bpm")
+          motion_filter_cfg$bandstop_max_bpm <- NULL
+        }
+        if (!is.null(motion_filter_cfg$bandstop_min_bpm) && !is.null(motion_filter_cfg$bandstop_max_bpm) &&
+            motion_filter_cfg$bandstop_max_bpm <= motion_filter_cfg$bandstop_min_bpm) {
+          if (!quiet) message(glue("bandstop_max_bpm must be greater than bandstop_min_bpm for $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+          gaps <- unique(c(gaps, "postprocess/motion_filter/bandstop_min_bpm", "postprocess/motion_filter/bandstop_max_bpm"))
+          motion_filter_cfg$bandstop_min_bpm <- NULL
+          motion_filter_cfg$bandstop_max_bpm <- NULL
+        }
+        if (is.null(motion_filter_cfg$filter_order)) {
+          motion_filter_cfg$filter_order <- 4L
+        } else if (!checkmate::test_integerish(motion_filter_cfg$filter_order, len = 1L, lower = 4L, upper = 10L) ||
+                   motion_filter_cfg$filter_order %% 4L != 0L) {
+          if (!quiet) message(glue("Invalid filter_order in $postprocess${cfg_name}$motion_filter. For notch filtering, it must be divisible by 4. You will be asked for this."))
+          gaps <- c(gaps, "postprocess/motion_filter/filter_order")
+          motion_filter_cfg$filter_order <- NULL
+        }
+      } else if (!is.null(filter_type) && filter_type == "lowpass") {
+        if (!checkmate::test_number(motion_filter_cfg$lowpass_bpm, lower = 1, upper = 100)) {
+          if (!quiet) message(glue("Invalid lowpass_bpm in $postprocess${cfg_name}$motion_filter. You will be asked for this."))
+          gaps <- c(gaps, "postprocess/motion_filter/lowpass_bpm")
+          motion_filter_cfg$lowpass_bpm <- NULL
+        }
+        if (is.null(motion_filter_cfg$filter_order)) {
+          motion_filter_cfg$filter_order <- 2L
+        } else if (!checkmate::test_integerish(motion_filter_cfg$filter_order, len = 1L, lower = 2L, upper = 10L) ||
+                   motion_filter_cfg$filter_order %% 2L != 0L) {
+          if (!quiet) message(glue("Invalid filter_order in $postprocess${cfg_name}$motion_filter. For low-pass filtering, it must be divisible by 2. You will be asked for this."))
+          gaps <- c(gaps, "postprocess/motion_filter/filter_order")
+          motion_filter_cfg$filter_order <- NULL
+        }
       }
     }
   }

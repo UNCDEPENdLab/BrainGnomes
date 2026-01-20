@@ -69,11 +69,18 @@ start_time=$(date +%s)
 
 log_message INFO Starting ROI extraction for subject $sub_id in $out_dir with mem: $mem
 
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
+
 rel $rel_flag $log_flag "${R_HOME}/bin/Rscript" --vanilla "$extract_rscript" $extract_cli &
 cmd_pid=$!
+run_bg_and_wait "$cmd_pid" cmd_status
 
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
-
-log_message INFO Finished ROI extraction for subject $sub_id "(time elapsed: $(time_elapsed))"
+if [[ $cmd_status -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO Finished ROI extraction for subject $sub_id "(time elapsed: $(time_elapsed))"
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "ROI extraction failed for subject $sub_id (exit code $cmd_status)"
+fi
 exit $cmd_status
