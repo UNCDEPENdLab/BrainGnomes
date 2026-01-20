@@ -28,6 +28,10 @@ get_tracked_job_status(
 
   Return parent jobs of this job
 
+- sequence_id:
+
+  The sequence id to query instead of `job_id`
+
 - sqlite_db:
 
   Character string of sqlite database

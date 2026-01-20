@@ -11,6 +11,8 @@
   exists, clarifying status of processing steps
 - feature: Added optional low-pass filtering of motion parameters,
   matching (Gratton)
+- feature: Gracefully adjust motion filtering parameters if they fall
+  above Nyquist at this TR
 
 ## BrainGnomes 0.7-5
 
