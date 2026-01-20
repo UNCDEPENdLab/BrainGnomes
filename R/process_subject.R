@@ -276,20 +276,28 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       }
       input_dirs <- unique(input_dirs[!is.na(input_dirs)])
 
+      input_regexes <- vapply(postprocess_streams, function(pp_nm) {
+        rx <- scfg$postprocess[[pp_nm]]$input_regex
+        if (is.null(rx) || is.na(rx) || rx == "") {
+          "desc:preproc suffix:bold"
+        } else {
+          rx
+        }
+      }, character(1), USE.NAMES = FALSE)
+
       has_inputs <- FALSE
       if (length(postprocess_streams) > 0L && length(input_dirs) > 0L) {
         for (dir in input_dirs) {
           if (!dir.exists(dir)) next
-          for (pp_nm in postprocess_streams) {
-            pp_cfg <- scfg$postprocess[[pp_nm]]
-            input_regex <- pp_cfg$input_regex
-            if (!checkmate::test_string(input_regex)) input_regex <- "desc:preproc suffix:bold"
-            pattern <- tryCatch(construct_bids_regex(input_regex), error = function(e) NULL)
-            if (!is.null(pattern)) {
-              if (length(list.files(path = dir, pattern = pattern, recursive = TRUE, full.names = TRUE)) > 0L) {
-                has_inputs <- TRUE
-                break
-              }
+          for (rx in unique(input_regexes)) {
+            pattern <- tryCatch(construct_bids_regex(rx), error = function(e) NULL)
+            if (is.null(pattern)) {
+              to_log(lg, "warn", "Invalid postprocess input_regex: {rx}")
+              next
+            }
+            if (length(list.files(path = dir, pattern = pattern, recursive = TRUE, full.names = TRUE)) > 0L) {
+              has_inputs <- TRUE
+              break
             }
           }
           if (has_inputs) break
@@ -298,12 +306,15 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
 
       if (!has_inputs) {
         input_dirs_txt <- if (length(input_dirs) > 0L) paste(input_dirs, collapse = ", ") else "<none>"
-        to_log(lg, "warn", "no fmriprep NIfTI inputs matched expected patterns in {input_dirs_txt}")
+        rx_label <- paste(unique(input_regexes), collapse = "; ")
+        to_log(lg, "warn", "no fmriprep NIfTI inputs matched expected patterns in {input_dirs_txt} (patterns: {rx_label})")
       }
 
-      if (missing_fmriprep || !has_inputs) return(TRUE)
+      if (!has_inputs) return(TRUE)
+      if (missing_fmriprep) {
+        to_log(lg, "warn", "Proceeding with postprocessing for {sub_id} because inputs were found even though fmriprep .complete markers are missing.")
+      }
     }
-
     # loop over inputs and processing streams
     postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
       unlist(lapply(postprocess_streams, function(pp_nm) {
