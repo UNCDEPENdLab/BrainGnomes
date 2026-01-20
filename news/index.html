@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,14 +40,23 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08-development">BrainGnomes 0.8 (DEVELOPMENT)<a class="anchor" aria-label="anchor" href="#braingnomes-08-development"></a></h2>
+<ul><li>feature: All HPC jobs are now tracked in detail by an SQLite database</li>
+<li>feature: Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>.</li>
+<li>feature: Improved error logging in HPC scripts so that success and failure are indicated more clearly</li>
+<li>feature: Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps</li>
+<li>feature: Added optional low-pass filtering of motion parameters, matching (Gratton)</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-5" id="braingnomes-07-5">BrainGnomes 0.7-5<a class="anchor" aria-label="anchor" href="#braingnomes-07-5"></a></h2>
 <p>Released 2026-01-13</p>
 <ul><li>Add <code>calculate_motion_outliers</code> function to calculate motion outliers in a BIDS dataset
 <ul><li>Returns mean FD alongside max FD</li>
 <li>Includes task and run columns from BIDS info</li>
 <li>Supports optional <code>output_file</code> argument to write results (CSV or TSV, with gzip support)</li>
-<li>Defaults for notch filter: <code>band_stop_min = 12</code>, <code>band_stop_max = 18</code> BPM</li>
+<li>Defaults for notch filter: <code>bandstop_min_bpm = 12</code>, <code>bandstop_max_bpm = 18</code> BPM</li>
 </ul></li>
+<li>Add optional low-pass filtering of motion parameters before FD recomputation; rename notch config fields to <code>bandstop_min_bpm</code>/<code>bandstop_max_bpm</code> (deprecated: <code>band_stop_min</code>/<code>band_stop_max</code>).</li>
 <li>Use the <code>scratch_directory</code> for postprocessing images to avoid collisions and ensure that intermediates do not clog the output folder</li>
 <li>Check that python packages directory is writable prior to attempting to resample a stereotaxic template to an image; fall back to a managed <code>reticulate</code> environment if not.</li>
 <li>More robust postprocess logging (fallback log directory if requested location is unavailable) and clearer reporting of retained volumes during confound regression.</li>

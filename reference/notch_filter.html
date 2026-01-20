@@ -15,7 +15,7 @@ confounds table to disk."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7-5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -61,8 +61,8 @@ confounds table to disk.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">notch_filter</span><span class="op">(</span></span>
 <span>  confounds_df <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  tr <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  band_stop_min <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  band_stop_max <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  bandstop_min_bpm <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  bandstop_max_bpm <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  columns <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rot_x"</span>, <span class="st">"rot_y"</span>, <span class="st">"rot_z"</span>, <span class="st">"trans_x"</span>, <span class="st">"trans_y"</span>, <span class="st">"trans_z"</span><span class="op">)</span>,</span>
 <span>  add_poly <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  out_file <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -86,12 +86,12 @@ confounds table to disk.</p>
 to check that the stop band falls within the</p></dd>
 
 
-<dt id="arg-band-stop-min">band_stop_min<a class="anchor" aria-label="anchor" href="#arg-band-stop-min"></a></dt>
+<dt id="arg-bandstop-min-bpm">bandstop_min_bpm<a class="anchor" aria-label="anchor" href="#arg-bandstop-min-bpm"></a></dt>
 <dd><p>Lower bound of the notch stop-band, in breaths
 per minute. This will be converted to Hz internally.</p></dd>
 
 
-<dt id="arg-band-stop-max">band_stop_max<a class="anchor" aria-label="anchor" href="#arg-band-stop-max"></a></dt>
+<dt id="arg-bandstop-max-bpm">bandstop_max_bpm<a class="anchor" aria-label="anchor" href="#arg-bandstop-max-bpm"></a></dt>
 <dd><p>Upper bound of the notch stop-band, in breaths
 per minute. This will be converted to Hz internally.</p></dd>
 

@@ -18,8 +18,8 @@ calculate_motion_outliers(
   include_filtered = FALSE,
   filter_method = c("notch", "lowpass"),
   tr = NULL,
-  band_stop_min = 12,
-  band_stop_max = 18,
+  bandstop_min_bpm = 12,
+  bandstop_max_bpm = 18,
   low_pass_hz = NULL,
   filter_order = 2L,
   motion_cols = c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z"),
@@ -69,12 +69,12 @@ calculate_motion_outliers(
 
   Repetition time in seconds, required when `include_filtered = TRUE`.
 
-- band_stop_min:
+- bandstop_min_bpm:
 
   Lower notch stop-band bound in breaths per minute (default 12; used
   when `filter_method = "notch"`).
 
-- band_stop_max:
+- bandstop_max_bpm:
 
   Upper notch stop-band bound in breaths per minute (default 18; used
   when `filter_method = "notch"`).
@@ -120,8 +120,8 @@ out_filt <- calculate_motion_outliers(
   include_filtered = TRUE,
   filter_method = "notch",
   tr = 2,
-  band_stop_min = 18,
-  band_stop_max = 24
+  bandstop_min_bpm = 18,
+  bandstop_max_bpm = 24
 )
 } # }
 ```
