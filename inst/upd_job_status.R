@@ -4,6 +4,7 @@
 # Used for jobs submitted to 'cluster_job_submit' that are command-line only 
 # retrieve in code using:   upd_job_status_path <- system.file("upd_job_status.R", package = "BrainGnomes")
 # example status update: paste("Rscript", upd_job_status_path, "--job_id" , JOBID, "--sqlite_db", SQLITE_DB, "--status", STATUS)
+# example with manifest:  paste("Rscript", upd_job_status_path, "--job_id" , JOBID, "--sqlite_db", SQLITE_DB, "--status", "COMPLETED", "--output_dir", OUTPUT_DIR)
 
 print_help <- function() {
   cat(paste("This script makes a call to the `update_tracked_job_status` command and is to be",
@@ -13,6 +14,8 @@ print_help <- function() {
             "  --sqlite_db <sqlite_db>: The path to the tracking SQLite database",
             "  --status <status>: The new status of the job specified by `--job_id`.",
             "                     One of QUEUED, STARTED, COMPLETED, FAILED, or FAILED_BY_EXT",
+            "  --output_dir <dir>: Directory to capture output manifest from (only used when status is COMPLETED).",
+            "                      If provided, captures file inventory (paths, sizes, mtimes) for later verification.",
             "  --cascade: If specified, then new status will cascade to child jobs.",
             "             Only works for status 'FAILED'/'FAILED_BY_EXT'",
             "  --help: Print the help menu",
@@ -31,8 +34,16 @@ if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL
 if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
 if (isTRUE(args$status == "NULL")) args$status <- NULL
 if (isTRUE(args$cascade == "NULL") | isTRUE(is.null(args$cascade))) args$cascade <- FALSE
+if (isTRUE(args$output_dir == "NULL")) args$output_dir <- NULL
+
+# Capture output manifest if status is COMPLETED and output_dir is provided
+output_manifest <- NULL
+if (isTRUE(toupper(args$status) == "COMPLETED") && !is.null(args$output_dir)) {
+  output_manifest <- BrainGnomes:::capture_output_manifest(args$output_dir)
+}
 
 BrainGnomes::update_tracked_job_status(job_id = args$job_id, 
                                        sqlite_db = args$sqlite_db, 
                                        status = args$status, 
+                                       output_manifest = output_manifest,
                                        cascade = args$cascade)

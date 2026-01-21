@@ -1,9 +1,10 @@
 # BrainGnomes 0.8 (DEVELOPMENT)
 
 * feature: All HPC jobs are now tracked in detail by an SQLite database
-* feature: Job failures and other errors can now be investigated using `diagnose_pipeline`.
+* feature: Job failures and other errors can now be investigated using `diagnose_pipeline`
 * feature: Improved error logging in HPC scripts so that success and failure are indicated more clearly
 * feature: Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps
+* feature: Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests
 * feature: Added optional low-pass filtering of motion parameters, matching (Gratton)
 * feature: Gracefully adjust motion filtering parameters if they fall above Nyquist at this TR
 

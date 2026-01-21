@@ -77,7 +77,7 @@ run_bg_and_wait "$cmd_pid" cmd_status
 
 if [[ $cmd_status -eq 0 ]]; then
   cleanup_fail_marker "$complete_file"
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
   log_message INFO Finished ROI extraction for subject $sub_id "(time elapsed: $(time_elapsed))"
 else
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade

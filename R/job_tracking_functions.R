@@ -53,6 +53,16 @@ ensure_tracking_db_schema <- function(sqlite_db) {
       }
     )
   }
+  if (!"output_manifest" %in% col_names) {
+    tryCatch(
+      dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN output_manifest TEXT"),
+      error = function(e) {
+        if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
+          stop(e)
+        }
+      }
+    )
+  }
   invisible(NULL)
 }
 
@@ -104,6 +114,7 @@ create_tracking_db = function(sqlite_db) {
       time_started INTEGER,
       time_ended INTEGER,
       status VARCHAR(24),
+      output_manifest TEXT,
       FOREIGN KEY (parent_id) REFERENCES job_tracking (id)
     );
     "
@@ -200,6 +211,8 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' @param job_id Character string or numeric. ID of the job to update. If numeric, it will be coerced to a string.
 #' @param status Character string. The job status to set. Must be one of:
 #'   \code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.
+#' @param output_manifest Character string. Optional JSON manifest of output files to store when
+#'   status is \code{"COMPLETED"}. See \code{\link{capture_output_manifest}}.
 #' @param cascade Logical. If \code{TRUE}, and the \code{status} is a failure type (\code{"FAILED"} or \code{"FAILED_BY_EXT"}),
 #'   the failure is recursively propagated to child jobs not listed in \code{exclude}.
 #' @param exclude Character or numeric vector. One or more job IDs to exclude from cascading failure updates.
@@ -212,6 +225,9 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #'   \item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} -> updates \code{time_ended}
 #' }
 #'
+#' When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
+#' is stored in the \code{output_manifest} column for later verification.
+#'
 #' If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
 #' via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
 #' \code{"FAILED"} or they are listed in \code{exclude}.
@@ -223,7 +239,8 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' @importFrom glue glue
 #' @importFrom DBI dbConnect dbExecute dbDisconnect
 #' @export
-update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, cascade = FALSE, exclude = NULL) {
+update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, 
+                                      output_manifest = NULL, cascade = FALSE, exclude = NULL) {
   
   if (!checkmate::test_string(sqlite_db)) return(invisible(NULL))
   if (is.numeric(job_id)) job_id <- as.character(job_id)
@@ -247,9 +264,30 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status, c
   )
   
   tryCatch({
-    submit_sqlite_query(str = glue("UPDATE job_tracking SET STATUS = ?, {time_field} = ? WHERE job_id = ?"),
-                        sqlite_db = sqlite_db, param = list(status, now, job_id))
+    submit_tracking_query(
+      str = glue("UPDATE job_tracking SET STATUS = ?, {time_field} = ? WHERE job_id = ?"),
+      sqlite_db = sqlite_db, 
+      param = list(status, now, job_id)
+    )
   }, error = function(e) { print(e); return(NULL)})
+  
+  # Store (or clear) output manifest on COMPLETED status
+  if (status == "COMPLETED") {
+    has_manifest <- is.character(output_manifest) &&
+      length(output_manifest) == 1 &&
+      !is.na(output_manifest) &&
+      nchar(output_manifest) > 0
+    manifest_value <- if (has_manifest) output_manifest else NA_character_
+    tryCatch({
+      submit_tracking_query(
+        str = "UPDATE job_tracking SET output_manifest = ? WHERE job_id = ?",
+        sqlite_db = sqlite_db, 
+        param = list(manifest_value, job_id)
+      )
+    }, error = function(e) { 
+      warning("Failed to update output manifest: ", conditionMessage(e))
+    })
+  }
   
   # recursive function for "cascading" failures using status "FAILED_BY_EXT"
   if (cascade) {
@@ -340,4 +378,180 @@ populate_list_arg = function(list_to_populate, arg_name, new_value = NULL, appen
     list_to_populate[[arg_name]] <- paste(list_to_populate[[arg_name]], new_value, sep = "\n")  
   }
   return(list_to_populate)
+}
+
+
+#' Capture output manifest for a completed step
+#'
+#' Scans an output directory and creates a JSON manifest containing file paths,
+#' sizes, and modification times. This manifest can be stored in the job tracking
+#' database and later used to verify that outputs remain intact.
+#'
+#' @param output_dir Directory to scan for output files
+#' @param recursive Scan subdirectories (default TRUE)
+#' @param pattern Optional regex pattern to filter files
+#'
+#' @return JSON string containing the manifest, or NULL if directory doesn't exist
+#'
+#' @importFrom jsonlite toJSON
+#' @keywords internal
+capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL) {
+  if (!checkmate::test_directory_exists(output_dir)) {
+    return(NULL)
+  }
+  
+  files <- list.files(output_dir, full.names = TRUE, recursive = recursive,
+                      pattern = pattern, all.files = FALSE)
+  
+  if (length(files) == 0) {
+    manifest <- list(
+      output_dir = normalizePath(output_dir),
+      captured_at = as.character(Sys.time()),
+      file_count = 0L,
+      total_size_bytes = 0L,
+      files = list()
+    )
+    return(jsonlite::toJSON(manifest, auto_unbox = TRUE, pretty = FALSE))
+  }
+  
+  info <- file.info(files)
+  norm_dir <- normalizePath(output_dir)
+  
+  manifest <- list(
+    output_dir = norm_dir,
+    captured_at = as.character(Sys.time()),
+    file_count = length(files),
+    total_size_bytes = sum(info$size, na.rm = TRUE),
+    files = lapply(seq_len(nrow(info)), function(i) {
+      # Store relative path for portability
+      rel_path <- sub(paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", norm_dir), "/?"), "", files[i])
+      list(
+        path = rel_path,
+        size = info$size[i],
+        mtime = as.numeric(info$mtime[i])
+      )
+    })
+  )
+  
+  jsonlite::toJSON(manifest, auto_unbox = TRUE, pretty = FALSE)
+}
+
+
+#' Verify current directory state against stored manifest
+#'
+#' Compares the current contents of an output directory against a previously
+#' captured manifest. This can detect missing files, size changes, or other
+#' modifications that may indicate incomplete or corrupted outputs.
+#'
+#' @param output_dir Directory to check
+#' @param manifest_json JSON string from database (as returned by capture_output_manifest)
+#' @param check_mtime Also verify modification times match (default FALSE)
+#'
+#' @return List with:
+#'   \itemize{
+#'     \item \code{verified}: logical indicating if all files match, or NA if no manifest
+#'     \item \code{reason}: character string describing the result
+#'     \item \code{missing}: character vector of missing file paths
+#'     \item \code{changed}: character vector of files with size/mtime changes
+#'     \item \code{extra}: character vector of files not in original manifest
+#'     \item \code{manifest_time}: timestamp when manifest was captured
+#'   }
+#'
+#' @importFrom jsonlite fromJSON
+#' @keywords internal
+verify_output_manifest <- function(output_dir, manifest_json, check_mtime = FALSE) {
+  # Handle missing or invalid manifest
+
+if (is.null(manifest_json) || (length(manifest_json) == 1 && is.na(manifest_json)) || 
+      (is.character(manifest_json) && nchar(manifest_json) == 0)) {
+    return(list(
+      verified = NA,
+      reason = "no_manifest",
+      missing = character(0),
+      changed = character(0),
+      extra = character(0),
+      manifest_time = NA_character_
+    ))
+  }
+  
+  manifest <- tryCatch(
+    jsonlite::fromJSON(manifest_json, simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  
+  if (is.null(manifest)) {
+    return(list(
+      verified = NA,
+      reason = "invalid_manifest_json",
+      missing = character(0),
+      changed = character(0),
+      extra = character(0),
+      manifest_time = NA_character_
+    ))
+  }
+  
+  # Check if directory exists
+  if (!dir.exists(output_dir)) {
+    return(list(
+      verified = FALSE,
+      reason = "directory_missing",
+      missing = output_dir,
+      changed = character(0),
+      extra = character(0),
+      manifest_time = manifest$captured_at
+    ))
+  }
+  
+  # Handle empty manifest (no files expected)
+  if (length(manifest$files) == 0) {
+    current_files <- list.files(output_dir, recursive = TRUE, all.files = FALSE)
+    return(list(
+      verified = length(current_files) == 0,
+      reason = if (length(current_files) == 0) "ok" else "unexpected_files",
+      missing = character(0),
+      changed = character(0),
+      extra = current_files,
+      manifest_time = manifest$captured_at
+    ))
+  }
+  
+  # Extract expected file info from manifest
+  expected_files <- vapply(manifest$files, function(x) x$path, character(1))
+  expected_sizes <- vapply(manifest$files, function(x) as.numeric(x$size), numeric(1))
+  expected_mtimes <- vapply(manifest$files, function(x) as.numeric(x$mtime), numeric(1))
+  
+  missing <- character(0)
+  changed <- character(0)
+  
+  # Check each expected file
+  for (i in seq_along(expected_files)) {
+    full_path <- file.path(output_dir, expected_files[i])
+    
+    if (!file.exists(full_path)) {
+      missing <- c(missing, expected_files[i])
+    } else {
+      info <- file.info(full_path)
+      if (!is.na(expected_sizes[i]) && info$size != expected_sizes[i]) {
+        changed <- c(changed, expected_files[i])
+      } else if (check_mtime && !is.na(expected_mtimes[i]) && 
+                 abs(as.numeric(info$mtime) - expected_mtimes[i]) > 1) {
+        changed <- c(changed, expected_files[i])
+      }
+    }
+  }
+  
+  # Check for unexpected extra files (informational)
+  current_files <- list.files(output_dir, recursive = TRUE, all.files = FALSE)
+  extra <- setdiff(current_files, expected_files)
+  
+  verified <- length(missing) == 0 && length(changed) == 0
+  
+  list(
+    verified = verified,
+    reason = if (verified) "ok" else "files_differ",
+    missing = missing,
+    changed = changed,
+    extra = extra,
+    manifest_time = manifest$captured_at
+  )
 }

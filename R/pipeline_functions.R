@@ -223,12 +223,16 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #' @param step_name Name of the processing step
 #' @param pp_stream Name of the postprocessing stream when `step_name` is
 #'   "postprocess"
-#' @return List containing `complete` (logical), `dir`, and
-#'   `complete_file`
+#' @param verify_manifest Logical. If TRUE and a manifest exists in the database,
+#'   verify that output files still exist and match (default TRUE).
+#' @return List containing `complete` (logical), `dir`, `complete_file`,
+#'   `db_status` (character or NA), `manifest_verified` (logical or NA),
+#'   and `verification_source` (character indicating how completion was determined)
 #' @importFrom checkmate assert_choice assert_string
 #' @keywords internal
 is_step_complete <- function(scfg, sub_id, ses_id = NULL,
-                             step_name, pp_stream = NULL) {
+                             step_name, pp_stream = NULL,
+                             verify_manifest = TRUE) {
   checkmate::assert_choice(step_name,
     c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess"))
   if (is.null(ses_id) || is.na(ses_id)) ses_id <- NULL
@@ -285,9 +289,98 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
       }
   )
 
+  # Initialize result structure
+  result <- list(
+    complete = FALSE,
+    dir = out_dir,
+    complete_file = complete_file,
+    db_status = NA_character_,
+    manifest_verified = NA,
+    verification_source = "none"
+  )
+
+  # Tier 1: Check job tracking database if available
+  sqlite_db <- scfg$metadata$sqlite_db
+  job_name_pattern <- if (!is.null(ses_id)) {
+    glue("{name_tag}_sub-{sub_id}_ses-{ses_id}")
+  } else {
+    glue("{name_tag}_sub-{sub_id}")
+  }
+
+  db_record <- NULL
+  if (!is.null(sqlite_db) && checkmate::test_file_exists(sqlite_db)) {
+    db_record <- tryCatch({
+      # Query for the most recent job matching this step/subject pattern
+      con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+      on.exit(try(DBI::dbDisconnect(con)), add = TRUE)
+      
+      db_cols <- DBI::dbGetQuery(con, "PRAGMA table_info(job_tracking)")
+      has_manifest <- "output_manifest" %in% db_cols$name
+      fields <- if (has_manifest) {
+        "job_id, status, output_manifest, time_ended"
+      } else {
+        "job_id, status, time_ended"
+      }
+      query <- glue(
+        "SELECT {fields} ",
+        "FROM job_tracking ",
+        "WHERE job_name = ? ",
+        "ORDER BY time_submitted DESC ",
+        "LIMIT 1"
+      )
+      DBI::dbGetQuery(con, query, params = list(job_name_pattern))
+    }, error = function(e) NULL)
+  }
+
+  if (!is.null(db_record) && nrow(db_record) > 0) {
+    result$db_status <- db_record$status[1]
+
+    if (result$db_status == "COMPLETED") {
+      # Tier 1a: DB shows COMPLETED - verify manifest if available
+      manifest_json <- if ("output_manifest" %in% names(db_record)) {
+        db_record$output_manifest[1]
+      } else {
+        NA_character_
+      }
+      dir_exists <- checkmate::test_directory_exists(out_dir)
+
+      if (verify_manifest && !is.null(manifest_json) && !is.na(manifest_json) && nchar(manifest_json) > 0) {
+        verification <- verify_output_manifest(out_dir, manifest_json, check_mtime = FALSE)
+        result$manifest_verified <- verification$verified
+
+        if (isTRUE(verification$verified)) {
+          result$complete <- TRUE
+          result$verification_source <- "db_manifest_verified"
+        } else if (is.na(verification$verified)) {
+          # Manifest couldn't be parsed; require output directory to exist
+          result$complete <- dir_exists
+          result$verification_source <- if (dir_exists) "db_status_dir_exists" else "db_status_dir_missing"
+        } else {
+          # Manifest verification failed - files missing or changed
+          result$complete <- FALSE
+          result$verification_source <- "db_manifest_failed"
+          result$manifest_details <- verification
+        }
+      } else {
+        # No manifest available; require output directory to exist
+        result$complete <- dir_exists
+        result$verification_source <- if (dir_exists) "db_status_dir_exists" else "db_status_dir_missing"
+      }
+      return(result)
+    } else if (result$db_status %in% c("FAILED", "FAILED_BY_EXT")) {
+      # DB shows failure
+      result$complete <- FALSE
+      result$verification_source <- "db_status_failed"
+      return(result)
+    }
+    # If status is QUEUED or STARTED, fall through to .complete file check
+  }
+
+  # Tier 2: Fall back to .complete file check (legacy or no DB record)
   complete_exists <- checkmate::test_file_exists(complete_file)
   fail_exists <- checkmate::test_file_exists(fail_file)
   complete_newer_than_fail <- FALSE
+
   if (complete_exists && fail_exists) {
     complete_mtime <- file.info(complete_file)$mtime
     fail_mtime <- file.info(fail_file)$mtime
@@ -296,10 +389,13 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
     }
   }
 
-  complete <- checkmate::test_directory_exists(out_dir) &&
-    complete_exists && (!fail_exists || complete_newer_than_fail)
+  dir_exists <- checkmate::test_directory_exists(out_dir)
+  complete_by_file <- dir_exists && complete_exists && (!fail_exists || complete_newer_than_fail)
 
-  list(complete = complete, dir = out_dir, complete_file = complete_file)
+  result$complete <- complete_by_file
+  result$verification_source <- if (complete_by_file) "complete_file" else "incomplete"
+
+  result
 }
 
 

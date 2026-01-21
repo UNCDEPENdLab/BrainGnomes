@@ -76,6 +76,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
     complete_file <- file.path(sub_dir, glue(".{name_tag}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
+    fail_file <- sub("_complete$", "_fail", complete_file)
+    fail_exists <- checkmate::test_file_exists(fail_file)
     
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
@@ -91,6 +93,10 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     if (file_exists) {
       to_log(lg, "info", "Removing existing .complete file: {complete_file}")
       unlink(complete_file)
+    }
+    if (isTRUE(scfg$force) && fail_exists) {
+      to_log(lg, "info", "Removing existing .fail file: {fail_file}")
+      unlink(fail_file)
     }
     
     # shared components across specific jobs

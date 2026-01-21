@@ -112,7 +112,7 @@ if [[ $success -eq 0 ]]; then
   fi
   cleanup_fail_marker "$complete_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
   log_message INFO "Finished aroma for subject $sub_id (time elapsed: $(time_elapsed))"
 else
   fail_file="${complete_file%_complete}_fail"

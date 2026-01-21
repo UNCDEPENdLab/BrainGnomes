@@ -8,6 +8,7 @@ update_tracked_job_status(
   sqlite_db = NULL,
   job_id = NULL,
   status,
+  output_manifest = NULL,
   cascade = FALSE,
   exclude = NULL
 )
@@ -19,6 +20,9 @@ update_tracked_job_status(
 
 \item{status}{Character string. The job status to set. Must be one of:
 \code{"QUEUED"}, \code{"STARTED"}, \code{"FAILED"}, \code{"COMPLETED"}, \code{"FAILED_BY_EXT"}.}
+
+\item{output_manifest}{Character string. Optional JSON manifest of output files to store when
+status is \code{"COMPLETED"}. See \code{\link{capture_output_manifest}}.}
 
 \item{cascade}{Logical. If \code{TRUE}, and the \code{status} is a failure type (\code{"FAILED"} or \code{"FAILED_BY_EXT"}),
 the failure is recursively propagated to child jobs not listed in \code{exclude}.}
@@ -38,6 +42,9 @@ The function updates both the job \code{status} and a timestamp corresponding to
 \item \code{"STARTED"} -> updates \code{time_started}
 \item \code{"FAILED"}, \code{"COMPLETED"}, or \code{"FAILED_BY_EXT"} -> updates \code{time_ended}
 }
+
+When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
+is stored in the \code{output_manifest} column for later verification.
 
 If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
 via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already

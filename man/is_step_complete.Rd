@@ -4,7 +4,14 @@
 \alias{is_step_complete}
 \title{Check whether a pipeline step is complete}
 \usage{
-is_step_complete(scfg, sub_id, ses_id = NULL, step_name, pp_stream = NULL)
+is_step_complete(
+  scfg,
+  sub_id,
+  ses_id = NULL,
+  step_name,
+  pp_stream = NULL,
+  verify_manifest = TRUE
+)
 }
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
@@ -17,10 +24,14 @@ is_step_complete(scfg, sub_id, ses_id = NULL, step_name, pp_stream = NULL)
 
 \item{pp_stream}{Name of the postprocessing stream when \code{step_name} is
 "postprocess"}
+
+\item{verify_manifest}{Logical. If TRUE and a manifest exists in the database,
+verify that output files still exist and match (default TRUE).}
 }
 \value{
-List containing \code{complete} (logical), \code{dir}, and
-\code{complete_file}
+List containing \code{complete} (logical), \code{dir}, \code{complete_file},
+\code{db_status} (character or NA), \code{manifest_verified} (logical or NA),
+and \code{verification_source} (character indicating how completion was determined)
 }
 \description{
 Determines if the expected output directory and \code{.complete} marker
