@@ -23,6 +23,7 @@ Imports:
     DBI,
     glue,
     filelock,
+    jsonlite,
     lubridate,
     lgr,
     reticulate,
