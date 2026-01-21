@@ -10,6 +10,7 @@ update_tracked_job_status(
   sqlite_db = NULL,
   job_id = NULL,
   status,
+  output_manifest = NULL,
   cascade = FALSE,
   exclude = NULL
 )
@@ -31,6 +32,12 @@ update_tracked_job_status(
 
   Character string. The job status to set. Must be one of: `"QUEUED"`,
   `"STARTED"`, `"FAILED"`, `"COMPLETED"`, `"FAILED_BY_EXT"`.
+
+- output_manifest:
+
+  Character string. Optional JSON manifest of output files to store when
+  status is `"COMPLETED"`. See
+  [`capture_output_manifest`](https://uncdependlab.github.io/BrainGnomes/reference/capture_output_manifest.md).
 
 - cascade:
 
@@ -59,6 +66,10 @@ to the status type:
 
 - `"FAILED"`, `"COMPLETED"`, or `"FAILED_BY_EXT"` -\> updates
   `time_ended`
+
+When `status` is `"COMPLETED"` and `output_manifest` is provided, the
+manifest is stored in the `output_manifest` column for later
+verification.
 
 If `cascade = TRUE`, and the status is `"FAILED"` or `"FAILED_BY_EXT"`,
 any dependent jobs (as determined via

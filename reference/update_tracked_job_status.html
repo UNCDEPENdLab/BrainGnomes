@@ -50,6 +50,7 @@
 <span>  sqlite_db <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  job_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">status</span>,</span>
+<span>  output_manifest <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cascade <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  exclude <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -72,6 +73,11 @@
 <code>"QUEUED"</code>, <code>"STARTED"</code>, <code>"FAILED"</code>, <code>"COMPLETED"</code>, <code>"FAILED_BY_EXT"</code>.</p></dd>
 
 
+<dt id="arg-output-manifest">output_manifest<a class="anchor" aria-label="anchor" href="#arg-output-manifest"></a></dt>
+<dd><p>Character string. Optional JSON manifest of output files to store when
+status is <code>"COMPLETED"</code>. See <code><a href="capture_output_manifest.html">capture_output_manifest</a></code>.</p></dd>
+
+
 <dt id="arg-cascade">cascade<a class="anchor" aria-label="anchor" href="#arg-cascade"></a></dt>
 <dd><p>Logical. If <code>TRUE</code>, and the <code>status</code> is a failure type (<code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>),
 the failure is recursively propagated to child jobs not listed in <code>exclude</code>.</p></dd>
@@ -90,7 +96,9 @@ the failure is recursively propagated to child jobs not listed in <code>exclude<
     <p>The function updates both the job <code>status</code> and a timestamp corresponding to the status type:</p><ul><li><p><code>"QUEUED"</code> -&gt; updates <code>time_submitted</code></p></li>
 <li><p><code>"STARTED"</code> -&gt; updates <code>time_started</code></p></li>
 <li><p><code>"FAILED"</code>, <code>"COMPLETED"</code>, or <code>"FAILED_BY_EXT"</code> -&gt; updates <code>time_ended</code></p></li>
-</ul><p>If <code>cascade = TRUE</code>, and the status is <code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>, any dependent jobs (as determined
+</ul><p>When <code>status</code> is <code>"COMPLETED"</code> and <code>output_manifest</code> is provided, the manifest
+is stored in the <code>output_manifest</code> column for later verification.</p>
+<p>If <code>cascade = TRUE</code>, and the status is <code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>, any dependent jobs (as determined
 via <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>) will be recursively marked as <code>"FAILED_BY_EXT"</code>, unless their status is already
 <code>"FAILED"</code> or they are listed in <code>exclude</code>.</p>
 <p>If <code>sqlite_db</code> or <code>job_id</code> is invalid or missing, the function fails silently and returns <code>NULL</code>.</p>

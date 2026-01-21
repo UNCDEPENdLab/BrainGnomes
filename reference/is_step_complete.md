@@ -6,7 +6,14 @@ present for a given subject/session and processing step.
 ## Usage
 
 ``` r
-is_step_complete(scfg, sub_id, ses_id = NULL, step_name, pp_stream = NULL)
+is_step_complete(
+  scfg,
+  sub_id,
+  ses_id = NULL,
+  step_name,
+  pp_stream = NULL,
+  verify_manifest = TRUE
+)
 ```
 
 ## Arguments
@@ -32,6 +39,14 @@ is_step_complete(scfg, sub_id, ses_id = NULL, step_name, pp_stream = NULL)
 
   Name of the postprocessing stream when `step_name` is "postprocess"
 
+- verify_manifest:
+
+  Logical. If TRUE and a manifest exists in the database, verify that
+  output files still exist and match (default TRUE).
+
 ## Value
 
-List containing `complete` (logical), `dir`, and `complete_file`
+List containing `complete` (logical), `dir`, `complete_file`,
+`db_status` (character or NA), `manifest_verified` (logical or NA), and
+`verification_source` (character indicating how completion was
+determined)

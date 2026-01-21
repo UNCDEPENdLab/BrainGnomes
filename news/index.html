@@ -42,9 +42,11 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08-development">BrainGnomes 0.8 (DEVELOPMENT)<a class="anchor" aria-label="anchor" href="#braingnomes-08-development"></a></h2>
 <ul><li>feature: All HPC jobs are now tracked in detail by an SQLite database</li>
-<li>feature: Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>.</li>
+<li>feature: Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>
+</li>
 <li>feature: Improved error logging in HPC scripts so that success and failure are indicated more clearly</li>
 <li>feature: Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps</li>
+<li>feature: Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests</li>
 <li>feature: Added optional low-pass filtering of motion parameters, matching (Gratton)</li>
 <li>feature: Gracefully adjust motion filtering parameters if they fall above Nyquist at this TR</li>
 </ul></div>

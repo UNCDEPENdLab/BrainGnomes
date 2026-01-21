@@ -21,6 +21,8 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_4d.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/butterworth_filter_cpp.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/calculate_motion_outliers.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/capture_output_manifest.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/check_status_reconciliation.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/cluster_job_submit.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/compare_lists.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/compute_brain_mask.html</loc></url>
@@ -130,6 +132,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_bids_conversion.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_exists.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_project.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/verify_output_manifest.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/wait_for_job.html</loc></url>
 </urlset>
 
