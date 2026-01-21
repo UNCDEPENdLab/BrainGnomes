@@ -415,7 +415,8 @@ capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL
   }
   
   info <- file.info(files)
-  norm_dir <- normalizePath(output_dir)
+  norm_dir <- normalizePath(output_dir, winslash = "/", mustWork = TRUE)
+  norm_files <- normalizePath(files, winslash = "/", mustWork = TRUE)
   
   manifest <- list(
     output_dir = norm_dir,
@@ -424,7 +425,7 @@ capture_output_manifest <- function(output_dir, recursive = TRUE, pattern = NULL
     total_size_bytes = sum(info$size, na.rm = TRUE),
     files = lapply(seq_len(nrow(info)), function(i) {
       # Store relative path for portability
-      rel_path <- sub(paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", norm_dir), "/?"), "", files[i])
+      rel_path <- sub(paste0("^", gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", norm_dir), "/?"), "", norm_files[i])
       list(
         path = rel_path,
         size = info$size[i],
