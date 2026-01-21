@@ -2,19 +2,23 @@
 
 ## BrainGnomes 0.8 (DEVELOPMENT)
 
-- feature: All HPC jobs are now tracked in detail by an SQLite database
-- feature: Job failures and other errors can now be investigated using
+- Add optional low-pass filtering of motion parameters before FD
+  recomputation; rename notch config fields to
+  `bandstop_min_bpm`/`bandstop_max_bpm` (deprecated:
+  `band_stop_min`/`band_stop_max`).
+- All HPC jobs are now tracked in detail by an SQLite database
+- Job failures and other errors can now be investigated using
   `diagnose_pipeline`
-- feature: Improved error logging in HPC scripts so that success and
-  failure are indicated more clearly
-- feature: Stale .fail files are removed when a newer .complete file
-  exists, clarifying status of processing steps
-- feature: Jobs now write a manifest of files and times to the job
-  tracking database for more thorough completeness tests
-- feature: Added optional low-pass filtering of motion parameters,
-  matching (Gratton)
-- feature: Gracefully adjust motion filtering parameters if they fall
-  above Nyquist at this TR
+- Improved error logging in HPC scripts so that success and failure are
+  indicated more clearly
+- Stale .fail files are removed when a newer .complete file exists,
+  clarifying status of processing steps
+- Jobs now write a manifest of files and times to the job tracking
+  database for more thorough completeness tests
+- Added optional low-pass filtering of motion parameters, matching
+  (Gratton)
+- Gracefully adjust motion filtering parameters if they fall above
+  Nyquist at this TR
 
 ## BrainGnomes 0.7-5
 
@@ -28,10 +32,6 @@ Released 2026-01-13
     TSV, with gzip support)
   - Defaults for notch filter: `bandstop_min_bpm = 12`,
     `bandstop_max_bpm = 18` BPM
-- Add optional low-pass filtering of motion parameters before FD
-  recomputation; rename notch config fields to
-  `bandstop_min_bpm`/`bandstop_max_bpm` (deprecated:
-  `band_stop_min`/`band_stop_max`).
 - Use the `scratch_directory` for postprocessing images to avoid
   collisions and ensure that intermediates do not clog the output folder
 - Check that python packages directory is writable prior to attempting
