@@ -20,8 +20,9 @@ trap 'traperror flywheel_sync $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(pri
 
 ####
 #verify required arguments
-[ -z "$flywheel_cmd" ] && echo "flywheel_cmd not set. Exiting." && exit 1
-[ ! -x "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not executable. Exiting." && exit 1
+[ -z "$flywheel_cmd" ] && echo "flywheel_cmd not set. Exiting" && exit 1
+[ ! -f "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not found. Exiting" && exit 1
+[ ! -r "$flywheel_cmd" ] && echo "flywheel_cmd $flywheel_cmd not readable. Exiting" && exit 1
 [ -z "$flywheel_source_url" ] && echo "flywheel_source_url not set. Exiting." && exit 1
 [ -z "$flywheel_sync_directory" ] && echo "flywheel_sync_directory not set. Exiting." && exit 1
 
@@ -39,31 +40,29 @@ fi
 stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
 stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
 
-log_flag=""
-[[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
-
 mem=$((SLURM_MEM_PER_NODE / 1024))GB
 start_time=$(date +%s)
 
-log_message INFO Starting flywheel_sync with mem: $mem
+log_message INFO Starting flywheel_sync with mem: $mem and cpus: $SLURM_JOB_CPUS_PER_NODE
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-# Build flywheel sync command (cli_options already includes all options from R)
+# to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 flywheel_cmd_args="sync"
 [ -n "$flywheel_cli_options" ] && flywheel_cmd_args="$flywheel_cmd_args $flywheel_cli_options"
 flywheel_cmd_args="$flywheel_cmd_args $flywheel_source_url $flywheel_sync_directory"
 
-# Run flywheel sync
-rel $rel_flag $log_flag "$flywheel_cmd" $flywheel_cmd_args &
+rel $rel_flag "$flywheel_cmd" $flywheel_cmd_args
 cmd_pid=$!
 
 cmd_status=0
 wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
 
+log_message DEBUG "Exit status of flywheel_sync is $cmd_status"
+
 [[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 [[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
 
-log_message INFO Finished flywheel_sync "(time elapsed: $(time_elapsed))"
-exit $cmd_status
 
+log_message INFO Exiting flywheel_sync "(time elapsed: $(time_elapsed))"
+exit $cmd_status

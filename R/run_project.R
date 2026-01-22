@@ -395,14 +395,15 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     pkg_dir = find.package(package = "BrainGnomes"),
     R_HOME = R.home(),
     upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
-    sqlite_db = scfg$metadata$sqlite_db,
     flywheel_cmd = scfg$compute_environment$flywheel,
     flywheel_cli_options = cli_options,
     flywheel_source_url = scfg$flywheel_sync$source_url,
     flywheel_sync_directory = scfg$metadata$flywheel_sync_directory
   )
 
-  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args, env_variables = env_variables)
+  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, 
+                               sched_args = sched_args, env_variables = env_variables,
+                               tracking_sqlite_db = scfg$metadata$sqlite_db)
 
   to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
   to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
