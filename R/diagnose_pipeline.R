@@ -502,6 +502,8 @@ get_all_nodes <- function(node) {
 get_job_type <- function(job_name) {
   if (grepl("^fsaverage", job_name)) {
     return("Setup")
+  } else if (grepl("^flywheel_sync", job_name)) {
+    return("Flywheel Sync")
   } else if (grepl("^bids_conversion", job_name)) {
     return("BIDS Conversion")
   } else if (grepl("^bids_validation", job_name)) {
@@ -549,7 +551,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
   job_info_map <- list()
   for (node in all_nodes) {
     job_name <- node$name
-    if (grepl("^fsaverage", job_name)) {
+    if (grepl("^fsaverage", job_name) || grepl("^flywheel_sync", job_name)) {
       next
     }
     
@@ -580,7 +582,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
   }
   
   step_order <- c(
-    "Setup", "BIDS Conversion", "BIDS Validation",
+    "Setup", "Flywheel Sync", "BIDS Conversion", "BIDS Validation",
     "MRIQC", "fMRIPrep", "ICA-AROMA", "ROI Extraction"
   )
   
@@ -730,11 +732,15 @@ print_step_tree_by_type <- function(tree_root) {
 
   all_nodes <- unlist(lapply(tree_root$children, get_all_nodes), recursive = FALSE)
 
+  # Collect project-level jobs (not subject-specific)
   fsaverage_jobs <- list()
+  flywheel_jobs <- list()
   for (job in all_nodes) {
     job_name <- job$name
     if (grepl("^fsaverage", job_name)) {
       fsaverage_jobs[[length(fsaverage_jobs) + 1]] <- job
+    } else if (grepl("^flywheel_sync", job_name)) {
+      flywheel_jobs[[length(flywheel_jobs) + 1]] <- job
     }
   }
 
@@ -752,12 +758,22 @@ print_step_tree_by_type <- function(tree_root) {
     subject_jobs[[sub_id]][[type]][[length(subject_jobs[[sub_id]][[type]]) + 1]] <- job
   }
 
+  # Add project-level jobs to each subject's display
   if (length(fsaverage_jobs) > 0) {
     for (sub_id in names(subject_jobs)) {
       if (is.null(subject_jobs[[sub_id]][["Setup"]])) {
         subject_jobs[[sub_id]][["Setup"]] <- list()
       }
       subject_jobs[[sub_id]][["Setup"]] <- c(fsaverage_jobs, subject_jobs[[sub_id]][["Setup"]])
+    }
+  }
+
+  if (length(flywheel_jobs) > 0) {
+    for (sub_id in names(subject_jobs)) {
+      if (is.null(subject_jobs[[sub_id]][["Flywheel Sync"]])) {
+        subject_jobs[[sub_id]][["Flywheel Sync"]] <- list()
+      }
+      subject_jobs[[sub_id]][["Flywheel Sync"]] <- c(flywheel_jobs, subject_jobs[[sub_id]][["Flywheel Sync"]])
     }
   }
 
@@ -768,7 +784,7 @@ print_step_tree_by_type <- function(tree_root) {
     job_types <- subject_jobs[[sub_id]]
 
     step_order <- c(
-      "Setup", "BIDS Conversion", "BIDS Validation",
+      "Setup", "Flywheel Sync", "BIDS Conversion", "BIDS Validation",
       "MRIQC", "fMRIPrep", "ICA-AROMA", "ROI Extraction"
     )
     ordered_types <- intersect(step_order, names(job_types))

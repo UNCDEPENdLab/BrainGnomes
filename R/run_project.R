@@ -205,7 +205,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
 
   flywheel_id <- NULL
-  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
+  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg, sequence_id = sequence_id)
 
   # If only sync was requested, don't enter subject-level processing
   if (!any(steps[names(steps) != "flywheel_sync"])) return(invisible(TRUE))
@@ -359,7 +359,7 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
 #' @keywords internal
 #' @noRd
 #' @importFrom checkmate test_true
-submit_flywheel_sync <- function(scfg, lg = NULL) {
+submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
   checkmate::assert_list(scfg)
 
   if (is.null(lg)) {
@@ -401,9 +401,21 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     flywheel_sync_directory = scfg$metadata$flywheel_sync_directory
   )
 
+  tracking_args <- list(
+    job_name = "flywheel_sync",
+    sequence_id = sequence_id,
+    n_nodes = 1,
+    n_cpus = scfg[["flywheel_sync"]]$ncores,
+    wall_time = hours_to_dhms(scfg[["flywheel_sync"]]$nhours),
+    mem_total = scfg[["flywheel_sync"]]$memgb,
+    scheduler = scfg$compute_environment$scheduler,
+    scheduler_options = scfg[["flywheel_sync"]]$sched_args
+  )
+
   job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, 
                                sched_args = sched_args, env_variables = env_variables,
-                               tracking_sqlite_db = scfg$metadata$sqlite_db)
+                               tracking_sqlite_db = scfg$metadata$sqlite_db,
+                               tracking_args = tracking_args)
 
   to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
   to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
