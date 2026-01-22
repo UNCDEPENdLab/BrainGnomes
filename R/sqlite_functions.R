@@ -313,6 +313,7 @@ tracking_df_to_tree <- function(tracking_df) {
       node$time_started <- job$time_started
       node$time_ended <- job$time_ended
       node$compute_file <- job$compute_file
+      node$sequence_id <- job$sequence_id
 
       node_lookup[[job$id]] <- node
     }
