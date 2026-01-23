@@ -55,14 +55,15 @@ flywheel_cmd_args="$flywheel_cmd_args $flywheel_source_url $flywheel_sync_direct
 rel $rel_flag "$flywheel_cmd" $flywheel_cmd_args
 cmd_pid=$!
 
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+run_bg_and_wait "$cmd_pid" cmd_status
 
 log_message DEBUG "Exit status of flywheel_sync is $cmd_status"
 
-[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-
-log_message INFO Exiting flywheel_sync "(time elapsed: $(time_elapsed))"
+if [[ $cmd_status -eq 0 ]]; then
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Finished flywheel_sync (time elapsed: $(time_elapsed))"
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "flywheel_sync failed (exit code $cmd_status)"
+fi
 exit $cmd_status
