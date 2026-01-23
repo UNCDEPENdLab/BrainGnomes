@@ -157,7 +157,7 @@ if [[ $failed -eq 0 ]]; then
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
   log_message INFO "Postprocessing completed for subject $sub_id $ses_str ($total_children/$total_children child jobs succeeded)."
 else
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
   log_message ERROR "Postprocessing failed for subject $sub_id $ses_str ($failed_count/$total_children child jobs failed)."
   if [[ $failed_count -gt 0 ]]; then
     log_message ERROR "Failed child job IDs: ${failed_ids[*]}"

@@ -7,8 +7,6 @@
 #'
 #' @author Zach Vig & Dan Shallal
 
-
-
 diagnose_pipeline <- function(input) {
   
   if (options()$warn < 1) {
