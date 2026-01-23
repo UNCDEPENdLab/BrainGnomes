@@ -500,7 +500,7 @@ get_all_nodes <- function(node) {
 #'
 #' @keywords internal
 get_job_type <- function(job_name) {
-  if (grepl("^fsaverage", job_name)) {
+  if (grepl("^fsaverage", job_name) || grepl("^prefetch_templates", job_name)) {
     return("Setup")
   } else if (grepl("^flywheel_sync", job_name)) {
     return("Flywheel Sync")
@@ -551,7 +551,7 @@ print_subject_summary_tree <- function(subject_jobs_df, subject_id) {
   job_info_map <- list()
   for (node in all_nodes) {
     job_name <- node$name
-    if (grepl("^fsaverage", job_name) || grepl("^flywheel_sync", job_name)) {
+    if (grepl("^fsaverage", job_name) || grepl("^flywheel_sync", job_name) || grepl("^prefetch_templates", job_name)) {
       next
     }
     
@@ -733,12 +733,12 @@ print_step_tree_by_type <- function(tree_root) {
   all_nodes <- unlist(lapply(tree_root$children, get_all_nodes), recursive = FALSE)
 
   # Collect project-level jobs (not subject-specific)
-  fsaverage_jobs <- list()
+  setup_jobs <- list()  # fsaverage and prefetch_templates
   flywheel_jobs <- list()
   for (job in all_nodes) {
     job_name <- job$name
-    if (grepl("^fsaverage", job_name)) {
-      fsaverage_jobs[[length(fsaverage_jobs) + 1]] <- job
+    if (grepl("^fsaverage", job_name) || grepl("^prefetch_templates", job_name)) {
+      setup_jobs[[length(setup_jobs) + 1]] <- job
     } else if (grepl("^flywheel_sync", job_name)) {
       flywheel_jobs[[length(flywheel_jobs) + 1]] <- job
     }
@@ -759,12 +759,12 @@ print_step_tree_by_type <- function(tree_root) {
   }
 
   # Add project-level jobs to each subject's display
-  if (length(fsaverage_jobs) > 0) {
+  if (length(setup_jobs) > 0) {
     for (sub_id in names(subject_jobs)) {
       if (is.null(subject_jobs[[sub_id]][["Setup"]])) {
         subject_jobs[[sub_id]][["Setup"]] <- list()
       }
-      subject_jobs[[sub_id]][["Setup"]] <- c(fsaverage_jobs, subject_jobs[[sub_id]][["Setup"]])
+      subject_jobs[[sub_id]][["Setup"]] <- c(setup_jobs, subject_jobs[[sub_id]][["Setup"]])
     }
   }
 

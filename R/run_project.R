@@ -217,7 +217,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # Prefetch TemplateFlow templates when needed so downstream runs can disable networking
   # This avoids socket errors in Python multiprocessing: https://github.com/nipreps/mriqc/issues/1170
   prefetch_id <- NULL
-  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps)
+  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps, sequence_id = sequence_id)
 
   parent_ids <- c(fsaverage_id, prefetch_id)
 
@@ -479,7 +479,7 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
 }
 
 # helper for handling the problem of multi
-submit_prefetch_templates <- function(scfg, steps) {
+submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_logical(steps, any.missing = FALSE)
 
@@ -532,10 +532,12 @@ submit_prefetch_templates <- function(scfg, steps) {
   log_file <- file.path(scfg$metadata$log_directory, "prefetch_templates_log.txt")
   env_variables <- c(
     pkg_dir = find.package(package = "BrainGnomes"),
+    R_HOME = R.home(),
     debug_pipeline = scfg$debug,
     log_file = log_file,
     stdout_log = stdout_log,
     stderr_log = stderr_log,
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     prefetch_container = container_path,
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
@@ -543,11 +545,24 @@ submit_prefetch_templates <- function(scfg, steps) {
     log_level = scfg$log_level
   )
 
+  tracking_args <- list(
+    job_name = "prefetch_templates",
+    sequence_id = sequence_id,
+    n_nodes = 1,
+    n_cpus = scfg[["prefetch_templates"]]$ncores,
+    wall_time = hours_to_dhms(scfg[["prefetch_templates"]]$nhours),
+    mem_total = scfg[["prefetch_templates"]]$memgb,
+    scheduler = scfg$compute_environment$scheduler,
+    scheduler_options = scfg[["prefetch_templates"]]$sched_args
+  )
+
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args,
     env_variables = env_variables,
-    echo = FALSE
+    echo = FALSE,
+    tracking_sqlite_db = scfg$metadata$sqlite_db,
+    tracking_args = tracking_args
   )
 
   return(job_id)
