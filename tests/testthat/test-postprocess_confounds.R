@@ -163,7 +163,7 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
   data.table::fwrite(conf_df, conf_path, sep = "\t")
 
   cfg <- list(
-    motion_filter = list(enable = TRUE, band_stop_min = 12, band_stop_max = 18),
+    motion_filter = list(enable = TRUE, filter_type = "notch", bandstop_min_bpm = 12, bandstop_max_bpm = 18),
     scrubbing = list(enable = FALSE, apply = FALSE, add_to_confounds = FALSE, head_radius = 40),
     confound_regression = list(
       enable = TRUE,
@@ -199,11 +199,12 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
   )
 
   motion_cols <- c("rot_x", "rot_y", "rot_z", "trans_x", "trans_y", "trans_z")
-  filtered_df <- notch_filter(
+  filtered_df <- filter_confounds(
     confounds_df = conf_df,
     tr = cfg$tr,
-    band_stop_min = cfg$motion_filter$band_stop_min,
-    band_stop_max = cfg$motion_filter$band_stop_max,
+    filter_type = cfg$motion_filter$filter_type,
+    bandstop_min_bpm = cfg$motion_filter$bandstop_min_bpm,
+    bandstop_max_bpm = cfg$motion_filter$bandstop_max_bpm,
     columns = motion_cols,
     lg = lgr::get_logger_glue("BrainGnomes.test.motion")
   )

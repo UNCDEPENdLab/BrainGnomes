@@ -114,6 +114,29 @@ function rel() {
   return $cmdExit  #exit status of command
 }
 
+run_bg_and_wait() {
+  local pid="$1"
+  local out_var="$2"
+  local status=0
+
+  if [[ -z "$pid" ]]; then
+    status=1
+  else
+    # Avoid ERR trap and errexit while waiting on background processes.
+    set +eE
+    wait "$pid"
+    status=$?
+    set -eE
+  fi
+
+  if [[ -n "$out_var" ]]; then
+    printf -v "$out_var" '%s' "$status"
+  else
+    echo "$status"
+  fi
+  return 0
+}
+
 
 function trap_job_failure() {
   local step="$1"
@@ -153,6 +176,24 @@ function archive_file() {
       mv "$fname" "${fname}_${mtime}"
     fi
     return 0
+}
+
+cleanup_fail_marker() {
+    local complete_path="$1"
+    [ -z "$complete_path" ] && return 0
+    local fail_file="${complete_path%_complete}_fail"
+    [ ! -f "$fail_file" ] && return 0
+
+    local mtime
+    if [ "$(uname)" = "Darwin" ]; then
+      mtime=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M:%S" "$fail_file" 2>/dev/null)
+    else
+      mtime=$(date -r "$fail_file" +"%Y-%m-%d %H:%M:%S" 2>/dev/null)
+    fi
+    [ -z "$mtime" ] && mtime="unknown"
+
+    rm -f "$fail_file"
+    log_message INFO "Removed stale fail marker $fail_file (mtime: $mtime)."
 }
 
 

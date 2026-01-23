@@ -5,7 +5,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --mem=16g
 
-set -e
+set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 
 # source bash functions used in pipeline shell scripts
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
@@ -16,6 +16,7 @@ trap 'trap_job_failure bids_validation SIGTERM' SIGTERM
 trap 'trap_job_failure bids_validation SIGINT' SIGINT
 trap 'trap_job_failure bids_validation SIGHUP' SIGHUP
 trap 'trap_job_failure bids_validation SIGQUIT' SIGQUIT
+trap 'traperror bids_validation $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
 ####
 #verify necessary arguments
@@ -55,12 +56,15 @@ log_message INFO Starting bids validation for subject $sub_id in $bids_dir
 
 rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile} &
 cmd_pid=$!
+run_bg_and_wait "$cmd_pid" success
 
-success=0
-wait $cmd_pid || success=$?
-[[ $success -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${bids_dir}/.bids_validation_complete
-[[ $success -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $success -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-
-log_message INFO Finished bids validation for subject $sub_id
+if [[ $success -eq 0 ]]; then
+  cleanup_fail_marker "${bids_dir}/.bids_validation_complete"
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${bids_dir}/.bids_validation_complete
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO Finished bids validation for subject $sub_id
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "Bids validation failed for subject $sub_id"
+fi
+exit $success

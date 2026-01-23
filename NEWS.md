@@ -1,3 +1,14 @@
+# BrainGnomes 0.8 (DEVELOPMENT)
+* Add optional low-pass filtering of motion parameters before FD recomputation; rename notch config fields to
+  `bandstop_min_bpm`/`bandstop_max_bpm` (deprecated: `band_stop_min`/`band_stop_max`).
+* All HPC jobs are now tracked in detail by an SQLite database
+* Job failures and other errors can now be investigated using `diagnose_pipeline`
+* Improved error logging in HPC scripts so that success and failure are indicated more clearly
+* Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps
+* Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests
+* Added optional low-pass filtering of motion parameters, matching (Gratton)
+* Gracefully adjust motion filtering parameters if they fall above Nyquist at this TR
+
 # BrainGnomes 0.7-5
 
 Released 2026-01-13
@@ -6,7 +17,7 @@ Released 2026-01-13
   - Returns mean FD alongside max FD
   - Includes task and run columns from BIDS info
   - Supports optional `output_file` argument to write results (CSV or TSV, with gzip support)
-  - Defaults for notch filter: `band_stop_min = 12`, `band_stop_max = 18` BPM
+  - Defaults for notch filter: `bandstop_min_bpm = 12`, `bandstop_max_bpm = 18` BPM
 * Use the `scratch_directory` for postprocessing images to avoid collisions and ensure that intermediates do not clog the output folder
 * Check that python packages directory is writable prior to attempting to resample a stereotaxic template to an image; fall back to
     a managed `reticulate` environment if not.

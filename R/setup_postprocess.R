@@ -27,7 +27,9 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "scrubbing/apply", "scrubbing/prefix",
       "confound_regression/columns", "confound_regression/noproc_columns",
       "confound_regression/prefix",
-      "motion_filter/enable", "motion_filter/band_stop_min", "motion_filter/band_stop_max",
+      "motion_filter/enable", "motion_filter/filter_type",
+      "motion_filter/bandstop_min_bpm", "motion_filter/bandstop_max_bpm",
+      "motion_filter/lowpass_bpm", "motion_filter/filter_order",
       "force_processing_order", "processing_steps"
     )
   }
@@ -795,10 +797,11 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
 #' Configure optional motion parameter filtering
 #'
 #' If motion parameters are used in scrubbing expressions or included among the
-#' selected confound regressors, users can choose to apply a notch (band-stop)
-#' filter to the rigid-body motion time series prior to downstream processing.
-#' This mirrors the respiration filtering strategy used in tools such as xcp-d
-#' and helps mitigate respiration-induced spikes in framewise displacement.
+#' selected confound regressors, users can choose to filter the rigid-body motion
+#' time series prior to downstream processing (either with a notch/band-stop
+#' filter or a low-pass filter). This mirrors the respiration filtering strategy
+#' used in tools such as xcp-d and helps mitigate respiration-induced spikes in
+#' framewise displacement.
 #'
 #' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
 #' @param fields Optional vector of fields to prompt for.
@@ -838,9 +841,13 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
   require_prompt <- motion_in_confounds || motion_in_scrubbing
   motion_fields <- if (is.null(fields)) character() else fields[grepl("^postprocess/motion_filter", fields)]
   explicit_enable <- "postprocess/motion_filter/enable" %in% motion_fields
-  explicit_band_min <- "postprocess/motion_filter/band_stop_min" %in% motion_fields
-  explicit_band_max <- "postprocess/motion_filter/band_stop_max" %in% motion_fields
-  any_explicit <- explicit_enable || explicit_band_min || explicit_band_max
+  explicit_filter_type <- "postprocess/motion_filter/filter_type" %in% motion_fields
+  explicit_band_min <- "postprocess/motion_filter/bandstop_min_bpm" %in% motion_fields
+  explicit_band_max <- "postprocess/motion_filter/bandstop_max_bpm" %in% motion_fields
+  explicit_low_pass <- "postprocess/motion_filter/lowpass_bpm" %in% motion_fields
+  explicit_filter_order <- "postprocess/motion_filter/filter_order" %in% motion_fields
+  any_explicit <- explicit_enable || explicit_filter_type || explicit_band_min ||
+    explicit_band_max || explicit_low_pass || explicit_filter_order
 
   need_enable_prompt <- FALSE
   if (is.null(fields)) {
@@ -851,7 +858,8 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
 
   if (!need_enable_prompt && !any_explicit && !require_prompt) {
     if (!isTRUE(motion_filter_cfg$enable) ||
-        (!is.null(motion_filter_cfg$band_stop_min) && !is.null(motion_filter_cfg$band_stop_max))) {
+        (!is.null(motion_filter_cfg$bandstop_min_bpm) && !is.null(motion_filter_cfg$bandstop_max_bpm)) ||
+        !is.null(motion_filter_cfg$lowpass_bpm)) {
       if (length(motion_filter_cfg) == 0L) {
         ppcfg$motion_filter <- NULL
       } else {
@@ -890,11 +898,12 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
     }
     motion_filter_cfg$enable <- prompt_input(
       instruct = glue("\n\n{context_text}
-      Respiratory motion can inflate framewise displacement estimates. A notch filter can attenuate
-      a specified band of frequencies (breaths per minute) before FD is recomputed, similar to the
-      approach used by xcp-d. Typical adult respiration falls between 12 and 20 BPM.
+      Respiratory motion can inflate framewise displacement estimates. You can filter the motion
+      parameters before FD is recomputed using a notch (band-stop) filter or a low-pass filter.
+      Notch filtering targets a specific respiration band (breaths per minute), similar to xcp-d.
+      Typical adult respiration falls between 12 and 20 BPM.
       \n"),
-      prompt = "Notch-filter motion parameters before computing FD?",
+      prompt = "Filter motion parameters before computing FD?",
       type = "flag",
       default = default_enable
     )
@@ -903,22 +912,56 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
   ppcfg$motion_filter <- motion_filter_cfg
   motion_filter_cfg <- ppcfg$motion_filter
 
-  ask_band_min <- FALSE
+  ask_filter_type <- FALSE
   if (isTRUE(motion_filter_cfg$enable)) {
     if (is.null(fields)) {
-      ask_band_min <- is.null(motion_filter_cfg$band_stop_min)
+      ask_filter_type <- is.null(motion_filter_cfg$filter_type)
+    } else {
+      ask_filter_type <- explicit_filter_type
+      if (!ask_filter_type && is.null(motion_filter_cfg$filter_type)) {
+        ask_filter_type <- TRUE
+      }
+    }
+  }
+
+  if (ask_filter_type) {
+    default_type <- motion_filter_cfg$filter_type
+    if (is.null(default_type)) default_type <- "notch"
+    motion_filter_cfg$filter_type <- prompt_input(
+      prompt = "Motion filter type (notch or lowpass)",
+      type = "character",
+      among = c("notch", "lowpass"),
+      default = default_type
+    )
+  }
+
+  if (isTRUE(motion_filter_cfg$enable) && is.null(motion_filter_cfg$filter_type)) {
+    if (!is.null(motion_filter_cfg$lowpass_bpm)) {
+      motion_filter_cfg$filter_type <- "lowpass"
+    } else {
+      motion_filter_cfg$filter_type <- "notch"
+    }
+  }
+
+  ppcfg$motion_filter <- motion_filter_cfg
+  motion_filter_cfg <- ppcfg$motion_filter
+
+  ask_band_min <- FALSE
+  if (isTRUE(motion_filter_cfg$enable) && motion_filter_cfg$filter_type == "notch") {
+    if (is.null(fields)) {
+      ask_band_min <- is.null(motion_filter_cfg$bandstop_min_bpm)
     } else {
       ask_band_min <- explicit_band_min
-      if (!ask_band_min && is.null(motion_filter_cfg$band_stop_min)) {
+      if (!ask_band_min && is.null(motion_filter_cfg$bandstop_min_bpm)) {
         ask_band_min <- TRUE
       }
     }
   }
 
   if (ask_band_min) {
-    default_min <- motion_filter_cfg$band_stop_min
+    default_min <- motion_filter_cfg$bandstop_min_bpm
     if (is.null(default_min)) default_min <- 12
-    motion_filter_cfg$band_stop_min <- prompt_input(
+    motion_filter_cfg$bandstop_min_bpm <- prompt_input(
       prompt = "Lower band-stop cutoff (breaths per minute)",
       type = "numeric", lower = 1, upper = 80, default = default_min
     )
@@ -927,29 +970,65 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
 
   motion_filter_cfg <- ppcfg$motion_filter
   ask_band_max <- FALSE
-  if (isTRUE(motion_filter_cfg$enable)) {
+  if (isTRUE(motion_filter_cfg$enable) && motion_filter_cfg$filter_type == "notch") {
     if (is.null(fields)) {
-      ask_band_max <- is.null(motion_filter_cfg$band_stop_max)
+      ask_band_max <- is.null(motion_filter_cfg$bandstop_max_bpm)
     } else {
       ask_band_max <- explicit_band_max
-      if (!ask_band_max && is.null(motion_filter_cfg$band_stop_max)) {
+      if (!ask_band_max && is.null(motion_filter_cfg$bandstop_max_bpm)) {
         ask_band_max <- TRUE
       }
     }
   }
 
   if (ask_band_max) {
-    min_reference <- motion_filter_cfg$band_stop_min
+    min_reference <- motion_filter_cfg$bandstop_min_bpm
     if (is.null(min_reference)) min_reference <- 12
     lower_bound <- min_reference + 0.01
-    default_max <- motion_filter_cfg$band_stop_max
+    default_max <- motion_filter_cfg$bandstop_max_bpm
     if (is.null(default_max) || default_max <= lower_bound) {
       default_max <- min_reference + 8
     }
-    motion_filter_cfg$band_stop_max <- prompt_input(
+    motion_filter_cfg$bandstop_max_bpm <- prompt_input(
       prompt = "Upper band-stop cutoff (breaths per minute)",
       type = "numeric", lower = lower_bound, upper = 100, default = default_max
     )
+    ppcfg$motion_filter <- motion_filter_cfg
+  }
+
+  motion_filter_cfg <- ppcfg$motion_filter
+  ask_low_pass <- FALSE
+  if (isTRUE(motion_filter_cfg$enable) && motion_filter_cfg$filter_type == "lowpass") {
+    if (is.null(fields)) {
+      ask_low_pass <- is.null(motion_filter_cfg$lowpass_bpm)
+    } else {
+      ask_low_pass <- explicit_low_pass
+      if (!ask_low_pass && is.null(motion_filter_cfg$lowpass_bpm)) {
+        ask_low_pass <- TRUE
+      }
+    }
+  }
+
+  if (ask_low_pass) {
+    default_low <- motion_filter_cfg$lowpass_bpm
+    if (is.null(default_low)) default_low <- 6
+    motion_filter_cfg$lowpass_bpm <- prompt_input(
+      prompt = "Low-pass cutoff (breaths per minute)",
+      type = "numeric", lower = 1, upper = 100, default = default_low
+    )
+    ppcfg$motion_filter <- motion_filter_cfg
+  }
+
+  motion_filter_cfg <- ppcfg$motion_filter
+  if (isTRUE(motion_filter_cfg$enable) && motion_filter_cfg$filter_type == "lowpass") {
+    if (is.null(motion_filter_cfg$filter_order)) motion_filter_cfg$filter_order <- 2L
+    if (explicit_filter_order) {
+      default_order <- motion_filter_cfg$filter_order
+      motion_filter_cfg$filter_order <- prompt_input(
+        prompt = "Low-pass filter order",
+        type = "integer", lower = 2, upper = 10, default = default_order
+      )
+    }
   }
 
   if (length(motion_filter_cfg) == 0L) {

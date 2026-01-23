@@ -189,6 +189,9 @@ done
 
 # Check exit status of child jobs using qstat -xf
 failed=0
+failed_count=0
+total_children=${#job_ids[@]}
+failed_ids=()
 for jid in "${job_ids[@]}"; do
   if details=$(qstat -xf "$jid" 2>/dev/null); then
     exit_status=$(printf "%s" "$details" | awk -F' = ' '/^\s*exit_status\s*=/{print $2}' | tail -n1)
@@ -197,16 +200,27 @@ for jid in "${job_ids[@]}"; do
     if [[ "$exit_status" != "0" ]]; then
       log_message ERROR "Child job $jid failed with state ${state:-unknown} exit status $exit_status"
       failed=1
+      failed_count=$((failed_count + 1))
+      failed_ids+=("$jid")
     fi
   else
     log_message ERROR "Could not retrieve final status for child job $jid; marking as failed"
     failed=1
+    failed_count=$((failed_count + 1))
+    failed_ids+=("$jid")
   fi
 done
 
-[[ $failed -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-[[ $failed -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $failed -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-log_message INFO Finished postprocessing for subject $sub_id $ses_str
+if [[ $failed -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Postprocessing completed for subject $sub_id $ses_str ($total_children/$total_children child jobs succeeded)."
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "Postprocessing failed for subject $sub_id $ses_str ($failed_count/$total_children child jobs failed)."
+  if [[ $failed_count -gt 0 ]]; then
+    log_message ERROR "Failed child job IDs: ${failed_ids[*]}"
+  fi
+fi
 exit $failed

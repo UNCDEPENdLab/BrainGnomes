@@ -93,9 +93,7 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
     $cli_options # all options setup by submit_aroma()
 ) &
 cmd_pid=$!
-
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
+run_bg_and_wait "$cmd_pid" cmd_status
 
 # fmripost-aroma somehow decides to throw a non-zero exit status even when it completes successfully.
 # fall back to looking for success string in fmriprep log file
@@ -112,14 +110,16 @@ if [[ $success -eq 0 ]]; then
     log_message INFO "Removing unneeded AROMA NIfTI/JSON files"
     rel $rel_flag $log_flag find "$out_dir" -type f -name "*space-MNI152NLin6Asym_res-2*" -delete
   fi
+  cleanup_fail_marker "$complete_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
+  log_message INFO "Finished aroma for subject $sub_id (time elapsed: $(time_elapsed))"
 else
   fail_file="${complete_file%_complete}_fail"
   archive_file "$fail_file"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$fail_file"
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "aroma failed for subject $sub_id (exit status $cmd_status; success flag $success)"
 fi
 
-log_message INFO Exiting aroma for subject $sub_id "(time elapsed: $(time_elapsed))"
 exit $success

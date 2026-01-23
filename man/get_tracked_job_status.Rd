@@ -19,6 +19,8 @@ get_tracked_job_status(
 
 \item{return_parent}{Return parent jobs of this job}
 
+\item{sequence_id}{The sequence id to query instead of \code{job_id}}
+
 \item{sqlite_db}{Character string of sqlite database}
 }
 \value{

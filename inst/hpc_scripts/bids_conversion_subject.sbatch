@@ -5,7 +5,7 @@
 #SBATCH --time=2:00:00
 #SBATCH --mem=16g
 
-set -e
+set -eE  # 'E' ensures ERR trap inherits in functions/subshells
 
 # source bash functions used in pipeline shell scripts
 [ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
@@ -16,6 +16,7 @@ trap 'trap_job_failure bids_conversion SIGTERM' SIGTERM
 trap 'trap_job_failure bids_conversion SIGINT' SIGINT
 trap 'trap_job_failure bids_conversion SIGHUP' SIGHUP
 trap 'trap_job_failure bids_conversion SIGQUIT' SIGQUIT
+trap 'traperror bids_conversion $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
 ####
 #verify necessary arguments
@@ -94,17 +95,17 @@ rel $rel_flag $log_flag singularity run --cleanenv --containall -B "$loc_bids_ro
   -f $heudiconv_heuristic -c dcm2niix \
   -o $loc_bids_root $cli_options &
 cmd_pid=$!
+run_bg_and_wait "$cmd_pid" cmd_status
 
-cmd_status=0
-wait $cmd_pid || cmd_status=$? # trap inline error code as exit status
-
-# write complete file if the command was successful and debug_pipeline is not set
-[[ $cmd_status -eq 0 && $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
-[[ $cmd_status -eq 0 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-[[ $cmd_status -eq 1 ]] && "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-
-
-log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
+if [[ $cmd_status -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
+  [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
+  log_message INFO Finished heudiconv for subject $sub_id $ses_str "(time elapsed: $(time_elapsed))"
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  log_message ERROR "Heudiconv failed for subject $sub_id $ses_str (exit code $cmd_status)"
+fi
 exit $cmd_status
 
 #######

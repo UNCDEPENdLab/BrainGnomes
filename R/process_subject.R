@@ -76,6 +76,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
     complete_file <- file.path(sub_dir, glue(".{name_tag}{sub_str}_complete")) # full path to expected complete file
     file_exists <- checkmate::test_file_exists(complete_file)
+    fail_file <- sub("_complete$", "_fail", complete_file)
+    fail_exists <- checkmate::test_file_exists(fail_file)
     
     job_id <- NULL
     # skip out if this step is not requested or it is already complete
@@ -91,6 +93,10 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     if (file_exists) {
       to_log(lg, "info", "Removing existing .complete file: {complete_file}")
       unlink(complete_file)
+    }
+    if (isTRUE(scfg$force) && fail_exists) {
+      to_log(lg, "info", "Removing existing .fail file: {fail_file}")
+      unlink(fail_file)
     }
     
     # shared components across specific jobs
@@ -227,6 +233,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
   if (isTRUE(steps["postprocess"])) {
+    missing_fmriprep <- FALSE
     ## If postprocessing is requested without running fmriprep, validate that the expected fmriprep outputs exist before scheduling jobs
     if (!isTRUE(steps["fmriprep"])) {
       if (is_external_path(scfg$metadata$fmriprep_directory,
@@ -235,17 +242,23 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
                             glue("sub-{sub_id}"))
         if (!checkmate::test_directory_exists(fp_dir)) {
           to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {fp_dir})")
-          return(TRUE)
+          missing_fmriprep <- TRUE
         }
       } else {
         chk <- is_step_complete(scfg, sub_id, step_name = "fmriprep")
         if (!chk$complete) {
+          if (!checkmate::test_directory_exists(chk$dir)) {
+            to_log(lg, "warn", "Missing fmriprep output directory: {chk$dir}")
+          }
+          if (!checkmate::test_file_exists(chk$complete_file)) {
+            to_log(lg, "warn", "Missing {basename(chk$complete_file)} in {dirname(chk$complete_file)}")
+          }
           to_log(lg, "warn", "Exiting process_subject for {sub_id} because fmriprep outputs are missing (expected {chk$dir} and {basename(chk$complete_file)})")
-          return(TRUE)
+          missing_fmriprep <- TRUE
         }
       }
     }
-    
+
     all_streams <- get_postprocess_stream_names(scfg)
     if (is.null(postprocess_streams)) {
       if (is.null(all_streams)) {
@@ -255,7 +268,59 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         postprocess_streams <- all_streams # run all
       }
     }
-    
+
+    if (!isTRUE(steps["fmriprep"])) {
+      input_dirs <- if (multi_session) {
+        vapply(seq_len(n_inputs), function(idx) {
+          ses_id <- sub_cfg$ses_id[idx]
+          dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+          if (!is.na(ses_id)) dir <- file.path(dir, glue("ses-{ses_id}"))
+          dir
+        }, character(1))
+      } else {
+        file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}"))
+      }
+      input_dirs <- unique(input_dirs[!is.na(input_dirs)])
+
+      input_regexes <- vapply(postprocess_streams, function(pp_nm) {
+        rx <- scfg$postprocess[[pp_nm]]$input_regex
+        if (is.null(rx) || is.na(rx) || rx == "") {
+          "desc:preproc suffix:bold"
+        } else {
+          rx
+        }
+      }, character(1), USE.NAMES = FALSE)
+
+      has_inputs <- FALSE
+      if (length(postprocess_streams) > 0L && length(input_dirs) > 0L) {
+        for (dir in input_dirs) {
+          if (!dir.exists(dir)) next
+          for (rx in unique(input_regexes)) {
+            pattern <- tryCatch(construct_bids_regex(rx), error = function(e) NULL)
+            if (is.null(pattern)) {
+              to_log(lg, "warn", "Invalid postprocess input_regex: {rx}")
+              next
+            }
+            if (length(list.files(path = dir, pattern = pattern, recursive = TRUE, full.names = TRUE)) > 0L) {
+              has_inputs <- TRUE
+              break
+            }
+          }
+          if (has_inputs) break
+        }
+      }
+
+      if (!has_inputs) {
+        input_dirs_txt <- if (length(input_dirs) > 0L) paste(input_dirs, collapse = ", ") else "<none>"
+        rx_label <- paste(unique(input_regexes), collapse = "; ")
+        to_log(lg, "warn", "no fmriprep NIfTI inputs matched expected patterns in {input_dirs_txt} (patterns: {rx_label})")
+      }
+
+      if (!has_inputs) return(TRUE)
+      if (missing_fmriprep) {
+        to_log(lg, "warn", "Proceeding with postprocessing for {sub_id} because inputs were found even though fmriprep .complete markers are missing.")
+      }
+    }
     # loop over inputs and processing streams
     postprocess_ids <- unlist(lapply(seq_len(n_inputs), function(idx) {
       unlist(lapply(postprocess_streams, function(pp_nm) {
