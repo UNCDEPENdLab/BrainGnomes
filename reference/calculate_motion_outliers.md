@@ -99,7 +99,7 @@ calculate_motion_outliers(
 
   Optional path to write results as a tab-separated file. If provided,
   results are written using
-  [`data.table::fwrite()`](https://rdatatable.gitlab.io/data.table/reference/fwrite.html).
+  [`data.table::fwrite()`](https://rdrr.io/pkg/data.table/man/fwrite.html).
 
 ## Value
 

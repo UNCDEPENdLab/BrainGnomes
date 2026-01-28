@@ -39,10 +39,11 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/file_sans_ext.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/filtfilt_cpp.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/framewise_displacement.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_all_nodes.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_job_type.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_nested_values.html</loc></url>
-<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_stream_outputs.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_sequence_ids.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/get_status_color.html</loc></url>

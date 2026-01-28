@@ -19,6 +19,8 @@
   (Gratton)
 - Gracefully adjust motion filtering parameters if they fall above
   Nyquist at this TR
+- Modify extract ROIs config to avoid input_regex and always generate it
+  internally from postproc stream
 
 ## BrainGnomes 0.7-5
 

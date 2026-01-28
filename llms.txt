@@ -81,8 +81,8 @@ steps.
   : Zero-Phase IIR Filtering via Forward and Reverse Filtering
 - [`get_fmriprep_outputs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_fmriprep_outputs.md)
   : Identify fMRIPrep-Derived Outputs for a NIfTI File
-- [`get_postproc_stream_outputs()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_stream_outputs.md)
-  : Determine expected output files for a postprocessing stream
+- [`get_postproc_output_files()`](https://uncdependlab.github.io/BrainGnomes/reference/get_postproc_output_files.md)
+  : List postprocessed output files for a stream based on its input spec
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
   : Get processing status for all subjects
 - [`get_step_title()`](https://uncdependlab.github.io/BrainGnomes/reference/get_step_title.md)
