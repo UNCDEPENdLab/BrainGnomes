@@ -638,11 +638,18 @@ submit_extract_rois <- function(
 
   # pull the requested extraction stream from the broader list
   ex_cfg <- scfg$extract_rois[[ex_stream]]
+  if (!is.null(ex_cfg$input_regex)) {
+    msg <- "extract_rois/input_regex is ignored by run_project; inputs are derived from postprocess streams."
+    if (!is.null(lg)) {
+      to_log(lg, "warn", msg)
+    } else {
+      warning(msg, call. = FALSE)
+    }
+  }
   if (isTRUE(scfg$force)) ex_cfg$overwrite <- TRUE # enable overwrite of ROIs if force=TRUE
 
-  # Every extract_rois stream can pull for 1+ postprocess streams. Based on postprocess input stream(s), generate regular expressions
-  # need to find outputs of postproc stream. A little tricky given that desc may not be in input_regex. This is handled inside extract_cli.R,
-  # which runs once the job fires (and any expected files are now available from earlier processing stages)
+  # Every extract_rois stream can pull for 1+ postprocess streams. Pass through the input spec
+  # and bids_desc for each stream so extract_cli.R can target postprocessed outputs directly.
   ex_cfg$input_regex <- sapply(ex_cfg$input_streams, function(ss) scfg$postprocess[[ss]]$input_regex, USE.NAMES = FALSE)
 
   # the bids_desc of the postprocess stream is used to update the matched files (to get the outputs of postprocessing)

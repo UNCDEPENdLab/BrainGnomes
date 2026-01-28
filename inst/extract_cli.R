@@ -69,7 +69,7 @@ if (!checkmate::test_directory(cfg$input)) {
   stop("No valid directory provided as --input")
 }
 
-input_files <- get_postproc_stream_outputs(cfg$input, cfg$input_regex, cfg$bids_desc)
+input_files <- get_postproc_output_files(cfg$input, cfg$input_regex, cfg$bids_desc)
 
 if (length(input_files) == 0L) {
   stop("Cannot find files for ROI extraction with --input: ", cfg$input)
