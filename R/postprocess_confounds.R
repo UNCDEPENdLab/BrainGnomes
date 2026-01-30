@@ -306,9 +306,10 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
     if (ncol(df) == 0L) {
       to_log(lg, "warn", "confound_calculate is enabled but produced zero columns; no confound file will be written.")
     } else {
+      include_header <- isTRUE(cfg$confound_calculate$include_header)
       to_log(lg, "info", "Writing postprocessed confounds to: {confile}")
       to_log(lg, "info", "Columns are: {paste(names(df), collapse=', ')}")
-      data.table::fwrite(df, file = confile, sep = "\t", col.names = FALSE)
+      data.table::fwrite(df, file = confile, sep = "\t", col.names = include_header)
     }
   }
 

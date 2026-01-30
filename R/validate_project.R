@@ -610,6 +610,11 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate confound calculation
   if (is.null(ppcfg$confound_calculate$enable)) gaps <- c(gaps, "postprocess/confound_calculate/enable")
   if ("confound_calculate" %in% names(ppcfg) && isTRUE(ppcfg$confound_calculate$enable)) {
+    if (!checkmate::test_flag(ppcfg$confound_calculate$include_header)) {
+      if (!quiet) message(glue("Invalid include_header field in $postprocess${cfg_name}$confound_calculate. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/confound_calculate/include_header")
+      ppcfg$confound_calculate$include_header <- NULL
+    }
     if (!checkmate::test_flag(ppcfg$confound_calculate$demean)) {
       if (!quiet) message(glue("Invalid demean field in $postprocess${cfg_name}$confound_calculate. You will be asked for this."))
       gaps <- c(gaps, "postprocess/confound_calculate/demean")

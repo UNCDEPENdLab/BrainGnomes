@@ -21,7 +21,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "temporal_filter/method", "temporal_filter/prefix",
       "intensity_normalize/global_median", "intensity_normalize/prefix",
       "confound_calculate/columns", "confound_calculate/noproc_columns",
-      "confound_calculate/demean",
+      "confound_calculate/demean", "confound_calculate/include_header",
       "scrubbing/expression", "scrubbing/add_to_confounds",
       "scrubbing/interpolate", "scrubbing/interpolate_prefix",
       "scrubbing/apply", "scrubbing/prefix",
@@ -1089,6 +1089,7 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$confound_calculate$columns)) fields <- c(fields, "postprocess/confound_calculate/columns")
     if (is.null(ppcfg$confound_calculate$noproc_columns)) fields <- c(fields, "postprocess/confound_calculate/noproc_columns")
     if (is.null(ppcfg$confound_calculate$demean)) fields <- c(fields, "postprocess/confound_calculate/demean")
+    if (is.null(ppcfg$confound_calculate$include_header)) fields <- c(fields, "postprocess/confound_calculate/include_header")
   }
 
   if ("postprocess/confound_calculate/columns" %in% fields) {
@@ -1107,6 +1108,14 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
   
   if ("postprocess/confound_calculate/demean" %in% fields) {
     ppcfg$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
+  }
+
+  if ("postprocess/confound_calculate/include_header" %in% fields) {
+    ppcfg$confound_calculate$include_header <- prompt_input(
+      "Include header row in postprocessed confounds.tsv?",
+      type = "flag",
+      default = TRUE
+    )
   }
 
   # if enabled but no columns were supplied, warn and offer to re-enter or disable
