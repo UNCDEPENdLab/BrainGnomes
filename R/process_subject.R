@@ -16,6 +16,92 @@ null_empty <- function(x) {
   return(x)
 }
 
+# summarize mode/uid/gid for diagnostics when path permissions are insufficient
+describe_fs_entry <- function(path) {
+  if (!checkmate::test_string(path)) return("<missing path>")
+  info <- suppressWarnings(file.info(path))
+  mode <- if (!is.na(info$mode[1])) as.character(as.octmode(info$mode[1])) else "unknown"
+  uid <- if (!is.na(info$uid[1])) as.character(info$uid[1]) else "unknown"
+  gid <- if (!is.na(info$gid[1])) as.character(info$gid[1]) else "unknown"
+  glue("{path} [mode={mode}, uid={uid}, gid={gid}]")
+}
+
+check_write_target <- function(path, label) {
+  if (!checkmate::test_string(path)) {
+    return(NULL)
+  }
+
+  if (file.exists(path)) {
+    writable <- isTRUE(file.access(path, 2L) == 0L)
+    traversable <- if (dir.exists(path)) isTRUE(file.access(path, 1L) == 0L) else TRUE
+    if (writable && traversable) return(NULL)
+    return(glue("{label} is not writable: {describe_fs_entry(path)}"))
+  }
+
+  parent <- normalizePath(dirname(path), winslash = "/", mustWork = FALSE)
+  while (!dir.exists(parent)) {
+    next_parent <- dirname(parent)
+    if (identical(next_parent, parent)) break
+    parent <- next_parent
+  }
+
+  if (!dir.exists(parent)) {
+    return(glue("Cannot locate an existing parent directory for {label}: {path}"))
+  }
+
+  can_create <- isTRUE(file.access(parent, 2L) == 0L) && isTRUE(file.access(parent, 1L) == 0L)
+  if (can_create) return(NULL)
+  glue("{label} does not exist and cannot be created because parent is not writable: {describe_fs_entry(parent)}")
+}
+
+collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = NULL,
+                                            stdout_log = NULL, stderr_log = NULL,
+                                            sqlite_db = NULL) {
+  issues <- c()
+
+  if (checkmate::test_string(stdout_log)) {
+    issue <- check_write_target(dirname(stdout_log), "stdout log directory")
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (checkmate::test_string(stderr_log)) {
+    issue <- check_write_target(dirname(stderr_log), "stderr log directory")
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (checkmate::test_string(sqlite_db)) {
+    issue <- check_write_target(sqlite_db, "job tracking SQLite database")
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  if (step_name %in% c("fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")) {
+    issue <- check_write_target(scfg$metadata$scratch_directory, "scratch directory")
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (step_name %in% c("fmriprep", "mriqc")) {
+    issue <- check_write_target(scfg$metadata$templateflow_home, "templateflow_home directory")
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  output_dir <- switch(step_name,
+    bids_conversion = scfg$metadata$bids_directory,
+    mriqc = scfg$metadata$mriqc_directory,
+    fmriprep = scfg$metadata$fmriprep_directory,
+    aroma = scfg$metadata$fmriprep_directory,
+    postprocess = {
+      d <- file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"))
+      if (!is.null(ses_id) && !is.na(ses_id)) d <- file.path(d, glue("ses-{ses_id}"))
+      d
+    },
+    extract_rois = scfg$metadata$rois_directory,
+    NULL
+  )
+  if (!is.null(output_dir)) {
+    issue <- check_write_target(output_dir, glue("{step_name} output directory"))
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  return(issues)
+}
+
 #' Preprocess a single subject
 #' @param scfg A list of configuration settings
 #' @param sub_cfg A data.frame of subject configuration settings
@@ -48,6 +134,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
   lg <- get_subject_logger(scfg, sub_id)
+  preflight_state <- new.env(parent = emptyenv())
+  preflight_state$failed <- FALSE
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- extract_ids <- NULL
   
@@ -124,6 +212,25 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       add_parent_path = system.file("add_parent.R", package = "BrainGnomes"),
       log_level = log_level_value
     )
+
+    preflight_issues <- collect_submit_permission_issues(
+      scfg = scfg,
+      step_name = name,
+      sub_id = sub_id,
+      ses_id = ses_id,
+      stdout_log = unname(env_variables["stdout_log"]),
+      stderr_log = unname(env_variables["stderr_log"]),
+      sqlite_db = tracking_sqlite_db
+    )
+    if (length(preflight_issues) > 0L) {
+      preflight_state$failed <- TRUE
+      issue_text <- paste(paste0("  - ", preflight_issues), collapse = "\n")
+      to_log(
+        lg, "warn",
+        "Exiting process_subject for {sub_id} because preflight permission checks failed for {name_tag}:\n{issue_text}"
+      )
+      return(job_id)
+    }
     
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
     sched_call <- list(job_name = name, jobid_str = jobid_str, stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
@@ -192,6 +299,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   # need unlist because NULL will be returned for jobs not submitted -- yielding a weird list of NULLs
   bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx, parent_ids = parent_ids)))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   if (isTRUE(steps["bids_conversion"])) {
     if (!is.na(bids_sub_dir)) to_log(lg, "info", "BIDS directory: {bids_sub_dir}")
@@ -223,12 +331,15 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = c(parent_ids, bids_conversion_ids))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle fmriprep
   fmriprep_id <- submit_step("fmriprep", parent_ids = c(parent_ids, bids_conversion_ids))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
@@ -327,6 +438,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         submit_step("postprocess", row_idx = idx, parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id, aroma_id), pp_stream = pp_nm)
       }))
     }))
+    if (isTRUE(preflight_state$failed)) return(TRUE)
   }
   
   if (isTRUE(steps["extract_rois"])) {

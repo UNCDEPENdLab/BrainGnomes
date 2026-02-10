@@ -1,3 +1,64 @@
+# internal helper: summarize path metadata for tracking DB diagnostics
+describe_tracking_path <- function(path) {
+  if (!checkmate::test_string(path)) return("<unset>")
+  info <- suppressWarnings(file.info(path))
+  mode <- if (!is.na(info$mode[1])) as.character(as.octmode(info$mode[1])) else "unknown"
+  uid <- if (!is.na(info$uid[1])) as.character(info$uid[1]) else "unknown"
+  gid <- if (!is.na(info$gid[1])) as.character(info$gid[1]) else "unknown"
+  glue("{path} [mode={mode}, uid={uid}, gid={gid}]")
+}
+
+format_tracking_db_error <- function(sqlite_db = NULL, operation = "tracking DB operation", err = NULL) {
+  db_path <- if (checkmate::test_string(sqlite_db)) {
+    normalizePath(sqlite_db, winslash = "/", mustWork = FALSE)
+  } else {
+    "<unset>"
+  }
+  parent_dir <- if (checkmate::test_string(sqlite_db)) {
+    normalizePath(dirname(sqlite_db), winslash = "/", mustWork = FALSE)
+  } else {
+    "<unset>"
+  }
+
+  db_exists <- checkmate::test_string(sqlite_db) && file.exists(sqlite_db)
+  parent_exists <- checkmate::test_string(parent_dir) && dir.exists(parent_dir)
+  db_write <- if (db_exists) isTRUE(file.access(sqlite_db, 2L) == 0L) else NA
+  parent_write <- if (parent_exists) isTRUE(file.access(parent_dir, 2L) == 0L) else NA
+
+  err_msg <- if (inherits(err, "condition")) conditionMessage(err) else as.character(err)
+  err_msg <- if (length(err_msg) == 0L || is.na(err_msg) || !nzchar(err_msg)) "Unknown SQLite error" else err_msg
+
+  hints <- c()
+  low <- tolower(err_msg)
+  if (grepl("readonly database", low, fixed = TRUE) || grepl("read-only", low, fixed = TRUE)) {
+    hints <- c(hints, "Hint: SQLite is read-only. Check write permission for the DB file and its parent directory.")
+  }
+  if (grepl("unable to open database file", low, fixed = TRUE)) {
+    hints <- c(hints, "Hint: SQLite could not be opened. Verify that the parent directory exists and is writable.")
+  }
+  if (grepl("database is locked", low, fixed = TRUE)) {
+    hints <- c(hints, "Hint: SQLite is locked by another writer. Retry after active jobs finish or increase busy timeout.")
+  }
+  if (length(hints) == 0L) {
+    hints <- "Hint: Verify SQLite path exists and is writable from compute nodes."
+  }
+
+  lines <- c(
+    glue("Tracking database error during {operation}."),
+    glue("Cause: {err_msg}"),
+    glue("sqlite_db: {db_path}"),
+    glue("db_exists: {db_exists}"),
+    glue("db_write_access: {if (is.na(db_write)) 'NA' else db_write}"),
+    glue("db_details: {describe_tracking_path(db_path)}"),
+    glue("parent_dir: {parent_dir}"),
+    glue("parent_exists: {parent_exists}"),
+    glue("parent_write_access: {if (is.na(parent_write)) 'NA' else parent_write}"),
+    glue("parent_details: {describe_tracking_path(parent_dir)}"),
+    hints
+  )
+  paste(lines, collapse = "\n")
+}
+
 #' Internal helper function to submit a query to the tracking SQLite database
 #'
 #' @param str Character string SQLite query
@@ -9,36 +70,63 @@
 submit_tracking_query = function(str, sqlite_db, param = NULL) {
   # previously called submit_sqlite()
   checkmate::assert_string(str)
+  if (!checkmate::test_string(sqlite_db)) {
+    stop(format_tracking_db_error(sqlite_db, operation = "submit_tracking_query", err = "sqlite_db is NULL or empty"), call. = FALSE)
+  }
   
   # check if tracking table exists in sqlite_db; if not, create it
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
-  sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
-  table_exists <- dbExistsTable(con, "job_tracking")
-  dbDisconnect(con)
+  table_exists <- tryCatch({
+    con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+    on.exit(try(dbDisconnect(con), silent = TRUE), add = TRUE)
+    sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
+    dbExistsTable(con, "job_tracking")
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "checking tracking table", err = e), call. = FALSE)
+  })
   
   if (isFALSE(table_exists)) {
-    create_tracking_db(sqlite_db)
+    tryCatch({
+      create_tracking_db(sqlite_db)
+    }, error = function(e) {
+      stop(format_tracking_db_error(sqlite_db, operation = "create_tracking_db", err = e), call. = FALSE)
+    })
   } else {
-    ensure_tracking_db_schema(sqlite_db)
+    tryCatch({
+      ensure_tracking_db_schema(sqlite_db)
+    }, error = function(e) {
+      stop(format_tracking_db_error(sqlite_db, operation = "ensure_tracking_db_schema", err = e), call. = FALSE)
+    })
   }
   
   # open sqlite connection and execute query
-  submit_sqlite_query(str = str, sqlite_db = sqlite_db, param = param)
+  tryCatch({
+    submit_sqlite_query(str = str, sqlite_db = sqlite_db, param = param)
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "submit_tracking_query dbExecute", err = e), call. = FALSE)
+  })
   
 }
 
 ensure_tracking_db_schema <- function(sqlite_db) {
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-  on.exit(dbDisconnect(con), add = TRUE)
+  con <- tryCatch({
+    dbConnect(RSQLite::SQLite(), sqlite_db)
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "ensure_tracking_db_schema connect", err = e), call. = FALSE)
+  })
+  on.exit(try(dbDisconnect(con), silent = TRUE), add = TRUE)
   sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
-  cols <- dbGetQuery(con, "PRAGMA table_info(job_tracking)")
+  cols <- tryCatch({
+    dbGetQuery(con, "PRAGMA table_info(job_tracking)")
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "ensure_tracking_db_schema PRAGMA table_info", err = e), call. = FALSE)
+  })
   col_names <- cols$name
   if (!"sequence_id" %in% col_names) {
     tryCatch(
       dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN sequence_id VARCHAR"),
       error = function(e) {
         if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
-          stop(e)
+          stop(format_tracking_db_error(sqlite_db, operation = "ALTER TABLE add sequence_id", err = e), call. = FALSE)
         }
       }
     )
@@ -48,7 +136,7 @@ ensure_tracking_db_schema <- function(sqlite_db) {
       dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN child_level INTEGER DEFAULT 0"),
       error = function(e) {
         if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
-          stop(e)
+          stop(format_tracking_db_error(sqlite_db, operation = "ALTER TABLE add child_level", err = e), call. = FALSE)
         }
       }
     )
@@ -58,7 +146,7 @@ ensure_tracking_db_schema <- function(sqlite_db) {
       dbExecute(con, "ALTER TABLE job_tracking ADD COLUMN output_manifest TEXT"),
       error = function(e) {
         if (!grepl("duplicate column name", conditionMessage(e), fixed = TRUE)) {
-          stop(e)
+          stop(format_tracking_db_error(sqlite_db, operation = "ALTER TABLE add output_manifest", err = e), call. = FALSE)
         }
       }
     )
@@ -119,7 +207,11 @@ create_tracking_db = function(sqlite_db) {
     );
     "
   # open sqlite connection
-  submit_sqlite_query(str = job_spec_sql, sqlite_db = sqlite_db)
+  tryCatch({
+    submit_sqlite_query(str = job_spec_sql, sqlite_db = sqlite_db)
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "create_tracking_db schema creation", err = e), call. = FALSE)
+  })
 }
 
 
@@ -186,7 +278,10 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
     id <- submit_sqlite_query(str = sequence_id_sql, sqlite_db = sqlite_db, 
                               param = list(parent_job_id), return_result = TRUE)
     if(!is.null(id[1,1])) { id[1,1] } else { NA }
-  }, error = function(e) { print(e); NA})
+  }, error = function(e) {
+    warning(format_tracking_db_error(sqlite_db, operation = "add_tracked_job_parent sequence lookup", err = e), call. = FALSE)
+    NA
+  })
   
   
   add_parent_sql <- "UPDATE job_tracking
@@ -198,7 +293,10 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
     # open sqlite connection and execute query
     submit_sqlite_query(str = add_parent_sql, sqlite_db = sqlite_db, 
                         param = list(parent_job_id, sequence_id, child_level, job_id))
-  }, error = function(e) { print(e); return(NULL)})
+  }, error = function(e) {
+    warning(format_tracking_db_error(sqlite_db, operation = "add_tracked_job_parent parent update", err = e), call. = FALSE)
+    return(NULL)
+  })
   
 }
 
@@ -269,7 +367,10 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
       sqlite_db = sqlite_db, 
       param = list(status, now, job_id)
     )
-  }, error = function(e) { print(e); return(NULL)})
+  }, error = function(e) {
+    warning(format_tracking_db_error(sqlite_db, operation = "update_tracked_job_status", err = e), call. = FALSE)
+    return(NULL)
+  })
   
   # Store (or clear) output manifest on COMPLETED status
   if (status == "COMPLETED") {
@@ -285,7 +386,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
         param = list(manifest_value, job_id)
       )
     }, error = function(e) { 
-      warning("Failed to update output manifest: ", conditionMessage(e))
+      warning(format_tracking_db_error(sqlite_db, operation = "update_tracked_job_status output_manifest", err = e), call. = FALSE)
     })
   }
   
@@ -322,7 +423,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
 get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, return_parent = FALSE, 
                                    sequence_id = NULL, sqlite_db) {
   
-  on.exit(try(dbDisconnect(con)))
+  con <- NULL
+  on.exit(try(if (!is.null(con)) dbDisconnect(con), silent = TRUE), add = TRUE)
   if (!checkmate::test_file_exists(sqlite_db)) {
     warning("Cannot find SQLite database at: ", sqlite_db)
   }
@@ -349,8 +451,16 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
     param <- as.list(rep(job_id, 1 + return_children + return_parent))
   }
   
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db)
-  df <- dbGetQuery(con, str, params = param)
+  con <- tryCatch({
+    dbConnect(RSQLite::SQLite(), sqlite_db)
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "get_tracked_job_status connect", err = e), call. = FALSE)
+  })
+  df <- tryCatch({
+    dbGetQuery(con, str, params = param)
+  }, error = function(e) {
+    stop(format_tracking_db_error(sqlite_db, operation = "get_tracked_job_status query", err = e), call. = FALSE)
+  })
   
   # rehydrate job_obj back into R6 class
   if (nrow(df) > 0L) df$job_obj <- lapply(df$job_obj, function(x) if (!is.null(x)) unserialize(x))

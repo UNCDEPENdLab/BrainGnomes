@@ -48,6 +48,18 @@ tracking_args <- list(
 if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL
 if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
 
-BrainGnomes::insert_tracked_job(sqlite_db = args$sqlite_db,
-                                job_id = args$job_id,
-                                tracking_args = tracking_args)
+tryCatch({
+  BrainGnomes::insert_tracked_job(
+    sqlite_db = args$sqlite_db,
+    job_id = args$job_id,
+    tracking_args = tracking_args
+  )
+}, error = function(e) {
+  msg <- paste(
+    "ERROR: Failed to insert tracked job into SQLite.",
+    conditionMessage(e),
+    sep = "\n"
+  )
+  cat(msg, "\n", file = stderr())
+  quit(save = "no", status = 1)
+})
