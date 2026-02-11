@@ -16,16 +16,6 @@ null_empty <- function(x) {
   return(x)
 }
 
-# summarize mode/uid/gid for diagnostics when path permissions are insufficient
-describe_fs_entry <- function(path) {
-  if (!checkmate::test_string(path)) return("<missing path>")
-  info <- suppressWarnings(file.info(path))
-  mode <- if (!is.na(info$mode[1])) as.character(as.octmode(info$mode[1])) else "unknown"
-  uid <- if (!is.na(info$uid[1])) as.character(info$uid[1]) else "unknown"
-  gid <- if (!is.na(info$gid[1])) as.character(info$gid[1]) else "unknown"
-  glue("{path} [mode={mode}, uid={uid}, gid={gid}]")
-}
-
 check_write_target <- function(path, label) {
   if (!checkmate::test_string(path)) {
     return(NULL)
@@ -35,7 +25,7 @@ check_write_target <- function(path, label) {
     writable <- isTRUE(file.access(path, 2L) == 0L)
     traversable <- if (dir.exists(path)) isTRUE(file.access(path, 1L) == 0L) else TRUE
     if (writable && traversable) return(NULL)
-    return(glue("{label} is not writable: {describe_fs_entry(path)}"))
+    return(glue("{label} is not writable: {describe_path_permissions(path)}"))
   }
 
   parent <- normalizePath(dirname(path), winslash = "/", mustWork = FALSE)
@@ -51,33 +41,57 @@ check_write_target <- function(path, label) {
 
   can_create <- isTRUE(file.access(parent, 2L) == 0L) && isTRUE(file.access(parent, 1L) == 0L)
   if (can_create) return(NULL)
-  glue("{label} does not exist and cannot be created because parent is not writable: {describe_fs_entry(parent)}")
+  glue("{label} does not exist and cannot be created because parent is not writable: {describe_path_permissions(parent)}")
+}
+
+check_write_target_cached <- function(path, label, check_cache = NULL) {
+  if (!checkmate::test_string(path)) return(NULL)
+  if (is.null(check_cache)) return(check_write_target(path, label))
+  if (!is.environment(check_cache)) stop("check_cache must be an environment when provided.")
+
+  # Cache key is the normalized path only (label-agnostic).  We only cache
+  # writable (NULL) outcomes so that failures are always rechecked with the
+  # caller's label for an accurate error message.
+  cache_key <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  if (exists(cache_key, envir = check_cache, inherits = FALSE)) {
+    return(NULL)        # previously verified writable
+  }
+
+  issue <- check_write_target(path, label)
+  if (is.null(issue)) {
+    assign(cache_key, TRUE, envir = check_cache)
+  }
+  issue
 }
 
 collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = NULL,
                                             stdout_log = NULL, stderr_log = NULL,
-                                            sqlite_db = NULL) {
+                                            sqlite_db = NULL, check_cache = NULL) {
+  if (!is.null(check_cache) && !is.environment(check_cache)) {
+    stop("check_cache must be an environment when provided.")
+  }
+
   issues <- c()
 
   if (checkmate::test_string(stdout_log)) {
-    issue <- check_write_target(dirname(stdout_log), "stdout log directory")
+    issue <- check_write_target_cached(dirname(stdout_log), "stdout log directory", check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
   if (checkmate::test_string(stderr_log)) {
-    issue <- check_write_target(dirname(stderr_log), "stderr log directory")
+    issue <- check_write_target_cached(dirname(stderr_log), "stderr log directory", check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
   if (checkmate::test_string(sqlite_db)) {
-    issue <- check_write_target(sqlite_db, "job tracking SQLite database")
+    issue <- check_write_target_cached(sqlite_db, "job tracking SQLite database", check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
 
   if (step_name %in% c("fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")) {
-    issue <- check_write_target(scfg$metadata$scratch_directory, "scratch directory")
+    issue <- check_write_target_cached(scfg$metadata$scratch_directory, "scratch directory", check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
   if (step_name %in% c("fmriprep", "mriqc")) {
-    issue <- check_write_target(scfg$metadata$templateflow_home, "templateflow_home directory")
+    issue <- check_write_target_cached(scfg$metadata$templateflow_home, "templateflow_home directory", check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
 
@@ -95,7 +109,7 @@ collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = N
     NULL
   )
   if (!is.null(output_dir)) {
-    issue <- check_write_target(output_dir, glue("{step_name} output directory"))
+    issue <- check_write_target_cached(output_dir, glue("{step_name} output directory"), check_cache)
     if (!is.null(issue)) issues <- c(issues, issue)
   }
 
@@ -110,11 +124,14 @@ collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = N
 #'   all available streams will be run.
 #' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
 #' @param sequence_id An identifying ID for a set of jobs in a sequence used for job tracking
+#' @param permission_check_cache Optional environment used to memoize write-permission checks
+#'   across repeated submissions.
 #' @return A logical value indicating whether the preprocessing was successful
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL,
+                            parent_ids = NULL, sequence_id = NULL, permission_check_cache = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -128,11 +145,27 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   checkmate::assert_logical(steps, names = "unique")
   checkmate::assert_character(postprocess_streams, null.ok = TRUE, any.missing = FALSE)
   checkmate::assert_character(extract_streams, null.ok = TRUE, any.missing = FALSE)
+  if (!is.null(permission_check_cache) && !is.environment(permission_check_cache)) {
+    stop("permission_check_cache must be an environment when provided.")
+  }
+  if (is.null(permission_check_cache)) permission_check_cache <- new.env(parent = emptyenv())
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
   
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
+
+  # Guard: verify the subject log directory is writable *before* setting up the
+  # logger, which does dir.create + file appender and would otherwise crash with
+  # an opaque lgr error if the log directory is unwritable.
+  sub_log_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
+  log_dir_issue <- check_write_target_cached(sub_log_dir, "subject log directory", permission_check_cache)
+  if (!is.null(log_dir_issue)) {
+    warning("Skipping subject ", sub_id, " because subject log directory is not writable:\n  ",
+            log_dir_issue, call. = FALSE)
+    return(TRUE)
+  }
+
   lg <- get_subject_logger(scfg, sub_id)
   preflight_state <- new.env(parent = emptyenv())
   preflight_state$failed <- FALSE
@@ -220,7 +253,8 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       ses_id = ses_id,
       stdout_log = unname(env_variables["stdout_log"]),
       stderr_log = unname(env_variables["stderr_log"]),
-      sqlite_db = tracking_sqlite_db
+      sqlite_db = tracking_sqlite_db,
+      check_cache = permission_check_cache
     )
     if (length(preflight_issues) > 0L) {
       preflight_state$failed <- TRUE

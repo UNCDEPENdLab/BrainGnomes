@@ -59,8 +59,11 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   checkmate::assert_subset(postprocess_streams, choices = all_pp_streams, empty.ok = TRUE)
   checkmate::assert_subset(extract_streams, choices = all_ex_streams, empty.ok = TRUE)
-  
-  scfg <- setup_project_directories(scfg)
+
+  # Shared permission-check cache: setup_project_directories primes it with
+  # verified-writable dirs; downstream preflight checks get instant hits.
+  permission_check_cache <- new.env(parent = emptyenv())
+  scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
 
   cat(glue("
     \nRunning processing pipeline for: {scfg$metadata$project_name}
@@ -264,7 +267,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # No flywheel sync: schedule subjects immediately
   submit_subjects(
     scfg = scfg, steps = steps, subject_filter = subject_filter, postprocess_streams = postprocess_streams, 
-    extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id
+    extract_streams = extract_streams, parent_ids = parent_ids, sequence_id = sequence_id,
+    permission_check_cache = permission_check_cache
   )
   return(invisible(TRUE))
 }
@@ -277,12 +281,16 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #' @param extract_streams Optional character vector of extraction streams
 #' @param parent_ids Optional character vector of job IDs to depend on
 #' @param sequence_id An identifying ID for a set of jobs in a sequence used for job tracking
+#' @param permission_check_cache Optional environment for memoizing write-permission checks.
+#'   When supplied (e.g. pre-primed by \code{setup_project_directories}), shared paths
+#'   already verified writable are skipped.
 #' @details 
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
 #' @keywords internal
 submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
-  extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
+  extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
+  permission_check_cache = NULL) {
 
   # look for subject directories in the DICOM directory
   subject_dicom_dirs <- data.frame(
@@ -341,12 +349,14 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
 
   # split data.frame by subject (some steps are subject-level, some are session-level)
   subject_dirs <- split(subject_dirs, subject_dirs$sub_id)
+  if (is.null(permission_check_cache)) permission_check_cache <- new.env(parent = emptyenv())
 
   for (ss in seq_along(subject_dirs)) {
     process_subject(
       scfg, subject_dirs[[ss]], steps,
       postprocess_streams = postprocess_streams, extract_streams = extract_streams,
-      parent_ids = parent_ids, sequence_id = sequence_id
+      parent_ids = parent_ids, sequence_id = sequence_id,
+      permission_check_cache = permission_check_cache
     )
   }
 
@@ -390,6 +400,17 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
   ), collapse = TRUE)
 
   cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
+
+  # preflight permission checks for project-level paths
+  pf_issues <- c(
+    check_write_target(scfg$metadata$log_directory, "log directory"),
+    check_write_target(scfg$metadata$flywheel_sync_directory, "flywheel sync directory"),
+    check_write_target(scfg$metadata$flywheel_temp_directory, "flywheel temp directory")
+  )
+  if (length(pf_issues) > 0L) {
+    stop("Preflight permission check failed for flywheel_sync:\n",
+         paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
+  }
 
   job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
 
@@ -443,6 +464,17 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
     scheduler_options = scfg[["fsaverage"]]$sched_args
   )
   tracking_sqlite_db <- scfg$metadata$sqlite_db
+
+  # preflight permission checks for project-level paths
+  pf_issues <- c(
+    check_write_target(scfg$metadata$log_directory, "log directory"),
+    check_write_target(scfg$metadata$fmriprep_directory, "fmriprep directory"),
+    check_write_target(tracking_sqlite_db, "job tracking SQLite database")
+  )
+  if (length(pf_issues) > 0L) {
+    stop("Preflight permission check failed for fsaverage_setup:\n",
+         paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
+  }
 
   job_id <- cluster_job_submit(sched_script,
                                scheduler = scfg$compute_environment$scheduler,
@@ -518,6 +550,16 @@ submit_prefetch_templates <- function(scfg, steps) {
     templateflow_home = tf_home,
     log_level = scfg$log_level
   )
+
+  # preflight permission checks for project-level paths
+  pf_issues <- c(
+    check_write_target(scfg$metadata$log_directory, "log directory"),
+    check_write_target(tf_home, "templateflow_home directory")
+  )
+  if (length(pf_issues) > 0L) {
+    stop("Preflight permission check failed for prefetch_templates:\n",
+         paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
+  }
 
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,

@@ -1,13 +1,3 @@
-# internal helper: summarize path metadata for tracking DB diagnostics
-describe_tracking_path <- function(path) {
-  if (!checkmate::test_string(path)) return("<unset>")
-  info <- suppressWarnings(file.info(path))
-  mode <- if (!is.na(info$mode[1])) as.character(as.octmode(info$mode[1])) else "unknown"
-  uid <- if (!is.na(info$uid[1])) as.character(info$uid[1]) else "unknown"
-  gid <- if (!is.na(info$gid[1])) as.character(info$gid[1]) else "unknown"
-  glue("{path} [mode={mode}, uid={uid}, gid={gid}]")
-}
-
 format_tracking_db_error <- function(sqlite_db = NULL, operation = "tracking DB operation", err = NULL) {
   db_path <- if (checkmate::test_string(sqlite_db)) {
     normalizePath(sqlite_db, winslash = "/", mustWork = FALSE)
@@ -49,11 +39,11 @@ format_tracking_db_error <- function(sqlite_db = NULL, operation = "tracking DB 
     glue("sqlite_db: {db_path}"),
     glue("db_exists: {db_exists}"),
     glue("db_write_access: {if (is.na(db_write)) 'NA' else db_write}"),
-    glue("db_details: {describe_tracking_path(db_path)}"),
+    glue("db_details: {describe_path_permissions(db_path)}"),
     glue("parent_dir: {parent_dir}"),
     glue("parent_exists: {parent_exists}"),
     glue("parent_write_access: {if (is.na(parent_write)) 'NA' else parent_write}"),
-    glue("parent_details: {describe_tracking_path(parent_dir)}"),
+    glue("parent_details: {describe_path_permissions(parent_dir)}"),
     hints
   )
   paste(lines, collapse = "\n")

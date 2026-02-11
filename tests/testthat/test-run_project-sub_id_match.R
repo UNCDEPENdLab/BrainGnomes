@@ -48,7 +48,8 @@ test_that("run_project uses custom sub_id_match for dicom dirs", {
   ns <- asNamespace("BrainGnomes")
   orig <- get("process_subject", envir = ns)
   unlockBinding("process_subject", ns)
-  assign("process_subject", function(scfg, sub_cfg, steps, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
+  assign("process_subject", function(scfg, sub_cfg, steps, postprocess_streams = NULL, extract_streams = NULL,
+                                     parent_ids = NULL, sequence_id = NULL, permission_check_cache = NULL) {
     captured <<- sub_cfg
     TRUE
   }, envir = ns)

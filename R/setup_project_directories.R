@@ -3,14 +3,23 @@
 #' Given a project configuration, create any missing directories referenced in
 #' the metadata, including the project root and standard subdirectories. A
 #' message is emitted for each directory created, and existing but unreadable
-#' directories trigger a warning.
+#' directories trigger a warning. After creation, every directory is verified
+#' writable; for directories owned by the current user an attempt is made to
+#' add the user-write bit via \code{ensure_user_writable}.
 #'
 #' @param scfg A project configuration object.
-#' @return Invisibly returns `scfg`.
+#' @param check_cache Optional environment used to memoize write-permission
+#'   results. Directories verified writable here will be recorded so that
+#'   downstream preflight checks (e.g. in \code{collect_submit_permission_issues})
+#'   can skip redundant \code{file.access()} calls.
+#' @return Invisibly returns \code{scfg}.
 #' @keywords internal
 #' @importFrom checkmate assert_class test_directory_exists
-setup_project_directories <- function(scfg) {
+setup_project_directories <- function(scfg, check_cache = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
+  if (!is.null(check_cache) && !is.environment(check_cache)) {
+    stop("check_cache must be an environment when provided.")
+  }
 
   dirs <- c(
     scfg$metadata$project_directory,
@@ -28,6 +37,7 @@ setup_project_directories <- function(scfg) {
 
   dirs <- dirs[!is.na(dirs) & nzchar(dirs)]
 
+  # --- create missing directories ---------------------------------------------
   for (d in dirs) {
     if (checkmate::test_directory_exists(d, access = "r")) {
       next
@@ -39,20 +49,29 @@ setup_project_directories <- function(scfg) {
     }
   }
 
-  # check that scratch directory is user-writable
-  scratch_dir <- scfg$metadata$scratch_directory
-  if (!checkmate::test_directory_exists(scratch_dir, access = "w")) {
-    warning("Work/scratch directory is not user-writable. Attempting to modify permissions: ", scratch_dir, immediate. = TRUE)
-    okay <- ensure_user_writable(scratch_dir)
-    if (!okay) stop("Cannot write to scratch directory. BrainGnomes cannot proceed. Fix permissions on: ", scratch_dir)
+  # --- verify writability on *all* directories ---------------------------------
+  for (d in dirs) {
+    if (!dir.exists(d)) next   # creation may have failed; preflight will catch it
+    if (checkmate::test_directory_exists(d, access = "w")) next  # already writable
+
+    # Attempt to remediate: ensure_user_writable adds the user-write bit when
+    # the current user owns the directory.
+    warning("Directory is not user-writable. Attempting to modify permissions: ", d, immediate. = TRUE)
+    okay <- tryCatch(ensure_user_writable(d), error = function(e) FALSE)
+    if (!isTRUE(okay)) {
+      warning("Cannot make directory writable: ", d,
+              ". Downstream jobs that write here will fail.", immediate. = TRUE)
+    }
   }
 
-  # if flywheel_temp_directory is defined, make sure it is user-writable
-  flywheel_temp_dir <- scfg$flywheel_sync$flywheel_temp_directory
-  if (!is.null(flywheel_temp_dir)) {
-    warning("Flywheel temp directory is not user-writable. Attempting to modify permissions: ", flywheel_temp_dir, immediate. = TRUE)
-    okay <- ensure_user_writable(flywheel_temp_dir)
-    if (!okay) stop("Cannot write to flywheel_temp_directory directory. BrainGnomes cannot proceed. Fix permissions on: ", flywheel_temp_dir)
+  # --- prime the permission cache ----------------------------------------------
+  if (!is.null(check_cache)) {
+    for (d in dirs) {
+      if (checkmate::test_directory_exists(d, access = "w")) {
+        cache_key <- normalizePath(d, winslash = "/", mustWork = FALSE)
+        assign(cache_key, TRUE, envir = check_cache)
+      }
+    }
   }
 
   invisible(scfg)
