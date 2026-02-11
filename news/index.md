@@ -23,6 +23,8 @@
   internally from postproc stream
 - Add optional header row for postprocessed confounds TSVs, configurable
   via postprocess YAML and validated during setup
+- Added extensive checks on write/permission issues with directories and
+  files
 
 ## BrainGnomes 0.7-5
 
