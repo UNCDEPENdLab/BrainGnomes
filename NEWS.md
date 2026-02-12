@@ -6,7 +6,7 @@
 * Improved error logging in HPC scripts so that success and failure are indicated more clearly
 * Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps
 * Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests
-* Added optional low-pass filtering of motion parameters, matching (Gratton)
+* Added optional low-pass filtering of motion parameters, matching Gratton
 * Gracefully adjust motion filtering parameters if they fall above Nyquist at this TR
 * Modify extract ROIs config to avoid input_regex and always generate it internally from postproc stream
 * Add optional header row for postprocessed confounds TSVs, configurable via postprocess YAML and validated during setup

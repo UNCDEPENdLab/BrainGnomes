@@ -11,7 +11,8 @@ submit_subjects(
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
-  sequence_id = NULL
+  sequence_id = NULL,
+  permission_check_cache = NULL
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ submit_subjects(
 \item{parent_ids}{Optional character vector of job IDs to depend on}
 
 \item{sequence_id}{An identifying ID for a set of jobs in a sequence used for job tracking}
+
+\item{permission_check_cache}{Optional environment for memoizing write-permission checks.
+When supplied (e.g. pre-primed by \code{setup_project_directories}), shared paths
+already verified writable are skipped.}
 }
 \description{
 Schedule subject-level processing

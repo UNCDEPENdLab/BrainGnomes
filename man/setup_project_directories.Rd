@@ -4,10 +4,15 @@
 \alias{setup_project_directories}
 \title{Ensure required project directories exist}
 \usage{
-setup_project_directories(scfg)
+setup_project_directories(scfg, check_cache = NULL)
 }
 \arguments{
 \item{scfg}{A project configuration object.}
+
+\item{check_cache}{Optional environment used to memoize write-permission
+results. Directories verified writable here will be recorded so that
+downstream preflight checks (e.g. in \code{collect_submit_permission_issues})
+can skip redundant \code{file.access()} calls.}
 }
 \value{
 Invisibly returns \code{scfg}.
@@ -16,6 +21,8 @@ Invisibly returns \code{scfg}.
 Given a project configuration, create any missing directories referenced in
 the metadata, including the project root and standard subdirectories. A
 message is emitted for each directory created, and existing but unreadable
-directories trigger a warning.
+directories trigger a warning. After creation, every directory is verified
+writable; for directories owned by the current user an attempt is made to
+add the user-write bit via \code{ensure_user_writable}.
 }
 \keyword{internal}
