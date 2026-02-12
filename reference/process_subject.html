@@ -96,6 +96,14 @@ across repeated submissions.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A logical value indicating whether the preprocessing was successful</p>
     </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>When postprocessing is requested without running <code>fmriprep</code>, the function verifies
+that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
+outside the project directory, only the existence of the subject's directory is
+required. For fMRIPrep directories inside the project directory, a <code>.complete</code>
+file in the project's log directory is still necessary.</p>
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

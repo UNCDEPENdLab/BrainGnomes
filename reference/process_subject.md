@@ -54,3 +54,12 @@ process_subject(
 ## Value
 
 A logical value indicating whether the preprocessing was successful
+
+## Details
+
+When postprocessing is requested without running `fmriprep`, the
+function verifies that the expected fMRIPrep outputs exist. If the
+configured fMRIPrep directory lies outside the project directory, only
+the existence of the subject's directory is required. For fMRIPrep
+directories inside the project directory, a `.complete` file in the
+project's log directory is still necessary.
