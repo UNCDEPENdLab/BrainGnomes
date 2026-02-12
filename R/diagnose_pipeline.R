@@ -212,7 +212,6 @@ diagnose_pipeline <- function(input) {
   
   cli::cli_h3(cli::style_bold(cli::col_cyan("Sequence {this_sequence_id}")))
   print_step_tree_by_type(this_sequence_tree)
-  cli::cli_end(id = "sequence_summary")
   
   # Ask if user wants to examine more closely
   cli::cli_inform(

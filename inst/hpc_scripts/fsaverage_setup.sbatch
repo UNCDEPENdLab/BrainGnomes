@@ -48,7 +48,7 @@ log_message INFO Starting fsaverage_setup with mem: $mem and cpus: $SLURM_JOB_CP
 
 # to trap sigterm, we need to background the main compute and then wait (during which time signals are received)
 rel $rel_flag singularity exec --cleanenv --containall -B "$loc_mrproc_root" "$fmriprep_container" \
-    rsync --mkpath -a --no-owner --no-group --no-times --no-perms /opt/freesurfer/subjects/fsaverage "${loc_mrproc_root}/sourcedata/freesurfer"
+    rsync --mkpath -a --no-owner --no-group --no-times --no-perms /opt/freesurfer/subjects/fsaverage "${loc_mrproc_root}/sourcedata/freesurfer" &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
 

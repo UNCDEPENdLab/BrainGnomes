@@ -419,13 +419,9 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
     wall_time = hours_to_dhms(scfg[["flywheel_sync"]]$nhours),
     mem_total = scfg[["flywheel_sync"]]$memgb,
     scheduler = scfg$compute_environment$scheduler,
-    scheduler_options = scfg[["flywheel_sync"]]$sched_args
+    scheduler_options = sched_args
   )
 
-  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, 
-                               sched_args = sched_args, env_variables = env_variables,
-                               tracking_sqlite_db = scfg$metadata$sqlite_db,
-                               tracking_args = tracking_args)
   # preflight permission checks for project-level paths
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
@@ -437,7 +433,10 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
          paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
   }
 
-  job_id <- cluster_job_submit(cmd, scheduler = scfg$compute_environment$scheduler, sched_args = sched_args)
+  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, 
+                               sched_args = sched_args, env_variables = env_variables,
+                               tracking_sqlite_db = scfg$metadata$sqlite_db,
+                               tracking_args = tracking_args)
 
   to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
   to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
@@ -486,7 +485,7 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
     wall_time = hours_to_dhms(scfg[["fsaverage"]]$nhours),
     mem_total = scfg[["fsaverage"]]$memgb,
     scheduler = scfg$compute_environment$scheduler,
-    scheduler_options = scfg[["fsaverage"]]$sched_args
+    scheduler_options = sched_args
   )
   tracking_sqlite_db <- scfg$metadata$sqlite_db
 
@@ -586,7 +585,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     wall_time = hours_to_dhms(scfg[["prefetch_templates"]]$nhours),
     mem_total = scfg[["prefetch_templates"]]$memgb,
     scheduler = scfg$compute_environment$scheduler,
-    scheduler_options = scfg[["prefetch_templates"]]$sched_args
+    scheduler_options = sched_args
   )
   
   # preflight permission checks for project-level paths

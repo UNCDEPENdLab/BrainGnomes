@@ -26,6 +26,7 @@ print_help <- function() {
 
 #read in command line arguments
 tmp <- commandArgs(trailingOnly = TRUE)
+if ("--help" %in% tmp) { print_help(); quit(save = "no", status = 0) }
 
 args <- BrainGnomes::parse_cli_args(tmp)
 

@@ -52,7 +52,7 @@ flywheel_cmd_args="sync"
 [ -n "$flywheel_cli_options" ] && flywheel_cmd_args="$flywheel_cmd_args $flywheel_cli_options"
 flywheel_cmd_args="$flywheel_cmd_args $flywheel_source_url $flywheel_sync_directory"
 
-rel $rel_flag "$flywheel_cmd" $flywheel_cmd_args
+rel $rel_flag "$flywheel_cmd" $flywheel_cmd_args &
 cmd_pid=$!
 
 run_bg_and_wait "$cmd_pid" cmd_status

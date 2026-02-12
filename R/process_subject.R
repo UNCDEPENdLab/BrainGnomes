@@ -127,6 +127,12 @@ collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = N
 #' @param permission_check_cache Optional environment used to memoize write-permission checks
 #'   across repeated submissions.
 #' @return A logical value indicating whether the preprocessing was successful
+#' @details
+#' When postprocessing is requested without running `fmriprep`, the function verifies
+#' that the expected fMRIPrep outputs exist. If the configured fMRIPrep directory lies
+#' outside the project directory, only the existence of the subject's directory is
+#' required. For fMRIPrep directories inside the project directory, a `.complete`
+#' file in the project's log directory is still necessary.
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
