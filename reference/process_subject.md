@@ -12,7 +12,8 @@ process_subject(
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
-  sequence_id = NULL
+  sequence_id = NULL,
+  permission_check_cache = NULL
 )
 ```
 
@@ -44,6 +45,11 @@ process_subject(
 
   An identifying ID for a set of jobs in a sequence used for job
   tracking
+
+- permission_check_cache:
+
+  Optional environment used to memoize write-permission checks across
+  repeated submissions.
 
 ## Value
 

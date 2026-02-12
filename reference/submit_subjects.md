@@ -12,7 +12,8 @@ submit_subjects(
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
-  sequence_id = NULL
+  sequence_id = NULL,
+  permission_check_cache = NULL
 )
 ```
 
@@ -46,6 +47,12 @@ submit_subjects(
 
   An identifying ID for a set of jobs in a sequence used for job
   tracking
+
+- permission_check_cache:
+
+  Optional environment for memoizing write-permission checks. When
+  supplied (e.g. pre-primed by `setup_project_directories`), shared
+  paths already verified writable are skipped.
 
 ## Details
 
