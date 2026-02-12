@@ -5,6 +5,13 @@
 # retreive in code using:   add_parent_path <- system.file("add_parent.R", package = "BrainGnomes")
 # example status update: paste("Rscript", add_parent_path, "--sqlite_db", SQLITE_DB, "--job_id" , JOBID,, "--parent_job_id" , PARENTJOBID, "--child_level", CHILDLEVEL)
 
+# Ensure BrainGnomes is discoverable when scheduler jobs do not export R_LIBS_USER.
+pkg_dir <- Sys.getenv("pkg_dir", unset = "")
+if (nzchar(pkg_dir)) {
+  lib_dir <- dirname(pkg_dir)
+  if (!(lib_dir %in% .libPaths())) .libPaths(c(lib_dir, .libPaths()))
+}
+
 print_help <- function() {
   cat(paste("This script makes a call to the `add_tracked_job_parent` command and is to be",
             "used internally in command-line only scripts submitted to `cluster_job_submit`.",

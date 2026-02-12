@@ -4,6 +4,13 @@
 # Used for jobs submitted via bash
 # Retrieve in code using:   insert_tracked_job_path <- system.file("insert_tracked_job.R", package = "BrainGnomes")
 
+# Ensure BrainGnomes is discoverable when scheduler jobs do not export R_LIBS_USER.
+pkg_dir <- Sys.getenv("pkg_dir", unset = "")
+if (nzchar(pkg_dir)) {
+  lib_dir <- dirname(pkg_dir)
+  if (!(lib_dir %in% .libPaths())) .libPaths(c(lib_dir, .libPaths()))
+}
+
 print_help <- function() {
   cat(paste("This script makes a call to the `insert_tracked_job` command and is to be",
             "used internally in command-line only scripts.",

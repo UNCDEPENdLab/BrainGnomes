@@ -6,6 +6,13 @@
 # example status update: paste("Rscript", upd_job_status_path, "--job_id" , JOBID, "--sqlite_db", SQLITE_DB, "--status", STATUS)
 # example with manifest:  paste("Rscript", upd_job_status_path, "--job_id" , JOBID, "--sqlite_db", SQLITE_DB, "--status", "COMPLETED", "--output_dir", OUTPUT_DIR)
 
+# Ensure BrainGnomes is discoverable when scheduler jobs do not export R_LIBS_USER.
+pkg_dir <- Sys.getenv("pkg_dir", unset = "")
+if (nzchar(pkg_dir)) {
+  lib_dir <- dirname(pkg_dir)
+  if (!(lib_dir %in% .libPaths())) .libPaths(c(lib_dir, .libPaths()))
+}
+
 print_help <- function() {
   cat(paste("This script makes a call to the `update_tracked_job_status` command and is to be",
             "used internally in command-line only scripts submitted to `cluster_job_submit`.",

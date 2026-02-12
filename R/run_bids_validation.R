@@ -41,6 +41,7 @@ run_bids_validation <- function(scfg, outfile = NULL) {
     log_file = log_file,
     stdout_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
     stderr_log = glue::glue("{scfg$metadata$log_directory}/bids_validation_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     log_level = log_level_value
   )
 
