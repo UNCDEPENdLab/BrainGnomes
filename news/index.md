@@ -25,6 +25,7 @@
   via postprocess YAML and validated during setup
 - Added extensive checks on write/permission issues with directories and
   files
+- bugfix: Get CSF probseg image for MRIQC during prefetch
 
 ## BrainGnomes 0.7-5
 
