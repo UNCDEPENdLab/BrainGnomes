@@ -449,6 +449,7 @@ test_that("setup_project_directories primes check_cache with writable dirs", {
 # -- setup_project_directories writability checks ------------------------------
 
 test_that("setup_project_directories warns and remediates unwritable directories", {
+  skip_on_os("windows")   # Sys.chmod() is a no-op on Windows
   tmp <- tempdir(TRUE)
   base <- file.path(tmp, paste0("spd_write_", Sys.getpid()))
   dir.create(base, recursive = TRUE, showWarnings = FALSE)
@@ -497,6 +498,7 @@ test_that("setup_project_directories warns and remediates unwritable directories
 # -- process_subject log-directory guard ---------------------------------------
 
 test_that("process_subject skips subject when log directory is not writable", {
+  skip_on_os("windows")   # Sys.chmod() is a no-op on Windows
   tmp <- tempdir(TRUE)
   base <- file.path(tmp, paste0("logguard_", Sys.getpid()))
   dir.create(base, recursive = TRUE, showWarnings = FALSE)
