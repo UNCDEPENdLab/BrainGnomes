@@ -1,5 +1,30 @@
 ### Utility functions for the pipeline
 
+# Summarize mode/uid/gid for a filesystem path (used in permission diagnostics).
+# @param path Character scalar path to describe.
+# @param fallback_label String returned when \code{path} is not a valid string.
+# @return A formatted string like "path [mode=755, uid=1000, gid=1000]".
+describe_path_permissions <- function(path, fallback_label = "<unset>") {
+  if (!checkmate::test_string(path)) return(fallback_label)
+  info <- suppressWarnings(file.info(path))
+  mode <- "unknown"
+  if (is.data.frame(info) && nrow(info) > 0L && "mode" %in% names(info) &&
+      length(info$mode) > 0L && !is.na(info$mode[1])) {
+    mode <- as.character(as.octmode(info$mode[1]))
+  }
+  uid <- "unknown"
+  if (is.data.frame(info) && nrow(info) > 0L && "uid" %in% names(info) &&
+      length(info$uid) > 0L && !is.na(info$uid[1])) {
+    uid <- as.character(info$uid[1])
+  }
+  gid <- "unknown"
+  if (is.data.frame(info) && nrow(info) > 0L && "gid" %in% names(info) &&
+      length(info$gid) > 0L && !is.na(info$gid[1])) {
+    gid <- as.character(info$gid[1])
+  }
+  glue("{path} [mode={mode}, uid={uid}, gid={gid}]")
+}
+
 
 #' Get the HPC job script for a given job name
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`

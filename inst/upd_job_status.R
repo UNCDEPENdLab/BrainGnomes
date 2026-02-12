@@ -42,8 +42,20 @@ if (isTRUE(toupper(args$status) == "COMPLETED") && !is.null(args$output_dir)) {
   output_manifest <- BrainGnomes:::capture_output_manifest(args$output_dir)
 }
 
-BrainGnomes::update_tracked_job_status(job_id = args$job_id, 
-                                       sqlite_db = args$sqlite_db, 
-                                       status = args$status, 
-                                       output_manifest = output_manifest,
-                                       cascade = args$cascade)
+tryCatch({
+  BrainGnomes::update_tracked_job_status(
+    job_id = args$job_id,
+    sqlite_db = args$sqlite_db,
+    status = args$status,
+    output_manifest = output_manifest,
+    cascade = args$cascade
+  )
+}, error = function(e) {
+  msg <- paste(
+    "ERROR: Failed to update tracked job status in SQLite.",
+    conditionMessage(e),
+    sep = "\n"
+  )
+  cat(msg, "\n", file = stderr())
+  quit(save = "no", status = 1)
+})

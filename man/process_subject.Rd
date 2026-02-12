@@ -11,7 +11,8 @@ process_subject(
   postprocess_streams = NULL,
   extract_streams = NULL,
   parent_ids = NULL,
-  sequence_id = NULL
+  sequence_id = NULL,
+  permission_check_cache = NULL
 )
 }
 \arguments{
@@ -27,6 +28,9 @@ all available streams will be run.}
 \item{parent_ids}{An optional character vector of HPC job ids that must complete before this subject is run.}
 
 \item{sequence_id}{An identifying ID for a set of jobs in a sequence used for job tracking}
+
+\item{permission_check_cache}{Optional environment used to memoize write-permission checks
+across repeated submissions.}
 }
 \value{
 A logical value indicating whether the preprocessing was successful

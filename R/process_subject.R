@@ -16,6 +16,106 @@ null_empty <- function(x) {
   return(x)
 }
 
+check_write_target <- function(path, label) {
+  if (!checkmate::test_string(path)) {
+    return(NULL)
+  }
+
+  if (file.exists(path)) {
+    writable <- isTRUE(file.access(path, 2L) == 0L)
+    traversable <- if (dir.exists(path)) isTRUE(file.access(path, 1L) == 0L) else TRUE
+    if (writable && traversable) return(NULL)
+    return(glue("{label} is not writable: {describe_path_permissions(path)}"))
+  }
+
+  parent <- normalizePath(dirname(path), winslash = "/", mustWork = FALSE)
+  while (!dir.exists(parent)) {
+    next_parent <- dirname(parent)
+    if (identical(next_parent, parent)) break
+    parent <- next_parent
+  }
+
+  if (!dir.exists(parent)) {
+    return(glue("Cannot locate an existing parent directory for {label}: {path}"))
+  }
+
+  can_create <- isTRUE(file.access(parent, 2L) == 0L) && isTRUE(file.access(parent, 1L) == 0L)
+  if (can_create) return(NULL)
+  glue("{label} does not exist and cannot be created because parent is not writable: {describe_path_permissions(parent)}")
+}
+
+check_write_target_cached <- function(path, label, check_cache = NULL) {
+  if (!checkmate::test_string(path)) return(NULL)
+  if (is.null(check_cache)) return(check_write_target(path, label))
+  if (!is.environment(check_cache)) stop("check_cache must be an environment when provided.")
+
+  # Cache key is the normalized path only (label-agnostic).  We only cache
+  # writable (NULL) outcomes so that failures are always rechecked with the
+  # caller's label for an accurate error message.
+  cache_key <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  if (exists(cache_key, envir = check_cache, inherits = FALSE)) {
+    return(NULL)        # previously verified writable
+  }
+
+  issue <- check_write_target(path, label)
+  if (is.null(issue)) {
+    assign(cache_key, TRUE, envir = check_cache)
+  }
+  issue
+}
+
+collect_submit_permission_issues <- function(scfg, step_name, sub_id, ses_id = NULL,
+                                            stdout_log = NULL, stderr_log = NULL,
+                                            sqlite_db = NULL, check_cache = NULL) {
+  if (!is.null(check_cache) && !is.environment(check_cache)) {
+    stop("check_cache must be an environment when provided.")
+  }
+
+  issues <- c()
+
+  if (checkmate::test_string(stdout_log)) {
+    issue <- check_write_target_cached(dirname(stdout_log), "stdout log directory", check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (checkmate::test_string(stderr_log)) {
+    issue <- check_write_target_cached(dirname(stderr_log), "stderr log directory", check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (checkmate::test_string(sqlite_db)) {
+    issue <- check_write_target_cached(sqlite_db, "job tracking SQLite database", check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  if (step_name %in% c("fmriprep", "mriqc", "aroma", "postprocess", "extract_rois")) {
+    issue <- check_write_target_cached(scfg$metadata$scratch_directory, "scratch directory", check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+  if (step_name %in% c("fmriprep", "mriqc")) {
+    issue <- check_write_target_cached(scfg$metadata$templateflow_home, "templateflow_home directory", check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  output_dir <- switch(step_name,
+    bids_conversion = scfg$metadata$bids_directory,
+    mriqc = scfg$metadata$mriqc_directory,
+    fmriprep = scfg$metadata$fmriprep_directory,
+    aroma = scfg$metadata$fmriprep_directory,
+    postprocess = {
+      d <- file.path(scfg$metadata$postproc_directory, glue("sub-{sub_id}"))
+      if (!is.null(ses_id) && !is.na(ses_id)) d <- file.path(d, glue("ses-{ses_id}"))
+      d
+    },
+    extract_rois = scfg$metadata$rois_directory,
+    NULL
+  )
+  if (!is.null(output_dir)) {
+    issue <- check_write_target_cached(output_dir, glue("{step_name} output directory"), check_cache)
+    if (!is.null(issue)) issues <- c(issues, issue)
+  }
+
+  return(issues)
+}
+
 #' Preprocess a single subject
 #' @param scfg A list of configuration settings
 #' @param sub_cfg A data.frame of subject configuration settings
@@ -24,11 +124,14 @@ null_empty <- function(x) {
 #'   all available streams will be run.
 #' @param parent_ids An optional character vector of HPC job ids that must complete before this subject is run.
 #' @param sequence_id An identifying ID for a set of jobs in a sequence used for job tracking
+#' @param permission_check_cache Optional environment used to memoize write-permission checks
+#'   across repeated submissions.
 #' @return A logical value indicating whether the preprocessing was successful
 #' @importFrom glue glue
 #' @importFrom checkmate assert_class assert_list assert_names assert_logical
 #' @keywords internal
-process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL, parent_ids = NULL, sequence_id = NULL) {
+process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_streams = NULL, extract_streams = NULL,
+                            parent_ids = NULL, sequence_id = NULL, permission_check_cache = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_data_frame(sub_cfg)
   expected_fields <- c("sub_id", "ses_id", "dicom_sub_dir", "dicom_ses_dir", "bids_sub_dir", "bids_ses_dir")
@@ -42,12 +145,30 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   checkmate::assert_logical(steps, names = "unique")
   checkmate::assert_character(postprocess_streams, null.ok = TRUE, any.missing = FALSE)
   checkmate::assert_character(extract_streams, null.ok = TRUE, any.missing = FALSE)
+  if (!is.null(permission_check_cache) && !is.environment(permission_check_cache)) {
+    stop("permission_check_cache must be an environment when provided.")
+  }
+  if (is.null(permission_check_cache)) permission_check_cache <- new.env(parent = emptyenv())
   expected <- c("bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
   for (ee in expected) if (is.na(steps[ee])) steps[ee] <- FALSE # ensure we have valid logicals for expected fields
   
   sub_id <- sub_cfg$sub_id[1L]
   bids_sub_dir <- sub_cfg$bids_sub_dir[1L]
+
+  # Guard: verify the subject log directory is writable *before* setting up the
+  # logger, which does dir.create + file appender and would otherwise crash with
+  # an opaque lgr error if the log directory is unwritable.
+  sub_log_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))
+  log_dir_issue <- check_write_target_cached(sub_log_dir, "subject log directory", permission_check_cache)
+  if (!is.null(log_dir_issue)) {
+    warning("Skipping subject ", sub_id, " because subject log directory is not writable:\n  ",
+            log_dir_issue, call. = FALSE)
+    return(TRUE)
+  }
+
   lg <- get_subject_logger(scfg, sub_id)
+  preflight_state <- new.env(parent = emptyenv())
+  preflight_state$failed <- FALSE
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- extract_ids <- NULL
   
@@ -124,6 +245,26 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
       add_parent_path = system.file("add_parent.R", package = "BrainGnomes"),
       log_level = log_level_value
     )
+
+    preflight_issues <- collect_submit_permission_issues(
+      scfg = scfg,
+      step_name = name,
+      sub_id = sub_id,
+      ses_id = ses_id,
+      stdout_log = unname(env_variables["stdout_log"]),
+      stderr_log = unname(env_variables["stderr_log"]),
+      sqlite_db = tracking_sqlite_db,
+      check_cache = permission_check_cache
+    )
+    if (length(preflight_issues) > 0L) {
+      preflight_state$failed <- TRUE
+      issue_text <- paste(paste0("  - ", preflight_issues), collapse = "\n")
+      to_log(
+        lg, "warn",
+        "Exiting process_subject for {sub_id} because preflight permission checks failed for {name_tag}:\n{issue_text}"
+      )
+      return(job_id)
+    }
     
     sched_script <- get_job_script(scfg, name) # lookup location of HPC script to run
     sched_call <- list(job_name = name, jobid_str = jobid_str, stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
@@ -192,6 +333,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   # need unlist because NULL will be returned for jobs not submitted -- yielding a weird list of NULLs
   bids_conversion_ids <- unlist(lapply(seq_len(n_inputs), function(idx) submit_step("bids_conversion", row_idx = idx, parent_ids = parent_ids)))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   if (isTRUE(steps["bids_conversion"])) {
     if (!is.na(bids_sub_dir)) to_log(lg, "info", "BIDS directory: {bids_sub_dir}")
@@ -223,12 +365,15 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   
   ## Handle MRIQC
   mriqc_id <- submit_step("mriqc", parent_ids = c(parent_ids, bids_conversion_ids))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle fmriprep
   fmriprep_id <- submit_step("fmriprep", parent_ids = c(parent_ids, bids_conversion_ids))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle aroma
   aroma_id <- submit_step("aroma", parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id))
+  if (isTRUE(preflight_state$failed)) return(TRUE)
   
   ## Handle postprocessing (session-level, multiple configs)
   postprocess_ids <- c()
@@ -327,6 +472,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
         submit_step("postprocess", row_idx = idx, parent_ids = c(parent_ids, bids_conversion_ids, fmriprep_id, aroma_id), pp_stream = pp_nm)
       }))
     }))
+    if (isTRUE(preflight_state$failed)) return(TRUE)
   }
   
   if (isTRUE(steps["extract_rois"])) {
@@ -638,11 +784,18 @@ submit_extract_rois <- function(
 
   # pull the requested extraction stream from the broader list
   ex_cfg <- scfg$extract_rois[[ex_stream]]
+  if (!is.null(ex_cfg$input_regex)) {
+    msg <- "extract_rois/input_regex is ignored by run_project; inputs are derived from postprocess streams."
+    if (!is.null(lg)) {
+      to_log(lg, "warn", msg)
+    } else {
+      warning(msg, call. = FALSE)
+    }
+  }
   if (isTRUE(scfg$force)) ex_cfg$overwrite <- TRUE # enable overwrite of ROIs if force=TRUE
 
-  # Every extract_rois stream can pull for 1+ postprocess streams. Based on postprocess input stream(s), generate regular expressions
-  # need to find outputs of postproc stream. A little tricky given that desc may not be in input_regex. This is handled inside extract_cli.R,
-  # which runs once the job fires (and any expected files are now available from earlier processing stages)
+  # Every extract_rois stream can pull for 1+ postprocess streams. Pass through the input spec
+  # and bids_desc for each stream so extract_cli.R can target postprocessed outputs directly.
   ex_cfg$input_regex <- sapply(ex_cfg$input_streams, function(ss) scfg$postprocess[[ss]]$input_regex, USE.NAMES = FALSE)
 
   # the bids_desc of the postprocess stream is used to update the matched files (to get the outputs of postprocessing)

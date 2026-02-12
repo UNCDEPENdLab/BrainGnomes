@@ -21,7 +21,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "temporal_filter/method", "temporal_filter/prefix",
       "intensity_normalize/global_median", "intensity_normalize/prefix",
       "confound_calculate/columns", "confound_calculate/noproc_columns",
-      "confound_calculate/demean",
+      "confound_calculate/demean", "confound_calculate/include_header",
       "scrubbing/expression", "scrubbing/add_to_confounds",
       "scrubbing/interpolate", "scrubbing/interpolate_prefix",
       "scrubbing/apply", "scrubbing/prefix",
@@ -1089,6 +1089,7 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
     if (is.null(ppcfg$confound_calculate$columns)) fields <- c(fields, "postprocess/confound_calculate/columns")
     if (is.null(ppcfg$confound_calculate$noproc_columns)) fields <- c(fields, "postprocess/confound_calculate/noproc_columns")
     if (is.null(ppcfg$confound_calculate$demean)) fields <- c(fields, "postprocess/confound_calculate/demean")
+    if (is.null(ppcfg$confound_calculate$include_header)) fields <- c(fields, "postprocess/confound_calculate/include_header")
   }
 
   if ("postprocess/confound_calculate/columns" %in% fields) {
@@ -1107,6 +1108,14 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
   
   if ("postprocess/confound_calculate/demean" %in% fields) {
     ppcfg$confound_calculate$demean <- prompt_input("Demean (filtered) regressors?", type = "flag", default = TRUE)
+  }
+
+  if ("postprocess/confound_calculate/include_header" %in% fields) {
+    ppcfg$confound_calculate$include_header <- prompt_input(
+      "Include header row in postprocessed confounds.tsv?",
+      type = "flag",
+      default = TRUE
+    )
   }
 
   # if enabled but no columns were supplied, warn and offer to re-enter or disable
@@ -1428,51 +1437,43 @@ setup_apply_aroma <- function(ppcfg = list(), fields = NULL) {
 
 
 
-#' Determine expected output files for a postprocessing stream
+#' List postprocessed output files for a stream based on its input spec
 #'
-#' Given a directory of candidate input files and a specification for
-#' matching those inputs, this function returns the full paths to the
-#' corresponding postprocessed NIfTI files. The output filenames are
-#' derived by replacing the `desc` entity in each input file with the
-#' stream's `bids_desc` value.
+#' Converts a postprocess input specification into a pattern that targets
+#' postprocessed outputs by ensuring the `desc` entity matches `bids_desc`.
 #'
-#' @param input_dir Directory containing the input NIfTI files to be
-#'   postprocessed.
-#' @param input_regex Specification used to match the input files. This may be
-#'   a space-separated set of BIDS entities (e.g., "desc:preproc suffix:bold")
-#'   or a regular expression prefixed with "regex:".
-#' @param bids_desc The `desc` value to use for the output filenames.
+#' @param input_dir Directory containing postprocessed outputs.
+#' @param input_regex Specification used to match the input files for the stream.
+#'   May be a space-separated set of BIDS entities or a regex prefixed with "regex:".
+#' @param bids_desc The `desc` value used for postprocessed outputs.
 #'
-#' @return A character vector of full paths to the expected postprocessed
-#'   NIfTI files. The vector is named with the corresponding input file.
+#' @return A character vector of full paths to matching postprocessed outputs.
 #' @export
-#' @examples
-#' \dontrun{
-#' get_postproc_stream_outputs(
-#'   input_dir = "/path/to/subject",
-#'   input_regex = "desc:preproc suffix:bold",
-#'   bids_desc = "clean"
-#' )
-#' }
-#' @importFrom checkmate assert_directory_exists assert_string
-get_postproc_stream_outputs <- function(input_dir, input_regex, bids_desc) {
+get_postproc_output_files <- function(input_dir, input_regex, bids_desc) {
   checkmate::assert_directory_exists(input_dir)
   if (is.null(input_regex)) input_regex <- "desc:preproc suffix:bold"
-  checkmate::assert_string(input_regex)
+  checkmate::assert_character(input_regex, min.len = 1L)
   checkmate::assert_string(bids_desc)
 
-  pattern <- construct_bids_regex(input_regex)
-  in_files <- list.files(path = input_dir, pattern = pattern, recursive = TRUE, full.names = TRUE)
+  resolve_spec <- function(spec) {
+    spec <- trimws(spec)
+    if (grepl("^regex:", spec)) {
+      return(trimws(sub("^regex\\s*:", "", spec)))
+    }
 
-  if (length(in_files) == 0L) return(character(0))
+    if (grepl("\\bdesc:", spec)) {
+      spec <- sub("\\bdesc:[^[:space:]]+", paste0("desc:", bids_desc), spec)
+    } else {
+      spec <- paste(spec, paste0("desc:", bids_desc))
+    }
 
-  out_files <- vapply(in_files, function(f) {
-    info <- as.list(extract_bids_info(f))
-    info$description <- bids_desc
-    construct_bids_filename(info, full.names = TRUE)
-  }, character(1))
+    construct_bids_regex(spec)
+  }
 
-  # leave as unnamed for now (don't need to remember input file)
-  # names(out_files) <- in_files
-  out_files
+  patterns <- vapply(input_regex, resolve_spec, character(1))
+  files <- unlist(lapply(patterns, function(pat) {
+    list.files(path = input_dir, pattern = pat, recursive = TRUE, full.names = TRUE)
+  }), use.names = FALSE)
+
+  unique(files)
 }

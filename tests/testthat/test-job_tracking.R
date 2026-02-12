@@ -405,3 +405,29 @@ test_that("get_tracked_job_status by sequence_id returns all jobs in sequence", 
   expect_equal(nrow(result), 2)
   expect_true(all(result$sequence_id == "my_sequence"))
 })
+
+test_that("format_tracking_db_error reports path diagnostics and readonly hint", {
+  db_file <- tempfile(fileext = ".sqlite")
+  err <- simpleError("attempt to write a readonly database")
+  msg <- format_tracking_db_error(
+    sqlite_db = db_file,
+    operation = "insert_tracked_job",
+    err = err
+  )
+  expect_true(grepl("insert_tracked_job", msg, fixed = TRUE))
+  expect_true(grepl("sqlite_db:", msg, fixed = TRUE))
+  expect_true(grepl("parent_dir:", msg, fixed = TRUE))
+  expect_true(grepl("read-only", tolower(msg), fixed = TRUE))
+})
+
+test_that("submit_tracking_query surfaces informative sqlite path error", {
+  bad_db <- file.path(tempdir(), "does_not_exist_parent", "tracking.sqlite")
+  expect_error(
+    submit_tracking_query("SELECT 1", sqlite_db = bad_db),
+    regexp = "Tracking database error during checking tracking table"
+  )
+  expect_error(
+    submit_tracking_query("SELECT 1", sqlite_db = bad_db),
+    regexp = "parent_dir:"
+  )
+})
