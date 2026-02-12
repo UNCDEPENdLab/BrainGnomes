@@ -31,6 +31,17 @@ SKIP_TOKENS = {
     "fsLR",
 }
 
+MRIQC_REQUIRED_PROBSEG = {
+    "MNI152NLin2009cAsym": [
+        {
+            "suffix": "probseg",
+            "label": "CSF",
+            "resolution": 1,
+            "extension": "nii.gz",
+        }
+    ]
+}
+
 TemplateQuery = Tuple[str, Dict[str, Any], str]
 DEBUG = False
 DEFAULT_RESOLUTION = 1
@@ -557,6 +568,35 @@ def add_default_t2w_queries(
     return augmented, optional
 
 
+def add_required_probseg_queries(
+    queries: List[TemplateQuery],
+    tokens: List[str],
+) -> List[TemplateQuery]:
+    """Ensure known MRIQC-required tissue probability maps are prefetched."""
+    templates = _template_names_from_tokens(tokens)
+    if not templates:
+        return queries
+
+    existing: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = {
+        _freeze_query(template, params) for template, params, _ in queries
+    }
+    augmented = list(queries)
+    for template in templates:
+        required = MRIQC_REQUIRED_PROBSEG.get(template, [])
+        for params in required:
+            query = dict(params)
+            fingerprint = _freeze_query(template, query)
+            if fingerprint in existing:
+                continue
+            existing.add(fingerprint)
+            label = (
+                f"{template} (MRIQC required: "
+                f"suffix={query.get('suffix')}, label={query.get('label')}, resolution={query.get('resolution')})"
+            )
+            augmented.append((template, query, label))
+    return augmented
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Prefetch TemplateFlow resources needed for the configured fMRIPrep output spaces."
@@ -629,6 +669,7 @@ def main() -> int:
         print("No TemplateFlow queries were resolved; nothing to prefetch.")
         return 0
     queries, optional_queries = add_default_t2w_queries(queries, spaces)
+    queries = add_required_probseg_queries(queries, spaces)
 
     # Determine where TemplateFlow will place fetched files
     tf_home = os.environ.get("TEMPLATEFLOW_HOME")

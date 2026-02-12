@@ -11,6 +11,7 @@
 * Modify extract ROIs config to avoid input_regex and always generate it internally from postproc stream
 * Add optional header row for postprocessed confounds TSVs, configurable via postprocess YAML and validated during setup
 * Added extensive checks on write/permission issues with directories and files
+* bugfix: Get CSF probseg image for MRIQC during prefetch
 
 # BrainGnomes 0.7-5
 
