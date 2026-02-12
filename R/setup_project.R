@@ -120,6 +120,7 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     fields <- c()
     if (is.null(scfg$metadata$project_name)) fields <- c(fields, "metadata/project_name")
     if (is.null(scfg$metadata$project_directory)) fields <- c(fields, "metadata/project_directory")
+    if (is.null(scfg$metadata$log_directory)) fields <- c(fields, "metadata/log_directory")
     if (is.null(scfg$metadata$templateflow_home)) fields <- c(fields, "metadata/templateflow_home")
     if (is.null(scfg$metadata$scratch_directory)) fields <- c(fields, "metadata/scratch_directory")
   }
@@ -188,6 +189,17 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       prompt = "Specify the directory for fmriprep files", default = default
     )
   }
+
+  # location of logs -- default within project directory, but allow external paths
+  if ("metadata/log_directory" %in% fields) {
+    default <- if (!test_string(scfg$metadata$log_directory)) file.path(scfg$metadata$project_directory, "logs") else scfg$metadata$log_directory
+    scfg$metadata$log_directory <- prompt_directory(
+      instruct = glue("\n\n
+        We recommend placing logs in a logs directory within the BrainGnomes project folder.
+        You can specify a different location if you prefer, including a shared external logs path."),
+      prompt = "Specify the directory for project logs", default = default
+    )
+  }
   
   if ("metadata/scratch_directory" %in% fields) {
     scfg$metadata$scratch_directory <- prompt_directory(prompt = "Where is your work directory?",
@@ -213,7 +225,10 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   # singularity bind paths are unhappy with symbolic links and ~/ notation
   scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
 
-  scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
+  # default log directory if one has not been provided
+  if (!test_string(scfg$metadata$log_directory)) {
+    scfg$metadata$log_directory <- file.path(scfg$metadata$project_directory, "logs")
+  }
 
   # location of postproc outputs -- currently forcing to be within BG project
   if ("metadata/postproc_directory" %in% fields) {

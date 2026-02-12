@@ -509,6 +509,118 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   return(job_id)
 }
 
+# normalize and sort TemplateFlow spaces for stable comparisons
+normalize_prefetch_spaces <- function(spaces) {
+  if (length(spaces) == 0L || is.null(spaces)) return(character(0))
+  spaces <- trimws(as.character(spaces))
+  spaces <- spaces[nzchar(spaces)]
+  sort(unique(spaces))
+}
+
+get_prefetch_state_file <- function(templateflow_home) {
+  file.path(templateflow_home, ".braingnomes_prefetch_state.dcf")
+}
+
+read_prefetch_state <- function(state_file) {
+  if (!checkmate::test_file_exists(state_file)) return(NULL)
+
+  state <- tryCatch({
+    lines <- readLines(state_file, warn = FALSE)
+    lines <- trimws(lines)
+    lines <- lines[nzchar(lines)]
+    if (length(lines) == 0L) return(NULL)
+
+    out <- list()
+    for (line in lines) {
+      split_idx <- regexpr(":", line, fixed = TRUE)[1]
+      if (split_idx <= 0L) next
+      key <- trimws(substr(line, 1L, split_idx - 1L))
+      val <- trimws(substr(line, split_idx + 1L, nchar(line)))
+      if (!nzchar(key)) next
+      out[[key]] <- val
+    }
+    out
+  }, error = function(e) NULL)
+
+  if (is.null(state) || length(state) == 0L) return(NULL)
+
+  if (!is.null(state$spaces) && checkmate::test_string(state$spaces)) {
+    state$spaces <- normalize_prefetch_spaces(strsplit(trimws(state$spaces), "\\s+")[[1]])
+  } else {
+    state$spaces <- character(0)
+  }
+
+  state
+}
+
+prefetch_state_covers_spaces <- function(state, requested_spaces, templateflow_home) {
+  if (is.null(state)) return(FALSE)
+
+  status <- if (!is.null(state$status)) toupper(trimws(as.character(state$status))) else ""
+  if (!identical(status, "COMPLETED")) return(FALSE)
+
+  state_tf_home <- if (!is.null(state$templateflow_home)) {
+    normalizePath(as.character(state$templateflow_home), winslash = "/", mustWork = FALSE)
+  } else {
+    ""
+  }
+  current_tf_home <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
+  if (!identical(state_tf_home, current_tf_home)) return(FALSE)
+
+  all(requested_spaces %in% state$spaces)
+}
+
+prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NULL) {
+  if (!checkmate::test_string(sqlite_db) || !checkmate::test_file_exists(sqlite_db)) {
+    return(FALSE)
+  }
+  if (!checkmate::test_directory_exists(templateflow_home)) {
+    return(FALSE)
+  }
+
+  con <- NULL
+  on.exit(try(if (!is.null(con)) DBI::dbDisconnect(con), silent = TRUE), add = TRUE)
+
+  record <- tryCatch({
+    con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+    cols <- DBI::dbGetQuery(con, "PRAGMA table_info(job_tracking)")
+    if (!"output_manifest" %in% cols$name) return(NULL)
+
+    if (checkmate::test_string(job_id)) {
+      DBI::dbGetQuery(
+        con,
+        "SELECT status, output_manifest
+         FROM job_tracking
+         WHERE job_name = ? AND job_id = ?
+         ORDER BY time_submitted DESC
+         LIMIT 1",
+        params = list("prefetch_templates", as.character(job_id))
+      )
+    } else {
+      DBI::dbGetQuery(
+        con,
+        "SELECT status, output_manifest
+         FROM job_tracking
+         WHERE job_name = ?
+         ORDER BY time_submitted DESC
+         LIMIT 1",
+        params = list("prefetch_templates")
+      )
+    }
+  }, error = function(e) NULL)
+
+  if (is.null(record) || nrow(record) == 0L) return(FALSE)
+  if (!identical(record$status[1], "COMPLETED")) return(FALSE)
+
+  manifest_json <- record$output_manifest[1]
+  if (is.null(manifest_json) || is.na(manifest_json) || !nzchar(manifest_json)) {
+    return(FALSE)
+  }
+
+  verification <- verify_output_manifest(templateflow_home, manifest_json, check_mtime = FALSE)
+  isTRUE(verification$verified)
+}
+
 # helper for handling the problem of multi
 submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
@@ -540,7 +652,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   # pull out non-template output spaces
   spaces_vec <- unique(strsplit(trimws(spaces), "\\s+")[[1]])
   skip_spaces <- c("anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6", "T1w", "T2w", "func")
-  fetch_spaces <- setdiff(spaces_vec, skip_spaces)
+  fetch_spaces <- normalize_prefetch_spaces(setdiff(spaces_vec, skip_spaces))
   if (length(fetch_spaces) == 0L) return(NULL)
 
   script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
@@ -549,9 +661,46 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     return(NULL)
   }
 
+  # preflight permission checks for project-level paths
+  pf_issues <- c(
+    check_write_target(scfg$metadata$log_directory, "log directory"),
+    check_write_target(tf_home, "templateflow_home directory")
+  )
+  if (length(pf_issues) > 0L) {
+    stop("Preflight permission check failed for prefetch_templates:\n",
+         paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
+  }
+
+  prefetch_state_file <- get_prefetch_state_file(tf_home)
+  prefetch_state <- read_prefetch_state(prefetch_state_file)
+  state_covers_spaces <- prefetch_state_covers_spaces(prefetch_state, fetch_spaces, tf_home)
+  if (state_covers_spaces) {
+    state_job_id <- if (!is.null(prefetch_state$scheduler_job_id) && checkmate::test_string(prefetch_state$scheduler_job_id)) {
+      prefetch_state$scheduler_job_id
+    } else {
+      NULL
+    }
+    manifest_ok <- prefetch_manifest_verified(
+      sqlite_db = scfg$metadata$sqlite_db,
+      templateflow_home = tf_home,
+      job_id = state_job_id
+    )
+
+    if (manifest_ok) {
+      message(glue::glue(
+        "Skipping TemplateFlow prefetch: prior successful prefetch covers requested spaces and manifest verification passed in {tf_home}."
+      ))
+      return(NULL)
+    }
+
+    message(glue::glue(
+      "Re-running TemplateFlow prefetch because prior manifest verification failed or files are missing in {tf_home}."
+    ))
+  }
+
   # default resource allocation requirements
   scfg$prefetch_templates <- list(nhours = 0.5, memgb = 16, ncores = 1)
-  
+
   log_stamp <- format(Sys.time(), "%d%b%Y_%H.%M.%S")
   stdout_log <- glue::glue("{scfg$metadata$log_directory}/prefetch_templates_jobid-%j_{log_stamp}.out")
   stderr_log <- sub("\\.out$", ".err", stdout_log)
@@ -573,6 +722,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
     templateflow_home = tf_home,
+    prefetch_state_file = prefetch_state_file,
     log_level = scfg$log_level
   )
 
@@ -587,16 +737,6 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     scheduler_options = sched_args
   )
   
-  # preflight permission checks for project-level paths
-  pf_issues <- c(
-    check_write_target(scfg$metadata$log_directory, "log directory"),
-    check_write_target(tf_home, "templateflow_home directory")
-  )
-  if (length(pf_issues) > 0L) {
-    stop("Preflight permission check failed for prefetch_templates:\n",
-         paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
-  }
-
   job_id <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args,

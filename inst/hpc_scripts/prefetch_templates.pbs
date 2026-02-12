@@ -81,7 +81,27 @@ cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
 
 if [[ $cmd_status -eq 0 ]]; then
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  if [[ -n "$prefetch_state_file" ]]; then
+    state_dir=$(dirname "$prefetch_state_file")
+    state_tmp="${prefetch_state_file}.tmp.$$"
+    if mkdir -p "$state_dir"; then
+      if {
+        printf "status: COMPLETED\n"
+        printf "templateflow_home: %s\n" "$templateflow_home"
+        printf "spaces: %s\n" "$prefetch_spaces"
+        printf "updated_at_utc: %s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        printf "scheduler_job_id: %s\n" "$PBS_JOBID"
+      } > "$state_tmp" && mv -f "$state_tmp" "$prefetch_state_file"; then
+        log_message INFO "Updated TemplateFlow prefetch state: $prefetch_state_file"
+      else
+        rm -f "$state_tmp"
+        log_message WARN "Unable to update TemplateFlow prefetch state: $prefetch_state_file"
+      fi
+    else
+      log_message WARN "Unable to create prefetch state directory: $state_dir"
+    fi
+  fi
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$templateflow_home"
   log_message INFO "Finished TemplateFlow prefetch (time elapsed: $(time_elapsed))"
 else
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade

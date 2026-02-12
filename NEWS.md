@@ -12,6 +12,8 @@
 * Add optional header row for postprocessed confounds TSVs, configurable via postprocess YAML and validated during setup
 * Added extensive checks on write/permission issues with directories and files
 * bugfix: Get CSF probseg image for MRIQC during prefetch
+* `run_project()` now skips TemplateFlow prefetch only when a prior successful prefetch covers requested spaces and the TemplateFlow manifest in job tracking still verifies; missing/deleted template files trigger re-prefetch.
+* bugfix: preserve user-specified `metadata/log_directory` (including external paths) instead of always resetting to `<project_directory>/logs`.
 
 # BrainGnomes 0.7-5
 
