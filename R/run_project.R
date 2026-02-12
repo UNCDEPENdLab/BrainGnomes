@@ -208,7 +208,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   scfg <- ensure_aroma_output_space(scfg, require_aroma = isTRUE(steps["aroma"]))
 
   flywheel_id <- NULL
-  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg)
+  if (isTRUE(steps["flywheel_sync"])) flywheel_id <- submit_flywheel_sync(scfg, sequence_id = sequence_id)
 
   # If only sync was requested, don't enter subject-level processing
   if (!any(steps[names(steps) != "flywheel_sync"])) return(invisible(TRUE))
@@ -220,7 +220,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   # Prefetch TemplateFlow templates when needed so downstream runs can disable networking
   # This avoids socket errors in Python multiprocessing: https://github.com/nipreps/mriqc/issues/1170
   prefetch_id <- NULL
-  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps)
+  if (any(steps[c("mriqc", "fmriprep", "aroma")])) prefetch_id <- submit_prefetch_templates(scfg, steps = steps, sequence_id = sequence_id)
 
   parent_ids <- c(fsaverage_id, prefetch_id)
 
@@ -369,7 +369,7 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
 #' @keywords internal
 #' @noRd
 #' @importFrom checkmate test_true
-submit_flywheel_sync <- function(scfg, lg = NULL) {
+submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
   checkmate::assert_list(scfg)
 
   if (is.null(lg)) {
@@ -399,8 +399,33 @@ submit_flywheel_sync <- function(scfg, lg = NULL) {
     audit_str
   ), collapse = TRUE)
 
-  cmd <- glue::glue("{scfg$compute_environment$flywheel} sync {cli_options} {scfg$flywheel_sync$source_url} {scfg$metadata$flywheel_sync_directory}")
+  sched_script <- get_job_script(scfg, "flywheel_sync", subject_suffix = FALSE)
+  
+  env_variables <- c(
+    pkg_dir = find.package(package = "BrainGnomes"),
+    R_HOME = R.home(),
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
+    flywheel_cmd = scfg$compute_environment$flywheel,
+    flywheel_cli_options = cli_options,
+    flywheel_source_url = scfg$flywheel_sync$source_url,
+    flywheel_sync_directory = scfg$metadata$flywheel_sync_directory
+  )
 
+  tracking_args <- list(
+    job_name = "flywheel_sync",
+    sequence_id = sequence_id,
+    n_nodes = 1,
+    n_cpus = scfg[["flywheel_sync"]]$ncores,
+    wall_time = hours_to_dhms(scfg[["flywheel_sync"]]$nhours),
+    mem_total = scfg[["flywheel_sync"]]$memgb,
+    scheduler = scfg$compute_environment$scheduler,
+    scheduler_options = scfg[["flywheel_sync"]]$sched_args
+  )
+
+  job_id <- cluster_job_submit(sched_script, scheduler = scfg$compute_environment$scheduler, 
+                               sched_args = sched_args, env_variables = env_variables,
+                               tracking_sqlite_db = scfg$metadata$sqlite_db,
+                               tracking_args = tracking_args)
   # preflight permission checks for project-level paths
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
@@ -487,7 +512,7 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
 }
 
 # helper for handling the problem of multi
-submit_prefetch_templates <- function(scfg, steps) {
+submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
   checkmate::assert_logical(steps, any.missing = FALSE)
 
@@ -540,10 +565,12 @@ submit_prefetch_templates <- function(scfg, steps) {
   log_file <- file.path(scfg$metadata$log_directory, "prefetch_templates_log.txt")
   env_variables <- c(
     pkg_dir = find.package(package = "BrainGnomes"),
+    R_HOME = R.home(),
     debug_pipeline = scfg$debug,
     log_file = log_file,
     stdout_log = stdout_log,
     stderr_log = stderr_log,
+    upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     prefetch_container = container_path,
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
@@ -551,6 +578,17 @@ submit_prefetch_templates <- function(scfg, steps) {
     log_level = scfg$log_level
   )
 
+  tracking_args <- list(
+    job_name = "prefetch_templates",
+    sequence_id = sequence_id,
+    n_nodes = 1,
+    n_cpus = scfg[["prefetch_templates"]]$ncores,
+    wall_time = hours_to_dhms(scfg[["prefetch_templates"]]$nhours),
+    mem_total = scfg[["prefetch_templates"]]$memgb,
+    scheduler = scfg$compute_environment$scheduler,
+    scheduler_options = scfg[["prefetch_templates"]]$sched_args
+  )
+  
   # preflight permission checks for project-level paths
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
@@ -565,7 +603,9 @@ submit_prefetch_templates <- function(scfg, steps) {
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args,
     env_variables = env_variables,
-    echo = FALSE
+    echo = FALSE,
+    tracking_sqlite_db = scfg$metadata$sqlite_db,
+    tracking_args = tracking_args
   )
 
   return(job_id)
