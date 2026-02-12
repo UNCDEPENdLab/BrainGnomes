@@ -26,6 +26,13 @@
 - Added extensive checks on write/permission issues with directories and
   files
 - bugfix: Get CSF probseg image for MRIQC during prefetch
+- [`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+  now skips TemplateFlow prefetch only when a prior successful prefetch
+  covers requested spaces and the TemplateFlow manifest in job tracking
+  still verifies; missing/deleted template files trigger re-prefetch.
+- bugfix: preserve user-specified `metadata/log_directory` (including
+  external paths) instead of always resetting to
+  `<project_directory>/logs`.
 
 ## BrainGnomes 0.7-5
 
