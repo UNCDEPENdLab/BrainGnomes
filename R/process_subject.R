@@ -534,9 +534,7 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  # log submission command
-  to_log(lg, "info", "Scheduled bids_conversion job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "bids_conversion job")
 
   return(job_id)
 
@@ -559,8 +557,7 @@ submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled bids_validation job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "bids_validation job")
 
   return(job_id)
 }
@@ -614,8 +611,7 @@ submit_fmriprep <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, 
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled fmriprep job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "fmriprep job")
 
   return(job_id)
 }
@@ -659,8 +655,7 @@ submit_mriqc <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled mriqc job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "mriqc job")
 
   return(job_id)
 }
@@ -716,8 +711,7 @@ submit_aroma <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, env
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled aroma job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "aroma job")
 
   return(job_id)
 }
@@ -768,8 +762,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled postprocess stream {pp_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, glue("postprocess stream {pp_stream} job"))
 
   return(job_id)
 }
@@ -832,8 +825,7 @@ submit_extract_rois <- function(
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  to_log(lg, "info", "Scheduled ROI extraction stream {ex_stream} job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, glue("ROI extraction stream {ex_stream} job"))
 
   return(job_id)
 }

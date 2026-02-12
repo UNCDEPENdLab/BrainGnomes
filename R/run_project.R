@@ -438,8 +438,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
                                tracking_sqlite_db = scfg$metadata$sqlite_db,
                                tracking_args = tracking_args)
 
-  to_log(lg, "info", "Scheduled flywheel_sync job: {truncate_str(attr(job_id, 'cmd'))}")
-  to_log(lg, "debug", "Full command: {attr(job_id, 'cmd')}")
+  log_submission_command(lg, job_id, "flywheel_sync job")
 
   return(job_id)
 }

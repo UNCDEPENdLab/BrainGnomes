@@ -48,3 +48,38 @@ test_that("run_bids_validation sets upd_job_status_path for scheduler script", {
   expect_true(nzchar(captured_env[["upd_job_status_path"]]))
   expect_match(basename(captured_env[["upd_job_status_path"]]), "^upd_job_status\\.R$")
 })
+
+test_that("submit_bids_validation handles failed submission without logging error", {
+  root <- tempfile("submit_bids_validation_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    compute_environment = list(
+      bids_validator = file.path(root, "bids-validator"),
+      scheduler = "slurm"
+    ),
+    bids_validation = list(outfile = "bids_validator_output.html")
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  local_mocked_bindings(
+    cluster_job_submit = function(...) NULL,
+    .package = "BrainGnomes"
+  )
+
+  expect_warning(
+    job_id <- submit_bids_validation(
+      scfg = scfg,
+      sub_dir = root,
+      sub_id = "project",
+      outfile = "bids_validator_output.html",
+      env_variables = c(),
+      sched_script = "/fake/script.sbatch",
+      sched_args = "--time=00:10:00",
+      lg = lgr::get_logger("test_submit_bids_validation")
+    ),
+    regexp = "Failed to schedule bids_validation job"
+  )
+  expect_null(job_id)
+})

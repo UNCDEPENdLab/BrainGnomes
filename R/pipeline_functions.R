@@ -522,6 +522,35 @@ truncate_str <- function(x, max_chars = 100, continuation = "...") {
   return(truncated)
 }
 
+format_submission_cmd <- function(job_id, truncate = FALSE, max_chars = 100,
+                                  unavailable = "<submission command unavailable>") {
+  checkmate::assert_flag(truncate)
+  checkmate::assert_int(max_chars, lower = 1)
+  checkmate::assert_string(unavailable)
+
+  cmd <- attr(job_id, "cmd")
+  if (!checkmate::test_string(cmd)) return(unavailable)
+  if (!isTRUE(truncate)) return(cmd)
+  truncate_str(cmd, max_chars = max_chars)
+}
+
+log_submission_command <- function(logger, job_id, label) {
+  checkmate::assert_string(label)
+
+  short_cmd <- format_submission_cmd(job_id, truncate = TRUE)
+  full_cmd <- format_submission_cmd(job_id, truncate = FALSE)
+  has_job_id <- checkmate::test_string(job_id) && nzchar(job_id)
+
+  if (isTRUE(has_job_id)) {
+    to_log(logger, "info", "Scheduled {label}: {short_cmd}")
+  } else {
+    to_log(logger, "warn", "Failed to schedule {label}. Submission command: {short_cmd}")
+  }
+  to_log(logger, "debug", "Full command: {full_cmd}")
+
+  invisible(NULL)
+}
+
 #' Run an FSL command with optional Singularity container support and structured logging
 #'
 #' Executes an FSL command in a clean shell environment, with support for Singularity containers, optional logging via the `lgr` package, and flexible control over execution and output.
