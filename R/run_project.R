@@ -506,12 +506,14 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
                                tracking_args = tracking_args
   )
 
+  log_submission_command(NULL, job_id, "fsaverage_setup job")
+
   return(job_id)
 }
 
 # normalize and sort TemplateFlow spaces for stable comparisons
 normalize_prefetch_spaces <- function(spaces) {
-  if (length(spaces) == 0L || is.null(spaces)) return(character(0))
+  if (is.null(spaces) || length(spaces) == 0L) return(character(0))
   spaces <- trimws(as.character(spaces))
   spaces <- spaces[nzchar(spaces)]
   sort(unique(spaces))
@@ -528,18 +530,19 @@ read_prefetch_state <- function(state_file) {
     lines <- readLines(state_file, warn = FALSE)
     lines <- trimws(lines)
     lines <- lines[nzchar(lines)]
-    if (length(lines) == 0L) return(NULL)
+    if (length(lines) == 0L) NULL else {
 
-    out <- list()
-    for (line in lines) {
-      split_idx <- regexpr(":", line, fixed = TRUE)[1]
-      if (split_idx <= 0L) next
-      key <- trimws(substr(line, 1L, split_idx - 1L))
-      val <- trimws(substr(line, split_idx + 1L, nchar(line)))
-      if (!nzchar(key)) next
-      out[[key]] <- val
+      out <- list()
+      for (line in lines) {
+        split_idx <- regexpr(":", line, fixed = TRUE)[1]
+        if (split_idx <= 0L) next
+        key <- trimws(substr(line, 1L, split_idx - 1L))
+        val <- trimws(substr(line, split_idx + 1L, nchar(line)))
+        if (!nzchar(key)) next
+        out[[key]] <- val
+      }
+      out
     }
-    out
   }, error = function(e) NULL)
 
   if (is.null(state) || length(state) == 0L) return(NULL)
@@ -745,6 +748,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     tracking_sqlite_db = scfg$metadata$sqlite_db,
     tracking_args = tracking_args
   )
+
+  log_submission_command(NULL, job_id, "prefetch_templates job")
 
   return(job_id)
 }

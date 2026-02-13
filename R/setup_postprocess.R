@@ -344,7 +344,7 @@ maybe_add_framewise_displacement <- function(ppcfg = list(), fields = NULL) {
   has_fd <- function(x) {
     vals <- to_tokens(x)
     if (length(vals) == 0L) return(FALSE)
-    any(grepl("framewise_displacement", vals, ignore.case = TRUE))
+    any(tolower(vals) %in% c("framewise_displacement", "framewise_displacement_unfiltered"))
   }
 
   cur_cols <- to_tokens(ppcfg$confound_calculate$columns)
