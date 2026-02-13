@@ -57,6 +57,7 @@
 <li>
 <code><a href="../reference/run_project.html">run_project()</a></code> now skips TemplateFlow prefetch only when a prior successful prefetch covers requested spaces and the TemplateFlow manifest in job tracking still verifies; missing/deleted template files trigger re-prefetch.</li>
 <li>bugfix: preserve user-specified <code>metadata/log_directory</code> (including external paths) instead of always resetting to <code>&lt;project_directory&gt;/logs</code>.</li>
+<li>During postprocess setup, <code>confound_calculate</code> now offers guided prompts to add <code>framewise_displacement</code> when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as <code>noproc</code> for QC/exclusion workflows.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-5" id="braingnomes-07-5">BrainGnomes 0.7-5<a class="anchor" aria-label="anchor" href="#braingnomes-07-5"></a></h2>

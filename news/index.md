@@ -33,6 +33,10 @@
 - bugfix: preserve user-specified `metadata/log_directory` (including
   external paths) instead of always resetting to
   `<project_directory>/logs`.
+- During postprocess setup, `confound_calculate` now offers guided
+  prompts to add `framewise_displacement` when omitted, including
+  whether to use motion-filtered FD and whether FD should be processed
+  vs kept as `noproc` for QC/exclusion workflows.
 
 ## BrainGnomes 0.7-5
 
