@@ -33,6 +33,29 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
                                  na.strings = c("n/a", "NA", "."),
                                  data.table = FALSE)
 
+  requested_confound_cols <- unlist(list(
+    cfg$confound_regression$columns,
+    cfg$confound_regression$noproc_columns,
+    cfg$confound_calculate$columns,
+    cfg$confound_calculate$noproc_columns
+  ), use.names = FALSE)
+  if (!is.null(requested_confound_cols)) {
+    requested_confound_cols <- as.character(requested_confound_cols)
+    requested_confound_cols <- requested_confound_cols[!is.na(requested_confound_cols)]
+    requested_confound_cols <- trimws(requested_confound_cols)
+    requested_confound_cols <- requested_confound_cols[nzchar(requested_confound_cols)]
+  }
+  needs_unfiltered_fd <- length(requested_confound_cols) > 0L &&
+    any(tolower(requested_confound_cols) == "framewise_displacement_unfiltered")
+  if (needs_unfiltered_fd) {
+    if ("framewise_displacement" %in% names(confounds) &&
+        !"framewise_displacement_unfiltered" %in% names(confounds)) {
+      confounds$framewise_displacement_unfiltered <- confounds$framewise_displacement
+    } else if (!"framewise_displacement_unfiltered" %in% names(confounds)) {
+      to_log(lg, "warn", "Requested framewise_displacement_unfiltered, but source confounds lack framewise_displacement; this column will be omitted.")
+    }
+  }
+
   # handle filtering of motion parameters for respiratory artifacts, recalculation of framewise_displacement
   motion_filter_cfg <- cfg$motion_filter
   if (!is.null(motion_filter_cfg) && isTRUE(motion_filter_cfg$enable)) {
@@ -301,6 +324,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
           function(x) x - mean(x, na.rm = TRUE)
         )
       }
+    }
+
+    if ("framewise_displacement_unfiltered" %in% names(df) &&
+        !"framewise_displacement" %in% names(df)) {
+      names(df)[names(df) == "framewise_displacement_unfiltered"] <- "framewise_displacement"
     }
 
     if (ncol(df) == 0L) {

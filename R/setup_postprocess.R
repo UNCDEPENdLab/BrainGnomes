@@ -298,11 +298,113 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_scrubbing(ppcfg, fields)
   ppcfg <- setup_confound_regression(ppcfg, fields)
   ppcfg <- setup_motion_filter(ppcfg, fields)
+  ppcfg <- maybe_add_framewise_displacement(ppcfg, fields)
   ppcfg <- setup_postprocess_steps(ppcfg, fields)
 
   # repopulate the relevant part of scfg
   scfg$postprocess[[stream_name]] <- ppcfg
   return(scfg)
+}
+
+#' Optionally add framewise displacement to confound_calculate columns
+#'
+#' If confound calculation is enabled and framewise displacement was not explicitly
+#' requested, prompt the user to add it. Users can choose whether to use FD
+#' recomputed after motion filtering (when enabled) and whether FD should be
+#' processed with the same filtering/denoising steps as the BOLD data (`columns`)
+#' or retained as an unprocessed QC covariate (`noproc_columns`).
+#'
+#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
+#' @param fields Optional vector of fields being edited.
+#' @return Modified `ppcfg`.
+#' @keywords internal
+maybe_add_framewise_displacement <- function(ppcfg = list(), fields = NULL) {
+  if (!isTRUE(ppcfg$confound_calculate$enable)) return(ppcfg)
+
+  if (!is.null(fields)) {
+    relevant <- c(
+      "postprocess/confound_calculate/enable",
+      "postprocess/confound_calculate/columns",
+      "postprocess/confound_calculate/noproc_columns"
+    )
+    if (!any(fields %in% relevant)) return(ppcfg)
+  }
+
+  to_tokens <- function(x) {
+    if (is.null(x)) return(character(0))
+    x <- as.character(x)
+    x <- x[!is.na(x)]
+    x <- trimws(x)
+    x[nzchar(x)]
+  }
+  from_tokens <- function(x) {
+    if (length(x) == 0L) return(NULL)
+    unique(x)
+  }
+  has_fd <- function(x) {
+    vals <- to_tokens(x)
+    if (length(vals) == 0L) return(FALSE)
+    any(grepl("framewise_displacement", vals, ignore.case = TRUE))
+  }
+
+  cur_cols <- to_tokens(ppcfg$confound_calculate$columns)
+  cur_noproc <- to_tokens(ppcfg$confound_calculate$noproc_columns)
+  if (has_fd(cur_cols) || has_fd(cur_noproc)) return(ppcfg)
+
+  include_fd <- prompt_input(
+    instruct = glue("\n
+      You enabled confound calculation but did not explicitly request `framewise_displacement`.
+      FD is often useful for QC and/or nuisance modeling.
+      "),
+    prompt = "Add framewise_displacement to postprocessed confounds?",
+    type = "flag",
+    default = FALSE
+  )
+  if (!isTRUE(include_fd)) return(ppcfg)
+
+  use_filtered_fd <- TRUE
+  if (isTRUE(ppcfg$motion_filter$enable)) {
+    use_filtered_fd <- prompt_input(
+      instruct = glue("\n
+        Motion filtering is enabled. BrainGnomes can use FD recomputed from filtered motion parameters
+        (notch/low-pass) or retain the original FD from the source confounds.
+        "),
+      prompt = "Use the FD recomputed after motion filtering?",
+      type = "flag",
+      default = TRUE
+    )
+  }
+
+  process_like_bold <- prompt_input(
+    instruct = glue("\n
+      Should FD be processed with the same postprocessing operations applied to BOLD-derived confounds
+      (e.g., AROMA/temporal filtering)?
+
+      Choose 'yes' when FD will be used as a regressor in fMRI modeling.
+      Choose 'no' when FD is for screening/QC or run exclusion; in that case it should stay in noproc_columns.
+      "),
+    prompt = "Process framewise_displacement like BOLD-derived confounds?",
+    type = "flag",
+    default = FALSE
+  )
+
+  fd_token <- if (isTRUE(ppcfg$motion_filter$enable) && !isTRUE(use_filtered_fd)) {
+    "framewise_displacement_unfiltered"
+  } else {
+    "framewise_displacement"
+  }
+
+  if (isTRUE(process_like_bold)) {
+    cur_cols <- unique(c(cur_cols, fd_token))
+    cur_noproc <- setdiff(cur_noproc, c("framewise_displacement", "framewise_displacement_unfiltered"))
+  } else {
+    cur_noproc <- unique(c(cur_noproc, fd_token))
+    cur_cols <- setdiff(cur_cols, c("framewise_displacement", "framewise_displacement_unfiltered"))
+  }
+
+  ppcfg$confound_calculate$columns <- from_tokens(cur_cols)
+  ppcfg$confound_calculate$noproc_columns <- from_tokens(cur_noproc)
+  return(ppcfg)
 }
 
 setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_desc = NULL) {

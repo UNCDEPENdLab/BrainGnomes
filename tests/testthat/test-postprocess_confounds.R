@@ -249,6 +249,70 @@ test_that("postprocess_confounds recomputes framewise displacement when only nop
   )
 })
 
+test_that("postprocess_confounds honors framewise_displacement_unfiltered requests", {
+  tmpdir <- tempfile("postproc_confounds_fd_unfiltered_")
+  dir.create(tmpdir)
+  on.exit(unlink(tmpdir, recursive = TRUE), add = TRUE)
+
+  n_time <- 40L
+  conf_df <- data.frame(
+    rot_x = sin(seq_len(n_time) / 4),
+    rot_y = cos(seq_len(n_time) / 5),
+    rot_z = sin(seq_len(n_time) / 6),
+    trans_x = seq(0.05, 0.15, length.out = n_time),
+    trans_y = seq(-0.1, 0.1, length.out = n_time),
+    trans_z = seq(0.2, -0.2, length.out = n_time),
+    framewise_displacement = rep(0.3, n_time)
+  )
+  conf_path <- file.path(tmpdir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
+  data.table::fwrite(conf_df, conf_path, sep = "\t")
+
+  cfg <- list(
+    motion_filter = list(enable = TRUE, filter_type = "notch", bandstop_min_bpm = 12, bandstop_max_bpm = 18),
+    scrubbing = list(enable = FALSE, apply = FALSE, add_to_confounds = FALSE, head_radius = 40),
+    confound_regression = list(enable = FALSE, columns = NULL, noproc_columns = NULL),
+    confound_calculate = list(
+      enable = TRUE,
+      columns = NULL,
+      noproc_columns = "framewise_displacement_unfiltered",
+      demean = FALSE,
+      include_header = TRUE
+    ),
+    apply_aroma = list(enable = FALSE, nonaggressive = TRUE),
+    temporal_filter = list(low_pass_hz = NULL, high_pass_hz = NULL, method = "butterworth"),
+    bids_desc = "pp",
+    tr = 0.8,
+    overwrite = TRUE
+  )
+
+  output_bids_info <- list(
+    subject = "99",
+    task = "rest",
+    description = "denoise",
+    suffix = "bold",
+    ext = ".nii.gz",
+    directory = tmpdir
+  )
+  proc_files <- list(confounds = conf_path, melodic_mix = NULL, noise_ics = integer(0))
+
+  postprocess_confounds(
+    proc_files = proc_files,
+    cfg = cfg,
+    processing_sequence = character(0),
+    output_bids_info = output_bids_info,
+    fsl_img = NULL,
+    lg = NULL
+  )
+
+  confound_file <- construct_bids_filename(
+    modifyList(output_bids_info, list(suffix = "confounds", ext = ".tsv")),
+    full.names = TRUE
+  )
+  calc_dt <- data.table::fread(confound_file)
+  expect_equal(colnames(calc_dt), "framewise_displacement")
+  expect_equal(calc_dt$framewise_displacement, conf_df$framewise_displacement, tolerance = 1e-6)
+})
+
 test_that("postprocess_confounds skips processing when confound data are empty", {
   skip_if_not_installed("RNifti")
 

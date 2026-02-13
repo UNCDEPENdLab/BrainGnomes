@@ -496,7 +496,10 @@ test_that("submit_prefetch_templates resubmits when a new space is requested", {
   expect_true(submitted)
   expect_equal(result, "99991")
   expect_true("prefetch_state_file" %in% names(captured_env))
-  expect_equal(captured_env[["prefetch_state_file"]], state_file)
+  expect_equal(
+    normalizePath(captured_env[["prefetch_state_file"]], winslash = "/", mustWork = FALSE),
+    normalizePath(state_file, winslash = "/", mustWork = FALSE)
+  )
 })
 
 test_that("prefetch_manifest_verified returns TRUE when manifest matches templateflow contents", {
