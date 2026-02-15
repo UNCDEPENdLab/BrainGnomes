@@ -1,6 +1,8 @@
 # Changelog
 
-## BrainGnomes 0.8 (DEVELOPMENT)
+## BrainGnomes 0.8
+
+Released 2026-02-14
 
 - Add optional low-pass filtering of motion parameters before FD
   recomputation; rename notch config fields to
@@ -37,6 +39,8 @@
   prompts to add `framewise_displacement` when omitted, including
   whether to use motion-filtered FD and whether FD should be processed
   vs kept as `noproc` for QC/exclusion workflows.
+- Increase consistency of instructions and formatting in
+  [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
 
 ## BrainGnomes 0.7-5
 

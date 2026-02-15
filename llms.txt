@@ -85,8 +85,6 @@ steps.
   : List postprocessed output files for a stream based on its input spec
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
   : Get processing status for all subjects
-- [`get_step_title()`](https://uncdependlab.github.io/BrainGnomes/reference/get_step_title.md)
-  : helper for retrieving a human-readable title for a pipeline step
 - [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
   : Get processing status for a single subject
 - [`get_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_tracked_job_status.md)
@@ -100,7 +98,7 @@ steps.
   : helper function to insert a keyed data.frame into the sqlite storage
   database
 - [`insert_tracked_job()`](https://uncdependlab.github.io/BrainGnomes/reference/insert_tracked_job.md)
-  : Internal helper funciton to insert a job into the tracking SQLite
+  : Internal helper function to insert a job into the tracking SQLite
   database
 - [`lmfit_residuals_4d`](https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.md)
   : Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear
@@ -133,9 +131,6 @@ steps.
   : summary method for project configuration object
 - [`summary(`*`<bg_status_df>`*`)`](https://uncdependlab.github.io/BrainGnomes/reference/summary.bg_status_df.md)
   : Summarize project status
-- [`tracking_df_to_tree()`](https://uncdependlab.github.io/BrainGnomes/reference/tracking_df_to_tree.md)
-  : helper for converting tracking data.frame into a multi-level
-  data.tree hierarchy
 - [`update_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.md)
   : Update Job Status in Tracking SQLite Database
 - [`wait_for_job()`](https://uncdependlab.github.io/BrainGnomes/reference/wait_for_job.md)

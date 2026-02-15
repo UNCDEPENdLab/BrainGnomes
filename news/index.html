@@ -40,7 +40,8 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08-development">BrainGnomes 0.8 (DEVELOPMENT)<a class="anchor" aria-label="anchor" href="#braingnomes-08-development"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08">BrainGnomes 0.8<a class="anchor" aria-label="anchor" href="#braingnomes-08"></a></h2>
+<p>Released 2026-02-14</p>
 <ul><li>Add optional low-pass filtering of motion parameters before FD recomputation; rename notch config fields to <code>bandstop_min_bpm</code>/<code>bandstop_max_bpm</code> (deprecated: <code>band_stop_min</code>/<code>band_stop_max</code>).</li>
 <li>All HPC jobs are now tracked in detail by an SQLite database</li>
 <li>Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>
@@ -58,6 +59,8 @@
 <code><a href="../reference/run_project.html">run_project()</a></code> now skips TemplateFlow prefetch only when a prior successful prefetch covers requested spaces and the TemplateFlow manifest in job tracking still verifies; missing/deleted template files trigger re-prefetch.</li>
 <li>bugfix: preserve user-specified <code>metadata/log_directory</code> (including external paths) instead of always resetting to <code>&lt;project_directory&gt;/logs</code>.</li>
 <li>During postprocess setup, <code>confound_calculate</code> now offers guided prompts to add <code>framewise_displacement</code> when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as <code>noproc</code> for QC/exclusion workflows.</li>
+<li>Increase consistency of instructions and formatting in <code><a href="../reference/setup_project.html">setup_project()</a></code>
+</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-5" id="braingnomes-07-5">BrainGnomes 0.7-5<a class="anchor" aria-label="anchor" href="#braingnomes-07-5"></a></h2>

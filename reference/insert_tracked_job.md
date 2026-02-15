@@ -1,6 +1,6 @@
-# Internal helper funciton to insert a job into the tracking SQLite database
+# Internal helper function to insert a job into the tracking SQLite database
 
-Internal helper funciton to insert a job into the tracking SQLite
+Internal helper function to insert a job into the tracking SQLite
 database
 
 ## Usage
