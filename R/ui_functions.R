@@ -277,6 +277,28 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
   }
   show_empty_hint <- !is.null(empty_keyword_display) && !is.null(default) && isFALSE(required)
 
+  normalize_instruction_block <- function(x) {
+    if (!checkmate::test_string(x)) return(NULL)
+
+    x <- gsub("\r\n?", "\n", x)
+    lines <- strsplit(x, "\n", fixed = TRUE)[[1]]
+    if (!length(lines)) return(NULL)
+
+    while (length(lines) > 0L && !nzchar(trimws(lines[1L]))) lines <- lines[-1L]
+    while (length(lines) > 0L && !nzchar(trimws(lines[length(lines)]))) lines <- lines[-length(lines)]
+    if (!length(lines)) return(NULL)
+
+    non_empty <- lines[nzchar(trimws(lines))]
+    indent_counts <- nchar(sub("^([ \t]*).*", "\\1", non_empty))
+    common_indent <- if (length(indent_counts)) min(indent_counts) else 0L
+
+    if (common_indent > 0L) {
+      lines <- substring(lines, common_indent + 1L)
+    }
+
+    paste(lines, collapse = "\n")
+  }
+
   if (type == "flag") {
     # Handle yes/no prompts
     if (!is.null(default)) {
@@ -300,13 +322,18 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, type = "c
     }
   }
 
-  # always add trailing space to make prompt clear
-  if (!grepl("\\s$", prompt)) prompt <- paste0(prompt, " ")
-  if (!grepl("\\s$", prompt_eol)) prompt_eol <- paste0(prompt_eol, " ") # also ensure that prompt_eol has trailing space
-  prompt <- paste0(prompt, prompt_eol)
+  prompt <- trimws(prompt, which = "right")
+  prompt_eol <- trimws(prompt_eol, which = "right")
+  if (!nzchar(prompt_eol)) prompt_eol <- ">"
+  if (nzchar(prompt)) {
+    prompt <- paste0(prompt, "\n", prompt_eol, " ")
+  } else {
+    prompt <- paste0(prompt_eol, " ")
+  }
   
   # print instructions
-  if (checkmate::test_string(instruct)) cat(instruct, "\n")
+  instruct <- normalize_instruction_block(instruct)
+  if (checkmate::test_string(instruct)) cat("\n", instruct, "\n\n", sep = "")
 
   # define typed empty return value
   empty <- switch(type,

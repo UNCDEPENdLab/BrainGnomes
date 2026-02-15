@@ -140,6 +140,7 @@ setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
   if (glue("{job_name}/memgb") %in% fields) {
     scfg[[job_name]]$memgb <- prompt_input(
       instruct = glue("How many GB of memory should be used for running {job_name}?"),
+      prompt = "Memory (GB):",
       type = "numeric", lower = 1, upper = 1024, len = 1L, default = defaults$memgb
     )
   }
@@ -147,6 +148,7 @@ setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
   if (glue("{job_name}/nhours") %in% fields) {
     scfg[[job_name]]$nhours <- prompt_input(
       instruct = glue("How many hours should each run of {job_name} request?"),
+      prompt = "Run time (hours):",
       type = "numeric", lower = 0.1, upper = 1000, len = 1L, default = defaults$nhours
     )
   }
@@ -154,6 +156,7 @@ setup_job <- function(scfg, job_name = NULL, defaults = NULL, fields = NULL) {
   if (glue("{job_name}/ncores") %in% fields) {
     scfg[[job_name]]$ncores <- prompt_input(
       instruct = glue("How many cores/CPUs should each job request?"),
+      prompt = "CPU cores:",
       type = "integer", lower = 1, upper = 1000, len = 1L, default = defaults$ncores
     )
   }

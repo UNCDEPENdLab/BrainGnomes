@@ -271,7 +271,7 @@ sqlite_table_exists <- function(sqlite_db, table_name) {
 #' @param tracking_df A data.frame returned by get_tracked_job_status()
 #' @return A named list of data.tree Node objects (one per sequence_id)
 #' @importFrom data.tree Node
-#' @export
+#' @keywords internal
 tracking_df_to_tree <- function(tracking_df) {
   if (!requireNamespace("data.tree", quietly = TRUE)) {
     stop("Package 'data.tree' is required for tracking_df_to_tree()")
@@ -348,7 +348,7 @@ tracking_df_to_tree <- function(tracking_df) {
 #'
 #' @param node A data.tree Node object representing a job
 #' @return A string summarizing the job
-#' @export
+#' @keywords internal
 get_step_title <- function(node) {
   if (is.null(node)) return(NA_character_)
   

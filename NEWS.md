@@ -1,4 +1,7 @@
-# BrainGnomes 0.8 (DEVELOPMENT)
+# BrainGnomes 0.8
+
+Released 2026-02-14
+
 * Add optional low-pass filtering of motion parameters before FD recomputation; rename notch config fields to
   `bandstop_min_bpm`/`bandstop_max_bpm` (deprecated: `band_stop_min`/`band_stop_max`).
 * All HPC jobs are now tracked in detail by an SQLite database
@@ -15,6 +18,7 @@
 * `run_project()` now skips TemplateFlow prefetch only when a prior successful prefetch covers requested spaces and the TemplateFlow manifest in job tracking still verifies; missing/deleted template files trigger re-prefetch.
 * bugfix: preserve user-specified `metadata/log_directory` (including external paths) instead of always resetting to `<project_directory>/logs`.
 * During postprocess setup, `confound_calculate` now offers guided prompts to add `framewise_displacement` when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as `noproc` for QC/exclusion workflows.
+* Increase consistency of instructions and formatting in `setup_project()`
 
 # BrainGnomes 0.7-5
 

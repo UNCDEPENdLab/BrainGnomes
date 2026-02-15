@@ -205,7 +205,7 @@ create_tracking_db = function(sqlite_db) {
 }
 
 
-#' Internal helper funciton to insert a job into the tracking SQLite database
+#' Internal helper function to insert a job into the tracking SQLite database
 #'
 #' @param sqlite_db Path to SQLite database used for tracking
 #' @param job_id Character string job ID
@@ -267,7 +267,7 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
     # open sqlite connection and execute query
     id <- submit_sqlite_query(str = sequence_id_sql, sqlite_db = sqlite_db, 
                               param = list(parent_job_id), return_result = TRUE)
-    if(!is.null(id[1,1])) { id[1,1] } else { NA }
+    if(nrow(id) > 0L && !is.na(id[1,1])) { id[1,1] } else { NA }
   }, error = function(e) {
     warning(format_tracking_db_error(sqlite_db, operation = "add_tracked_job_parent sequence lookup", err = e), call. = FALSE)
     NA
@@ -337,7 +337,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
   checkmate::assert_string(status)
   status <- toupper(status)
   checkmate::assert_subset(status, c("QUEUED", "STARTED", "FAILED", "COMPLETED", "FAILED_BY_EXT"))
-  if (cascade & status %in% c("QUEUED", "STARTED", "COMPLETED")) {
+  if (cascade && status %in% c("QUEUED", "STARTED", "COMPLETED")) {
     cascade <- FALSE
     warning("Only status FAILED or FAILED_BY_EXT can cascade in `update_tracked_job_status`")
   }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/job_tracking_functions.R
 \name{insert_tracked_job}
 \alias{insert_tracked_job}
-\title{Internal helper funciton to insert a job into the tracking SQLite database}
+\title{Internal helper function to insert a job into the tracking SQLite database}
 \usage{
 insert_tracked_job(sqlite_db, job_id, tracking_args = list())
 }
@@ -14,5 +14,5 @@ insert_tracked_job(sqlite_db, job_id, tracking_args = list())
 \item{tracking_args}{List of tracking arguments for SQLite database}
 }
 \description{
-Internal helper funciton to insert a job into the tracking SQLite database
+Internal helper function to insert a job into the tracking SQLite database
 }

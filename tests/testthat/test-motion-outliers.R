@@ -209,6 +209,56 @@ test_that("calculate_motion_outliers validates bandstop_max_bpm > bandstop_min_b
   )
 })
 
+test_that("calculate_motion_outliers lowpass filtering produces filtered FD columns", {
+  skip_if_not_installed("data.table")
+  skip_if_not_installed("signal")
+
+  tmp_dir <- tempfile("motion_lp_test")
+  dir.create(tmp_dir, recursive = TRUE)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  n <- 100L
+  set.seed(42)
+  # Motion with a mix of slow drift and fast oscillation
+  t_seq <- seq_len(n)
+  motion_data <- data.frame(
+    rot_x   = 0.01 * sin(2 * pi * t_seq / 50) + 0.005 * sin(2 * pi * t_seq / 4),
+    rot_y   = 0.005 * cos(2 * pi * t_seq / 40),
+    rot_z   = 0.002 * sin(2 * pi * t_seq / 60),
+    trans_x = 0.1 * sin(2 * pi * t_seq / 45) + 0.08 * sin(2 * pi * t_seq / 3),
+    trans_y = 0.05 * cos(2 * pi * t_seq / 55),
+    trans_z = 0.03 * sin(2 * pi * t_seq / 35)
+  )
+  confounds_file <- file.path(tmp_dir, "sub-01_task-rest_desc-confounds_timeseries.tsv")
+  data.table::fwrite(motion_data, confounds_file, sep = "\t")
+
+  result <- calculate_motion_outliers(
+    confounds_files = confounds_file,
+    thresholds = 0.3,
+    include_filtered = TRUE,
+    filter_method = "lowpass",
+    tr = 1,
+    low_pass_hz = 0.1,
+    filter_order = 2L
+  )
+
+  expect_equal(nrow(result), 1L)
+  # Filtered columns should be present
+  expect_true("fd_filt_max" %in% names(result))
+  expect_true("fd_filt_mean" %in% names(result))
+  expect_true("fd_filt_gt_0p3" %in% names(result))
+
+  # Filtered FD should be non-negative and finite
+
+  expect_true(is.finite(result$fd_filt_max))
+  expect_true(result$fd_filt_max >= 0)
+  expect_true(is.finite(result$fd_filt_mean))
+
+  # Low-pass should reduce high-frequency motion, so filtered max FD should be
+  # smaller than or equal to unfiltered (the fast oscillation is removed)
+  expect_true(result$fd_filt_max <= result$fd_max + 1e-6)
+})
+
 test_that("calculate_motion_outliers writes output file with correct separator", {
   skip_if_not_installed("data.table")
 

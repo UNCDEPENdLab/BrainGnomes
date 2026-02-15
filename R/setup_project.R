@@ -133,7 +133,8 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     scfg$metadata$project_directory <- prompt_input("What is the root directory where project files will be stored?", type = "character")
     if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
       create <- prompt_input(
-        instruct = glue("The directory {scfg$metadata$project_directory} does not exist. Would you like me to create it?\n"),
+        instruct = glue("The directory {scfg$metadata$project_directory} does not exist."),
+        prompt = "Create this directory now?",
         type = "flag"
       )
       if (create) dir.create(scfg$metadata$project_directory, recursive = TRUE)
@@ -185,7 +186,8 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
       instruct = glue("\n\n
         We recommend that fmriprep outputs be placed in data_fmriprep within the BrainGnomes project directory.
         You can specify a different location if you wish. Also, if you're working from extant fmriprep files, you
-        can point to an existing directory containing the results of fmriprep."),
+        can point to an existing directory containing the results of fmriprep.\n
+      "),
       prompt = "Specify the directory for fmriprep files", default = default
     )
   }
@@ -335,7 +337,7 @@ setup_fmriprep <- function(scfg = NULL, fields = NULL) {
     scfg$fmriprep$fs_license_file <- prompt_input(
       instruct = glue("\n
       What is the location of your FreeSurfer license file? This is required for fmriprep to run.
-      The license file is might be called FreeSurferLicense.txt and is available from the FreeSurfer website.
+      The license file might be called FreeSurferLicense.txt and is available from the FreeSurfer website.
       https://surfer.nmr.mgh.harvard.edu/fswiki/License\n
       "),
       prompt = "What is the location of your FreeSurfer license file?",
@@ -501,7 +503,8 @@ setup_flywheel_sync <- function(scfg, fields = NULL) {
 
   if (is.null(scfg$flywheel_sync$source_url) || "flywheel_sync/source_url" %in% fields) {
     scfg$flywheel_sync$source_url <- prompt_input(
-      instruct = "Enter the Flywheel project URL (e.g., fw://server/group/project):",
+      instruct = "Use the Flywheel project URL format: fw://server/group/project.",
+      prompt = "Flywheel project URL:",
       type = "character"
     )
   }
@@ -636,7 +639,7 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
   if (is.null(scfg$bids_conversion$ses_regex) || "bids_conversion/ses_regex" %in% fields) {
     scfg$bids_conversion$ses_regex <- prompt_input(
       instruct = glue("
-      If you have multisession data, specify the the regex pattern for session IDs within the subject folders.
+      If you have multisession data, specify the regex pattern for session IDs within subject folders.
       If you don't have multisession data, just press Enter to skip this step.
     ", .trim = FALSE),
       prompt = "What is the regex pattern for the session IDs?",
@@ -647,14 +650,14 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
   if (!is.na(scfg$bids_conversion$ses_regex) && (is.null(scfg$bids_conversion$ses_id_match) || "bids_conversion/ses_id_match" %in% fields)) {
     scfg$bids_conversion$ses_id_match <- prompt_input(
       instruct = glue("\n
-      What is the regex pattern for extracting the ID from the subject folder name? You
+      What is the regex pattern for extracting the ID from the session folder name? You
       can use multiple capturing groups if the ID has multiple parts. The default is ([0-9]+),
       which extracts the first number-like sequence from the folder name. For example, if your
-      subject folder is named 'sub-001', the ID will be '001'. If your subject folder is named
-      '001', the ID will be '001'. If the entire folder name is the subject ID, such as '001ra_2May2024',
-      the id matching expression should be (.+), which matches all characters in the folder name.\n
+      session folder is named 'ses-01', the ID will be '01'. If your session folder is named
+      '001', the ID will be '001'. If the entire folder name is the session ID, such as '001ra_2May2024',
+      the ID matching expression should be (.+), which matches all characters in the folder name.\n
     "),
-      prompt = "What is the regex pattern for extracting the subject ID from the folder name?",
+      prompt = "What is the regex pattern for extracting the session ID from the folder name?",
       type = "character", default = "([0-9]+)"
     )
   } else {
@@ -663,11 +666,20 @@ setup_bids_conversion <- function(scfg, fields = NULL) {
 
 
   if (is.null(scfg$bids_conversion$heuristic_file) || "bids_conversion/heuristic_file" %in% fields) {
-    scfg$bids_conversion$heuristic_file <- prompt_input(instruct = glue("What is the location of the heudiconv heuristic file?"), type = "file")
+    scfg$bids_conversion$heuristic_file <- prompt_input(
+      instruct = "Provide the path to your heudiconv heuristic file.",
+      prompt = "Heudiconv heuristic file:",
+      type = "file"
+    )
   }
 
   if (is.null(scfg$bids_conversion$overwrite) || "bids_conversion/overwrite" %in% fields) {
-    scfg$bids_conversion$overwrite <- prompt_input(instruct = glue("Should existing BIDS files be overwritten by heudiconv?"), type = "flag", default = TRUE)
+    scfg$bids_conversion$overwrite <- prompt_input(
+      instruct = "Enable this if you want heudiconv to replace existing BIDS outputs.",
+      prompt = "Overwrite existing BIDS files?",
+      type = "flag",
+      default = TRUE
+    )
   }
 
   if (is.null(scfg$bids_conversion$clear_cache) || "bids_conversion/clear_cache" %in% fields) {
@@ -904,7 +916,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
     scfg$compute_environment$bids_validator <- prompt_input(
       instruct = glue("
       \nAfter BIDS conversion, the pipeline can pass resulting BIDS folders to bids-validator to verify that 
-      the folder conforms to the BIDS specification. You can read more about validtion here: 
+      the folder conforms to the BIDS specification. You can read more about validation here: 
       https://bids-validator.readthedocs.io/en/stable/index.html.
       
       If you'd like to include BIDS validation in the processing pipeline, specify the location of the 
@@ -934,7 +946,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   if ("compute_environment/aroma_container" %in% fields) {
     scfg$compute_environment$aroma_container <- prompt_input(
       instruct = glue("\n
-      The pipeline can use ICA-AROMA to denoise fMRI timeseries. As descried in Pruim et al. (2015), this
+      The pipeline can use ICA-AROMA to denoise fMRI timeseries. As described in Pruim et al. (2015), this
       is a data-driven step that produces a set of temporal regressors that are thought to be motion-related.
       If you would like to use ICA-AROMA in the pipeline, you need to build a singularity container of this
       workflow. Follow the instructions here: https://fmripost-aroma.readthedocs.io/latest/

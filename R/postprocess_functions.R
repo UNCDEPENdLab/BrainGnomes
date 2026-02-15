@@ -311,7 +311,7 @@ filter_confounds <- function(confounds_df = NULL,
 
     Q <- f0 / bandwidth
     coeffs <- iirnotch_r(f0 = f0, Q = Q, fs = fs)
-    to_log(lg, "info", "Applying notch filter centerd at {round(f0, 4)} Hz (Q = {round(Q, 2)}, order {filter_order}, passes {n_filter_applications}) to {length(available_cols)} motion columns.")
+    to_log(lg, "info", "Applying notch filter centered at {round(f0, 4)} Hz (Q = {round(Q, 2)}, order {filter_order}, passes {n_filter_applications}) to {length(available_cols)} motion columns.")
   } else {
     if (is.null(filter_order)) filter_order <- 2L
     checkmate::assert_number(low_pass_hz, lower = 0.001)

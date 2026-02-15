@@ -10,7 +10,8 @@
 diagnose_pipeline <- function(input) {
   
   if (options()$warn < 1) {
-    on.exit(options(warn = options()$warn))
+    old_warn <- options()$warn
+    on.exit(options(warn = old_warn))
     options(warn = 1)
   }
 
@@ -26,14 +27,14 @@ diagnose_pipeline <- function(input) {
     }
     proj_dir <- input
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
-    sqlite_db <- file.path(input, grep(".sqlite", proj_files, value = TRUE))
+    sqlite_db <- file.path(input, grep("\\.sqlite$", proj_files, value = TRUE))
   }
   else if (checkmate::test_class(input, "bg_project_cfg")) {
     proj_dir <- input$metadata$project_directory
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     sqlite_db <- file.path(
       proj_dir,
-      grep(".sqlite", proj_files, value = TRUE)
+      grep("\\.sqlite$", proj_files, value = TRUE)
     )
   } else {
     cli::cli_abort(
@@ -98,14 +99,14 @@ diagnose_pipeline <- function(input) {
   
   if (selected_view == "subject") {
     con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
-    on.exit(DBI::dbDisconnect(con))
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
     all_tracking_df <- DBI::dbGetQuery(con, "SELECT * FROM job_tracking")
     if (nrow(all_tracking_df) > 0L && "job_obj" %in% names(all_tracking_df)) {
       all_tracking_df$job_obj <- lapply(all_tracking_df$job_obj, function(x) {
         if (!is.null(x)) unserialize(x) else NULL
       })
     }
-    on.exit(NULL)
+    DBI::dbDisconnect(con)
     
     all_job_names <- unique(all_tracking_df$job_name)
     subjects <- unique(regmatches(all_job_names, regexpr("sub-[^_]+", all_job_names)))
@@ -273,7 +274,6 @@ diagnose_pipeline <- function(input) {
   this_job <- job_list[[job_choice]]$node
   
   this_job_name <- this_job$name
-  this_job_title <- get_step_title(this_job)
   this_job_status <- this_job$status
   
   if (this_job_status == "COMPLETED") {
@@ -295,9 +295,10 @@ diagnose_pipeline <- function(input) {
     )
   } else {
     if (this_job_status == "FAILED_BY_EXT") {
-      upstream_node <- data.tree::FindNode(this_job$root, filterFun = function(n) {
+      upstream_matches <- data.tree::Traverse(this_job$root, filterFun = function(n) {
         !is.null(n$id) && n$id == this_job$parent_id
       })
+      upstream_node <- if (length(upstream_matches) > 0L) upstream_matches[[1]] else NULL
       
       if (!is.null(upstream_node)) {
         extra <- "because upstream job {.code {upstream_node$name}} failed"
@@ -839,7 +840,8 @@ get_status_symbol <- Vectorize(
            "QUEUED" = cli::col_magenta("\u2197"), # arrow
            "STARTED" = cli::col_yellow("\u22ef"), # ellipsis
            "FAILED" = cli::col_red("\u2717"), # X mark
-           "FAILED_BY_EXT" = cli::col_red("\u2717")) # X mark
+           "FAILED_BY_EXT" = cli::col_red("\u2717"), # X mark
+           cli::col_yellow("?")) # unknown/unrecognized status
   },
   USE.NAMES = FALSE
   )

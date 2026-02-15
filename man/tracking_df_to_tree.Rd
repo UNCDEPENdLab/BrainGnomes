@@ -15,3 +15,4 @@ A named list of data.tree Node objects (one per sequence_id)
 \description{
 helper for converting tracking data.frame into a multi-level data.tree hierarchy
 }
+\keyword{internal}

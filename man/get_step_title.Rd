@@ -15,3 +15,4 @@ A string summarizing the job
 \description{
 helper for retrieving a human-readable title for a pipeline step
 }
+\keyword{internal}
