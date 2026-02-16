@@ -1,14 +1,26 @@
 test_that("aroma sbatch reconciles non-zero exit with success token", {
   skip_if(Sys.which("bash") == "", "bash is required for shell-script integration test")
 
-  script_path <- normalizePath(
-    testthat::test_path("..", "..", "inst", "hpc_scripts", "aroma_subject.sbatch"),
-    mustWork = TRUE
+  resolve_pkg_file <- function(inst_rel, fallback_rel) {
+    inst_path <- system.file(inst_rel, package = "BrainGnomes")
+    if (nzchar(inst_path) && file.exists(inst_path)) {
+      return(normalizePath(inst_path, mustWork = TRUE))
+    }
+    fallback <- do.call(testthat::test_path, as.list(c("..", "..", "inst", fallback_rel)))
+    normalizePath(fallback, mustWork = TRUE)
+  }
+
+  script_path <- resolve_pkg_file(
+    inst_rel = file.path("hpc_scripts", "aroma_subject.sbatch"),
+    fallback_rel = c("hpc_scripts", "aroma_subject.sbatch")
   )
-  pkg_dir <- normalizePath(
-    testthat::test_path("..", "..", "inst"),
-    mustWork = TRUE
-  )
+
+  pkg_dir_installed <- system.file(package = "BrainGnomes")
+  if (nzchar(pkg_dir_installed) && file.exists(file.path(pkg_dir_installed, "shell_functions"))) {
+    pkg_dir <- normalizePath(pkg_dir_installed, mustWork = TRUE)
+  } else {
+    pkg_dir <- normalizePath(testthat::test_path("..", "..", "inst"), mustWork = TRUE)
+  }
 
   root <- tempfile("aroma_reconcile_")
   dir.create(root, recursive = TRUE)
