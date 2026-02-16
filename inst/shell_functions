@@ -118,21 +118,95 @@ run_bg_and_wait() {
   local pid="$1"
   local out_var="$2"
   local status=0
+  local saved_err_trap=""
+  local had_errexit=0
+  local had_errtrace=0
 
   if [[ -z "$pid" ]]; then
     status=1
   else
-    # Avoid ERR trap and errexit while waiting on background processes.
+    # Why this is needed:
+    # `wait` returns the child exit status. For long-running tools (fMRIPrep/AROMA),
+    # a non-zero status can occur even when logs indicate successful completion.
+    # We intentionally defer failure classification to caller logic (e.g., success-token
+    # checks), so `wait` must not trigger `trap ERR` or implicit errexit here.
+    #
+    # Save current trap/options, suppress ERR handling only for wait, then restore.
+    saved_err_trap="$(trap -p ERR || true)"
+    [[ $- == *e* ]] && had_errexit=1
+    [[ $- == *E* ]] && had_errtrace=1
+
+    trap - ERR
     set +eE
     wait "$pid"
     status=$?
-    set -eE
+
+    if [[ $had_errexit -eq 1 ]]; then set -e; else set +e; fi
+    if [[ $had_errtrace -eq 1 ]]; then set -E; else set +E; fi
+
+    if [[ -n "$saved_err_trap" ]]; then
+      eval "$saved_err_trap"
+    else
+      trap - ERR
+    fi
   fi
 
   if [[ -n "$out_var" ]]; then
     printf -v "$out_var" '%s' "$status"
   else
     echo "$status"
+  fi
+  return 0
+}
+
+mark_failed_in_tracking_db() {
+  local step="${1:-unknown_step}"
+  local reason="${2:-unspecified}"
+  local job_id="${3:-}"
+  local resolved_job_id="${job_id:-${SLURM_JOB_ID:-${PBS_JOBID:-}}}"
+  local rscript_bin=""
+  local saved_err_trap=""
+  local had_errexit=0
+  local had_errtrace=0
+  local upd_status=0
+
+  [[ -n "$R_HOME" ]] && rscript_bin="${R_HOME}/bin/Rscript"
+
+  if [[ -z "$resolved_job_id" || -z "$upd_job_status_path" || -z "$sqlite_db" || -z "$rscript_bin" ]]; then
+    log_message WARN "Skipping SQLite FAILED update for ${step} (${reason}): missing job metadata."
+    return 0
+  fi
+  if [[ ! -x "$rscript_bin" ]]; then
+    log_message WARN "Skipping SQLite FAILED update for ${step}: cannot execute ${rscript_bin}."
+    return 0
+  fi
+  if [[ ! -f "$upd_job_status_path" ]]; then
+    log_message WARN "Skipping SQLite FAILED update for ${step}: upd_job_status_path not found (${upd_job_status_path})."
+    return 0
+  fi
+
+  # Prevent recursive trap handling if the status update command itself fails.
+  saved_err_trap="$(trap -p ERR || true)"
+  [[ $- == *e* ]] && had_errexit=1
+  [[ $- == *E* ]] && had_errtrace=1
+  trap - ERR
+  set +eE
+
+  "$rscript_bin" "$upd_job_status_path" --job_id "$resolved_job_id" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  upd_status=$?
+
+  if [[ $had_errexit -eq 1 ]]; then set -e; else set +e; fi
+  if [[ $had_errtrace -eq 1 ]]; then set -E; else set +E; fi
+  if [[ -n "$saved_err_trap" ]]; then
+    eval "$saved_err_trap"
+  else
+    trap - ERR
+  fi
+
+  if [[ $upd_status -ne 0 ]]; then
+    log_message WARN "Failed to set SQLite status to FAILED for ${step} (job_id: ${resolved_job_id}, reason: ${reason})."
+  else
+    log_message INFO "Set SQLite status to FAILED for ${step} (job_id: ${resolved_job_id}, reason: ${reason})."
   fi
   return 0
 }
@@ -144,9 +218,11 @@ function trap_job_failure() {
   local now
   now=$(date +"%Y-%m-%d %H:%M:%S")
   local fail_file=".${step}_fail"
+  [ -n "$complete_file" ] && fail_file="${complete_file%_complete}_fail"
 
   # "unknown" if SLURM variables are unset
-  local job_id="${SLURM_JOB_ID:-unknown}"
+  local resolved_job_id="${SLURM_JOB_ID:-${PBS_JOBID:-}}"
+  local job_id="${resolved_job_id:-unknown}"
   local job_name="${SLURM_JOB_NAME:-unknown}"
   local err="${stderr_log:-unknown}"
 
@@ -164,6 +240,7 @@ function trap_job_failure() {
   log_message ERROR "  Job ID     : $job_id"
   log_message ERROR "  Job Name   : $job_name"
   log_message ERROR "  Working Dir: $(pwd)"
+  mark_failed_in_tracking_db "$step" "signal:${signal}" "$resolved_job_id"
 
   exit 1
 }
@@ -242,6 +319,7 @@ function traperror () {
 
     # send dotfile to stderr
     cat "$dotfile" >&2
+    mark_failed_in_tracking_db "$step" "err_status:${err}" "${SLURM_JOB_ID:-${PBS_JOBID:-}}"
 
     exit "$err"  
 }

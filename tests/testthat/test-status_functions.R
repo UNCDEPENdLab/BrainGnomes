@@ -415,3 +415,60 @@ test_that("is_step_complete falls back to complete file for STARTED jobs", {
   expect_true(res$complete)
   expect_equal(res$verification_source, "complete_file")
 })
+
+test_that("check_status_reconciliation detects fail-marker/DB mismatch", {
+  root <- tempfile("status-reconcile-fail-")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(root, "logs")
+  bids_dir <- file.path(root, "bids")
+  fmriprep_dir <- file.path(root, "fmriprep")
+  dir.create(log_dir, recursive = TRUE)
+  dir.create(bids_dir, recursive = TRUE)
+  dir.create(fmriprep_dir, recursive = TRUE)
+
+  sub <- "01"
+  dir.create(file.path(log_dir, paste0("sub-", sub)), recursive = TRUE)
+  dir.create(file.path(bids_dir, paste0("sub-", sub)), recursive = TRUE)
+  dir.create(file.path(fmriprep_dir, paste0("sub-", sub)), recursive = TRUE)
+
+  sqlite_db <- file.path(root, "tracking.sqlite")
+  create_tracking_db(sqlite_db)
+  insert_tracked_job(
+    sqlite_db = sqlite_db,
+    job_id = "job_reconcile_fail",
+    tracking_args = list(job_name = paste0("fmriprep_sub-", sub))
+  )
+  update_tracked_job_status(sqlite_db = sqlite_db, job_id = "job_reconcile_fail", status = "STARTED")
+
+  fail_file <- file.path(log_dir, paste0("sub-", sub), paste0(".fmriprep_sub-", sub, "_fail"))
+  writeLines("failed", fail_file)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      bids_directory = bids_dir,
+      fmriprep_directory = fmriprep_dir,
+      sqlite_db = sqlite_db
+    ),
+    bids_conversion = list(enable = FALSE),
+    mriqc = list(enable = FALSE),
+    fmriprep = list(enable = TRUE),
+    aroma = list(enable = FALSE),
+    postprocess = list(enable = FALSE)
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  rec <- check_status_reconciliation(
+    scfg = scfg,
+    sub_ids = sub,
+    steps = "fmriprep",
+    verbose = FALSE
+  )
+
+  expect_equal(nrow(rec), 1)
+  expect_true(rec$fail_file_exists[1])
+  expect_true(rec$discrepancy[1])
+  expect_match(rec$details[1], ".fail file exists but DB status is: STARTED", fixed = TRUE)
+})

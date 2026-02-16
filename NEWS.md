@@ -6,6 +6,8 @@ Released 2026-02-14
   `bandstop_min_bpm`/`bandstop_max_bpm` (deprecated: `band_stop_min`/`band_stop_max`).
 * All HPC jobs are now tracked in detail by an SQLite database
 * Job failures and other errors can now be investigated using `diagnose_pipeline`
+* Added a new vignette, "Diagnosing Pipeline Runs", that walks through `get_project_status()`, `get_subject_status()`,
+  and interactive use of `diagnose_pipeline()`
 * Improved error logging in HPC scripts so that success and failure are indicated more clearly
 * Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps
 * Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests
@@ -19,6 +21,13 @@ Released 2026-02-14
 * bugfix: preserve user-specified `metadata/log_directory` (including external paths) instead of always resetting to `<project_directory>/logs`.
 * During postprocess setup, `confound_calculate` now offers guided prompts to add `framewise_displacement` when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as `noproc` for QC/exclusion workflows.
 * Increase consistency of instructions and formatting in `setup_project()`
+* bugfix: avoid spurious "Already disconnected" warnings on exit from `diagnose_pipeline()`
+* bugfix: `diagnose_pipeline()` now respects configured `metadata/log_directory` instead of assuming `<project_directory>/logs`
+* bugfix: `diagnose_pipeline()` now matches subjects by exact `sub-<id>` tokens to avoid accidental partial matches
+* bugfix: `run_bg_and_wait()` now suppresses and restores `ERR` trap handling around `wait`, so non-zero container exits can be reconciled against success tokens before jobs are marked failed.
+* bugfix: shell trap handlers now attempt a best-effort SQLite status update to `FAILED` before exit, reducing `_fail`/DB mismatch after abrupt failures.
+* bugfix: `update_tracked_job_status()` now warns when no tracking rows are updated for a job_id (instead of failing silently).
+* bugfix: `check_status_reconciliation()` now checks `.fail` markers against DB status and reports mismatch details.
 
 # BrainGnomes 0.7-5
 

@@ -79,6 +79,21 @@ test_that("update_tracked_job_status updates status correctly", {
   expect_false(is.na(result$time_ended))
 })
 
+test_that("update_tracked_job_status warns when job_id is not found", {
+  db_file <- tempfile(fileext = ".sqlite")
+  on.exit(unlink(db_file), add = TRUE)
+
+  create_tracking_db(db_file)
+
+  expect_warning(
+    update_tracked_job_status(sqlite_db = db_file, job_id = "missing_job", status = "FAILED"),
+    "did not match any row"
+  )
+
+  res <- get_tracked_job_status(job_id = "missing_job", sqlite_db = db_file)
+  expect_equal(nrow(res), 0)
+})
+
 test_that("capture_output_manifest creates valid JSON", {
   out_dir <- tempfile("manifest_test_")
   dir.create(out_dir, recursive = TRUE)

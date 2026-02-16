@@ -93,6 +93,8 @@ log_message INFO Starting aroma for subject $sub_id with mem: $mem and cpus: $SL
     $cli_options # all options setup by submit_aroma()
 ) &
 cmd_pid=$!
+# run_bg_and_wait suppresses/restores ERR handling around wait so caller can reconcile
+# non-zero exits against success tokens below.
 run_bg_and_wait "$cmd_pid" cmd_status
 
 # fmripost-aroma somehow decides to throw a non-zero exit status even when it completes successfully.

@@ -28,6 +28,16 @@ diagnose_pipeline <- function(input) {
     proj_dir <- input
     proj_files <- list.files(proj_dir, include.dirs = TRUE)
     sqlite_db <- file.path(input, grep("\\.sqlite$", proj_files, value = TRUE))
+    log_root <- file.path(proj_dir, "logs")
+
+    cfg_file <- file.path(proj_dir, "project_config.yaml")
+    if (checkmate::test_file_exists(cfg_file)) {
+      cfg_yaml <- tryCatch(yaml::read_yaml(cfg_file), error = function(e) NULL)
+      cfg_log_dir <- cfg_yaml$metadata$log_directory
+      if (checkmate::test_string(cfg_log_dir)) {
+        log_root <- cfg_log_dir
+      }
+    }
   }
   else if (checkmate::test_class(input, "bg_project_cfg")) {
     proj_dir <- input$metadata$project_directory
@@ -36,6 +46,11 @@ diagnose_pipeline <- function(input) {
       proj_dir,
       grep("\\.sqlite$", proj_files, value = TRUE)
     )
+    log_root <- if (checkmate::test_string(input$metadata$log_directory)) {
+      input$metadata$log_directory
+    } else {
+      file.path(proj_dir, "logs")
+    }
   } else {
     cli::cli_abort(
       "Input must be either a path to a project directory or an scfg object."
@@ -99,7 +114,9 @@ diagnose_pipeline <- function(input) {
   
   if (selected_view == "subject") {
     con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
-    on.exit(DBI::dbDisconnect(con), add = TRUE)
+    on.exit({
+      if (DBI::dbIsValid(con)) DBI::dbDisconnect(con)
+    }, add = TRUE)
     all_tracking_df <- DBI::dbGetQuery(con, "SELECT * FROM job_tracking")
     if (nrow(all_tracking_df) > 0L && "job_obj" %in% names(all_tracking_df)) {
       all_tracking_df$job_obj <- lapply(all_tracking_df$job_obj, function(x) {
@@ -134,7 +151,14 @@ diagnose_pipeline <- function(input) {
     
     selected_subject <- subjects[sub_choice]
     
-    subject_jobs_df <- all_tracking_df[grepl(selected_subject, all_tracking_df$job_name), ]
+    job_names <- ifelse(is.na(all_tracking_df$job_name), "", all_tracking_df$job_name)
+    job_subject_matches <- regmatches(job_names, gregexpr("sub-[^_]+", job_names))
+    job_subjects <- vapply(
+      job_subject_matches,
+      function(x) if (length(x) > 0L) x[[1L]] else NA_character_,
+      character(1)
+    )
+    subject_jobs_df <- all_tracking_df[!is.na(job_subjects) & job_subjects == selected_subject, ]
     
     if (nrow(subject_jobs_df) == 0) {
       cli::cli_abort("No jobs found for subject {.val {selected_subject}}")
@@ -258,6 +282,22 @@ diagnose_pipeline <- function(input) {
   number_jobs(this_sequence_tree)
   n_jobs <- length(job_list)
   
+  cli::cli_h3("Numbered jobs:")
+  for (job_item in job_list) {
+    node <- job_item$node
+    level <- job_item$level
+    indent <- if (level > 0) {
+      paste0(strrep("  ", level), "\u2514\u2500 ")
+    } else {
+      ""
+    }
+    sym <- get_status_symbol(node$status)
+    status_colored <- get_status_color(node$status)
+    cli::cli_text(
+      "{job_item$number}. {indent}{sym} {.code {node$name}} (job {node$job_id}) [{status_colored}]"
+    )
+  }
+  
   cli::cli_inform(
     c("Which job would you like to examine?",
       "i" = "There are {n_jobs} jobs total (including nested jobs)")
@@ -376,32 +416,42 @@ diagnose_pipeline <- function(input) {
     }
   }
 
-  subject_folder <- sub(".*(sub-\\d+).*", "\\1", this_job_name)
-  logs_dir <- file.path(proj_dir, "logs", subject_folder)
-
-  if (!dir.exists(logs_dir)) {
-    cli::cli_warn("Logs directory not found for subject {.val {subject_folder}} at {.path {logs_dir}}")
-    logs_dir <- NULL
+  out_file <- NULL
+  err_file <- NULL
+  subject_match <- regmatches(this_job_name, regexpr("sub-[^_]+", this_job_name))
+  has_subject <- length(subject_match) > 0 && !is.na(subject_match) && nzchar(subject_match)
+  log_search_dirs <- if (has_subject) {
+    c(file.path(log_root, subject_match), log_root)
+  } else {
+    c(log_root)
+  }
+  log_search_dirs <- unique(log_search_dirs)
+  existing_log_dirs <- log_search_dirs[dir.exists(log_search_dirs)]
+  
+  if (length(existing_log_dirs) == 0L) {
+    cli::cli_warn("No existing log directories found for this job under {.path {log_root}}")
   } else {
     job_id <- this_job$job_id
     
-    out_candidates <- list.files(
-      logs_dir,
-      pattern = paste0(job_id, ".*\\.out$"),
-      full.names = TRUE
-    )
-    err_candidates <- list.files(
-      logs_dir,
-      pattern = paste0(job_id, ".*\\.err$"),
-      full.names = TRUE
-    )
+    out_candidates <- unlist(lapply(existing_log_dirs, function(ld) {
+      list.files(ld, pattern = paste0(job_id, ".*\\.out$"), full.names = TRUE)
+    }), use.names = FALSE)
+    err_candidates <- unlist(lapply(existing_log_dirs, function(ld) {
+      list.files(ld, pattern = paste0(job_id, ".*\\.err$"), full.names = TRUE)
+    }), use.names = FALSE)
     
     if (length(out_candidates) == 0 && length(err_candidates) == 0) {
-      cli::cli_warn("No log files found containing job ID {.val {job_id}} in {.path {logs_dir}}")
+      cli::cli_warn(
+        "No log files found containing job ID {.val {job_id}} in searched directories: {.path {existing_log_dirs}}"
+      )
     }
     
-    out_file <- if (length(out_candidates) > 0) out_candidates[[1]] else NULL
-    err_file <- if (length(err_candidates) > 0) err_candidates[[1]] else NULL
+    if (length(out_candidates) > 0) {
+      out_file <- out_candidates[which.max(file.info(out_candidates)$mtime)][1]
+    }
+    if (length(err_candidates) > 0) {
+      err_file <- err_candidates[which.max(file.info(err_candidates)$mtime)][1]
+    }
   }
 
   repeat {
@@ -878,7 +928,7 @@ get_status_color <- Vectorize(
 #' @param verbose Logical. If TRUE, print detailed reconciliation information.
 #'
 #' @return A data.frame with columns: sub_id, ses_id, step_name, db_status, 
-#'   manifest_verified, complete_file_exists, discrepancy (logical), and details.
+#'   manifest_verified, complete_file_exists, fail_file_exists, discrepancy (logical), and details.
 #'
 #' @keywords internal
 #' @importFrom cli cli_alert_warning cli_alert_info cli_alert_success
@@ -936,6 +986,7 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
             
             # Check .complete file independently
             complete_file_exists <- checkmate::test_file_exists(chk$complete_file)
+            fail_file_exists <- checkmate::test_file_exists(sub("_complete$", "_fail", chk$complete_file))
             
             # Identify discrepancies
             discrepancy <- FALSE
@@ -955,6 +1006,14 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
               details <- c(details, paste0(".complete file exists but DB status is: ", 
                                            if (is.na(chk$db_status)) "not found" else chk$db_status))
             }
+            if (fail_file_exists && (is.na(chk$db_status) || !(chk$db_status %in% c("FAILED", "FAILED_BY_EXT")))) {
+              discrepancy <- TRUE
+              details <- c(details, paste0(".fail file exists but DB status is: ",
+                                           if (is.na(chk$db_status)) "not found" else chk$db_status))
+            } else if (!fail_file_exists && !is.na(chk$db_status) && chk$db_status %in% c("FAILED", "FAILED_BY_EXT")) {
+              discrepancy <- TRUE
+              details <- c(details, paste0("DB status is ", chk$db_status, " but .fail file is missing"))
+            }
             
             if (discrepancy) discrepancies_found <- discrepancies_found + 1
             
@@ -965,6 +1024,7 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
               db_status = if (is.na(chk$db_status)) NA_character_ else chk$db_status,
               manifest_verified = chk$manifest_verified,
               complete_file_exists = complete_file_exists,
+              fail_file_exists = fail_file_exists,
               verification_source = chk$verification_source,
               discrepancy = discrepancy,
               details = paste(details, collapse = "; "),
@@ -980,6 +1040,7 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
                                   verify_manifest = TRUE)
           
           complete_file_exists <- checkmate::test_file_exists(chk$complete_file)
+          fail_file_exists <- checkmate::test_file_exists(sub("_complete$", "_fail", chk$complete_file))
           
           discrepancy <- FALSE
           details <- character(0)
@@ -998,6 +1059,14 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
             details <- c(details, paste0(".complete file exists but DB status is: ", 
                                          if (is.na(chk$db_status)) "not found" else chk$db_status))
           }
+          if (fail_file_exists && (is.na(chk$db_status) || !(chk$db_status %in% c("FAILED", "FAILED_BY_EXT")))) {
+            discrepancy <- TRUE
+            details <- c(details, paste0(".fail file exists but DB status is: ",
+                                         if (is.na(chk$db_status)) "not found" else chk$db_status))
+          } else if (!fail_file_exists && !is.na(chk$db_status) && chk$db_status %in% c("FAILED", "FAILED_BY_EXT")) {
+            discrepancy <- TRUE
+            details <- c(details, paste0("DB status is ", chk$db_status, " but .fail file is missing"))
+          }
           
           if (discrepancy) discrepancies_found <- discrepancies_found + 1
           
@@ -1008,6 +1077,7 @@ check_status_reconciliation <- function(scfg, sub_ids = NULL,
             db_status = if (is.na(chk$db_status)) NA_character_ else chk$db_status,
             manifest_verified = chk$manifest_verified,
             complete_file_exists = complete_file_exists,
+            fail_file_exists = fail_file_exists,
             verification_source = chk$verification_source,
             discrepancy = discrepancy,
             details = paste(details, collapse = "; "),

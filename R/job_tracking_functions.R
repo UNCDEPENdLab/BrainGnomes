@@ -320,6 +320,9 @@ add_tracked_job_parent = function(sqlite_db = NULL, job_id = NULL, parent_job_id
 #' via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
 #' \code{"FAILED"} or they are listed in \code{exclude}.
 #'
+#' If no tracking row matches \code{job_id}, a warning is emitted and no manifest/cascade
+#' updates are attempted, preventing silent status-update failures.
+#'
 #' If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails silently and returns \code{NULL}.
 #'
 #' @return Invisibly returns \code{NULL}. Side effect is a modification to the SQLite job tracking table.
@@ -350,8 +353,8 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
                        COMPLETED = "time_ended",
                        FAILED_BY_EXT = "time_ended"
   )
-  
-  tryCatch({
+
+  rows_updated <- tryCatch({
     submit_tracking_query(
       str = glue("UPDATE job_tracking SET STATUS = ?, {time_field} = ? WHERE job_id = ?"),
       sqlite_db = sqlite_db, 
@@ -359,8 +362,19 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
     )
   }, error = function(e) {
     warning(format_tracking_db_error(sqlite_db, operation = "update_tracked_job_status", err = e), call. = FALSE)
-    return(NULL)
+    return(NA_integer_)
   })
+
+  if (length(rows_updated) != 1L || !is.numeric(rows_updated) || is.na(rows_updated) || rows_updated < 1) {
+    warning(
+      glue(
+        "update_tracked_job_status did not match any row for job_id '{job_id}' in {sqlite_db}. ",
+        "Status remains unchanged in SQLite."
+      ),
+      call. = FALSE
+    )
+    return(invisible(NULL))
+  }
   
   # Store (or clear) output manifest on COMPLETED status
   if (status == "COMPLETED") {
@@ -369,7 +383,7 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
       !is.na(output_manifest) &&
       nchar(output_manifest) > 0
     manifest_value <- if (has_manifest) output_manifest else NA_character_
-    tryCatch({
+    manifest_rows <- tryCatch({
       submit_tracking_query(
         str = "UPDATE job_tracking SET output_manifest = ? WHERE job_id = ?",
         sqlite_db = sqlite_db, 
@@ -377,7 +391,17 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
       )
     }, error = function(e) { 
       warning(format_tracking_db_error(sqlite_db, operation = "update_tracked_job_status output_manifest", err = e), call. = FALSE)
+      return(NA_integer_)
     })
+    if (length(manifest_rows) == 1L && is.numeric(manifest_rows) && !is.na(manifest_rows) && manifest_rows < 1) {
+      warning(
+        glue(
+          "update_tracked_job_status wrote status COMPLETED for job_id '{job_id}', ",
+          "but output_manifest update affected 0 rows."
+        ),
+        call. = FALSE
+      )
+    }
   }
   
   # recursive function for "cascading" failures using status "FAILED_BY_EXT"
