@@ -326,7 +326,8 @@ function traperror () {
 
 
 log_level_rank() {
-  local lvl=${1^^}
+  local lvl
+  lvl=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
   case "$lvl" in
     TRACE) echo 600 ;;
     DEBUG) echo 500 ;;
@@ -340,12 +341,13 @@ log_level_rank() {
 
 function log_message() {
   [[ $# -eq 0 ]] && echo "No arguments to log_message provided" && return 1
-  local level=${1^^}
+  local level
+  level=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
   shift
   local message="$*"
 
   local threshold=${LOG_LEVEL:-${log_level:-INFO}}
-  threshold=${threshold^^}
+  threshold=$(printf '%s' "$threshold" | tr '[:lower:]' '[:upper:]')
   local level_rank
   local threshold_rank
   level_rank=$(log_level_rank "$level")

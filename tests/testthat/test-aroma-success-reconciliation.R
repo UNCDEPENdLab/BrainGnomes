@@ -119,10 +119,21 @@ test_that("aroma sbatch reconciles non-zero exit with success token", {
     stderr = stderr_log
   )
 
-  expect_equal(exit_status, 0)
+  failure_context <- paste(
+    c(
+      paste0("exit_status: ", exit_status),
+      if (file.exists(stdout_log)) c("stdout (tail):", tail(readLines(stdout_log, warn = FALSE), 20)) else "stdout missing",
+      if (file.exists(stderr_log)) c("stderr (tail):", tail(readLines(stderr_log, warn = FALSE), 20)) else "stderr missing"
+    ),
+    collapse = "\n"
+  )
+
+  expect_equal(exit_status, 0, info = failure_context)
   expect_true(file.exists(stdout_log))
   expect_true(file.exists(complete_file))
   expect_false(file.exists(fail_file))
-  expect_true(file.exists(status_trace))
-  expect_equal(readLines(status_trace), c("STARTED", "COMPLETED"))
+  expect_true(file.exists(status_trace), info = failure_context)
+  if (file.exists(status_trace)) {
+    expect_equal(readLines(status_trace, warn = FALSE), c("STARTED", "COMPLETED"))
+  }
 })
