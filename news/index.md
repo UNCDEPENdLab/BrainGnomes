@@ -11,6 +11,11 @@ Released 2026-02-14
 - All HPC jobs are now tracked in detail by an SQLite database
 - Job failures and other errors can now be investigated using
   `diagnose_pipeline`
+- Added a new vignette, “Diagnosing Pipeline Runs”, that walks through
+  [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md),
+  [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md),
+  and interactive use of
+  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
 - Improved error logging in HPC scripts so that success and failure are
   indicated more clearly
 - Stale .fail files are removed when a newer .complete file exists,
@@ -41,6 +46,30 @@ Released 2026-02-14
   vs kept as `noproc` for QC/exclusion workflows.
 - Increase consistency of instructions and formatting in
   [`setup_project()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_project.md)
+- bugfix: avoid spurious “Already disconnected” warnings on exit from
+  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+- bugfix:
+  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  now respects configured `metadata/log_directory` instead of assuming
+  `<project_directory>/logs`
+- bugfix:
+  [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  now matches subjects by exact `sub-<id>` tokens to avoid accidental
+  partial matches
+- bugfix: `run_bg_and_wait()` now suppresses and restores `ERR` trap
+  handling around `wait`, so non-zero container exits can be reconciled
+  against success tokens before jobs are marked failed.
+- bugfix: shell trap handlers now attempt a best-effort SQLite status
+  update to `FAILED` before exit, reducing `_fail`/DB mismatch after
+  abrupt failures.
+- bugfix:
+  [`update_tracked_job_status()`](https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.md)
+  now warns when no tracking rows are updated for a job_id (instead of
+  failing silently).
+- bugfix:
+  [`check_status_reconciliation()`](https://uncdependlab.github.io/BrainGnomes/reference/check_status_reconciliation.md)
+  now checks `.fail` markers against DB status and reports mismatch
+  details.
 
 ## BrainGnomes 0.7-5
 

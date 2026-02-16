@@ -20,6 +20,7 @@
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a></li>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
   </ul></li>
@@ -46,6 +47,8 @@
 <li>All HPC jobs are now tracked in detail by an SQLite database</li>
 <li>Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>
 </li>
+<li>Added a new vignette, “Diagnosing Pipeline Runs”, that walks through <code><a href="../reference/get_project_status.html">get_project_status()</a></code>, <code><a href="../reference/get_subject_status.html">get_subject_status()</a></code>, and interactive use of <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code>
+</li>
 <li>Improved error logging in HPC scripts so that success and failure are indicated more clearly</li>
 <li>Stale .fail files are removed when a newer .complete file exists, clarifying status of processing steps</li>
 <li>Jobs now write a manifest of files and times to the job tracking database for more thorough completeness tests</li>
@@ -61,6 +64,15 @@
 <li>During postprocess setup, <code>confound_calculate</code> now offers guided prompts to add <code>framewise_displacement</code> when omitted, including whether to use motion-filtered FD and whether FD should be processed vs kept as <code>noproc</code> for QC/exclusion workflows.</li>
 <li>Increase consistency of instructions and formatting in <code><a href="../reference/setup_project.html">setup_project()</a></code>
 </li>
+<li>bugfix: avoid spurious “Already disconnected” warnings on exit from <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code>
+</li>
+<li>bugfix: <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> now respects configured <code>metadata/log_directory</code> instead of assuming <code>&lt;project_directory&gt;/logs</code>
+</li>
+<li>bugfix: <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> now matches subjects by exact <code>sub-&lt;id&gt;</code> tokens to avoid accidental partial matches</li>
+<li>bugfix: <code>run_bg_and_wait()</code> now suppresses and restores <code>ERR</code> trap handling around <code>wait</code>, so non-zero container exits can be reconciled against success tokens before jobs are marked failed.</li>
+<li>bugfix: shell trap handlers now attempt a best-effort SQLite status update to <code>FAILED</code> before exit, reducing <code>_fail</code>/DB mismatch after abrupt failures.</li>
+<li>bugfix: <code><a href="../reference/update_tracked_job_status.html">update_tracked_job_status()</a></code> now warns when no tracking rows are updated for a job_id (instead of failing silently).</li>
+<li>bugfix: <code><a href="../reference/check_status_reconciliation.html">check_status_reconciliation()</a></code> now checks <code>.fail</code> markers against DB status and reports mismatch details.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7-5" id="braingnomes-07-5">BrainGnomes 0.7-5<a class="anchor" aria-label="anchor" href="#braingnomes-07-5"></a></h2>

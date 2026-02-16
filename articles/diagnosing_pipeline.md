@@ -1,0 +1,222 @@
+# Diagnosing Pipeline Runs
+
+## Overview
+
+When
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+launches many jobs, it can be hard to quickly answer:
+
+- What already succeeded?
+- What is still running?
+- What failed?
+- What should I inspect next?
+
+This vignette shows a practical diagnosis workflow using:
+
+- [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+  for a project-wide status table
+- [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+  for one subject
+- [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  for interactive, log-driven debugging
+
+The examples below were run on this project:
+
+`/proj/mnhallqlab/projects/bg08test_14feb2026`
+
+### Load the project
+
+``` r
+library(BrainGnomes)
+
+project_dir <- "/proj/mnhallqlab/projects/bg08test_14feb2026"
+scfg <- load_project(project_dir, validate = FALSE)
+```
+
+`validate = FALSE` is useful when loading from non-interactive contexts,
+because validation can otherwise trigger interactive correction prompts.
+
+## Project-level triage with `get_project_status()`
+
+Start with a table of completion flags and times for all subjects:
+
+``` r
+status_df <- get_project_status(scfg)
+status_df
+summary(status_df)
+```
+
+Captured output (16 Feb 2026):
+
+    rows: 10 cols: 12
+
+    sub_id  bids_conversion_complete  mriqc_complete  fmriprep_complete  aroma_complete  task_complete
+    540294  TRUE                     TRUE            FALSE              FALSE           FALSE
+    540295  TRUE                     TRUE            FALSE              FALSE           FALSE
+    ...     ...                      ...             ...                ...             ...
+    540311  TRUE                     TRUE            FALSE              FALSE           FALSE
+
+    Summary:
+    step                       n_complete
+    bids_conversion_complete   10
+    mriqc_complete             10
+    fmriprep_complete           0
+    aroma_complete              0
+    task_complete               0
+
+This gives a quick pass/fail style view. In this run, BIDS conversion
+and MRIQC are complete for all subjects, while downstream steps are not
+yet complete.
+
+You can also scan log markers for explicit failures:
+
+``` r
+list.files(
+  scfg$metadata$log_directory,
+  pattern = "_fail$",
+  recursive = TRUE,
+  full.names = FALSE
+)
+```
+
+Captured output:
+
+    [1] "sub-540295/.fmriprep_sub-540295_fail"
+    [2] "sub-540300/.fmriprep_sub-540300_fail"
+    [3] "sub-540301/.fmriprep_sub-540301_fail"
+    [4] "sub-540302/.fmriprep_sub-540302_fail"
+    [5] "sub-540303/.aroma_sub-540303_fail"
+
+## Subject-level check with `get_subject_status()`
+
+To check one subject:
+
+``` r
+get_subject_status(scfg, "540296")
+```
+
+Captured output:
+
+      sub_id ses_id bids_conversion_complete bids_conversion_time mriqc_complete
+    1 540296   <NA>                     TRUE  2026-02-14 18:27:01           TRUE
+               mriqc_time fmriprep_complete fmriprep_time aroma_complete aroma_time
+    1 2026-02-15 04:00:02             FALSE          <NA>          FALSE       <NA>
+      task_complete task_time
+    1         FALSE      <NA>
+
+This is often the fastest way to answer, “Where is subject X stuck?”
+
+## Interactive diagnosis with `diagnose_pipeline()`
+
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+gives a tree view plus optional log-tail inspection.
+
+``` r
+diagnose_pipeline(scfg)
+```
+
+### Sequence-first walkthrough
+
+Prompt decisions used:
+
+    Enter 1 for subject summary or 2 for sequence ID
+    > 2
+
+    Enter which pipeline run to diagnose. The default is the most recent.
+    > [Enter]
+
+Captured output excerpt:
+
+    The run you selected had 2 top-level jobs:
+
+    Subject: sub-540296
+      bids_conversion_sub-540296 [COMPLETED]
+      mriqc_sub-540296           [COMPLETED]
+      fmriprep_sub-540296        [COMPLETED]
+      aroma_sub-540296           [STARTED]
+      postprocess_task_sub-540296[QUEUED]
+      extract_rois_sub-540296    [QUEUED]
+    ...
+    Would you like to examine any of these jobs more closely?
+
+### Drill down to a specific job and inspect logs
+
+Prompt decisions used:
+
+    Would you like to examine any of these jobs more closely?
+    > yes
+
+    Enter the job number from the list above
+    > 17
+
+    Further diagnosis...
+    1. View the output file in console
+    2. Return output file as character object
+    3. View the error file in the console
+    4. Return error file as character object
+    5. Exit
+
+For this run, job `17` was `fmriprep_sub-540296`.
+
+Captured details:
+
+    Job `fmriprep_sub-540296`...
+    ...was submitted at 2026-02-14 17:53:38.310812
+    ...was started at 2026-02-14 18:27:15.174171
+    ...successfully completed at 2026-02-14 23:56:17.037141
+    ...had 1 child job
+    Child job details:
+    1 of 1 [STARTED]: aroma_sub-540296
+
+Example error-tail output excerpt:
+
+    Warning: The system is configured to read the RTC time in the local time zone...
+
+Example output-tail excerpt:
+
+    ... nipype.workflow IMPORTANT: fMRIPrep finished successfully!
+    ... Finished fmriprep for subject 540296 (time elapsed: 5h 29m 5s)
+
+## Subject-first diagnosis path
+
+If you already know the subject you care about, use the subject-summary
+branch:
+
+    Enter 1 for subject summary or 2 for sequence ID
+    > 1
+
+    Found 10 subject(s) across all runs.
+    Enter the number corresponding to the subject you want to view
+    > 3
+
+Captured output excerpt for `sub-540296`:
+
+    Subject Summary: sub-540296
+      bids_conversion_sub-540296 [COMPLETED]
+      mriqc_sub-540296           [COMPLETED]
+      fmriprep_sub-540296        [COMPLETED]
+      aroma_sub-540296           [STARTED]
+      postprocess_task_sub-540296[QUEUED]
+      extract_rois_sub-540296    [QUEUED]
+
+You can then continue into sequence-level and job-level inspection from
+there.
+
+## Interpreting success vs failure
+
+In
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md):
+
+- `COMPLETED` means the tracked job finished.
+- `STARTED` means running (or previously started without terminal status
+  yet).
+- `QUEUED` means waiting on scheduler dependencies/resources.
+- `FAILED` or `FAILED_BY_EXT` indicate hard failure (direct or
+  upstream-caused).
+
+In
+[`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+and
+[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md),
+`*_complete` flags are stricter and include checks beyond simple queue
+status (for example, completion markers and output state).
