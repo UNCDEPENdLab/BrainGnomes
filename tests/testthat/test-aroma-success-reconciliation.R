@@ -1,5 +1,6 @@
 test_that("aroma sbatch reconciles non-zero exit with success token", {
   skip_if(Sys.which("bash") == "", "bash is required for shell-script integration test")
+  skip_on_os("windows")
 
   resolve_pkg_file <- function(inst_rel, fallback_rel) {
     inst_path <- system.file(inst_rel, package = "BrainGnomes")
@@ -31,15 +32,12 @@ test_that("aroma sbatch reconciles non-zero exit with success token", {
   mrproc_dir <- file.path(root, "fmriprep")
   scratch_dir <- file.path(root, "scratch")
   bin_dir <- file.path(root, "bin")
-  r_home <- file.path(root, "R_HOME")
-  r_bin <- file.path(r_home, "bin")
   out_dir <- file.path(mrproc_dir, "sub-01", "func")
   dir.create(log_dir, recursive = TRUE)
   dir.create(file.path(bids_dir, "sub-01"), recursive = TRUE)
   dir.create(out_dir, recursive = TRUE)
   dir.create(scratch_dir, recursive = TRUE)
   dir.create(bin_dir, recursive = TRUE)
-  dir.create(r_bin, recursive = TRUE)
 
   bold_file <- file.path(
     out_dir,
@@ -58,9 +56,23 @@ test_that("aroma sbatch reconciles non-zero exit with success token", {
 
   file.create(bold_file)
   file.create(aroma_container)
-  file.create(upd_job_status_path)
   file.create(sqlite_db)
   writeLines("stale fail marker", fail_file)
+
+  writeLines(
+    c(
+      "args <- commandArgs(trailingOnly = TRUE)",
+      "status <- NA_character_",
+      "for (i in seq_along(args)) {",
+      "  if (identical(args[[i]], '--status') && i < length(args)) status <- args[[i + 1L]]",
+      "}",
+      "trace_file <- Sys.getenv('BG_TEST_STATUS_TRACE', unset = '')",
+      "if (!is.na(status) && nzchar(trace_file)) {",
+      "  cat(status, file = trace_file, sep = '\\n', append = TRUE)",
+      "}"
+    ),
+    upd_job_status_path
+  )
 
   singularity_path <- file.path(bin_dir, "singularity")
   writeLines(
@@ -73,31 +85,10 @@ test_that("aroma sbatch reconciles non-zero exit with success token", {
   )
   Sys.chmod(singularity_path, mode = "0755")
 
-  rscript_path <- file.path(r_bin, "Rscript")
-  writeLines(
-    c(
-      "#!/usr/bin/env bash",
-      "status=\"\"",
-      "for ((i=1; i<=$#; i++)); do",
-      "  if [[ \"${!i}\" == \"--status\" ]]; then",
-      "    next=$((i+1))",
-      "    status=\"${!next}\"",
-      "    break",
-      "  fi",
-      "done",
-      "if [[ -n \"$BG_TEST_STATUS_TRACE\" && -n \"$status\" ]]; then",
-      "  echo \"$status\" >> \"$BG_TEST_STATUS_TRACE\"",
-      "fi",
-      "exit 0"
-    ),
-    rscript_path
-  )
-  Sys.chmod(rscript_path, mode = "0755")
-
   env <- c(
     paste0("pkg_dir=", pkg_dir),
     paste0("PATH=", bin_dir, ":", Sys.getenv("PATH")),
-    paste0("R_HOME=", r_home),
+    paste0("R_HOME=", R.home()),
     paste0("BG_TEST_STATUS_TRACE=", status_trace),
     paste0("aroma_container=", aroma_container),
     paste0("loc_mrproc_root=", mrproc_dir),
