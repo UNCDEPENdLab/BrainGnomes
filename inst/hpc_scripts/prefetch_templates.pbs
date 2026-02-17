@@ -67,6 +67,7 @@ for path in "${bind_paths[@]}"; do
 done
 
 log_message INFO "Prefetching TemplateFlow resources into $templateflow_home for spaces: $prefetch_spaces"
+start_time=$(date +%s)
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
 

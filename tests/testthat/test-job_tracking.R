@@ -382,6 +382,49 @@ test_that("job tracking cascade works for FAILED status", {
   expect_equal(child_result$status, "FAILED_BY_EXT")
 })
 
+test_that("job tracking cascade tolerates NA child status", {
+  db_file <- tempfile(fileext = ".sqlite")
+  on.exit(unlink(db_file), add = TRUE)
+
+  create_tracking_db(db_file)
+
+  insert_tracked_job(
+    sqlite_db = db_file,
+    job_id = "parent_na",
+    tracking_args = list(job_name = "parent", sequence_id = "seq_na")
+  )
+  insert_tracked_job(
+    sqlite_db = db_file,
+    job_id = "child_na",
+    tracking_args = list(job_name = "child", sequence_id = "seq_na")
+  )
+  add_tracked_job_parent(
+    sqlite_db = db_file,
+    job_id = "child_na",
+    parent_job_id = "parent_na",
+    child_level = 1
+  )
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
+  DBI::dbExecute(
+    con,
+    "UPDATE job_tracking SET status = NULL WHERE job_id = 'child_na'"
+  )
+  DBI::dbDisconnect(con)
+
+  expect_no_error(
+    update_tracked_job_status(
+      sqlite_db = db_file,
+      job_id = "parent_na",
+      status = "FAILED",
+      cascade = TRUE
+    )
+  )
+
+  child_result <- get_tracked_job_status(job_id = "child_na", sqlite_db = db_file)
+  expect_equal(child_result$status, "FAILED_BY_EXT")
+})
+
 test_that("get_tracked_job_status returns children when requested", {
   db_file <- tempfile(fileext = ".sqlite")
   on.exit(unlink(db_file), add = TRUE)

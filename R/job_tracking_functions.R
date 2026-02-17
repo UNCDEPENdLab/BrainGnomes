@@ -408,12 +408,25 @@ update_tracked_job_status <- function(sqlite_db = NULL, job_id = NULL, status,
   if (cascade) {
     if (is.numeric(exclude)) exclude <- as.character(exclude)
     
-    status_tree <- get_tracked_job_status(job_id, return_children = TRUE, sqlite_db = sqlite_db) # retrieve current job and children
+    status_tree <- get_tracked_job_status(
+      job_id = job_id,
+      return_children = TRUE,
+      sqlite_db = sqlite_db
+    ) # retrieve current job and children
+    if (!is.data.frame(status_tree) || nrow(status_tree) == 0L) return(invisible(NULL))
     job_ids <- status_tree$job_id # get list of job ids
     
     for (child_job in setdiff(job_ids, c(job_id, exclude))) {
-      child_status <- with(status_tree, status[which(job_ids == child_job)]) # check status
-      if (child_status != "FAILED") update_tracked_job_status(child_job, sqlite_db = sqlite_db, status = "FAILED_BY_EXT", cascade = TRUE)
+      child_idx <- which(status_tree$job_id == child_job)
+      child_status <- if (length(child_idx) > 0L) status_tree$status[child_idx[1L]] else NA_character_ # check status
+      if (length(child_status) != 1L || is.na(child_status) || child_status != "FAILED") {
+        update_tracked_job_status(
+          sqlite_db = sqlite_db,
+          job_id = child_job,
+          status = "FAILED_BY_EXT",
+          cascade = TRUE
+        )
+      }
     }
   }
   
