@@ -50,5 +50,8 @@ If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_
 via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
 \code{"FAILED"} or they are listed in \code{exclude}.
 
+If no tracking row matches \code{job_id}, a warning is emitted and no manifest/cascade
+updates are attempted, preventing silent status-update failures.
+
 If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails silently and returns \code{NULL}.
 }

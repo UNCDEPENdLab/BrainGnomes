@@ -31,7 +31,8 @@ verify that output files still exist and match (default TRUE).}
 \value{
 List containing \code{complete} (logical), \code{dir}, \code{complete_file},
 \code{db_status} (character or NA), \code{manifest_verified} (logical or NA),
-and \code{verification_source} (character indicating how completion was determined)
+\code{verification_source} (character indicating how completion was determined),
+and optional \code{db_error} when DB lookup fails
 }
 \description{
 Determines if the expected output directory and \code{.complete} marker

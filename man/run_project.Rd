@@ -18,7 +18,7 @@ run_project(
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
 
-\item{steps}{Character vector of pipeline steps to execute (or \code{"all"} to run all steps).
+\item{steps}{Character vector of pipeline steps to execute (or \code{"all"} to run all enabled steps).
 Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
 If \code{NULL}, the user will be prompted for which steps to run.}
 

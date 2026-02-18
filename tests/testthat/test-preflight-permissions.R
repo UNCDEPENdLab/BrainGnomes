@@ -155,10 +155,12 @@ test_that("submit_flywheel_sync proceeds when all paths are writable", {
   )
 
   submitted <- FALSE
+  captured_env <- NULL
   local_mocked_bindings(
     get_job_sched_args = function(...) "--time=01:00:00",
     check_write_target = function(path, label) NULL,
     cluster_job_submit = function(...) {
+      captured_env <<- list(...)[["env_variables"]]
       submitted <<- TRUE
       jid <- "12345"
       attr(jid, "cmd") <- "fw sync ..."
@@ -170,6 +172,10 @@ test_that("submit_flywheel_sync proceeds when all paths are writable", {
 
   result <- submit_flywheel_sync(scfg)
   expect_true(submitted)
+  expect_true("stdout_log" %in% names(captured_env))
+  expect_true("stderr_log" %in% names(captured_env))
+  expect_match(unname(captured_env["stdout_log"]), "flywheel_sync_jobid-%j_")
+  expect_match(unname(captured_env["stderr_log"]), "flywheel_sync_jobid-%j_")
   expect_equal(result, {
     jid <- "12345"
     attr(jid, "cmd") <- "fw sync ..."
@@ -240,12 +246,17 @@ test_that("submit_fsaverage_setup proceeds when all paths are writable", {
   class(scfg) <- "bg_project_cfg"
 
   submitted <- FALSE
+  captured_env <- NULL
+  captured_sched_call <- NULL
   local_mocked_bindings(
     check_write_target = function(path, label) NULL,
-    get_job_sched_args = function(...) "--time=00:10:00",
-    set_cli_options = function(current, new_opts, ...) c(current, new_opts),
+    get_job_sched_args = function(...) {
+      captured_sched_call <<- list(...)
+      "--time=00:10:00"
+    },
     hours_to_dhms = function(h) "0-00:09:00",
     cluster_job_submit = function(...) {
+      captured_env <<- list(...)[["env_variables"]]
       submitted <<- TRUE
       "99999"
     },
@@ -254,6 +265,11 @@ test_that("submit_fsaverage_setup proceeds when all paths are writable", {
 
   result <- submit_fsaverage_setup(scfg, sequence_id = "test-seq")
   expect_true(submitted)
+  expect_true("stdout_log" %in% names(captured_env))
+  expect_true("stderr_log" %in% names(captured_env))
+  expect_equal(captured_sched_call$jobid_str, "fsaverage_setup")
+  expect_equal(unname(captured_sched_call$stdout_log), unname(captured_env["stdout_log"]))
+  expect_equal(unname(captured_sched_call$stderr_log), unname(captured_env["stderr_log"]))
   expect_equal(result, "99999")
 })
 

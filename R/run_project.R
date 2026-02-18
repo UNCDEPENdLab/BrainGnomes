@@ -260,16 +260,20 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
     # Lightweight controller job to schedule subjects after flywheel completes
     scfg$submit_subjects <- list(nhours = 0.5, memgb = 4, ncores = 1)
+    stdout_log <- glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+    stderr_log <- glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
     sched_args <- get_job_sched_args(
       scfg, job_name = "submit_subjects",
-      stdout_log = glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-      stderr_log = glue::glue("{scfg$metadata$log_directory}/submit_subjects_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
+      stdout_log = stdout_log,
+      stderr_log = stderr_log
     )
     sched_script <- get_job_script(scfg, "submit_subjects", subject_suffix = FALSE)
     env_variables <- c(
       pkg_dir = find.package(package = "BrainGnomes"),
       R_HOME = R.home(),
       snapshot_rds = snap_file,
+      stdout_log = stdout_log,
+      stderr_log = stderr_log,
       log_level = scfg$log_level
     )
     cluster_job_submit(
@@ -401,9 +405,11 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
     }
   }
 
+  stdout_log <- glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  stderr_log <- glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
   sched_args <- get_job_sched_args(scfg, job_name = "flywheel_sync",
-    stdout_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-    stderr_log = glue::glue("{scfg$metadata$log_directory}/flywheel_sync_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
+    stdout_log = stdout_log,
+    stderr_log = stderr_log
   )
 
   audit_str <- if (test_true(scfg$flywheel_sync$save_audit_logs)) {
@@ -419,10 +425,15 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
   ), collapse = TRUE)
 
   sched_script <- get_job_script(scfg, "flywheel_sync", subject_suffix = FALSE)
+  log_file <- if ("flywheel" %in% names(lg$appenders)) lg$appenders$flywheel$destination else NULL
   
   env_variables <- c(
+    debug_pipeline = scfg$debug,
     pkg_dir = find.package(package = "BrainGnomes"),
     R_HOME = R.home(),
+    log_file = log_file,
+    stdout_log = stdout_log,
+    stderr_log = stderr_log,
     upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     flywheel_cmd = scfg$compute_environment$flywheel,
     flywheel_cli_options = cli_options,
@@ -468,12 +479,14 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   checkmate::assert_directory_exists(scfg$metadata$fmriprep_directory)
   checkmate::assert_file_exists(scfg$compute_environment$fmriprep_container)
 
+  stdout_log <- glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out")
+  stderr_log <- glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err")
   env_variables <- c(
     debug_pipeline = scfg$debug,
     pkg_dir = find.package(package = "BrainGnomes"), # location of installed R package
     R_HOME = R.home(), # populate location of R installation so that it can be used by any child R jobs
-    stdout_log = glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.out"),
-    stderr_log = glue("{scfg$metadata$log_directory}/cp_fsaverage_setup_jobid-%j_{format(Sys.time(), '%d%b%Y_%H.%M.%S')}.err"),
+    stdout_log = stdout_log,
+    stderr_log = stderr_log,
     upd_job_status_path = system.file("upd_job_status.R", package = "BrainGnomes"),
     add_parent_path = system.file("add_parent.R", package = "BrainGnomes"),
     loc_mrproc_root = scfg$metadata$fmriprep_directory,
@@ -482,13 +495,11 @@ submit_fsaverage_setup <- function(scfg, sequence_id = NULL) {
   
   # get resource allocation request & scheduler arguments
   scfg$fsaverage <- list(nhours = 0.15, memgb = 8, ncores = 1) # fake top-level job to let get_job_sched_args work
-  sched_args <- c(get_job_sched_args(scfg, "fsaverage"))
-  sched_args <- set_cli_options( # setup files for stdout and stderr, job name
-    sched_args,
-    c(
-      glue("--job-name=fsaverage_setup"),
-      glue("--output={env_variables['stdout_log']}"),
-      glue("--error={env_variables['stderr_log']}")
+  sched_args <- c(get_job_sched_args(
+    scfg, "fsaverage",
+    jobid_str = "fsaverage_setup",
+    stdout_log = stdout_log,
+    stderr_log = stderr_log
     )
   )
   ext <- ifelse(scfg$compute_environment$scheduler == "torque", "pbs", "sbatch")
