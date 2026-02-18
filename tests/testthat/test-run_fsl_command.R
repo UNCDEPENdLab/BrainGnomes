@@ -69,5 +69,8 @@ test_that("run_fsl_command falls back to feat path when FSLDIR is unset", {
     use_lgr = FALSE
   )
   expect_equal(as.numeric(rc), 0)
-  expect_identical(Sys.getenv("FSLDIR"), fake_fsldir)
+  expect_identical(
+    normalizePath(Sys.getenv("FSLDIR"), winslash = "/", mustWork = FALSE),
+    normalizePath(fake_fsldir, winslash = "/", mustWork = FALSE)
+  )
 })
