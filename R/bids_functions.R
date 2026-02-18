@@ -343,50 +343,6 @@ construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   return(pattern)
 }
 
-#' Check for Existence of a BIDS-Formatted Output File with a given description
-#'
-#' This function constructs a BIDS-compliant filename based on an input file, replacing
-#' the `desc` field with a specified `description`, and checks whether the corresponding output file
-#' already exists. If the file exists and `overwrite = FALSE`, the function returns `skip = TRUE`.
-#'
-#' @param in_file Path to the input BIDS file (e.g., a preprocessed BOLD image).
-#' @param description Character string to use as the new `desc` field in the expected output file.
-#' @param overwrite Logical. If `FALSE`, existing files will not be overwritten.
-#'
-#' @return A list with elements:
-#'   \item{out_file}{Path to the expected output file.}
-#'   \item{skip}{Logical indicating whether to skip writing due to file existence.}
-#'
-#' @importFrom checkmate assert_file_exists assert_string assert_flag test_file_exists
-#' @importFrom glue glue
-#' @keywords internal
-out_file_exists <- function(in_file, description, overwrite = TRUE) {
-  checkmate::assert_file_exists(in_file)
-  checkmate::assert_string(description)
-  checkmate::assert_flag(overwrite)
-
-  # Parse and update BIDS fields
-  bids_info <- extract_bids_info(in_file)
-  bids_info$description <- description # set desc to new description
-
-  # Reconstruct filename
-  out_file <- file.path(dirname(in_file), construct_bids_filename(bids_info))
-
-  # Check if file exists and whether to skip
-  skip <- FALSE
-  if (checkmate::test_file_exists(out_file)) {
-    if (isFALSE(overwrite)) {
-      message(glue::glue("Processed file already exists: {out_file}. Skipping this step."))
-      skip <- TRUE
-    } else {
-      message(glue::glue("Overwriting existing file: {out_file}."))
-    }
-  }
-
-  return(list(out_file = out_file, skip = skip))
-}
-
-
 #' Identify fMRIPrep-Derived Outputs for a NIfTI File
 #'
 #' Given the path to a preprocessed NIfTI file from fMRIPrep or fMRIPost, this function

@@ -201,6 +201,54 @@ test_that("is_step_complete handles old schema without output_manifest column", 
   expect_equal(res_old_schema_no_dir$verification_source, "db_status_dir_missing")
 })
 
+test_that("is_step_complete surfaces DB query failures and does not fall back to .complete", {
+  root <- tempfile("status-db-query-error-")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(root, "logs")
+  fmriprep_dir <- file.path(root, "fmriprep")
+  dir.create(log_dir, recursive = TRUE)
+  dir.create(fmriprep_dir, recursive = TRUE)
+
+  sqlite_db <- file.path(root, "tracking.sqlite")
+  # Create a SQLite file that lacks the expected job_tracking table.
+  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+  DBI::dbExecute(con, "CREATE TABLE unrelated (id INTEGER PRIMARY KEY, value TEXT)")
+  DBI::dbDisconnect(con)
+
+  sub <- "01"
+  out_dir <- file.path(fmriprep_dir, paste0("sub-", sub))
+  dir.create(out_dir, recursive = TRUE)
+  sub_log_dir <- file.path(log_dir, paste0("sub-", sub))
+  dir.create(sub_log_dir, recursive = TRUE)
+  complete_file <- file.path(sub_log_dir, paste0(".fmriprep_sub-", sub, "_complete"))
+  writeLines("done", complete_file)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      fmriprep_directory = fmriprep_dir,
+      sqlite_db = sqlite_db
+    ),
+    bids_conversion = list(enable = FALSE),
+    mriqc = list(enable = FALSE),
+    fmriprep = list(enable = TRUE),
+    aroma = list(enable = FALSE),
+    postprocess = list(enable = FALSE)
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  expect_warning(
+    res <- is_step_complete(scfg, sub_id = sub, step_name = "fmriprep"),
+    regexp = "could not query job tracking database"
+  )
+  expect_false(res$complete)
+  expect_equal(res$verification_source, "db_query_error")
+  expect_true(is.character(res$db_error))
+  expect_true(nzchar(res$db_error))
+})
+
 test_that("is_step_complete uses manifest verification for DB COMPLETED", {
   root <- tempfile("status-db-manifest-ok-")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)

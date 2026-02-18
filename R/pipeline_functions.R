@@ -255,7 +255,8 @@ validate_exists <- function(input, description = "", directory = FALSE, prompt_c
 #'   verify that output files still exist and match (default TRUE).
 #' @return List containing `complete` (logical), `dir`, `complete_file`,
 #'   `db_status` (character or NA), `manifest_verified` (logical or NA),
-#'   and `verification_source` (character indicating how completion was determined)
+#'   `verification_source` (character indicating how completion was determined),
+#'   and optional `db_error` when DB lookup fails
 #' @importFrom checkmate assert_choice assert_string
 #' @keywords internal
 is_step_complete <- function(scfg, sub_id, ses_id = NULL,
@@ -336,6 +337,7 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
   }
 
   db_record <- NULL
+  db_query_error <- NULL
   if (!is.null(sqlite_db) && checkmate::test_file_exists(sqlite_db)) {
     db_record <- tryCatch({
       # Query for the most recent job matching this step/subject pattern
@@ -357,7 +359,25 @@ is_step_complete <- function(scfg, sub_id, ses_id = NULL,
         "LIMIT 1"
       )
       DBI::dbGetQuery(con, query, params = list(job_name_pattern))
-    }, error = function(e) NULL)
+    }, error = function(e) {
+      db_query_error <<- conditionMessage(e)
+      NULL
+    })
+  }
+
+  if (!is.null(db_query_error)) {
+    warning(
+      glue(
+        "is_step_complete could not query job tracking database '{sqlite_db}' ",
+        "for job_name '{job_name_pattern}': {db_query_error}. ",
+        "Treating step as incomplete and skipping legacy .complete/.fail fallback."
+      ),
+      call. = FALSE
+    )
+    result$complete <- FALSE
+    result$verification_source <- "db_query_error"
+    result$db_error <- db_query_error
+    return(result)
   }
 
   if (!is.null(db_record) && nrow(db_record) > 0) {
@@ -615,33 +635,43 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
     # if we are using a singularity container, always look inside the container for FSLDIR
     checkmate::assert_file_exists(fsl_img, access = "r")
     fsldir <- system(glue("singularity exec {fsl_img} printenv FSLDIR"), intern = TRUE)
-    if (length(fsldir) == 0L) stop("Cannot find FSLDIR inside singularity container")
+    fsldir <- if (length(fsldir) > 0L) trimws(fsldir[1L]) else ""
+    if (!nzchar(fsldir)) stop("Cannot find FSLDIR inside singularity container")
   } else if (is.null(fsldir)) {
-    # look for FSLDIR in system environment if not passed in    
-    fsldir <- Sys.getenv("FSLDIR")
-    if (isFALSE(nzchar(fsldir))) {
-      # check for FSLDIR in .bashrc or .profile
-      bashrc_fsldir <- ""
-      if (file.exists("~/.profile")) {
-        bashrc_fsldir <- system("source ~/.profile && echo $FSLDIR", intern = TRUE)
+    # look for FSLDIR in system environment if not passed in
+    fsldir <- trimws(Sys.getenv("FSLDIR", unset = ""))
+    if (!nzchar(fsldir)) {
+      read_startup_fsldir <- function(startup_file) {
+        startup_path <- path.expand(startup_file)
+        if (!file.exists(startup_path)) return("")
+        startup_cmd <- paste(
+          ".", shQuote(startup_path),
+          ">/dev/null 2>&1; printf \"%s\" \"$FSLDIR\""
+        )
+        out <- suppressWarnings(system2("bash", c("-lc", startup_cmd), stdout = TRUE, stderr = FALSE))
+        if (length(out) == 0L) return("")
+        trimws(out[1L])
       }
 
-      if (nzchar(bashrc_fsldir) && file.exists("~/.bashrc")) {
-        bashrc_fsldir <- system("source ~/.bashrc && echo $FSLDIR", intern = TRUE)
-      }
-
-      # Fallback: look for location of fsl feat on PATH
-      if (nzchar(bashrc_fsldir)) {
-        feat_loc <- system("command -v feat", intern = TRUE)
-        exit_code <- attr(feat_loc, "status")
-        if (!is.null(exit_code) && exit_code == 1) {
-          warning("Could not find FSL using FSLDIR or system PATH. Defaulting to Defaulting to /usr/local/fsl.")
-          fsldir <- "/usr/local/fsl"
-        } else {
-          fsldir <- dirname(dirname(feat_loc))
+      # fallback order: profile, then bashrc, then feat on PATH
+      fsldir <- read_startup_fsldir("~/.profile")
+      if (!nzchar(fsldir)) fsldir <- read_startup_fsldir("~/.bashrc")
+      if (!nzchar(fsldir)) {
+        feat_loc <- suppressWarnings(system2("bash", c("-lc", "command -v feat"), stdout = TRUE, stderr = FALSE))
+        if (length(feat_loc) > 0L && nzchar(trimws(feat_loc[1L]))) {
+          fsldir <- dirname(dirname(trimws(feat_loc[1L])))
         }
       }
     }
+  }
+
+  fsldir <- trimws(as.character(fsldir)[1L])
+  if (!nzchar(fsldir)) {
+    stop("Cannot resolve FSLDIR. Set `fsldir` explicitly or export FSLDIR before calling run_fsl_command().")
+  }
+  fslconf_path <- file.path(fsldir, "etc", "fslconf", "fsl.sh")
+  if (!file.exists(fslconf_path)) {
+    stop("Resolved FSLDIR is invalid (missing etc/fslconf/fsl.sh): ", fsldir)
   }
 
   Sys.setenv(FSLDIR=fsldir) #export to R environment
@@ -870,26 +900,6 @@ lead <- function(x, n = 1L, default = NA) {
 lag <- function(x, n = 1L, default = NA) {
   if (n < 0L) return(lead(x, -n, default))
   c(rep(default, n), head(x, -n))
-}
-
-get_pipeline_status <- function(scfg) {
-  # adapted from get_feat_status.
-  # use to read timing files
-  # if (!is.null(timing_file)) {
-  #     timing <- readLines(timing_file)
-  #      if (length(timing) > 0L) {
-  #        # convert to POSIXct object to allow for any date calculations
-  #        timing <- anytime::anytime(timing)
-  #        feat_checks$feat_execution_start <- timing[1L]
-  #        if (length(timing) == 2L) {
-  #          feat_checks$feat_execution_end <- timing[2L]
-  #          feat_checks$feat_execution_min <- as.numeric(difftime(timing[2L], timing[1L], units = "mins"))
-  #        } else {
-  #          to_log(lg, "warn", "Did not find two timing entries in {timing_file}")
-  #          to_log(lg, "warn", "File contents: {timing}")
-  #        }
-  #      }
-  #   }
 }
 
 #' Resolve a desired log level

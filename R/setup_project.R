@@ -797,40 +797,6 @@ setup_aroma <- function(scfg, fields = NULL) {
 }
 
 
-get_compute_environment_from_file <- function(scfg) {
-  if (length(scfg) > 0L && !"compute_environment" %in% names(scfg)) {
-    cat(glue("
-      No compute environment settings were found in your configuration. This includes settings such
-      as the location of the fmriprep container or the location of heudiconv.
-      ", .trim = FALSE))
-
-    from_file <- prompt_input("Would you like to import these from an existing YAML file?", type = "flag")
-    if (from_file) {
-      file_loc <- prompt_input("Specify the file location (or press Enter to cancel):", type = "file", len = 1L)
-      if (!is.na(file_loc)) {
-        ff <- read_yaml(file_loc)
-        possible_fields <- c(
-          "fmriprep_container", "heudiconv_container", "mriqc_container",
-          "aroma_container", "scheduler"
-        )
-
-        if ("compute_environment" %in% names(ff)) {
-          scfg$compute_environment <- ff$compute_environment
-        } else if (any(possible_fields %in% names(ff))) {
-          # config has the settings as the top layer (malformed, but okay)
-          for (field in possible_fields) {
-            scfg$compute_environment[[field]] <- ff[[field]]
-          }
-        } else {
-          warning("Could not find any compute environment information in file: ", file_loc)
-        }
-      }
-    }
-  }
-
-  return(scfg)
-}
-
 #' Setup the compute environment for a study
 #' @param scfg a project configuration object, as produced by `load_project` or `setup_project`
 #' @return a modified version of `scfg` with `$compute_environment` populated

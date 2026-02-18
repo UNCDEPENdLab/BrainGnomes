@@ -1,7 +1,7 @@
 
 #' Run the processing pipeline
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
-#' @param steps Character vector of pipeline steps to execute (or `"all"` to run all steps).
+#' @param steps Character vector of pipeline steps to execute (or `"all"` to run all enabled steps).
 #'   Options are c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois").
 #'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
@@ -76,43 +76,62 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   # by passing steps, user is asking for unattended execution
   prompt <- is.null(steps)
+  supported_steps <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
 
   if (isFALSE(prompt)) {   
-    if ("flywheel_sync" %in% steps) {
+    user_steps <- unique(tolower(trimws(steps)))
+    user_steps <- user_steps[!is.na(user_steps) & nzchar(user_steps)]
+    if (length(user_steps) == 0L) {
+      stop("No processing steps were requested in run_project.")
+    }
+    if ("all" %in% user_steps) {
+      user_steps <- supported_steps[vapply(supported_steps, function(step_name) {
+        isTRUE(scfg[[step_name]]$enable)
+      }, logical(1))]
+      if (length(user_steps) == 0L) {
+        stop("No enabled processing steps are available in this configuration.")
+      }
+    }
+    unknown_steps <- setdiff(user_steps, supported_steps)
+    if (length(unknown_steps) > 0L) {
+      stop("Unknown processing step(s): ", paste(unknown_steps, collapse = ", "),
+           ". Valid choices are: ", paste(c("all", supported_steps), collapse = ", "))
+    }
+
+    if ("flywheel_sync" %in% user_steps) {
       if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
       if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
       if (is.null(scfg$metadata$flywheel_sync_directory)) stop("Cannot run flywheel_sync without a flywheel_sync_directory.")
       if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) stop("Cannot run flywheel_sync without a valid location of the fw command.")
     }
 
-    if ("bids_conversion" %in% steps) {
+    if ("bids_conversion" %in% user_steps) {
       if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
       if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
       if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
     }
 
-    if ("mriqc" %in% steps && !isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
+    if ("mriqc" %in% user_steps && !isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
 
-    if ("fmriprep" %in% steps && !isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
+    if ("fmriprep" %in% user_steps && !isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
 
-    if ("aroma" %in% steps && !isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
+    if ("aroma" %in% user_steps && !isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
     
-    if ("postprocess" %in% steps) {
+    if ("postprocess" %in% user_steps) {
       if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
       if (length(all_pp_streams) == 0L) stop("Cannot run postprocessing without at least one postprocess configuration.")
       if (is.null(postprocess_streams)) postprocess_streams <- all_pp_streams # run all streams if no specifics were requested
     }
 
-    if ("extract_rois" %in% steps) {
+    if ("extract_rois" %in% user_steps) {
       if (!isTRUE(scfg$extract_rois$enable)) stop("extract_rois was requested, but it is disabled in the configuration.")
       if (length(all_ex_streams) == 0L) stop("Cannot run extraction without at least one extract_rois configuration.")
       if (is.null(extract_streams)) extract_streams <- all_ex_streams # run all streams if no specifics were requested
     }
 
     # convert steps to logicals to match downstream expectations (e.g., in process_subject)
-    user_steps <- steps # copy user character vector to populate logical vector
-    steps <- rep(FALSE, 7)
-    names(steps) <- c("flywheel_sync", "bids_conversion", "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois")
+    steps <- rep(FALSE, length(supported_steps))
+    names(steps) <- supported_steps
     for (s in user_steps) steps[s] <- TRUE
     
     scfg$debug <- debug # pass forward debug flag from arguments
