@@ -77,5 +77,9 @@ any dependent jobs (as determined via
 will be recursively marked as `"FAILED_BY_EXT"`, unless their status is
 already `"FAILED"` or they are listed in `exclude`.
 
+If no tracking row matches `job_id`, a warning is emitted and no
+manifest/cascade updates are attempted, preventing silent status-update
+failures.
+
 If `sqlite_db` or `job_id` is invalid or missing, the function fails
 silently and returns `NULL`.

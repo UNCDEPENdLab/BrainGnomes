@@ -27,9 +27,9 @@ run_project(
 - steps:
 
   Character vector of pipeline steps to execute (or `"all"` to run all
-  steps). Options are c("flywheel_sync", "bids_conversion", "mriqc",
-  "fmriprep", "aroma", "postprocess", "extract_rois"). If `NULL`, the
-  user will be prompted for which steps to run.
+  enabled steps). Options are c("flywheel_sync", "bids_conversion",
+  "mriqc", "fmriprep", "aroma", "postprocess", "extract_rois"). If
+  `NULL`, the user will be prompted for which steps to run.
 
 - subject_filter:
 

@@ -102,6 +102,8 @@ is stored in the <code>output_manifest</code> column for later verification.</p>
 <p>If <code>cascade = TRUE</code>, and the status is <code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>, any dependent jobs (as determined
 via <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>) will be recursively marked as <code>"FAILED_BY_EXT"</code>, unless their status is already
 <code>"FAILED"</code> or they are listed in <code>exclude</code>.</p>
+<p>If no tracking row matches <code>job_id</code>, a warning is emitted and no manifest/cascade
+updates are attempted, preventing silent status-update failures.</p>
 <p>If <code>sqlite_db</code> or <code>job_id</code> is invalid or missing, the function fails silently and returns <code>NULL</code>.</p>
     </div>
 

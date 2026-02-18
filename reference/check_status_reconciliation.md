@@ -38,5 +38,5 @@ check_status_reconciliation(
 ## Value
 
 A data.frame with columns: sub_id, ses_id, step_name, db_status,
-manifest_verified, complete_file_exists, discrepancy (logical), and
-details.
+manifest_verified, complete_file_exists, fail_file_exists, discrepancy
+(logical), and details.

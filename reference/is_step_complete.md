@@ -47,6 +47,6 @@ is_step_complete(
 ## Value
 
 List containing `complete` (logical), `dir`, `complete_file`,
-`db_status` (character or NA), `manifest_verified` (logical or NA), and
+`db_status` (character or NA), `manifest_verified` (logical or NA),
 `verification_source` (character indicating how completion was
-determined)
+determined), and optional `db_error` when DB lookup fails
