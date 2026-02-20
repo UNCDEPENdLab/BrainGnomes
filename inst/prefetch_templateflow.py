@@ -2,8 +2,8 @@
 import argparse
 import os
 import sys
-import re
-from dataclasses import asdict, is_dataclass
+import time
+from dataclasses import asdict, dataclass, is_dataclass
 from itertools import product
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -42,9 +42,22 @@ MRIQC_REQUIRED_PROBSEG = {
     ]
 }
 
-TemplateQuery = Tuple[str, Dict[str, Any], str]
+QueryFingerprint = Tuple[str, Tuple[Tuple[str, Any], ...]]
+
+
+@dataclass
+class QuerySpec:
+    template: str
+    params: Dict[str, Any]
+    label: str
+    optional: bool = False
+    allow_desc_retry: bool = False
+
+
 DEBUG = False
 DEFAULT_RESOLUTION = 1
+DEFAULT_API_GET_MAX_RETRIES = 2
+DEFAULT_API_GET_RETRY_DELAY_SECONDS = 1.0
 
 
 def dbg(message: str) -> None:
@@ -65,6 +78,76 @@ def parse_spaces(spaces: str) -> List[str]:
         seen.add(token)
         ordered.append(token)
     return ordered
+
+
+def _coerce_int_if_possible(value: Any) -> Any:
+    """Convert numeric-like strings to int while preserving non-numeric values."""
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return value
+
+
+def _split_output_space_token(token: str) -> Tuple[str, Dict[str, Any], bool]:
+    """Split a token into template name, embedded query kwargs, and surface flag."""
+    parts = [part.strip() for part in token.split(":")]
+    template = parts[0] if parts else token
+
+    # Detect obvious surface spaces
+    is_surface = template in {"fsnative", "fsaverage", "fsaverage5", "fsaverage6", "fsLR"}
+    query: Dict[str, Any] = {}
+
+    for qual in parts[1:]:
+        if not qual:
+            continue
+
+        key, sep, raw_value = qual.partition("-")
+        if not sep:
+            continue
+        key = key.strip().lower()
+        raw_value = raw_value.strip()
+        if not raw_value:
+            continue
+
+        if key == "res":
+            resolution = _coerce_resolution(raw_value)
+            if resolution is not None:
+                query["resolution"] = resolution
+            continue
+        if key == "cohort":
+            query["cohort"] = _coerce_int_if_possible(raw_value)
+            continue
+        if key == "atlas":
+            query["atlas"] = raw_value
+            continue
+        if key in {"den", "density"}:
+            query["density"] = raw_value
+            is_surface = True
+            continue
+        if key in {"hemi", "hemisphere"}:
+            query["hemi"] = raw_value
+            continue
+        if key == "label":
+            query["label"] = raw_value
+            continue
+        if key == "desc":
+            query["desc"] = raw_value
+            continue
+        if key == "suffix":
+            query["suffix"] = raw_value
+            continue
+        if key == "space":
+            query["space"] = raw_value
+            continue
+        if key in {"extension", "ext"}:
+            query["extension"] = raw_value
+            continue
+
+    return template, query, is_surface
 
 
 def _token_to_references(token: str) -> List["Reference"]:
@@ -103,28 +186,11 @@ def parse_output_space_token(token: str) -> Tuple[str, Optional[int], bool]:
     - "MNI152NLin6Asym" -> ("MNI152NLin6Asym", None, False)
     - "fsaverage:den-10k" -> ("fsaverage", None, True)
     """
-    parts = token.split(":")
-    template = parts[0]
-
-    # Detect obvious surface spaces
-    is_surface = template in {"fsnative", "fsaverage", "fsaverage5", "fsaverage6", "fsLR"}
-
+    template, embedded_query, is_surface = _split_output_space_token(token)
     resolution: Optional[int] = None
-    if len(parts) > 1:
-        for qual in parts[1:]:
-            qual = qual.strip()
-            if not qual:
-                continue
-            # resolution may be "res-2" or "res-01"; ignore "res-native"
-            m = re.match(r"^res-(\d+)$", qual)
-            if m:
-                try:
-                    resolution = int(m.group(1))
-                except Exception:
-                    resolution = None
-            # presence of a surface density qualifier strongly implies a surface space
-            if qual.startswith("den-"):
-                is_surface = True
+    parsed_resolution = embedded_query.get("resolution")
+    if isinstance(parsed_resolution, int):
+        resolution = parsed_resolution
 
     return template, resolution, is_surface
 
@@ -273,10 +339,10 @@ def _normalize_query_dict(
     override_suffix: Optional[str],
     override_desc: Optional[str],
     preferred_resolutions: Optional[Sequence[int]] = None,
-) -> List[Dict[str, Any]]:
+) -> List[Tuple[Dict[str, Any], bool]]:
     """Map SpatialReferences spec fields to TemplateFlow api.get keyword arguments."""
     spec_data = dict(spec)
-    queries: List[Dict[str, Any]] = []
+    queries: List[Tuple[Dict[str, Any], bool]] = []
 
     suffix_source = override_suffix if override_suffix else _pop_any(spec_data, "suffixes", "suffix")
     suffix_values = _option_values(suffix_source, allow_none=False)
@@ -288,9 +354,11 @@ def _normalize_query_dict(
 
     desc_source = override_desc if override_desc else _pop_any(spec_data, "descs", "desc")
     desc_values = _option_values(desc_source, allow_none=True)
+    default_desc_applied = False
     if fallback_suffix:
         if not desc_values or desc_values == [None]:
             desc_values = ["brain"]
+            default_desc_applied = True
 
     if override_res is not None:
         res_source = override_res
@@ -329,7 +397,8 @@ def _normalize_query_dict(
             query[key] = value
         if not query.get("suffix"):
             continue
-        queries.append(query)
+        used_default_desc = default_desc_applied and query.get("desc") == "brain"
+        queries.append((query, used_default_desc))
 
     return queries
 
@@ -345,6 +414,62 @@ def _freeze_query(template: str, params: Dict[str, Any]) -> Tuple[str, Tuple[Tup
 
     items = tuple(sorted((key, _freeze_value(val)) for key, val in params.items()))
     return template, items
+
+
+def _is_transient_fetch_exception(exc: Exception) -> bool:
+    """Best-effort classification for transient TemplateFlow fetch failures."""
+    msg = str(exc).lower()
+    cls = exc.__class__.__name__.lower()
+    transient_markers = (
+        "timeout",
+        "timed out",
+        "temporar",
+        "connection",
+        "dns",
+        "name resolution",
+        "max retries exceeded",
+        "503",
+        "502",
+        "504",
+        "429",
+        "unavailable",
+        "reset",
+        "refused",
+        "ssl",
+        "rate limit",
+    )
+    return any(marker in msg or marker in cls for marker in transient_markers)
+
+
+def _api_get_with_retry(
+    template: str,
+    params: Dict[str, Any],
+    retry_transient: bool,
+    max_retries: int = DEFAULT_API_GET_MAX_RETRIES,
+    base_delay_seconds: float = DEFAULT_API_GET_RETRY_DELAY_SECONDS,
+) -> Tuple[Optional[Any], Optional[Exception]]:
+    """Execute TemplateFlow api.get with optional transient retry/backoff."""
+    attempts = max_retries + 1 if retry_transient else 1
+    for attempt in range(attempts):
+        try:
+            return api.get(template=template, **params), None
+        except Exception as exc:  # pragma: no cover
+            should_retry = (
+                retry_transient
+                and attempt < attempts - 1
+                and _is_transient_fetch_exception(exc)
+            )
+            if not should_retry:
+                return None, exc
+
+            delay = base_delay_seconds * (2 ** attempt)
+            print(
+                f"Transient TemplateFlow fetch error for template={template} "
+                f"(attempt {attempt + 1}/{attempts}): {exc}. Retrying in {delay:.1f}s ...",
+                file=sys.stderr,
+            )
+            time.sleep(delay)
+    return None, RuntimeError("Unreachable retry state in _api_get_with_retry")
 
 
 def _format_query_detail(template: str, params: Dict[str, Any]) -> str:
@@ -392,8 +517,18 @@ def _extract_entry(entry: Any) -> Tuple[str, List[Any], str]:
     else:
         spec_list = [specs]
 
-    template_name = _space_label(space_obj)
-    display_label = template_name
+    template_label = _space_label(space_obj)
+    template_name, embedded_spec, _ = _split_output_space_token(template_label)
+    display_label = template_label
+    if embedded_spec:
+        merged_specs: List[Any] = []
+        for spec in spec_list:
+            spec_dict = _spec_to_dict(spec)
+            # SpatialReferences-derived spec values take precedence over embedded label fields.
+            merged_spec = dict(embedded_spec)
+            merged_spec.update(spec_dict)
+            merged_specs.append(merged_spec)
+        spec_list = merged_specs
     return template_name, spec_list, display_label
 
 
@@ -446,7 +581,7 @@ def build_queries_from_spatial_refs(
     override_res: Optional[int],
     override_suffix: Optional[str],
     override_desc: Optional[str],
-) -> List[TemplateQuery]:
+) -> List[QuerySpec]:
     """Mirror fMRIPrep's TemplateFlow usage via niworkflows SpatialReferences."""
     if not tokens:
         return []
@@ -457,8 +592,8 @@ def build_queries_from_spatial_refs(
     preferred_resolutions = resolution_preferences(tokens, override_res)
     dbg(f"SpatialReferences returned {len(entries)} entry/entries.")
 
-    queries: List[TemplateQuery] = []
-    seen: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = set()
+    queries: List[QuerySpec] = []
+    seen: Set[QueryFingerprint] = set()
     for entry in entries:
         template_name, specs, label = _extract_entry(entry)
         if not template_name:
@@ -478,14 +613,21 @@ def build_queries_from_spatial_refs(
             if not query_variants:
                 dbg("Spec produced zero query variants.")
                 continue
-            for query in query_variants:
+            for query, used_default_desc in query_variants:
                 fingerprint = _freeze_query(template_name, query)
                 if fingerprint in seen:
                     continue
                 seen.add(fingerprint)
                 detail_label = _format_label_with_query(label, query)
                 dbg(f"Resolved query: template={template_name}, params={query}, label={detail_label}")
-                queries.append((template_name, query, detail_label))
+                queries.append(
+                    QuerySpec(
+                        template=template_name,
+                        params=dict(query),
+                        label=detail_label,
+                        allow_desc_retry=bool(used_default_desc and query.get("desc") == "brain"),
+                    )
+                )
     dbg(f"Total SpatialReferences-derived queries: {len(queries)}")
     return queries
 
@@ -495,34 +637,115 @@ def build_queries_legacy(
     override_res: Optional[int],
     override_suffix: Optional[str],
     override_desc: Optional[str],
-) -> List[TemplateQuery]:
+) -> List[QuerySpec]:
     """Fallback to the original parsing logic when SpatialReferences is unavailable."""
     dbg(f"Using legacy parser for tokens: {tokens}")
-    queries: List[TemplateQuery] = []
+    queries: List[QuerySpec] = []
     for token in tokens:
         if token in SKIP_TOKENS:
             continue
-        template, resolution, is_surface = parse_output_space_token(token)
+        template, token_query, is_surface = _split_output_space_token(token)
         if is_surface:
             continue
-        res_arg = override_res if override_res is not None else resolution
+
+        token_query = dict(token_query)
+        token_resolution = token_query.pop("resolution", None)
+        token_suffix = token_query.pop("suffix", None)
+        token_desc = token_query.pop("desc", None)
+
+        res_arg = override_res if override_res is not None else token_resolution
         if res_arg is None:
             res_arg = DEFAULT_RESOLUTION
-        suffix_values = [override_suffix] if override_suffix else ["T1w", "mask"]
-        desc_values = [override_desc] if override_desc else (["brain"] if not override_suffix else [None])
+
+        if override_suffix:
+            suffix_values = [override_suffix]
+        elif token_suffix not in (None, ""):
+            suffix_values = [token_suffix]
+        else:
+            suffix_values = ["T1w", "mask"]
+
+        if override_desc:
+            desc_values = [override_desc]
+        elif token_desc not in (None, ""):
+            desc_values = [token_desc]
+        else:
+            desc_values = ["brain"] if (token_suffix in (None, "") and not override_suffix) else [None]
 
         for suffix in suffix_values:
             for desc in desc_values:
-                query: Dict[str, Any] = {"suffix": suffix}
+                query: Dict[str, Any] = dict(token_query)
+                query["suffix"] = suffix
                 if res_arg is not None:
                     query["resolution"] = res_arg
                 if desc not in (None, ""):
                     query["desc"] = desc
                 query_copy = dict(query)  # ensure stored query is immutable for later iterations
-                queries.append((template, query_copy, token))
-                dbg(f"Legacy query: template={template}, params={query_copy}, label={token}")
+                allow_desc_retry = (
+                    desc == "brain"
+                    and not override_desc
+                    and token_desc in (None, "")
+                    and token_suffix in (None, "")
+                    and not override_suffix
+                )
+                detail_label = _format_label_with_query(token, query_copy)
+                queries.append(
+                    QuerySpec(
+                        template=template,
+                        params=query_copy,
+                        label=detail_label,
+                        allow_desc_retry=bool(allow_desc_retry),
+                    )
+                )
+                dbg(f"Legacy query: template={template}, params={query_copy}, label={detail_label}")
     dbg(f"Total legacy queries: {len(queries)}")
     return queries
+
+
+def _dedupe_query_specs(queries: List[QuerySpec]) -> List[QuerySpec]:
+    """Deduplicate queries by template+params while preserving order."""
+    deduped: List[QuerySpec] = []
+    seen: Set[QueryFingerprint] = set()
+    for query in queries:
+        fingerprint = _freeze_query(query.template, query.params)
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        deduped.append(query)
+    return deduped
+
+
+def _resolve_queries_with_token_fallback(
+    tokens: List[str],
+    override_res: Optional[int],
+    override_suffix: Optional[str],
+    override_desc: Optional[str],
+) -> List[QuerySpec]:
+    """Resolve queries token-by-token, falling back to legacy only for tokens that fail."""
+    if not tokens:
+        return []
+
+    if SpatialReferences is None:
+        print(
+            "niworkflows is unavailable in this environment; falling back to legacy TemplateFlow parsing.",
+            file=sys.stderr,
+        )
+        return build_queries_legacy(tokens, override_res, override_suffix, override_desc)
+
+    queries: List[QuerySpec] = []
+    for token in tokens:
+        try:
+            token_queries = build_queries_from_spatial_refs([token], override_res, override_suffix, override_desc)
+        except Exception as exc:
+            print(
+                f"SpatialReferences parsing failed for token '{token}' ({exc}); "
+                "falling back to legacy TemplateFlow parsing for this token.",
+                file=sys.stderr,
+            )
+            dbg(f"SpatialReferences parsing error for token '{token}': {exc}")
+            token_queries = build_queries_legacy([token], override_res, override_suffix, override_desc)
+        queries.extend(token_queries)
+
+    return _dedupe_query_specs(queries)
 
 
 def _template_names_from_tokens(tokens: List[str]) -> List[str]:
@@ -543,42 +766,57 @@ def _template_names_from_tokens(tokens: List[str]) -> List[str]:
 
 
 def add_default_t2w_queries(
-    queries: List[TemplateQuery],
+    queries: List[QuerySpec],
     tokens: List[str],
-) -> Tuple[List[TemplateQuery], Set[Tuple[str, Tuple[Tuple[str, Any], ...]]]]:
+) -> List[QuerySpec]:
     """Ensure T2w res-01 templates are prefetched for each template space."""
     templates = _template_names_from_tokens(tokens)
     if not templates:
-        return queries, set()
+        return queries
 
-    existing: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = {
-        _freeze_query(template, params) for template, params, _ in queries
+    cohorts_by_template: Dict[str, List[Any]] = {}
+    for query in queries:
+        cohort_value = query.params.get("cohort")
+        if cohort_value in (None, ""):
+            continue
+        if query.template not in cohorts_by_template:
+            cohorts_by_template[query.template] = []
+        if cohort_value not in cohorts_by_template[query.template]:
+            cohorts_by_template[query.template].append(cohort_value)
+
+    existing: Set[QueryFingerprint] = {
+        _freeze_query(query.template, query.params) for query in queries
     }
     augmented = list(queries)
-    optional: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = set()
     for template in templates:
-        params = {"suffix": "T2w", "resolution": 1}
-        fingerprint = _freeze_query(template, params)
-        if fingerprint in existing:
-            continue
-        existing.add(fingerprint)
-        label = f"{template} (T2w res-01)"
-        augmented.append((template, params, label))
-        optional.add(fingerprint)
-    return augmented, optional
+        cohort_values = cohorts_by_template.get(template, [None])
+        for cohort_value in cohort_values:
+            params = {"suffix": "T2w", "resolution": 1}
+            if cohort_value not in (None, ""):
+                params["cohort"] = cohort_value
+            fingerprint = _freeze_query(template, params)
+            if fingerprint in existing:
+                continue
+            existing.add(fingerprint)
+            if cohort_value in (None, ""):
+                label = f"{template} (T2w res-01)"
+            else:
+                label = f"{template} (T2w res-01 cohort-{cohort_value})"
+            augmented.append(QuerySpec(template=template, params=params, label=label, optional=True))
+    return augmented
 
 
 def add_required_probseg_queries(
-    queries: List[TemplateQuery],
+    queries: List[QuerySpec],
     tokens: List[str],
-) -> List[TemplateQuery]:
+) -> List[QuerySpec]:
     """Ensure known MRIQC-required tissue probability maps are prefetched."""
     templates = _template_names_from_tokens(tokens)
     if not templates:
         return queries
 
-    existing: Set[Tuple[str, Tuple[Tuple[str, Any], ...]]] = {
-        _freeze_query(template, params) for template, params, _ in queries
+    existing: Set[QueryFingerprint] = {
+        _freeze_query(query.template, query.params) for query in queries
     }
     augmented = list(queries)
     for template in templates:
@@ -593,7 +831,7 @@ def add_required_probseg_queries(
                 f"{template} (MRIQC required: "
                 f"suffix={query.get('suffix')}, label={query.get('label')}, resolution={query.get('resolution')})"
             )
-            augmented.append((template, query, label))
+            augmented.append(QuerySpec(template=template, params=query, label=label))
     return augmented
 
 
@@ -647,28 +885,14 @@ def main() -> int:
         return 0
     dbg(f"Parsed output spaces tokens: {spaces}")
 
-    # Build TemplateFlow queries via niworkflows when available to mirror fMRIPrep exactly.
-    try:
-        queries = build_queries_from_spatial_refs(spaces, args.res, args.suffix, args.desc)
-    except Exception as exc:
-        if SpatialReferences is None:
-            print(
-                f"niworkflows is unavailable in this environment ({exc}); falling back to legacy TemplateFlow parsing.",
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"SpatialReferences-based parsing failed ({exc}); falling back to legacy TemplateFlow parsing.",
-                file=sys.stderr,
-            )
-        dbg(f"SpatialReferences parsing error: {exc}")
-        queries = build_queries_legacy(spaces, args.res, args.suffix, args.desc)
+    # Build TemplateFlow queries via niworkflows when available; fallback is token-scoped.
+    queries = _resolve_queries_with_token_fallback(spaces, args.res, args.suffix, args.desc)
 
     dbg(f"Resolved {len(queries)} total TemplateFlow queries.")
     if not queries:
         print("No TemplateFlow queries were resolved; nothing to prefetch.")
         return 0
-    queries, optional_queries = add_default_t2w_queries(queries, spaces)
+    queries = add_default_t2w_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
 
     # Determine where TemplateFlow will place fetched files
@@ -680,24 +904,68 @@ def main() -> int:
     failures: List[str] = []
     soft_failures: List[str] = []
     fetched: List[str] = []
-    for template, params, label in queries:
+    for query_spec in queries:
+        template = query_spec.template
+        params = query_spec.params
+        label = query_spec.label
         detail = _format_query_detail(template, params)
-        fingerprint = _freeze_query(template, params)
-        is_optional = fingerprint in optional_queries
+        is_optional = query_spec.optional
         print(f"Fetching TemplateFlow resource for '{label}' ({detail}) ...")
 
-        try:
-            result = api.get(template=template, **params)
-        except Exception as exc:  # pragma: no cover
+        result, fetch_exc = _api_get_with_retry(
+            template=template,
+            params=params,
+            retry_transient=not is_optional,
+        )
+        if fetch_exc is not None:
             if is_optional:
-                print(f"Optional TemplateFlow resource failed to fetch '{label}': {exc}", file=sys.stderr)
+                print(f"Optional TemplateFlow resource failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
                 soft_failures.append(label)
             else:
-                print(f"Failed to fetch '{label}': {exc}", file=sys.stderr)
+                print(f"Failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
                 failures.append(label)
             continue
 
         if not _paths_exist(result):
+            allow_desc_retry = (
+                query_spec.allow_desc_retry
+                and params.get("desc") == "brain"
+            )
+            if allow_desc_retry:
+                retry_params = dict(params)
+                retry_params.pop("desc", None)
+                retry_detail = _format_query_detail(template, retry_params)
+                print(
+                    f"No files resolved for space '{label}' ({detail}); retrying without desc=brain ({retry_detail}).",
+                    file=sys.stderr,
+                )
+                retry_result, retry_exc = _api_get_with_retry(
+                    template=template,
+                    params=retry_params,
+                    retry_transient=not is_optional,
+                )
+                if retry_exc is not None:
+                    if is_optional:
+                        print(
+                            f"Optional retry without desc failed for '{label}': {retry_exc}",
+                            file=sys.stderr,
+                        )
+                        soft_failures.append(label)
+                    else:
+                        print(
+                            f"Retry without desc failed for '{label}': {retry_exc}",
+                            file=sys.stderr,
+                        )
+                        failures.append(label)
+                    continue
+                if retry_result is not None and _paths_exist(retry_result):
+                    print(
+                        f"Resolved space '{label}' after retrying without desc=brain.",
+                        file=sys.stderr,
+                    )
+                    fetched.append(label)
+                    continue
+
             if is_optional:
                 print(
                     f"Optional TemplateFlow resource unavailable for space '{label}' ({detail}).",
