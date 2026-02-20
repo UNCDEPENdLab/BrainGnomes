@@ -37,12 +37,17 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8-1" id="braingnomes-08-1">BrainGnomes 0.8-1<a class="anchor" aria-label="anchor" href="#braingnomes-08-1"></a></h2>
+<ul><li>Refactor prefetch to accept cohort specifications and extend them to T2w fetch.</li>
+<li>Refactor prefetch to fall back to no desc field if desc:brain fails</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08">BrainGnomes 0.8<a class="anchor" aria-label="anchor" href="#braingnomes-08"></a></h2>
-<p>Released 2026-02-14</p>
+<p>Released 2026-02-17</p>
 <ul><li>Add optional low-pass filtering of motion parameters before FD recomputation; rename notch config fields to <code>bandstop_min_bpm</code>/<code>bandstop_max_bpm</code> (deprecated: <code>band_stop_min</code>/<code>band_stop_max</code>).</li>
 <li>All HPC jobs are now tracked in detail by an SQLite database</li>
 <li>Job failures and other errors can now be investigated using <code>diagnose_pipeline</code>

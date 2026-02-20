@@ -1,8 +1,14 @@
 # Changelog
 
+## BrainGnomes 0.8-1
+
+- Refactor prefetch to accept cohort specifications and extend them to
+  T2w fetch.
+- Refactor prefetch to fall back to no desc field if desc:brain fails
+
 ## BrainGnomes 0.8
 
-Released 2026-02-14
+Released 2026-02-17
 
 - Add optional low-pass filtering of motion parameters before FD
   recomputation; rename notch config fields to
