@@ -74,3 +74,47 @@ test_that("run_fsl_command falls back to feat path when FSLDIR is unset", {
     normalizePath(fake_fsldir, winslash = "/", mustWork = FALSE)
   )
 })
+
+test_that("run_fsl_command accepts singularity FSLDIR that is host-invisible", {
+  fake_img <- tempfile("fsl_", fileext = ".sif")
+  file.create(fake_img)
+  on.exit(unlink(fake_img, force = TRUE), add = TRUE)
+
+  old_fsldir <- Sys.getenv("FSLDIR", unset = NA_character_)
+  on.exit({
+    if (is.na(old_fsldir)) Sys.unsetenv("FSLDIR") else Sys.setenv(FSLDIR = old_fsldir)
+  }, add = TRUE)
+  Sys.setenv(FSLDIR = "/host/fsl")
+
+  local_mocked_bindings(
+    system2 = function(command, args = character(), stdout = "", stderr = "", ...) {
+      if (identical(command, "singularity") &&
+          length(args) >= 4L &&
+          identical(args[[1]], "exec") &&
+          identical(args[[3]], "printenv") &&
+          identical(args[[4]], "FSLDIR")) {
+        return("/opt/fsl-6.0.7.16")
+      }
+      if (identical(command, "singularity") &&
+          length(args) >= 4L &&
+          identical(args[[1]], "exec") &&
+          identical(args[[3]], "bash") &&
+          identical(args[[4]], "-lc")) {
+        return(0L)
+      }
+      character(0)
+    },
+    .package = "base",
+    .env = baseenv()
+  )
+
+  rc <- run_fsl_command(
+    "fslmaths in.nii.gz -Tmean out.nii.gz",
+    run = FALSE,
+    echo = FALSE,
+    use_lgr = FALSE,
+    fsl_img = fake_img
+  )
+  expect_equal(as.numeric(rc), 0)
+  expect_identical(Sys.getenv("FSLDIR"), "/host/fsl")
+})

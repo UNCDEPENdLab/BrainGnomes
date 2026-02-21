@@ -608,7 +608,7 @@ log_submission_command <- function(logger, job_id, label) {
 run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE, stop_on_fail=TRUE, log_file=NULL, use_lgr=TRUE, fsl_img=NULL, bind_paths=NULL) {
   checkmate::assert_character(args)
   checkmate::assert_string(fsldir, null.ok = TRUE)
-  if (!is.null(fsldir)) checkmate::assert_directory_exists(fsldir)
+  if (!is.null(fsldir) && is.null(fsl_img)) checkmate::assert_directory_exists(fsldir)
 
   checkmate::assert_flag(echo)
   checkmate::assert_flag(run)
@@ -634,7 +634,7 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   if (!is.null(fsl_img)) {
     # if we are using a singularity container, always look inside the container for FSLDIR
     checkmate::assert_file_exists(fsl_img, access = "r")
-    fsldir <- system(glue("singularity exec {fsl_img} printenv FSLDIR"), intern = TRUE)
+    fsldir <- suppressWarnings(system2("singularity", c("exec", fsl_img, "printenv", "FSLDIR"), stdout = TRUE, stderr = FALSE))
     fsldir <- if (length(fsldir) > 0L) trimws(fsldir[1L]) else ""
     if (!nzchar(fsldir)) stop("Cannot find FSLDIR inside singularity container")
   } else if (is.null(fsldir)) {
@@ -670,11 +670,24 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
     stop("Cannot resolve FSLDIR. Set `fsldir` explicitly or export FSLDIR before calling run_fsl_command().")
   }
   fslconf_path <- file.path(fsldir, "etc", "fslconf", "fsl.sh")
-  if (!file.exists(fslconf_path)) {
+  if (!is.null(fsl_img)) {
+    # In container mode, FSLDIR usually refers to a path that only exists inside the image.
+    fslconf_check <- paste("test -f", shQuote(fslconf_path))
+    fslconf_status <- suppressWarnings(system2(
+      "singularity",
+      c("exec", fsl_img, "bash", "-lc", fslconf_check),
+      stdout = FALSE,
+      stderr = FALSE
+    ))
+    if (!identical(as.integer(fslconf_status), 0L)) {
+      stop("Resolved FSLDIR is invalid (missing etc/fslconf/fsl.sh): ", fsldir)
+    }
+  } else if (!file.exists(fslconf_path)) {
     stop("Resolved FSLDIR is invalid (missing etc/fslconf/fsl.sh): ", fsldir)
   }
 
-  Sys.setenv(FSLDIR=fsldir) #export to R environment
+  # Avoid poisoning host environment with container-only FSLDIR values.
+  if (is.null(fsl_img)) Sys.setenv(FSLDIR=fsldir)
   fslsetup <- paste0("FSLDIR=", fsldir, "; PATH=${FSLDIR}/bin:${PATH}; . ${FSLDIR}/etc/fslconf/fsl.sh; ${FSLDIR}/bin/")
 
   # Command to run (basic or singularity-wrapped)
