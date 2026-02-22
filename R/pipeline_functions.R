@@ -672,10 +672,9 @@ run_fsl_command <- function(args, fsldir=NULL, echo=TRUE, run=TRUE, intern=FALSE
   fslconf_path <- file.path(fsldir, "etc", "fslconf", "fsl.sh")
   if (!is.null(fsl_img)) {
     # In container mode, FSLDIR usually refers to a path that only exists inside the image.
-    fslconf_check <- paste("test -f", shQuote(fslconf_path))
     fslconf_status <- suppressWarnings(system2(
       "singularity",
-      c("exec", fsl_img, "bash", "-lc", fslconf_check),
+      c("exec", fsl_img, "test", "-f", fslconf_path),
       stdout = FALSE,
       stderr = FALSE
     ))

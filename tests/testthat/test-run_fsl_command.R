@@ -98,8 +98,8 @@ test_that("run_fsl_command accepts singularity FSLDIR that is host-invisible", {
       if (identical(command, "singularity") &&
           length(args) >= 4L &&
           identical(args[[1]], "exec") &&
-          identical(args[[3]], "bash") &&
-          identical(args[[4]], "-lc")) {
+          identical(args[[3]], "test") &&
+          identical(args[[4]], "-f")) {
         return(0L)
       }
       character(0)
