@@ -395,11 +395,9 @@ setup_bids_validation <- function(scfg, fields=NULL) {
   if (is.null(scfg$bids_validation$outfile) || "bids_validation/outfile" %in% fields) {
     scfg$bids_validation$outfile <- prompt_input(
       instruct = glue("\n
-      What should be the name of the output file created by bids_validator? The default is bids_validator_output.html
-      You can also include the subject and session IDs in the filename by using the following
-      placeholders: {{sub_id}} and {{ses_id}}. For example, bids_validation_sub-{{sub_id}}_ses-{{ses_id}}.html will substitute
-      the subject and session IDs into the filename. This is useful if you want to place the output files in a common
-      directory for all subjects and sessions, but still want to be able to identify which file belongs to which subject.
+      What should be the output HTML file for bids_validator? The default is bids_validator_output.html.
+      Relative paths are written under your project log directory (recommended) so they do not alter the BIDS dataset.
+      Absolute paths are also supported if you want to write elsewhere.
       \n
     "),
       prompt = "What is the name of the output file for bids-validator?",

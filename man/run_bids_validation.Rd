@@ -4,14 +4,21 @@
 \alias{run_bids_validation}
 \title{Run BIDS validation on the project BIDS directory}
 \usage{
-run_bids_validation(scfg, outfile = NULL)
+run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
 }
 \arguments{
 \item{scfg}{A \code{bg_project_cfg} object returned by \code{setup_project()} or
 \code{load_project()}.}
 
-\item{outfile}{The name of the HTML report to create in the BIDS directory. If
-\code{NULL}, the value stored in \code{scfg$bids_validation$outfile} is used.}
+\item{outfile}{The output HTML report path for bids-validator. Relative paths are
+written under \code{scfg$metadata$log_directory} (to avoid contaminating the BIDS
+dataset); absolute paths are used as provided. If \code{NULL}, the value stored in
+\code{scfg$bids_validation$outfile} is used.}
+
+\item{wait_jobs}{Optional character vector of upstream scheduler job IDs that
+must complete before this validation job starts.}
+
+\item{sequence_id}{Optional sequence ID used for job tracking.}
 }
 \value{
 The job id returned by the scheduler.

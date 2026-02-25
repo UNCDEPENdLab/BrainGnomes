@@ -252,7 +252,8 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
       subject_filter = subject_filter,
       postprocess_streams = postprocess_streams,
       extract_streams = extract_streams,
-      parent_ids = parent_ids
+      parent_ids = parent_ids,
+      sequence_id = sequence_id
     )
     snap_file <- file.path(scfg$metadata$log_directory, "run_project_snapshot.rds")
     dir.create(dirname(snap_file), showWarnings = FALSE, recursive = TRUE)

@@ -6,15 +6,20 @@
 #'
 #' @param scfg A \code{bg_project_cfg} object returned by \code{setup_project()} or
 #'   \code{load_project()}.
-#' @param outfile The name of the HTML report to create in the BIDS directory. If
-#'   \code{NULL}, the value stored in \code{scfg$bids_validation$outfile} is used.
+#' @param outfile The output HTML report path for bids-validator. Relative paths are
+#'   written under \code{scfg$metadata$log_directory} (to avoid contaminating the BIDS
+#'   dataset); absolute paths are used as provided. If \code{NULL}, the value stored in
+#'   \code{scfg$bids_validation$outfile} is used.
+#' @param wait_jobs Optional character vector of upstream scheduler job IDs that
+#'   must complete before this validation job starts.
+#' @param sequence_id Optional sequence ID used for job tracking.
 #' @return The job id returned by the scheduler.
 #' @export
 #' @examples
 #' \dontrun{
 #'   run_bids_validation(study_config, outfile = "bids_validator_output.html")
 #' }
-run_bids_validation <- function(scfg, outfile = NULL) {
+run_bids_validation <- function(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL) {
   checkmate::assert_class(scfg, "bg_project_cfg")
 
   if (!validate_exists(scfg$compute_environment$bids_validator)) {
@@ -45,18 +50,31 @@ run_bids_validation <- function(scfg, outfile = NULL) {
     log_level = log_level_value
   )
 
-  sched_script <- get_job_script(scfg, "bids_validation")
+  sched_script <- get_job_script(scfg, "bids_validation", subject_suffix = FALSE)
   sched_args <- get_job_sched_args(scfg, "bids_validation", stdout_log = env_variables["stdout_log"], stderr_log = env_variables["stderr_log"])
+
+  tracking_args <- list(
+    job_name = "bids_validation_project",
+    sequence_id = sequence_id,
+    n_nodes = 1
+  )
+  if (!is.null(scfg$bids_validation$ncores)) tracking_args$n_cpus <- scfg$bids_validation$ncores
+  if (!is.null(scfg$bids_validation$nhours)) tracking_args$wall_time <- hours_to_dhms(scfg$bids_validation$nhours)
+  if (!is.null(scfg$bids_validation$memgb)) tracking_args$mem_total <- scfg$bids_validation$memgb
+  if (!is.null(scfg$compute_environment$scheduler)) tracking_args$scheduler <- scfg$compute_environment$scheduler
+  tracking_args$scheduler_options <- sched_args
   
   job_id <- submit_bids_validation(
     scfg,
     sub_dir = scfg$metadata$bids_directory,
-    sub_id = "project",
     outfile = outfile,
     env_variables = env_variables,
     sched_script = sched_script,
     sched_args = sched_args,
-    lg = lg
+    parent_ids = wait_jobs,
+    lg = lg,
+    tracking_sqlite_db = scfg$metadata$sqlite_db,
+    tracking_args = tracking_args
   )
 
   invisible(job_id)

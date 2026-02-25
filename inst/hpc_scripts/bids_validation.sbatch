@@ -26,8 +26,6 @@ trap 'traperror bids_validation $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(p
 [ -z "$bids_dir" ] && echo "bids_dir not set. Exiting." && exit 1
 [ ! -d "$bids_dir" ] && echo "bids_dir $bids_dir not found. Exiting" && exit 1
 [ ! -r "$bids_dir" ] && echo "bids_dir $bids_dir not readable. Exiting" && exit 1
-[ -z "$sub_id" ] && echo "sub_id not set. Exiting." && exit 1
-[ -z "$outfile" ] && outfile="bids_validator_output.html" # default output file name
 if [[ "$debug_pipeline" == "TRUE" || "$debug_pipeline" -eq 1 ]]; then
   debug_pipeline=1
   log_message INFO "Running in debug mode; commands will not be executed"
@@ -41,6 +39,12 @@ fi
 [ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
 stdout_log="${stdout_log//%j/$SLURM_JOB_ID}"
 stderr_log="${stderr_log//%j/$SLURM_JOB_ID}"
+report_dir="$(dirname "$stdout_log")"
+[ -z "$outfile" ] && outfile="${report_dir}/bids_validator_output.html" # default output file path
+if [[ "$outfile" != /* ]]; then
+  outfile="${report_dir}/${outfile}"
+fi
+mkdir -p "$(dirname "$outfile")"
 
 cd $bids_dir || { echo "Failed to change directory to $bids_dir"; exit 1; }
 
@@ -50,11 +54,11 @@ cd $bids_dir || { echo "Failed to change directory to $bids_dir"; exit 1; }
 log_flag=""
 [[ -n "$log_file" ]] && log_flag="-l $log_file" # if log_file is set, pass it to rel
 
-log_message INFO Starting bids validation for subject $sub_id in $bids_dir
+log_message INFO Starting bids validation for dataset in $bids_dir
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "STARTED"
 
-rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${bids_dir}/${outfile} &
+rel $rel_flag $log_flag ${bids_validator} ${bids_dir} --outfile ${outfile} &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" success
 
@@ -62,9 +66,9 @@ if [[ $success -eq 0 ]]; then
   cleanup_fail_marker "${bids_dir}/.bids_validation_complete"
   [[ $debug_pipeline -eq 0 ]] && date +"%Y-%m-%d %H:%M:%S" > ${bids_dir}/.bids_validation_complete
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED"
-  log_message INFO Finished bids validation for subject $sub_id
+  log_message INFO Finished bids validation for dataset
 else
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
-  log_message ERROR "Bids validation failed for subject $sub_id"
+  log_message ERROR "Bids validation failed for dataset"
 fi
 exit $success

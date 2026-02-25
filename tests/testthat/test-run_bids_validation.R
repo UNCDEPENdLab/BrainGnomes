@@ -30,10 +30,9 @@ test_that("run_bids_validation sets upd_job_status_path for scheduler script", {
 
   captured_env <- NULL
   local_mocked_bindings(
-    get_job_script = function(...) "/fake/bids_validation_subject.sbatch",
+    get_job_script = function(...) "/fake/bids_validation.sbatch",
     get_job_sched_args = function(...) "--time=00:10:00",
-    submit_bids_validation = function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL,
-                                      outfile = NULL, env_variables = NULL, sched_script = NULL,
+    submit_bids_validation = function(scfg, sub_dir = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL,
                                       sched_args = NULL, parent_ids = NULL, lg = NULL,
                                       tracking_sqlite_db = NULL, tracking_args = NULL) {
       captured_env <<- env_variables
@@ -55,6 +54,9 @@ test_that("submit_bids_validation handles failed submission without logging erro
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
 
   scfg <- list(
+    metadata = list(
+      log_directory = root
+    ),
     compute_environment = list(
       bids_validator = file.path(root, "bids-validator"),
       scheduler = "slurm"
@@ -72,7 +74,6 @@ test_that("submit_bids_validation handles failed submission without logging erro
     job_id <- submit_bids_validation(
       scfg = scfg,
       sub_dir = root,
-      sub_id = "project",
       outfile = "bids_validator_output.html",
       env_variables = c(),
       sched_script = "/fake/script.sbatch",
@@ -82,4 +83,83 @@ test_that("submit_bids_validation handles failed submission without logging erro
     regexp = "Failed to schedule bids_validation job"
   )
   expect_null(job_id)
+})
+
+test_that("submit_bids_validation routes relative outfile under log directory", {
+  root <- tempfile("submit_bids_validation_outfile_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  captured_env <- NULL
+  scfg <- list(
+    metadata = list(
+      log_directory = file.path(root, "logs")
+    ),
+    compute_environment = list(
+      bids_validator = file.path(root, "bids-validator"),
+      scheduler = "slurm"
+    ),
+    bids_validation = list(outfile = "bids_validator_output.html")
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  local_mocked_bindings(
+    cluster_job_submit = function(..., env_variables = NULL) {
+      captured_env <<- env_variables
+      "777"
+    },
+    .package = "BrainGnomes"
+  )
+
+  job_id <- submit_bids_validation(
+    scfg = scfg,
+    sub_dir = file.path(root, "bids"),
+    outfile = "bids_validation_project.html",
+    env_variables = c(),
+    sched_script = "/fake/script.sbatch",
+    sched_args = "--time=00:10:00",
+    lg = lgr::get_logger("test_submit_bids_validation_outfile")
+  )
+
+  expect_equal(job_id, "777")
+  expect_true("outfile" %in% names(captured_env))
+  expect_equal(
+    captured_env[["outfile"]],
+    normalizePath(
+      file.path(scfg$metadata$log_directory, "bids_validation_project.html"),
+      winslash = "/",
+      mustWork = FALSE
+    )
+  )
+})
+
+test_that("submit_bids_validation rejects subject/session placeholders in outfile", {
+  root <- tempfile("submit_bids_validation_placeholders_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = file.path(root, "logs")
+    ),
+    compute_environment = list(
+      bids_validator = file.path(root, "bids-validator"),
+      scheduler = "slurm"
+    ),
+    bids_validation = list(outfile = "bids_validator_output.html")
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  expect_error(
+    submit_bids_validation(
+      scfg = scfg,
+      sub_dir = file.path(root, "bids"),
+      outfile = "bids_validation_sub-{{sub_id}}_ses-{{ses_id}}.html",
+      env_variables = c(),
+      sched_script = "/fake/script.sbatch",
+      sched_args = "--time=00:10:00",
+      lg = lgr::get_logger("test_submit_bids_validation_placeholders")
+    ),
+    regexp = "no longer supports \\{\\{sub_id\\}\\} or \\{\\{ses_id\\}\\} placeholders"
+  )
 })

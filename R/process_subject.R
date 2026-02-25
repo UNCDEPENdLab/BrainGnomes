@@ -540,14 +540,45 @@ submit_bids_conversion <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id =
 
 }
 
-submit_bids_validation <- function(scfg, sub_dir = NULL, sub_id = NULL, ses_id = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
+resolve_bids_validation_outfile <- function(outfile, log_directory) {
+  checkmate::assert_string(outfile)
+  checkmate::assert_string(log_directory)
+
+  if (grepl("\\{\\{sub_id\\}\\}|\\{\\{ses_id\\}\\}", outfile)) {
+    stop("bids_validation outfile no longer supports {{sub_id}} or {{ses_id}} placeholders.")
+  }
+
+  resolved <- outfile
+  if (grepl("^~", resolved)) {
+    resolved <- path.expand(resolved)
+  }
+  if (!grepl("^(/|[A-Za-z]:[\\\\/])", resolved)) {
+    resolved <- file.path(log_directory, resolved)
+  }
+
+  normalizePath(resolved, winslash = "/", mustWork = FALSE)
+}
+
+submit_bids_validation <- function(scfg, sub_dir = NULL, outfile = NULL, env_variables = NULL, sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, tracking_sqlite_db = NULL, tracking_args = NULL) {
+  resolved_outfile <- if (is.null(outfile)) scfg$bids_validation$outfile else outfile
+  log_directory <- scfg$metadata$log_directory
+  if (!checkmate::test_string(log_directory)) {
+    stop("Cannot run BIDS validation without a valid metadata$log_directory.")
+  }
+  resolved_outfile <- resolve_bids_validation_outfile(
+    outfile = resolved_outfile,
+    log_directory = log_directory
+  )
+  out_dir <- dirname(resolved_outfile)
+  if (!checkmate::test_directory_exists(out_dir)) {
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  }
   
   env_variables <- c(
     env_variables,
     bids_validator = scfg$compute_environment$bids_validator,
     bids_dir = sub_dir,
-    sub_id = sub_id,
-    outfile = if (is.null(outfile)) scfg$bids_validation$outfile else outfile
+    outfile = resolved_outfile
   )
 
   job_id <- cluster_job_submit(sched_script,
