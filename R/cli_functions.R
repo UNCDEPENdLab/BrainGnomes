@@ -191,6 +191,9 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
   # always collapse into a single string to avoid continuation errors in args_to_df
   if (length(args) > 1L) args <- paste(args, collapse = " ")
   df <- args_to_df(args)
+  # Treat bare options (e.g. "--flag") as logical TRUE.
+  bare_flag_idx <- !df$has_equals & is.na(df$rhs)
+  if (any(bare_flag_idx)) df$rhs[bare_flag_idx] <- "TRUE"
   assignments <- paste(df$lhs, df$rhs, sep="=")
   set_nested_values(assignments, sep = sep, type_values = type_values)
 }

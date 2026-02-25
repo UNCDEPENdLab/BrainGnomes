@@ -33,6 +33,17 @@ test_that("parse_cli_args handles embedded equals signs", {
   expect_equal(res$bar, "a = b")
 })
 
+test_that("parse_cli_args treats bare flags as TRUE", {
+  res <- parse_cli_args(c("--status FAILED", "--cascade"))
+  expect_equal(res$status, "FAILED")
+  expect_true(isTRUE(res$cascade))
+})
+
+test_that("parse_cli_args respects explicit FALSE and NULL for flags", {
+  expect_false(parse_cli_args(c("--cascade=FALSE"))$cascade)
+  expect_null(parse_cli_args(c("--cascade=NULL"))$cascade)
+})
+
 # nested_list_to_args round-trips with parse_cli_args
 
 test_that("nested_list_to_args creates expected CLI strings", {
@@ -53,4 +64,3 @@ test_that("set_cli_options updates and adds options", {
   # expect_equal(result, c("--foo=3", "--bar=2", "--baz=4"))
   expect_equal(result, c("--foo=3 --baz=4 --bar=2"))
 })
-

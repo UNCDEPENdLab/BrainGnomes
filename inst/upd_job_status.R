@@ -41,7 +41,7 @@ args <- BrainGnomes::parse_cli_args(tmp)
 if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL
 if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
 if (isTRUE(args$status == "NULL")) args$status <- NULL
-if (isTRUE(args$cascade == "NULL") | isTRUE(is.null(args$cascade))) args$cascade <- FALSE
+args$cascade <- isTRUE(args$cascade)
 if (isTRUE(args$output_dir == "NULL")) args$output_dir <- NULL
 
 # Capture output manifest if status is COMPLETED and output_dir is provided
