@@ -53,7 +53,7 @@ BIDS directory is desired.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_bids_validation</span><span class="op">(</span><span class="va">scfg</span>, outfile <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_bids_validation</span><span class="op">(</span><span class="va">scfg</span>, outfile <span class="op">=</span> <span class="cn">NULL</span>, wait_jobs <span class="op">=</span> <span class="cn">NULL</span>, sequence_id <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -66,8 +66,19 @@ BIDS directory is desired.</p>
 
 
 <dt id="arg-outfile">outfile<a class="anchor" aria-label="anchor" href="#arg-outfile"></a></dt>
-<dd><p>The name of the HTML report to create in the BIDS directory. If
-<code>NULL</code>, the value stored in <code>scfg$bids_validation$outfile</code> is used.</p></dd>
+<dd><p>The output HTML report path for bids-validator. Relative paths are
+written under <code>scfg$metadata$log_directory</code> (to avoid contaminating the BIDS
+dataset); absolute paths are used as provided. If <code>NULL</code>, the value stored in
+<code>scfg$bids_validation$outfile</code> is used.</p></dd>
+
+
+<dt id="arg-wait-jobs">wait_jobs<a class="anchor" aria-label="anchor" href="#arg-wait-jobs"></a></dt>
+<dd><p>Optional character vector of upstream scheduler job IDs that
+must complete before this validation job starts.</p></dd>
+
+
+<dt id="arg-sequence-id">sequence_id<a class="anchor" aria-label="anchor" href="#arg-sequence-id"></a></dt>
+<dd><p>Optional sequence ID used for job tracking.</p></dd>
 
 </dl></div>
     <div class="section level2">

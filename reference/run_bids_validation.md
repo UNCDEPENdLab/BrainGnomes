@@ -9,7 +9,7 @@ desired.
 ## Usage
 
 ``` r
-run_bids_validation(scfg, outfile = NULL)
+run_bids_validation(scfg, outfile = NULL, wait_jobs = NULL, sequence_id = NULL)
 ```
 
 ## Arguments
@@ -23,8 +23,19 @@ run_bids_validation(scfg, outfile = NULL)
 
 - outfile:
 
-  The name of the HTML report to create in the BIDS directory. If
-  `NULL`, the value stored in `scfg$bids_validation$outfile` is used.
+  The output HTML report path for bids-validator. Relative paths are
+  written under `scfg$metadata$log_directory` (to avoid contaminating
+  the BIDS dataset); absolute paths are used as provided. If `NULL`, the
+  value stored in `scfg$bids_validation$outfile` is used.
+
+- wait_jobs:
+
+  Optional character vector of upstream scheduler job IDs that must
+  complete before this validation job starts.
+
+- sequence_id:
+
+  Optional sequence ID used for job tracking.
 
 ## Value
 
