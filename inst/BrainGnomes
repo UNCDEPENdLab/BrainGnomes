@@ -1,17 +1,117 @@
 #!/usr/bin/env Rscript
 
+help_tokens <- c("-h", "--help")
+public_commands <- c("setup_project", "edit_project", "run_project", "status")
+
+is_help_token <- function(x) {
+  is.character(x) && length(x) > 0L && all(x %in% help_tokens)
+}
+
+print_global_help <- function(status = 0L) {
+  cat(
+    "Usage: BrainGnomes <command> [options]\n\n",
+    "Commands:\n",
+    "  setup_project [project_name] [project_directory]\n",
+    "  edit_project <project_directory|config.yaml>\n",
+    "  run_project <project_directory|config.yaml> [--steps=<steps>] [--subject_filter=<ids>] [--dry-run]\n",
+    "  status <project_directory|config.yaml> [--sub_id=<id>] [--ses_id=<id>] [--summary]\n",
+    "  help [command]\n\n",
+    "Examples:\n",
+    "  BrainGnomes setup_project demo_project /proj/my_study\n",
+    "  BrainGnomes edit_project /proj/my_study/project_config.yaml\n",
+    "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_validation fmriprep' --subject_filter='001 002' --force\n",
+    "  BrainGnomes status /proj/my_study/project_config.yaml --summary\n\n",
+    "Use 'BrainGnomes <command> --help' for command-specific help.\n",
+    sep = ""
+  )
+  quit(save = "no", status = status)
+}
+
+print_command_help <- function(command, status = 0L) {
+  switch(
+    command,
+    "setup_project" = cat(
+      "Usage: BrainGnomes setup_project [project_name] [project_directory]\n\n",
+      "Create or update a project config interactively.\n\n",
+      "Examples:\n",
+      "  BrainGnomes setup_project\n",
+      "  BrainGnomes setup_project demo_project\n",
+      "  BrainGnomes setup_project demo_project /proj/my_study\n",
+      sep = ""
+    ),
+    "edit_project" = cat(
+      "Usage: BrainGnomes edit_project <project_directory|config.yaml>\n\n",
+      "Edit an existing project configuration interactively.\n\n",
+      "Examples:\n",
+      "  BrainGnomes edit_project /proj/my_study\n",
+      "  BrainGnomes edit_project /proj/my_study/project_config.yaml\n",
+      sep = ""
+    ),
+    "run_project" = cat(
+      "Usage: BrainGnomes run_project <project_directory|config.yaml> [options]\n\n",
+      "Options:\n",
+      "  --steps=<steps>                    Pipeline steps to run (space-separated).\n",
+      "  --subject_filter=<ids>             Subject IDs to include (space-separated).\n",
+      "  --postprocess_streams=<streams>    Postprocess streams to include (space-separated).\n",
+      "  --debug                            Run in debug mode.\n",
+      "  --force                            Force rerun of previously completed jobs.\n\n",
+      "  --dry-run                          Validate and show planned work without submitting jobs.\n\n",
+      "Examples:\n",
+      "  BrainGnomes run_project /proj/my_study\n",
+      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_validation fmriprep'\n",
+      "  BrainGnomes run_project /proj/my_study --subject_filter='001 002' --postprocess_streams='rest task' --debug --force\n",
+      "  BrainGnomes run_project /proj/my_study/project_config.yaml --steps='bids_conversion fmriprep' --dry-run\n",
+      sep = ""
+    ),
+    "status" = cat(
+      "Usage: BrainGnomes status <project_directory|config.yaml> [options]\n\n",
+      "Options:\n",
+      "  --sub_id=<id>                     Limit status output to one subject.\n",
+      "  --ses_id=<id>                     Optional session id (requires --sub_id).\n",
+      "  --summary                         Print completion summary table.\n\n",
+      "Examples:\n",
+      "  BrainGnomes status /proj/my_study\n",
+      "  BrainGnomes status /proj/my_study/project_config.yaml --summary\n",
+      "  BrainGnomes status /proj/my_study --sub_id='001' --ses_id='01'\n",
+      sep = ""
+    ),
+    {
+      message("Unknown command: ", command)
+      print_global_help(status = 2L)
+    }
+  )
+
+  quit(save = "no", status = status)
+}
+
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1L) {
-  cat("Usage: BrainGnomes <command> [options]\n")
-  cat("Commands:\n")
-  cat("  setup_project [project_name] [project_directory]\n")
-  cat("  edit_project <project_directory|config.yaml>\n")
-  cat("  run_project <project_directory|config.yaml> -steps <steps> -subject_filter <ids> -postprocess_streams <streams> [-debug] [-force]\n")
-  quit(status = 1)
+  print_global_help(status = 1L)
 }
 
 cmd <- args[1]
 opts <- if (length(args) > 1) args[-1] else character()
+
+if (is_help_token(cmd)) {
+  print_global_help(status = 0L)
+}
+
+if (identical(cmd, "help")) {
+  if (length(opts) > 0L) {
+    print_command_help(opts[1], status = 0L)
+  } else {
+    print_global_help(status = 0L)
+  }
+}
+
+if (length(opts) > 0L && any(opts %in% help_tokens)) {
+  print_command_help(cmd, status = 0L)
+}
+
+if (!(cmd %in% public_commands)) {
+  message("Unknown command: ", cmd)
+  print_global_help(status = 2L)
+}
 
 if (!requireNamespace("BrainGnomes", quietly = TRUE)) {
   stop("BrainGnomes package is required to run this script.")
@@ -37,7 +137,7 @@ cli_edit <- function(opts) {
 }
 
 cli_run <- function(opts) {
-  if (length(opts) < 1) stop("cli_project requires a project directory or YAML file")
+  if (length(opts) < 1) stop("run_project requires a project directory or YAML file")
   input <- opts[1]
   cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
   steps <- cli_args$steps
@@ -45,16 +145,48 @@ cli_run <- function(opts) {
   postprocess_streams <- cli_args$postprocess_streams
   debug <- FALSE
   force <- FALSE
+  dry_run <- FALSE
+  dry_run_opt <- NULL
+  if (!is.null(cli_args[["dry-run"]])) dry_run_opt <- cli_args[["dry-run"]]
+  if (is.null(dry_run_opt) && !is.null(cli_args$dry_run)) dry_run_opt <- cli_args$dry_run
   if (!is.null(cli_args$debug)) debug <- isTRUE(cli_args$debug) || is.na(cli_args$debug)
   if (!is.null(cli_args$force)) force <- isTRUE(cli_args$force) || is.na(cli_args$force)
+  if (!is.null(dry_run_opt)) dry_run <- isTRUE(dry_run_opt) || is.na(dry_run_opt)
   scfg <- BrainGnomes::load_project(input)
   ret <- BrainGnomes::run_project(scfg, steps = steps, subject_filter = subject_filter,
-    postprocess_streams = postprocess_streams, debug = debug, force = force)
+    postprocess_streams = postprocess_streams, debug = debug, force = force, dry_run = dry_run)
+}
+
+cli_status <- function(opts) {
+  if (length(opts) < 1) stop("status requires a project directory or YAML file")
+  input <- opts[1]
+  cli_args <- if (length(opts) > 1) BrainGnomes::parse_cli_args(opts[-1]) else list()
+  sub_id <- cli_args$sub_id
+  ses_id <- cli_args$ses_id
+  do_summary <- !is.null(cli_args$summary) && (isTRUE(cli_args$summary) || is.na(cli_args$summary))
+
+  if (!is.null(ses_id) && is.null(sub_id)) {
+    stop("--ses_id can only be used when --sub_id is provided")
+  }
+
+  scfg <- BrainGnomes::load_project(input)
+  status_df <- if (is.null(sub_id)) {
+    BrainGnomes::get_project_status(scfg)
+  } else {
+    BrainGnomes::get_subject_status(scfg, sub_id = as.character(sub_id), ses_id = if (is.null(ses_id)) NULL else as.character(ses_id))
+  }
+
+  if (isTRUE(do_summary)) {
+    print(summary(status_df))
+  } else {
+    print(status_df)
+  }
 }
 
 switch(cmd,
   setup_project = cli_setup(opts),
   edit_project = cli_edit(opts),
-  cli_project = cli_run(opts),
+  run_project = cli_run(opts),
+  status = cli_status(opts),
   stop(paste("Unknown command:", cmd))
 )

@@ -12,6 +12,7 @@ run_project(
   extract_streams = NULL,
   debug = FALSE,
   force = FALSE,
+  dry_run = FALSE,
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")
 )
 }
@@ -40,6 +41,9 @@ streams will be run.}
 \item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
 
 \item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
+
+\item{dry_run}{A logical value indicating whether to perform a dry run (validate settings and
+report planned work without submitting any jobs).}
 
 \item{log_level}{Character string controlling log verbosity. One of
 \code{TRACE}, \code{DEBUG}, \code{INFO}, \code{WARN}, \code{ERROR}, or \code{FATAL}.}

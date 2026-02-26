@@ -12,7 +12,8 @@ submit_subjects(
   extract_streams = NULL,
   parent_ids = NULL,
   sequence_id = NULL,
-  permission_check_cache = NULL
+  permission_check_cache = NULL,
+  dry_run = FALSE
 )
 }
 \arguments{
@@ -33,6 +34,9 @@ submit_subjects(
 \item{permission_check_cache}{Optional environment for memoizing write-permission checks.
 When supplied (e.g. pre-primed by \code{setup_project_directories}), shared paths
 already verified writable are skipped.}
+
+\item{dry_run}{Logical. If \code{TRUE}, report planned subject/session scope without submitting
+any subject-level jobs.}
 }
 \description{
 Schedule subject-level processing

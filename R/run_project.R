@@ -6,6 +6,8 @@
 #'   If `NULL`, the user will be prompted for which steps to run.
 #' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
+#' @param dry_run A logical value indicating whether to perform a dry run (validate settings and
+#'   report planned work without submitting any jobs).
 #' @param subject_filter Optional character vector or data.frame specifying which
 #'   subjects (and optionally sessions) to process. When `NULL` and run
 #'   interactively, the user will be prompted to enter space-separated subject
@@ -32,7 +34,7 @@
 #' @importFrom checkmate assert_list assert_flag
 #' @importFrom lgr get_logger_glue
 run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_streams = NULL, 
-  extract_streams = NULL, debug = FALSE, force = FALSE,
+  extract_streams = NULL, debug = FALSE, force = FALSE, dry_run = FALSE,
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
 
   checkmate::assert_class(scfg, "bg_project_cfg")
@@ -46,6 +48,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   
   checkmate::assert_flag(debug)
   checkmate::assert_flag(force)
+  checkmate::assert_flag(dry_run)
   valid_log_levels <- c("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL")
   if (length(log_level) > 1L) log_level <- log_level[1L]
   log_level <- toupper(log_level)
@@ -136,6 +139,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     
     scfg$debug <- debug # pass forward debug flag from arguments
     scfg$force <- force # pass forward force flag from arguments
+    scfg$dry_run <- dry_run
     scfg$log_level <- log_level
   } else {
     ids <- prompt_input(
@@ -185,6 +189,10 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
     # check whether to run in debug mode
     scfg$debug <- prompt_input(instruct = "Run pipeline in debug mode? This will echo commands to logs, but not run them.", type = "flag")
     scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
+    scfg$dry_run <- prompt_input(
+      instruct = "Run as dry run? This validates configuration and reports planned jobs without submitting them.",
+      type = "flag", default = FALSE
+    )
     scfg$log_level <- prompt_input(
       instruct = "Select log level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)",
       type = "character", among = valid_log_levels, default = log_level
@@ -194,6 +202,7 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
   if (isTRUE(scfg$force)) {
     if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
+  if (is.null(scfg$dry_run)) scfg$dry_run <- dry_run
   if (is.null(scfg$log_level)) scfg$log_level <- log_level
   scfg$log_level <- toupper(scfg$log_level)
   options(BrainGnomes.log_level = scfg$log_level)
@@ -220,6 +229,35 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 
   if (steps["postprocess"] && !validate_exists(scfg$compute_environment$fsl_container)) {
     stop("Cannot run postprocessing without a valid FSL container.")
+  }
+
+  if (isTRUE(scfg$dry_run)) {
+    dry_requested <- names(steps)[steps]
+    cat("\nDry run enabled. No jobs will be submitted.\n")
+    cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")
+    if (length(postprocess_streams) > 0L) {
+      cat("Postprocess streams:", paste(postprocess_streams, collapse = ", "), "\n")
+    }
+    if (length(extract_streams) > 0L) {
+      cat("Extraction streams:", paste(extract_streams, collapse = ", "), "\n")
+    }
+    if (isTRUE(steps["flywheel_sync"])) {
+      cat("Would submit: flywheel_sync\n")
+      if (any(steps[names(steps) != "flywheel_sync"])) {
+        cat("Would submit after flywheel_sync: submit_subjects controller\n")
+      }
+    }
+
+    if (any(steps[names(steps) != "flywheel_sync"])) {
+      submit_subjects(
+        scfg = scfg, steps = steps, subject_filter = subject_filter,
+        postprocess_streams = postprocess_streams, extract_streams = extract_streams,
+        parent_ids = NULL, sequence_id = NULL,
+        permission_check_cache = permission_check_cache,
+        dry_run = TRUE
+      )
+    }
+    return(invisible(TRUE))
   }
 
   # generate sequence ID for job tracking
@@ -308,13 +346,17 @@ run_project <- function(scfg, steps = NULL, subject_filter = NULL, postprocess_s
 #' @param permission_check_cache Optional environment for memoizing write-permission checks.
 #'   When supplied (e.g. pre-primed by \code{setup_project_directories}), shared paths
 #'   already verified writable are skipped.
+#' @param dry_run Logical. If \code{TRUE}, report planned subject/session scope without submitting
+#'   any subject-level jobs.
 #' @details 
 #'   This function is not meant to be called by users! Instead, it is called internally
 #'   after flywheel sync completes.
 #' @keywords internal
 submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_streams = NULL,
   extract_streams = NULL, parent_ids = NULL, sequence_id = NULL,
-  permission_check_cache = NULL) {
+  permission_check_cache = NULL, dry_run = FALSE) {
+
+  checkmate::assert_flag(dry_run)
 
   # look for subject directories in the DICOM directory
   subject_dicom_dirs <- data.frame(
@@ -369,6 +411,16 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL, postprocess_stre
 
   if (nrow(subject_dirs) == 0L) {
     stop(glue("Cannot find any valid subject folders in bids directory: {scfg$metadata$bids_directory}"))
+  }
+
+  if (isTRUE(dry_run)) {
+    msg_df <- unique(subject_dirs[, c("sub_id", "ses_id"), drop = FALSE])
+    msg_lines <- apply(msg_df, 1, function(rr) {
+      if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}")
+      else glue("  sub-{rr['sub_id']}")
+    })
+    cat("Dry run subject/session plan:\n", paste(msg_lines, collapse = "\n"), "\n")
+    return(invisible(msg_df))
   }
 
   # split data.frame by subject (some steps are subject-level, some are session-level)
