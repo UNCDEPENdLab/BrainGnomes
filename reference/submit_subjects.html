@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,7 +37,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Schedule subject-level processing</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
       <div class="d-none name"><code>submit_subjects.Rd</code></div>
     </div>
 
@@ -55,7 +55,8 @@
 <span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  parent_ids <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sequence_id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  permission_check_cache <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  permission_check_cache <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dry_run <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +96,11 @@
 <dd><p>Optional environment for memoizing write-permission checks.
 When supplied (e.g. pre-primed by <code>setup_project_directories</code>), shared paths
 already verified writable are skipped.</p></dd>
+
+
+<dt id="arg-dry-run">dry_run<a class="anchor" aria-label="anchor" href="#arg-dry-run"></a></dt>
+<dd><p>Logical. If <code>TRUE</code>, report planned subject/session scope without submitting
+any subject-level jobs.</p></dd>
 
 </dl></div>
     <div class="section level2">

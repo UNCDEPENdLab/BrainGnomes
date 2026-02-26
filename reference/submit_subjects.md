@@ -13,7 +13,8 @@ submit_subjects(
   extract_streams = NULL,
   parent_ids = NULL,
   sequence_id = NULL,
-  permission_check_cache = NULL
+  permission_check_cache = NULL,
+  dry_run = FALSE
 )
 ```
 
@@ -53,6 +54,11 @@ submit_subjects(
   Optional environment for memoizing write-permission checks. When
   supplied (e.g. pre-primed by `setup_project_directories`), shared
   paths already verified writable are skipped.
+
+- dry_run:
+
+  Logical. If `TRUE`, report planned subject/session scope without
+  submitting any subject-level jobs.
 
 ## Details
 

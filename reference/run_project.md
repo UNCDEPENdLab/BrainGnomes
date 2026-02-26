@@ -13,6 +13,7 @@ run_project(
   extract_streams = NULL,
   debug = FALSE,
   force = FALSE,
+  dry_run = FALSE,
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")
 )
 ```
@@ -63,6 +64,11 @@ run_project(
 
   A logical value indicating whether to force the execution of all
   steps, regardless of their current status.
+
+- dry_run:
+
+  A logical value indicating whether to perform a dry run (validate
+  settings and report planned work without submitting any jobs).
 
 - log_level:
 

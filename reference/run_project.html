@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8-1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,7 +37,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Run the processing pipeline</h1>
-      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/R/run_project.R" class="external-link"><code>R/run_project.R</code></a></small>
       <div class="d-none name"><code>run_project.Rd</code></div>
     </div>
 
@@ -55,6 +55,7 @@
 <span>  extract_streams <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  debug <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  force <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  dry_run <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  log_level <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"INFO"</span>, <span class="st">"DEBUG"</span>, <span class="st">"WARN"</span>, <span class="st">"ERROR"</span>, <span class="st">"TRACE"</span>, <span class="st">"FATAL"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -100,6 +101,11 @@ streams will be run.</p></dd>
 
 <dt id="arg-force">force<a class="anchor" aria-label="anchor" href="#arg-force"></a></dt>
 <dd><p>A logical value indicating whether to force the execution of all steps, regardless of their current status.</p></dd>
+
+
+<dt id="arg-dry-run">dry_run<a class="anchor" aria-label="anchor" href="#arg-dry-run"></a></dt>
+<dd><p>A logical value indicating whether to perform a dry run (validate settings and
+report planned work without submitting any jobs).</p></dd>
 
 
 <dt id="arg-log-level">log_level<a class="anchor" aria-label="anchor" href="#arg-log-level"></a></dt>

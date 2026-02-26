@@ -5,6 +5,10 @@
 - Refactor prefetch to accept cohort specifications and extend them to
   T2w fetch.
 - Refactor prefetch to fall back to no desc field if desc:brain fails
+- Improve CLI interface to support –help or BrainGnomes help
+- Add CLI status command to get project status from command line
+- Add dry_run option to run_project to see what would be run without
+  executing it
 
 ## BrainGnomes 0.8
 
