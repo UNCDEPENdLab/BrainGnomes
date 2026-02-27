@@ -1,7 +1,7 @@
 ---
 title: "Diagnosing Pipeline Runs"
-author: "Michael Hallquist"
-date: "16 Feb 2026"
+author: "Michael Hallquist & Dan Shallal"
+date: "25 Feb 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -177,6 +177,9 @@ The first prompt asks whether to diagnose by **subject** or by **sequence ID**:
 ```
 Enter 1 for subject summary or 2 for sequence ID
 > 2
+
+Enter which pipeline run to diagnose. The default is the most recent.
+> [Enter]
 ```
 
 Choosing the sequence‑first path lets you pick a specific pipeline run (for
@@ -187,7 +190,7 @@ run, grouped by subject, with their current status:
 ```
 Postprocess stream1
   postprocess_stream1_sub-540294                  [STARTED]
-    postprocess_sub-540294_task-ridl_run-01_...   [FAILED]
+  ---postprocess_sub-540294_task-ridl_run-01_...   [FAILED]
 ```
 
 For postprocessing, this view expands nested structure: the subject‑level
@@ -213,6 +216,10 @@ subject‑summary branch:
 ```
 Enter 1 for subject summary or 2 for sequence ID
 > 1
+
+Found 10 subject(s) across all runs.
+Enter the number corresponding to the subject you want to view
+> 3
 ```
 
 Here, `diagnose_pipeline()` looks across **all sequences** in the SQLite
@@ -226,6 +233,16 @@ The summary groups jobs by step (BIDS conversion, MRIQC, fMRIPrep, AROMA,
 postprocessing streams, etc.) and highlights, for each step, which sequence
 had the most successful outcome. You can then jump from this high‑level
 summary back into sequence‑ or job‑level inspection for detailed debugging.
+
+Example subject‑level summary for `sub-540303`:
+
+```
+BIDS Conversion
+  ✓ bids_conversion_sub-540303 (job 15135998, sequence 18303423-c037-477a-91af-b6289525dad2) [COMPLETED]
+
+fMRIPrep
+  • fmriprep_sub-540303 (job 15136000, sequence 18303423-c037-477a-91af-b6289525dad2) [STARTED]
+```
 
 ## Interpreting job statuses
 
