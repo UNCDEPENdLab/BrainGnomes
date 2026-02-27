@@ -341,8 +341,16 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       cur_file <- apply_mask(cur_file,
         mask_file = apply_mask_file,
         out_file = out_file,
-        overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
+      
+      # Postproc check for apply_mask
+      check_path <- system.file("postproc_checks/apply_mask_check.R", package = "BrainGnomes")
+      if (nzchar(check_path) && file.exists(check_path)) {
+        source(check_path)
+        check_msg <- test_masking(maskpath = apply_mask_file, datapath = cur_file)
+        to_log(lg, "info", check_msg)
+      }
     } else if (step == "spatial_smooth") {
       cur_file <- spatial_smooth(cur_file,
         out_file = out_file,
