@@ -8,6 +8,7 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
   py_code <- paste(
     "import json",
     "import pathlib",
+    "import shutil",
     "import tempfile",
     "import types",
     "import importlib.util",
@@ -56,10 +57,13 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
     "mod = importlib.util.module_from_spec(spec)",
     "spec.loader.exec_module(mod)",
     "",
-    "sys.argv = [str(script), '--output-spaces', 'MNIPediatricAsym']",
-    "rc = mod.main()",
-    "print(f'RC|{rc}')",
-    "print('CALLS|' + json.dumps(calls, sort_keys=True))",
+    "try:",
+    "    sys.argv = [str(script), '--output-spaces', 'MNIPediatricAsym']",
+    "    rc = mod.main()",
+    "    print(f'RC|{rc}')",
+    "    print('CALLS|' + json.dumps(calls, sort_keys=True))",
+    "finally:",
+    "    shutil.rmtree(tmpdir, ignore_errors=True)",
     sep = "\n"
   )
 

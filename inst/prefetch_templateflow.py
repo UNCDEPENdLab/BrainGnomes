@@ -616,7 +616,7 @@ def _build_manifest_payload(
         if not path.exists():
             continue
         stat = path.stat()
-        rel_path = os.path.relpath(str(path), root)
+        rel_path = Path(os.path.relpath(str(path), root)).as_posix()
         entries.append(
             {
                 "path": rel_path,
