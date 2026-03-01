@@ -639,7 +639,75 @@ read_prefetch_state <- function(state_file) {
   state
 }
 
-prefetch_state_covers_spaces <- function(state, requested_spaces, templateflow_home) {
+find_container_runtime <- function() {
+  runtimes <- Sys.which(c("singularity", "apptainer"))
+  available <- unname(runtimes[nzchar(runtimes)])
+  if (length(available) == 0L) return(NULL)
+  available[[1L]]
+}
+
+run_prefetch_query_plan_command <- function(runtime, cmd_args, env) {
+  tryCatch(
+    suppressWarnings(system2(runtime, cmd_args, stdout = TRUE, stderr = TRUE, env = env)),
+    error = function(e) structure(character(0), status = 1L)
+  )
+}
+
+resolve_prefetch_query_plan <- function(container_path, script_path, requested_spaces, templateflow_home) {
+  if (!checkmate::test_file_exists(container_path) || !checkmate::test_file_exists(script_path)) {
+    return(NULL)
+  }
+
+  runtime <- find_container_runtime()
+  if (!checkmate::test_string(runtime)) return(NULL)
+
+  summary_dir <- tempfile("prefetch_plan_")
+  dir.create(summary_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(summary_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  summary_file <- file.path(summary_dir, "prefetch_summary.json")
+  script_dir <- normalizePath(dirname(script_path), winslash = "/", mustWork = TRUE)
+  bind_dirs <- unique(c(
+    script_dir,
+    normalizePath(summary_dir, winslash = "/", mustWork = TRUE)
+  ))
+  bind_args <- unlist(lapply(bind_dirs, function(path) c("-B", paste0(path, ":", path))), use.names = FALSE)
+
+  cmd_args <- c(
+    "exec", "--cleanenv", "--containall",
+    bind_args,
+    normalizePath(container_path, winslash = "/", mustWork = TRUE),
+    "python",
+    normalizePath(script_path, winslash = "/", mustWork = TRUE),
+    "--output-spaces", paste(requested_spaces, collapse = " "),
+    "--plan-only",
+    "--summary-json", summary_file
+  )
+
+  env <- c(
+    TEMPLATEFLOW_HOME = normalizePath(templateflow_home, winslash = "/", mustWork = FALSE),
+    APPTAINERENV_TEMPLATEFLOW_HOME = normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
+  )
+
+  out <- run_prefetch_query_plan_command(runtime, cmd_args, env)
+  status <- attr(out, "status")
+  if (!is.null(status) && !identical(status, 0L)) return(NULL)
+  if (!checkmate::test_file_exists(summary_file)) return(NULL)
+
+  plan <- tryCatch(
+    jsonlite::fromJSON(summary_file, simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(plan)) return(NULL)
+
+  list(
+    query_signature = if (!is.null(plan$query_signature)) plan$query_signature else NULL,
+    query_count = if (!is.null(plan$query_count)) plan$query_count else NULL,
+    queries = if (!is.null(plan$queries)) plan$queries else list()
+  )
+}
+
+prefetch_state_covers_request <- function(state, requested_spaces, requested_query_signature, templateflow_home) {
   if (is.null(state)) return(FALSE)
 
   status <- if (!is.null(state$status)) toupper(trimws(as.character(state$status))) else ""
@@ -653,10 +721,14 @@ prefetch_state_covers_spaces <- function(state, requested_spaces, templateflow_h
   current_tf_home <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
   if (!identical(state_tf_home, current_tf_home)) return(FALSE)
 
-  all(requested_spaces %in% state$spaces)
+  if (!all(requested_spaces %in% state$spaces)) return(FALSE)
+
+  state_query_signature <- if (!is.null(state$query_signature)) trimws(as.character(state$query_signature)) else ""
+  if (!checkmate::test_string(requested_query_signature) || !nzchar(requested_query_signature)) return(FALSE)
+  identical(state_query_signature, requested_query_signature)
 }
 
-prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NULL) {
+prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NULL, query_signature = NULL) {
   if (!checkmate::test_string(sqlite_db) || !checkmate::test_file_exists(sqlite_db)) {
     return(FALSE)
   }
@@ -701,6 +773,16 @@ prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NU
   manifest_json <- record$output_manifest[1]
   if (is.null(manifest_json) || is.na(manifest_json) || !nzchar(manifest_json)) {
     return(FALSE)
+  }
+
+  manifest <- tryCatch(
+    jsonlite::fromJSON(manifest_json, simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(manifest)) return(FALSE)
+  if (checkmate::test_string(query_signature)) {
+    manifest_signature <- if (!is.null(manifest$query_signature)) manifest$query_signature else NULL
+    if (!identical(manifest_signature, query_signature)) return(FALSE)
   }
 
   verification <- verify_output_manifest(templateflow_home, manifest_json, check_mtime = FALSE)
@@ -759,8 +841,25 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
 
   prefetch_state_file <- get_prefetch_state_file(tf_home)
   prefetch_state <- read_prefetch_state(prefetch_state_file)
-  state_covers_spaces <- prefetch_state_covers_spaces(prefetch_state, fetch_spaces, tf_home)
-  if (state_covers_spaces) {
+  prefetch_plan <- resolve_prefetch_query_plan(
+    container_path = container_path,
+    script_path = script_path,
+    requested_spaces = fetch_spaces,
+    templateflow_home = tf_home
+  )
+  current_query_signature <- if (!is.null(prefetch_plan$query_signature)) {
+    as.character(prefetch_plan$query_signature)
+  } else {
+    NULL
+  }
+
+  state_covers_request <- prefetch_state_covers_request(
+    prefetch_state,
+    fetch_spaces,
+    current_query_signature,
+    tf_home
+  )
+  if (state_covers_request) {
     state_job_id <- if (!is.null(prefetch_state$scheduler_job_id) && checkmate::test_string(prefetch_state$scheduler_job_id)) {
       prefetch_state$scheduler_job_id
     } else {
@@ -769,7 +868,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     manifest_ok <- prefetch_manifest_verified(
       sqlite_db = scfg$metadata$sqlite_db,
       templateflow_home = tf_home,
-      job_id = state_job_id
+      job_id = state_job_id,
+      query_signature = current_query_signature
     )
 
     if (manifest_ok) {
@@ -781,6 +881,13 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
 
     message(glue::glue(
       "Re-running TemplateFlow prefetch because prior manifest verification failed or files are missing in {tf_home}."
+    ))
+  } else if (!is.null(prefetch_state) && identical(
+    toupper(trimws(as.character(if (!is.null(prefetch_state$status)) prefetch_state$status else ""))),
+    "COMPLETED"
+  )) {
+    message(glue::glue(
+      "Re-running TemplateFlow prefetch because cached state in {tf_home} does not match the current query set."
     ))
   }
 
@@ -843,19 +950,29 @@ ensure_aroma_output_space <- function(scfg, require_aroma = isTRUE(scfg$aroma$en
 
   if (is.null(scfg$fmriprep$auto_added_aroma_space)) scfg$fmriprep$auto_added_aroma_space <- FALSE
 
-  spaces <- scfg$fmriprep$output_spaces
+  spaces <- validate_char(scfg$fmriprep$output_spaces, empty_value = NULL)
   has_required_space <- !is.null(spaces) && grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE)
-  if (has_required_space) return(scfg)
+  if (has_required_space) {
+    scfg$fmriprep$output_spaces <- spaces # persist normalized value
+    return(scfg)
+  }
 
   addition <- "MNI152NLin6Asym:res-2"
-  if (is.null(spaces) || !nzchar(trimws(spaces))) {
-    scfg$fmriprep$output_spaces <- addition
+  default_space <- "MNI152NLin2009cAsym"
+  blank <- is.null(spaces) || !nzchar(trimws(spaces))
+
+  scfg$fmriprep$output_spaces <- if (blank) {
+    paste(default_space, addition)
   } else {
-    scfg$fmriprep$output_spaces <- trimws(paste(spaces, addition))
+    trimws(paste(spaces, addition))
   }
 
   if (isTRUE(verbose)) {
-    message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+    if (blank) {
+      message("No fmriprep output spaces specified. Using default MNI152NLin2009cAsym and adding MNI152NLin6Asym:res-2 so AROMA can run.")
+    } else {
+      message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+    }
   }
 
   scfg$fmriprep$auto_added_aroma_space <- TRUE

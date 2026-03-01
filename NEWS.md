@@ -1,10 +1,12 @@
 # BrainGnomes 0.8-1
 
-* Refactor prefetch to accept cohort specifications and extend them to T2w fetch.
-* Refactor prefetch to fall back to no desc field if desc:brain fails
 * Improve CLI interface to support --help or BrainGnomes <command> help
 * Add CLI status command to get project status from command line
 * Add dry_run option to run_project to see what would be run without executing it
+* Refactor prefetch to accept cohort specifications and extend them to T2w fetch.
+* Refactor prefetch to fall back to no desc field if desc:brain fails
+* Harden prefetch caching and validation checks so that later failures invalidate skip logic
+* Make prefetch state query-specific so that an exact snapshot of templateflow files is retained
 
 # BrainGnomes 0.8
 

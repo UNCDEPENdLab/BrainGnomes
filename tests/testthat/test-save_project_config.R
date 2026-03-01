@@ -48,3 +48,18 @@ test_that("save_project_config updates YAML path when file argument supplied", {
     normalizePath(new_yaml, winslash = "/", mustWork = TRUE)
   )
 })
+
+test_that("validate_char normalizes blank fmriprep output_spaces to NULL", {
+  # Normalization now happens via validate_char (called in validate_project and
+
+  # ensure_aroma_output_space), not in load_project directly.
+  expect_null(validate_char("", empty_value = NULL))
+  expect_null(validate_char(NA_character_, empty_value = NULL))
+})
+
+test_that("validate_char normalizes .na.character fmriprep output_spaces to NULL", {
+  expect_null(validate_char(".na.character", empty_value = NULL))
+  expect_null(validate_char(".na", empty_value = NULL))
+  # A real value passes through
+  expect_identical(validate_char("MNI152NLin2009cAsym", empty_value = NULL), "MNI152NLin2009cAsym")
+})

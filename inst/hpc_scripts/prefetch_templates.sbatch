@@ -66,6 +66,57 @@ for path in "${bind_paths[@]}"; do
   bind_args+=("-B" "$path:$path")
 done
 
+prefetch_summary_file=$(mktemp "$templateflow_home/.braingnomes_prefetch_summary_${SLURM_JOB_ID}_XXXX.json")
+prefetch_manifest_file=$(mktemp "$templateflow_home/.braingnomes_prefetch_manifest_${SLURM_JOB_ID}_XXXX.json")
+
+write_prefetch_failed_state_fallback() {
+  [ -z "$prefetch_state_file" ] && return 0
+
+  local state_dir state_tmp query_signature query_count
+  state_dir=$(dirname "$prefetch_state_file")
+  state_tmp="${prefetch_state_file}.tmp.$$"
+  query_signature=""
+  query_count=""
+
+  if command -v python >/dev/null 2>&1 && [ -s "$prefetch_summary_file" ]; then
+    mapfile -t parsed < <(python - "$prefetch_summary_file" <<'PY'
+import json
+import sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        payload = json.load(f)
+except Exception:
+    print("")
+    print("")
+    raise SystemExit(0)
+print(payload.get("query_signature", "") or "")
+print(payload.get("query_count", "") or "")
+PY
+)
+    query_signature="${parsed[0]}"
+    query_count="${parsed[1]}"
+  fi
+
+  if mkdir -p "$state_dir"; then
+    if {
+      printf "status: FAILED\n"
+      printf "templateflow_home: %s\n" "$templateflow_home"
+      printf "spaces: %s\n" "$prefetch_spaces"
+      printf "updated_at_utc: %s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+      printf "scheduler_job_id: %s\n" "$SLURM_JOB_ID"
+      [ -n "$query_signature" ] && printf "query_signature: %s\n" "$query_signature"
+      [ -n "$query_count" ] && printf "query_count: %s\n" "$query_count"
+    } > "$state_tmp" && mv -f "$state_tmp" "$prefetch_state_file"; then
+      log_message INFO "Invalidated TemplateFlow prefetch state after failure: $prefetch_state_file"
+    else
+      rm -f "$state_tmp"
+      log_message WARN "Unable to invalidate TemplateFlow prefetch state after failure: $prefetch_state_file"
+    fi
+  else
+    log_message WARN "Unable to create prefetch state directory: $state_dir"
+  fi
+}
+
 log_message INFO "Prefetching TemplateFlow resources into $templateflow_home for spaces: $prefetch_spaces"
 start_time=$(date +%s)
 
@@ -77,36 +128,28 @@ rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_hom
 
 # run the TemplateFlow prefetch helper inside the fMRIPrep container
 rel $rel_flag $log_flag singularity exec --cleanenv --containall "${bind_args[@]}" \
-  "$prefetch_container" python "$prefetch_script" --output-spaces "$prefetch_spaces" &
+  "$prefetch_container" python "$prefetch_script" \
+  --output-spaces "$prefetch_spaces" \
+  --summary-json "$prefetch_summary_file" \
+  --manifest-json "$prefetch_manifest_file" \
+  --state-file "$prefetch_state_file" \
+  --scheduler-job-id "$SLURM_JOB_ID" &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
 
 if [[ $cmd_status -eq 0 ]]; then
-  if [[ -n "$prefetch_state_file" ]]; then
-    state_dir=$(dirname "$prefetch_state_file")
-    state_tmp="${prefetch_state_file}.tmp.$$"
-    if mkdir -p "$state_dir"; then
-      if {
-        printf "status: COMPLETED\n"
-        printf "templateflow_home: %s\n" "$templateflow_home"
-        printf "spaces: %s\n" "$prefetch_spaces"
-        printf "updated_at_utc: %s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-        printf "scheduler_job_id: %s\n" "$SLURM_JOB_ID"
-      } > "$state_tmp" && mv -f "$state_tmp" "$prefetch_state_file"; then
-        log_message INFO "Updated TemplateFlow prefetch state: $prefetch_state_file"
-      else
-        rm -f "$state_tmp"
-        log_message WARN "Unable to update TemplateFlow prefetch state: $prefetch_state_file"
-      fi
-    else
-      log_message WARN "Unable to create prefetch state directory: $state_dir"
-    fi
+  if [[ -s "$prefetch_manifest_file" ]]; then
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_manifest_file "$prefetch_manifest_file"
+  else
+    "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$templateflow_home"
   fi
-  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$templateflow_home"
   log_message INFO "Finished TemplateFlow prefetch (time elapsed: $(time_elapsed))"
 else
+  write_prefetch_failed_state_fallback
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$SLURM_JOB_ID" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
   log_message ERROR "TemplateFlow prefetch failed (exit code $cmd_status)"
 fi
+
+rm -f "$prefetch_summary_file" "$prefetch_manifest_file"
 
 exit $cmd_status

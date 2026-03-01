@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
+import json
 import os
 import sys
 import time
 from dataclasses import asdict, dataclass, is_dataclass
+from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -228,6 +231,30 @@ def _paths_exist(result: Union[str, os.PathLike, Sequence[Union[str, os.PathLike
     if not seq:
         return False
     return any(Path(p).exists() for p in seq)
+
+
+def _existing_paths(result: Union[str, os.PathLike, Sequence[Union[str, os.PathLike]]]) -> List[str]:
+    """Return existing file paths resolved by TemplateFlow api.get."""
+    if isinstance(result, (str, os.PathLike)):
+        paths = [result]
+    else:
+        try:
+            paths = list(result)  # type: ignore[arg-type]
+        except TypeError:
+            return []
+
+    existing: List[str] = []
+    seen: Set[str] = set()
+    for path_obj in paths:
+        path_str = os.fspath(path_obj)
+        if not path_str:
+            continue
+        abs_path = os.path.abspath(path_str)
+        if abs_path in seen or not Path(abs_path).exists():
+            continue
+        seen.add(abs_path)
+        existing.append(abs_path)
+    return existing
 
 
 def _space_label(space_obj: Any) -> str:
@@ -491,6 +518,122 @@ def _format_label_with_query(label: str, query: Dict[str, Any]) -> str:
     if extras:
         return f"{label} ({', '.join(extras)})"
     return label
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _query_spec_payload(query: QuerySpec) -> Dict[str, Any]:
+    return {
+        "template": query.template,
+        "params": dict(query.params),
+        "optional": bool(query.optional),
+        "label": query.label,
+    }
+
+
+def _query_signature_payload(queries: List[QuerySpec]) -> List[Dict[str, Any]]:
+    payload = [
+        {
+            "template": query.template,
+            "params": dict(query.params),
+            "optional": bool(query.optional),
+        }
+        for query in queries
+    ]
+    return sorted(
+        payload,
+        key=lambda item: (
+            item["template"],
+            json.dumps(item["params"], sort_keys=True, separators=(",", ":")),
+            item["optional"],
+        ),
+    )
+
+
+def _compute_query_signature(queries: List[QuerySpec]) -> str:
+    payload = json.dumps(
+        _query_signature_payload(queries),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _write_json(path: Optional[str], payload: Dict[str, Any]) -> None:
+    if not path:
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(target)
+
+
+def _write_prefetch_state(
+    state_file: Optional[str],
+    *,
+    status: str,
+    templateflow_home: str,
+    spaces: List[str],
+    scheduler_job_id: Optional[str],
+    query_signature: Optional[str],
+    query_count: int,
+) -> None:
+    if not state_file:
+        return
+
+    target = Path(state_file)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.tmp.{os.getpid()}")
+    lines = [
+        f"status: {status}",
+        f"templateflow_home: {templateflow_home}",
+        f"spaces: {' '.join(spaces)}",
+        f"updated_at_utc: {_utc_now()}",
+    ]
+    if scheduler_job_id:
+        lines.append(f"scheduler_job_id: {scheduler_job_id}")
+    if query_signature:
+        lines.append(f"query_signature: {query_signature}")
+    lines.append(f"query_count: {query_count}")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    tmp.replace(target)
+
+
+def _build_manifest_payload(
+    templateflow_home: str,
+    query_signature: str,
+    resolved_paths: List[str],
+) -> Dict[str, Any]:
+    root = os.path.abspath(templateflow_home)
+    entries: List[Dict[str, Any]] = []
+    total_size = 0
+
+    for path_str in sorted(set(resolved_paths)):
+        path = Path(path_str)
+        if not path.exists():
+            continue
+        stat = path.stat()
+        rel_path = os.path.relpath(str(path), root)
+        entries.append(
+            {
+                "path": rel_path,
+                "size": stat.st_size,
+                "mtime": stat.st_mtime,
+            }
+        )
+        total_size += stat.st_size
+
+    return {
+        "output_dir": root,
+        "captured_at": _utc_now(),
+        "query_signature": query_signature,
+        "file_count": len(entries),
+        "total_size_bytes": total_size,
+        "files": entries,
+    }
 
 
 def _extract_entry(entry: Any) -> Tuple[str, List[Any], str]:
@@ -874,6 +1017,31 @@ def main() -> int:
         action="store_true",
         help="Emit verbose debugging information about TemplateFlow query resolution.",
     )
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Resolve TemplateFlow queries and write summary metadata without fetching files.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default=None,
+        help="Path to a JSON file describing the resolved query plan and fetch outcome.",
+    )
+    parser.add_argument(
+        "--manifest-json",
+        default=None,
+        help="Path to a JSON file containing the resolved-file manifest written on success.",
+    )
+    parser.add_argument(
+        "--state-file",
+        default=None,
+        help="Path to the BrainGnomes prefetch state DCF file to update.",
+    )
+    parser.add_argument(
+        "--scheduler-job-id",
+        default=None,
+        help="Scheduler job id to record in the prefetch state file.",
+    )
     args = parser.parse_args()
 
     global DEBUG
@@ -894,6 +1062,7 @@ def main() -> int:
         return 0
     queries = add_default_t2w_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
+    query_signature = _compute_query_signature(queries)
 
     # Determine where TemplateFlow will place fetched files
     tf_home = os.environ.get("TEMPLATEFLOW_HOME")
@@ -901,9 +1070,33 @@ def main() -> int:
         tf_home = str(Path.home() / ".cache" / "templateflow")
     print(f"TemplateFlow cache directory: {tf_home}")
 
+    summary_payload: Dict[str, Any] = {
+        "status": "PLANNED",
+        "captured_at": _utc_now(),
+        "templateflow_home": os.path.abspath(tf_home),
+        "output_spaces": spaces,
+        "query_signature": query_signature,
+        "query_count": len(queries),
+        "queries": [_query_spec_payload(query) for query in queries],
+        "resolved_resources": [],
+        "resolved_files": [],
+        "failures": [],
+        "optional_failures": [],
+    }
+    _write_json(args.summary_json, summary_payload)
+
+    if args.plan_only:
+        print(
+            "Resolved TemplateFlow prefetch plan for spaces: "
+            + " ".join(spaces)
+        )
+        return 0
+
     failures: List[str] = []
     soft_failures: List[str] = []
     fetched: List[str] = []
+    resolved_resources: List[Dict[str, Any]] = []
+    resolved_files: List[str] = []
     for query_spec in queries:
         template = query_spec.template
         params = query_spec.params
@@ -959,6 +1152,16 @@ def main() -> int:
                         failures.append(label)
                     continue
                 if retry_result is not None and _paths_exist(retry_result):
+                    retry_paths = _existing_paths(retry_result)
+                    resolved_resources.append(
+                        {
+                            "label": label,
+                            "template": template,
+                            "params": dict(retry_params),
+                            "paths": retry_paths,
+                        }
+                    )
+                    resolved_files.extend(retry_paths)
                     print(
                         f"Resolved space '{label}' after retrying without desc=brain.",
                         file=sys.stderr,
@@ -979,6 +1182,16 @@ def main() -> int:
                 )
                 failures.append(label)
             continue
+        result_paths = _existing_paths(result)
+        resolved_resources.append(
+            {
+                "label": label,
+                "template": template,
+                "params": dict(params),
+                "paths": result_paths,
+            }
+        )
+        resolved_files.extend(result_paths)
         fetched.append(label)
 
     if soft_failures:
@@ -989,6 +1202,26 @@ def main() -> int:
         )
 
     if failures:
+        summary_payload.update(
+            {
+                "status": "FAILED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_prefetch_state(
+            args.state_file,
+            status="FAILED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print(
             "TemplateFlow prefetch completed with failures for: " + ", ".join(failures),
             file=sys.stderr,
@@ -996,12 +1229,57 @@ def main() -> int:
         return 1
 
     if fetched:
+        manifest_payload = _build_manifest_payload(tf_home, query_signature, resolved_files)
+        _write_json(args.manifest_json, manifest_payload)
+        summary_payload.update(
+            {
+                "status": "COMPLETED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+                "manifest_file_count": manifest_payload["file_count"],
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_prefetch_state(
+            args.state_file,
+            status="COMPLETED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print(
             "Successfully prefetched TemplateFlow resources for: "
             + ", ".join(fetched)
             + f"\nFiles stored under: {tf_home}"
         )
     else:
+        summary_payload.update(
+            {
+                "status": "COMPLETED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+                "manifest_file_count": 0,
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_json(args.manifest_json, _build_manifest_payload(tf_home, query_signature, resolved_files))
+        _write_prefetch_state(
+            args.state_file,
+            status="COMPLETED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print("No TemplateFlow resources were prefetched.")
     return 0
 

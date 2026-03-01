@@ -1,9 +1,30 @@
-# helper to convert NULL, empty list, or "", character(0) to NA for conformity
-validate_char <- function(arg) {
-  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || (length(arg) == 1L && (is.na(arg[1L]) || arg[1L] == ""))) {
-    arg <- NA_character_
+# Normalize optional character config fields to a canonical empty value.
+# Handles NULL, list(), character(0), NA (any type), "",
+# and YAML sentinel strings ".na" / ".na.character".
+# @param arg The value to normalise.
+# @param empty_value What to return when the field is effectively empty.
+#   Use \code{NA_character_} (default) for fields stored with that convention
+#   (e.g. cli_options, sched_args) or \code{NULL} for fields where
+#   NULL means "not set" (e.g. output_spaces, mask_file).
+# @return A trimmed character scalar, vector, or \code{empty_value}.
+validate_char <- function(arg, empty_value = NA_character_) {
+  sentinels <- c(".na", ".na.character")
+
+  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L) {
+    return(empty_value)
   }
-  return(arg)
+
+  # Coerce to character, discard true NAs
+  values <- trimws(as.character(arg))
+  values <- values[!is.na(values)]
+
+  # Drop empty strings and sentinel tokens
+  keep <- nzchar(values) & !(tolower(values) %in% sentinels)
+  values <- values[keep]
+
+  if (length(values) == 0L) return(empty_value)
+  if (length(values) == 1L) return(values)
+  values
 }
 
 # check memgb, nhours, ncores, cli_options, and sched_args for all jobs
@@ -267,6 +288,9 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, attr(scfg, "gaps"))
     }
   }
+
+  # normalize fmriprep output_spaces (NULL = not set, real string = user value)
+  scfg$fmriprep$output_spaces <- validate_char(scfg$fmriprep$output_spaces, empty_value = NULL)
 
   if (!checkmate::test_flag(scfg$bids_validation$enable)) {
     message("Invalid bids_validation/enable flag. You will be asked for this.")
@@ -625,7 +649,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/confound_calculate/columns")
       ppcfg$confound_calculate$columns <- NULL
     }
-    if (!checkmate::test_character(ppcfg$confound_calculate$noproc_columns)) {
+    ppcfg$confound_calculate$noproc_columns <- validate_char(ppcfg$confound_calculate$noproc_columns, empty_value = NULL)
+    if (!is.null(ppcfg$confound_calculate$noproc_columns) && !checkmate::test_character(ppcfg$confound_calculate$noproc_columns)) {
       if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_calculate"))
       gaps <- c(gaps, "postprocess/confound_calculate/noproc_columns")
       ppcfg$confound_calculate$noproc_columns <- NULL
@@ -672,7 +697,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/confound_regression/columns")
       ppcfg$confound_regression$columns <- NULL
     }
-    if (!checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
+    ppcfg$confound_regression$noproc_columns <- validate_char(ppcfg$confound_regression$noproc_columns, empty_value = NULL)
+    if (!is.null(ppcfg$confound_regression$noproc_columns) && !checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
       if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_regression."))
       gaps <- c(gaps, "postprocess/confound_regression/noproc_columns")
       ppcfg$confound_regression$noproc_columns <- NULL
@@ -783,10 +809,9 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
   }
 
   if ("mask_file" %in% names(ecfg)) {
-    mask_val <- ecfg$mask_file
-    if (length(mask_val) == 1L && (is.na(mask_val) || mask_val %in% c("", ".na", ".na.character"))) {
-      ecfg$mask_file <- NULL
-    } else if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
+    mask_val <- validate_char(ecfg$mask_file, empty_value = NULL)
+    ecfg$mask_file <- mask_val
+    if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
       if (!quiet) message(glue("Invalid mask_file in $extract_rois${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "extract_rois/mask_file")
       ecfg$mask_file <- NULL
