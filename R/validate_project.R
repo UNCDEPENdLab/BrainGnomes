@@ -27,6 +27,40 @@ validate_char <- function(arg, empty_value = NA_character_) {
   values
 }
 
+# Coerce common YAML-style boolean strings to logical scalars while leaving
+# unrelated values untouched so validation can decide what to do next.
+normalize_flag_value <- function(arg) {
+  if (is.logical(arg) && length(arg) == 1L) return(arg)
+  if (is.null(arg) || length(arg) != 1L) return(arg)
+
+  if (is.factor(arg)) arg <- as.character(arg)
+  if (!is.character(arg) || is.na(arg)) return(arg)
+
+  key <- tolower(trimws(arg))
+  if (key %in% c("true", "t", "yes", "y", "on")) return(TRUE)
+  if (key %in% c("false", "f", "no", "n", "off")) return(FALSE)
+
+  arg
+}
+
+normalize_project_flags <- function(scfg, paths) {
+  assignments <- list()
+
+  for (path in paths) {
+    value <- get_nested_values(scfg, path, simplify = FALSE)[[1L]]
+    if (is.null(value)) next
+
+    normalized <- normalize_flag_value(value)
+    if (!identical(normalized, value)) assignments[[path]] <- normalized
+  }
+
+  if (length(assignments) > 0L) {
+    scfg <- set_nested_values(assignments, lst = scfg, type_values = FALSE)
+  }
+
+  scfg
+}
+
 # check memgb, nhours, ncores, cli_options, and sched_args for all jobs
 validate_job_settings <- function(scfg, job_name = NULL) {
   gaps <- c()
@@ -65,6 +99,12 @@ validate_job_settings <- function(scfg, job_name = NULL) {
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
 validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
+  scfg <- normalize_project_flags(scfg, c(
+    "bids_conversion/enable",
+    "bids_conversion/overwrite",
+    "bids_conversion/clear_cache"
+  ))
+
   # BIDS conversion validation -- only relevant if enabled
   if (!checkmate::test_flag(scfg$bids_conversion$enable)) {
     if (!quiet) message("Invalid bids_conversion/enable flag. You will be asked for this.")
@@ -160,6 +200,22 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
 
   checkmate::assert_flag(quiet)
   checkmate::assert_flag(correct_problems)
+
+  scfg <- normalize_project_flags(scfg, c(
+    "flywheel_sync/enable",
+    "flywheel_sync/save_audit_logs",
+    "bids_conversion/enable",
+    "bids_conversion/overwrite",
+    "bids_conversion/clear_cache",
+    "bids_validation/enable",
+    "fmriprep/enable",
+    "mriqc/enable",
+    "aroma/enable",
+    "aroma/cleanup",
+    "postprocess/enable",
+    "extract_rois/enable",
+    "extract_rois/rtoz"
+  ))
 
   gaps <- c()
 
