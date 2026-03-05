@@ -602,7 +602,28 @@ normalize_prefetch_spaces <- function(spaces) {
   sort(unique(spaces))
 }
 
-get_prefetch_state_file <- function(templateflow_home) {
+prefetch_state_cache_hash <- function(templateflow_home) {
+  normalized <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
+  tmp <- tempfile("prefetch_state_hash_")
+  on.exit(unlink(tmp), add = TRUE)
+  writeLines(normalized, tmp, useBytes = TRUE)
+  unname(tools::md5sum(tmp))
+}
+
+get_prefetch_state_file <- function(log_directory, templateflow_home) {
+  if (!checkmate::test_string(log_directory) || !nzchar(log_directory)) {
+    stop("log_directory must be a non-empty string when resolving prefetch state file.", call. = FALSE)
+  }
+  if (!checkmate::test_string(templateflow_home) || !nzchar(templateflow_home)) {
+    stop("templateflow_home must be a non-empty string when resolving prefetch state file.", call. = FALSE)
+  }
+
+  log_directory <- normalizePath(log_directory, winslash = "/", mustWork = FALSE)
+  cache_hash <- prefetch_state_cache_hash(templateflow_home)
+  file.path(log_directory, sprintf(".braingnomes_prefetch_state_%s.dcf", cache_hash))
+}
+
+get_legacy_prefetch_state_file <- function(templateflow_home) {
   file.path(templateflow_home, ".braingnomes_prefetch_state.dcf")
 }
 
@@ -637,6 +658,87 @@ read_prefetch_state <- function(state_file) {
   }
 
   state
+}
+
+prefetch_templateflow_cache_initialized <- function(templateflow_home) {
+  if (!checkmate::test_directory_exists(templateflow_home)) return(FALSE)
+  entries <- list.files(templateflow_home, all.files = FALSE, no.. = TRUE, full.names = FALSE)
+  any(grepl("^tpl-", entries))
+}
+
+copy_prefetch_state_file <- function(from, to) {
+  if (!checkmate::test_file_exists(from)) {
+    stop(glue::glue("Cannot copy prefetch state; source file does not exist: {from}"), call. = FALSE)
+  }
+
+  target_dir <- dirname(to)
+  if (!dir.exists(target_dir)) dir.create(target_dir, recursive = TRUE, showWarnings = FALSE)
+  tmp <- paste0(to, ".tmp.", Sys.getpid())
+
+  copied <- isTRUE(file.copy(from, tmp, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE))
+  if (!copied || !file.exists(tmp)) {
+    stop(glue::glue("Failed to stage copied prefetch state file: {tmp}"), call. = FALSE)
+  }
+
+  renamed <- isTRUE(file.rename(tmp, to))
+  if (!renamed) {
+    copied_final <- isTRUE(file.copy(tmp, to, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE))
+    suppressWarnings(unlink(tmp))
+    if (!copied_final || !file.exists(to)) {
+      stop(glue::glue("Failed to finalize copied prefetch state file: {to}"), call. = FALSE)
+    }
+  }
+
+  invisible(to)
+}
+
+migrate_prefetch_state_file <- function(state_file, legacy_state_file, templateflow_home) {
+  if (!checkmate::test_file_exists(legacy_state_file)) return(invisible(NULL))
+
+  if (!checkmate::test_file_exists(state_file)) {
+    copy_prefetch_state_file(legacy_state_file, state_file)
+    message(glue::glue(
+      "Migrated legacy TemplateFlow prefetch state from {legacy_state_file} to {state_file}."
+    ))
+  } else {
+    message(glue::glue(
+      "Found legacy TemplateFlow prefetch state at {legacy_state_file}; using logs-based state file at {state_file}."
+    ))
+  }
+
+  removed <- suppressWarnings(unlink(legacy_state_file))
+  if (!checkmate::test_file_exists(legacy_state_file) || identical(removed, 0L)) {
+    message(glue::glue(
+      "Removed legacy TemplateFlow prefetch state file from templateflow_home: {legacy_state_file}"
+    ))
+    return(invisible(NULL))
+  }
+
+  cache_initialized <- prefetch_templateflow_cache_initialized(templateflow_home)
+  base_msg <- glue::glue(
+    "Unable to remove legacy TemplateFlow prefetch state file at {legacy_state_file}. "
+  )
+  guidance <- "Remove it manually to avoid TemplateFlow standard-space resolution failures."
+
+  if (!cache_initialized) {
+    stop(
+      paste0(
+        base_msg,
+        "TemplateFlow cache appears uninitialized (no tpl-* directories). ",
+        guidance
+      ),
+      call. = FALSE
+    )
+  }
+
+  warning(
+    paste0(
+      base_msg,
+      "Continuing because TemplateFlow cache appears initialized (tpl-* directories detected). ",
+      guidance
+    ),
+    call. = FALSE
+  )
 }
 
 find_container_runtime <- function() {
@@ -808,6 +910,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
 
   tf_home <- normalizePath(tf_home, mustWork = FALSE)
   if (!dir.exists(tf_home)) dir.create(tf_home, showWarnings = FALSE, recursive = TRUE)
+  prefetch_state_file <- get_prefetch_state_file(scfg$metadata$log_directory, tf_home)
+  legacy_prefetch_state_file <- get_legacy_prefetch_state_file(tf_home)
 
   spaces <- scfg$fmriprep$output_spaces
   if (isTRUE(steps["aroma"]) && (is.null(spaces) || !grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE))) {
@@ -832,14 +936,19 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   # preflight permission checks for project-level paths
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
-    check_write_target(tf_home, "templateflow_home directory")
+    check_write_target(tf_home, "templateflow_home directory"),
+    check_write_target(prefetch_state_file, "prefetch state file")
   )
   if (length(pf_issues) > 0L) {
     stop("Preflight permission check failed for prefetch_templates:\n",
          paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
   }
 
-  prefetch_state_file <- get_prefetch_state_file(tf_home)
+  migrate_prefetch_state_file(
+    state_file = prefetch_state_file,
+    legacy_state_file = legacy_prefetch_state_file,
+    templateflow_home = tf_home
+  )
   prefetch_state <- read_prefetch_state(prefetch_state_file)
   prefetch_plan <- resolve_prefetch_query_plan(
     container_path = container_path,

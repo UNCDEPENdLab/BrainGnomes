@@ -1,6 +1,6 @@
 # BrainGnomes 0.8-1
 
-Released 2026-03-01
+Released 2026-03-05
 
 * Improve CLI interface to support --help or BrainGnomes <command> help
 * Add CLI status command to get project status from command line
@@ -9,6 +9,7 @@ Released 2026-03-01
 * Refactor prefetch to fall back to no desc field if desc:brain fails
 * Harden prefetch caching and validation checks so that later failures invalidate skip logic
 * Make prefetch state query-specific so that an exact snapshot of templateflow files is retained
+* Move prefetch state files out of `templateflow_home` and into hashed project log paths; legacy state files in `templateflow_home` are now migrated and removed to avoid poisoning TemplateFlow standard-space discovery.
 * Harden check on flywheel location to accommodate missing fw command.
 
 # BrainGnomes 0.8

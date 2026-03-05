@@ -59,15 +59,30 @@ prefetch_script=$(abspath "$prefetch_script")
 templateflow_home=$(abspath "$templateflow_home")
 prefetch_script_dir=$(dirname "$prefetch_script")
 
+# Create temp files for summary/manifest OUTSIDE templateflow_home to avoid
+# poisoning the TemplateFlow cache.  When templateflow_home is empty, any file
+# (including hidden dot-files) causes templateflow's _init_cache() to skip
+# skeleton extraction, which makes api.get() return empty results.
+prefetch_tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/braingnomes_prefetch_${PBS_JOBID}_XXXX")
+prefetch_summary_file="$prefetch_tmpdir/.braingnomes_prefetch_summary_${PBS_JOBID}.json"
+prefetch_manifest_file="$prefetch_tmpdir/.braingnomes_prefetch_manifest_${PBS_JOBID}.json"
+touch "$prefetch_summary_file" "$prefetch_manifest_file"
+
+# Resolve bind paths: templateflow_home, script dir, prefetch temp dir,
+# and (if set) the prefetch state file's parent directory so the Python
+# script running inside --containall can write the state file.
+prefetch_state_dir=""
+if [ -n "$prefetch_state_file" ]; then
+  prefetch_state_dir=$(dirname "$prefetch_state_file")
+  [ ! -d "$prefetch_state_dir" ] && mkdir -p "$prefetch_state_dir"
+fi
+
 bind_args=()
-bind_paths=("$templateflow_home" "$prefetch_script_dir")
+bind_paths=("$templateflow_home" "$prefetch_script_dir" "$prefetch_tmpdir" "$prefetch_state_dir")
 for path in "${bind_paths[@]}"; do
   [ -z "$path" ] && continue
   bind_args+=("-B" "$path:$path")
 done
-
-prefetch_summary_file=$(mktemp "$templateflow_home/.braingnomes_prefetch_summary_${PBS_JOBID}_XXXX.json")
-prefetch_manifest_file=$(mktemp "$templateflow_home/.braingnomes_prefetch_manifest_${PBS_JOBID}_XXXX.json")
 
 write_prefetch_failed_state_fallback() {
   [ -z "$prefetch_state_file" ] && return 0
@@ -151,5 +166,6 @@ else
 fi
 
 rm -f "$prefetch_summary_file" "$prefetch_manifest_file"
+[ -n "$prefetch_tmpdir" ] && rm -rf "$prefetch_tmpdir"
 
 exit $cmd_status

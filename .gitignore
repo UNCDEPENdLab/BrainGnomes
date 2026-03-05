@@ -55,3 +55,7 @@ docs
 
 .DS_Store
 .vscode/
+
+# Python cache
+__pycache__/
+*.pyc

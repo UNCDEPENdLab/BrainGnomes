@@ -363,11 +363,13 @@ test_that("submit_prefetch_templates proceeds when all paths are writable", {
 test_that("submit_prefetch_templates skips when cached state covers requested spaces", {
   root <- tempfile("pft_cached_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
     paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
@@ -378,7 +380,7 @@ test_that("submit_prefetch_templates skips when cached state covers requested sp
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home
     ),
     compute_environment = list(
@@ -415,11 +417,13 @@ test_that("submit_prefetch_templates skips when cached state covers requested sp
 test_that("submit_prefetch_templates resubmits when state covers spaces but manifest verification fails", {
   root <- tempfile("pft_reprefetch_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
     paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
@@ -430,7 +434,7 @@ test_that("submit_prefetch_templates resubmits when state covers spaces but mani
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home,
       sqlite_db = file.path(root, "tracking.sqlite")
     ),
@@ -468,11 +472,13 @@ test_that("submit_prefetch_templates resubmits when state covers spaces but mani
 test_that("submit_prefetch_templates ignores FAILED cached state from prior rerun", {
   root <- tempfile("pft_failed_state_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: FAILED",
     paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
@@ -484,7 +490,7 @@ test_that("submit_prefetch_templates ignores FAILED cached state from prior reru
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home,
       sqlite_db = file.path(root, "tracking.sqlite")
     ),
@@ -527,11 +533,13 @@ test_that("submit_prefetch_templates ignores FAILED cached state from prior reru
 test_that("submit_prefetch_templates resubmits when a new space is requested", {
   root <- tempfile("pft_newspace_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
     paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
@@ -542,7 +550,7 @@ test_that("submit_prefetch_templates resubmits when a new space is requested", {
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home
     ),
     compute_environment = list(
@@ -586,12 +594,14 @@ test_that("submit_prefetch_templates resubmits when a new space is requested", {
 test_that("submit_prefetch_templates resubmits when cached manifest drifts after success", {
   root <- tempfile("pft_manifest_drift_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
   sqlite_db <- file.path(root, "tracking.sqlite")
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   tf_file <- file.path(tf_home, "tpl-MNI152NLin2009cAsym", "tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz")
   dir.create(dirname(tf_file), recursive = TRUE, showWarnings = FALSE)
   writeLines("original", tf_file)
@@ -632,7 +642,7 @@ test_that("submit_prefetch_templates resubmits when cached manifest drifts after
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home,
       sqlite_db = sqlite_db
     ),
@@ -669,13 +679,15 @@ test_that("submit_prefetch_templates resubmits when cached manifest drifts after
 test_that("submit_prefetch_templates resubmits when copied state file references a different templateflow_home", {
   root <- tempfile("pft_tfhome_change_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
   container <- file.path(root, "fmriprep.sif")
   file.create(container)
   tf_home <- file.path(root, "templateflow")
   dir.create(tf_home)
   previous_tf_home <- file.path(root, "old_templateflow")
   dir.create(previous_tf_home)
-  state_file <- file.path(tf_home, ".braingnomes_prefetch_state.dcf")
+  state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
     paste0("templateflow_home: ", normalizePath(previous_tf_home, winslash = "/", mustWork = FALSE)),
@@ -687,7 +699,7 @@ test_that("submit_prefetch_templates resubmits when copied state file references
 
   scfg <- list(
     metadata = list(
-      log_directory = file.path(root, "logs"),
+      log_directory = log_dir,
       templateflow_home = tf_home,
       sqlite_db = file.path(root, "tracking.sqlite")
     ),
@@ -725,6 +737,247 @@ test_that("submit_prefetch_templates resubmits when copied state file references
   expect_true(submitted)
   expect_false(manifest_checked)
   expect_equal(result, "99993")
+})
+
+test_that("submit_prefetch_templates migrates legacy state file into logs and removes legacy file", {
+  root <- tempfile("pft_state_migrate_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  container <- file.path(root, "fmriprep.sif")
+  file.create(container)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home)
+  legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
+  new_state_file <- get_prefetch_state_file(log_dir, tf_home)
+  writeLines(c(
+    "status: COMPLETED",
+    paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
+    "spaces: MNI152NLin2009cAsym",
+    "scheduler_job_id: migrated-job",
+    "query_signature: sig-current"
+  ), legacy_state_file)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      templateflow_home = tf_home,
+      sqlite_db = file.path(root, "tracking.sqlite")
+    ),
+    compute_environment = list(
+      fmriprep_container = container,
+      scheduler = "slurm"
+    ),
+    fmriprep = list(output_spaces = "MNI152NLin2009cAsym"),
+    debug = FALSE,
+    log_level = "INFO"
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  steps <- c(mriqc = FALSE, fmriprep = TRUE, aroma = FALSE)
+
+  submitted <- FALSE
+  local_mocked_bindings(
+    get_job_sched_args = function(...) "--time=00:30:00",
+    get_job_script = function(...) "/path/to/script.sbatch",
+    check_write_target = function(path, label) NULL,
+    resolve_prefetch_query_plan = function(...) list(query_signature = "sig-current", query_count = 1L),
+    prefetch_manifest_verified = function(...) TRUE,
+    cluster_job_submit = function(...) {
+      submitted <<- TRUE
+      "never"
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- submit_prefetch_templates(scfg, steps = steps)
+  expect_null(result)
+  expect_false(submitted)
+  expect_true(file.exists(new_state_file))
+  expect_false(file.exists(legacy_state_file))
+})
+
+test_that("submit_prefetch_templates prefers logs-based state when both state locations exist", {
+  root <- tempfile("pft_state_dual_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  container <- file.path(root, "fmriprep.sif")
+  file.create(container)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home)
+  legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
+  new_state_file <- get_prefetch_state_file(log_dir, tf_home)
+  writeLines(c(
+    "status: FAILED",
+    paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
+    "spaces: MNI152NLin2009cAsym",
+    "scheduler_job_id: legacy-job",
+    "query_signature: sig-current"
+  ), legacy_state_file)
+  writeLines(c(
+    "status: COMPLETED",
+    paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
+    "spaces: MNI152NLin2009cAsym",
+    "scheduler_job_id: logs-job",
+    "query_signature: sig-current"
+  ), new_state_file)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      templateflow_home = tf_home,
+      sqlite_db = file.path(root, "tracking.sqlite")
+    ),
+    compute_environment = list(
+      fmriprep_container = container,
+      scheduler = "slurm"
+    ),
+    fmriprep = list(output_spaces = "MNI152NLin2009cAsym"),
+    debug = FALSE,
+    log_level = "INFO"
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  steps <- c(mriqc = FALSE, fmriprep = TRUE, aroma = FALSE)
+  manifest_job_id <- NULL
+  local_mocked_bindings(
+    get_job_sched_args = function(...) "--time=00:30:00",
+    get_job_script = function(...) "/path/to/script.sbatch",
+    check_write_target = function(path, label) NULL,
+    resolve_prefetch_query_plan = function(...) list(query_signature = "sig-current", query_count = 1L),
+    prefetch_manifest_verified = function(...) {
+      args <- list(...)
+      manifest_job_id <<- args$job_id
+      TRUE
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- submit_prefetch_templates(scfg, steps = steps)
+  expect_null(result)
+  expect_identical(manifest_job_id, "logs-job")
+  expect_false(file.exists(legacy_state_file))
+})
+
+test_that("submit_prefetch_templates stops when legacy state cannot be removed and cache is uninitialized", {
+  skip_on_os("windows")
+
+  root <- tempfile("pft_state_legacy_stop_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  container <- file.path(root, "fmriprep.sif")
+  file.create(container)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home)
+  legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
+  writeLines(c(
+    "status: COMPLETED",
+    paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
+    "spaces: MNI152NLin2009cAsym",
+    "query_signature: sig-current"
+  ), legacy_state_file)
+  on.exit({
+    Sys.chmod(tf_home, "755")
+    unlink(root, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.chmod(tf_home, "555")
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      templateflow_home = tf_home,
+      sqlite_db = file.path(root, "tracking.sqlite")
+    ),
+    compute_environment = list(
+      fmriprep_container = container,
+      scheduler = "slurm"
+    ),
+    fmriprep = list(output_spaces = "MNI152NLin2009cAsym"),
+    debug = FALSE,
+    log_level = "INFO"
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  steps <- c(mriqc = FALSE, fmriprep = TRUE, aroma = FALSE)
+  local_mocked_bindings(
+    get_job_sched_args = function(...) "--time=00:30:00",
+    get_job_script = function(...) "/path/to/script.sbatch",
+    check_write_target = function(path, label) NULL,
+    .package = "BrainGnomes"
+  )
+
+  expect_error(
+    submit_prefetch_templates(scfg, steps = steps),
+    regexp = "TemplateFlow cache appears uninitialized"
+  )
+})
+
+test_that("submit_prefetch_templates warns when legacy state cannot be removed but cache is initialized", {
+  skip_on_os("windows")
+
+  root <- tempfile("pft_state_legacy_warn_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  log_dir <- file.path(root, "logs")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  container <- file.path(root, "fmriprep.sif")
+  file.create(container)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home)
+  dir.create(file.path(tf_home, "tpl-MNI152NLin2009cAsym"), recursive = TRUE, showWarnings = FALSE)
+  legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
+  writeLines(c(
+    "status: COMPLETED",
+    paste0("templateflow_home: ", normalizePath(tf_home, winslash = "/", mustWork = FALSE)),
+    "spaces: MNI152NLin2009cAsym",
+    "query_signature: sig-current"
+  ), legacy_state_file)
+  on.exit({
+    Sys.chmod(tf_home, "755")
+    unlink(root, recursive = TRUE, force = TRUE)
+  }, add = TRUE)
+  Sys.chmod(tf_home, "555")
+
+  scfg <- list(
+    metadata = list(
+      log_directory = log_dir,
+      templateflow_home = tf_home,
+      sqlite_db = file.path(root, "tracking.sqlite")
+    ),
+    compute_environment = list(
+      fmriprep_container = container,
+      scheduler = "slurm"
+    ),
+    fmriprep = list(output_spaces = "MNI152NLin2009cAsym"),
+    debug = FALSE,
+    log_level = "INFO"
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  steps <- c(mriqc = FALSE, fmriprep = TRUE, aroma = FALSE)
+  submitted <- FALSE
+  local_mocked_bindings(
+    get_job_sched_args = function(...) "--time=00:30:00",
+    get_job_script = function(...) "/path/to/script.sbatch",
+    check_write_target = function(path, label) NULL,
+    resolve_prefetch_query_plan = function(...) list(query_signature = "sig-current", query_count = 1L),
+    prefetch_manifest_verified = function(...) TRUE,
+    cluster_job_submit = function(...) {
+      submitted <<- TRUE
+      "never"
+    },
+    .package = "BrainGnomes"
+  )
+
+  expect_warning(
+    result <- submit_prefetch_templates(scfg, steps = steps),
+    regexp = "Continuing because TemplateFlow cache appears initialized"
+  )
+  expect_null(result)
+  expect_false(submitted)
 })
 
 test_that("prefetch_manifest_verified returns TRUE when manifest matches templateflow contents", {
