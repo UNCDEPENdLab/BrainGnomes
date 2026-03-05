@@ -176,6 +176,8 @@ test_that("submit_flywheel_sync proceeds when all paths are writable", {
   expect_true("stderr_log" %in% names(captured_env))
   expect_match(unname(captured_env["stdout_log"]), "flywheel_sync_jobid-%j_")
   expect_match(unname(captured_env["stderr_log"]), "flywheel_sync_jobid-%j_")
+  expect_match(unname(captured_env["flywheel_cli_options"]), "--tmp-path\\s+[^'\"\\s]+")
+  expect_false(grepl("--tmp-path\\s+['\"]", unname(captured_env["flywheel_cli_options"])))
   expect_equal(result, {
     jid <- "12345"
     attr(jid, "cmd") <- "fw sync ..."

@@ -473,7 +473,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
 
   cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
     "--include dicom", "-y",
-    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'"),
+    glue("--tmp-path {scfg$metadata$flywheel_temp_directory}"),
     audit_str
   ), collapse = TRUE)
 
