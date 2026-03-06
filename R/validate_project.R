@@ -390,6 +390,24 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     ppcfg$tr <- NULL
   }
 
+  # postprocess/validate_postproc_steps
+  if (!"validate_postproc_steps" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/validate_postproc_steps")
+  } else if (!checkmate::test_flag(ppcfg$validate_postproc_steps)) {
+    if (!quiet) message(glue("Invalid validate_postproc_steps in $postprocess${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "postprocess/validate_postproc_steps")
+    ppcfg$validate_postproc_steps <- NULL
+  }
+
+  # postprocess/stop_on_failed_validation
+  if (!"stop_on_failed_validation" %in% names(ppcfg)) {
+    gaps <- c(gaps, "postprocess/stop_on_failed_validation")
+  } else if (!checkmate::test_flag(ppcfg$stop_on_failed_validation)) {
+    if (!quiet) message(glue("Invalid stop_on_failed_validation in $postprocess${cfg_name}. You will be asked for this."))
+    gaps <- c(gaps, "postprocess/stop_on_failed_validation")
+    ppcfg$stop_on_failed_validation <- NULL
+  }
+
   # validate temporal filtering
   if (is.null(ppcfg$temporal_filter$enable)) gaps <- c(gaps, "postprocess/temporal_filter/enable")
   if ("temporal_filter" %in% names(ppcfg) && isTRUE(ppcfg$temporal_filter$enable)) {

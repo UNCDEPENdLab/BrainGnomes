@@ -344,12 +344,25 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
       
-      # Postproc check for apply_mask
-      check_path <- system.file("postproc_checks/apply_mask_check.R", package = "BrainGnomes")
-      if (nzchar(check_path) && file.exists(check_path)) {
-        source(check_path)
-        check_msg <- test_masking(maskpath = apply_mask_file, datapath = cur_file)
-        to_log(lg, "info", check_msg)
+      
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_apply_mask(mask_file = apply_mask_file, data_file = cur_file)
+        v_msg <- attr(v_ok, "message")
+        external_violations <- attr(v_ok, "external_violations")
+
+        if (isTRUE(v_ok)) {
+          to_log(lg, "info", glue("apply_mask validation passed: {v_msg}"))
+        } else {
+          to_log(lg, "error", glue("apply_mask validation failed: {v_msg}"))
+          if (isTRUE(cfg$stop_on_failed_validation)) {
+            stop(
+              glue(
+                "apply_mask validation failed with {external_violations} voxels outside the mask having non-zero signal ",
+                "and stop_on_failed_validation is TRUE. STOPPING postprocessing for this dataset."
+              )
+            )
+          }
+        }
       }
     } else if (step == "spatial_smooth") {
       cur_file <- spatial_smooth(cur_file,
