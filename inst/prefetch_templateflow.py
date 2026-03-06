@@ -61,6 +61,10 @@ DEBUG = False
 DEFAULT_RESOLUTION = 1
 DEFAULT_API_GET_MAX_RETRIES = 2
 DEFAULT_API_GET_RETRY_DELAY_SECONDS = 1.0
+DEFAULT_FALLBACK_DESC_BY_SUFFIX = {
+    "T1w": None,
+    "mask": "brain",
+}
 
 
 def dbg(message: str) -> None:
@@ -381,11 +385,9 @@ def _normalize_query_dict(
 
     desc_source = override_desc if override_desc else _pop_any(spec_data, "descs", "desc")
     desc_values = _option_values(desc_source, allow_none=True)
-    default_desc_applied = False
-    if fallback_suffix:
-        if not desc_values or desc_values == [None]:
-            desc_values = ["brain"]
-            default_desc_applied = True
+    use_suffix_default_desc = bool(
+        fallback_suffix and (not desc_values or desc_values == [None])
+    )
 
     if override_res is not None:
         res_source = override_res
@@ -403,9 +405,7 @@ def _normalize_query_dict(
     space_values = _option_values(_pop_any(spec_data, "spaces", "space"), allow_none=True)
     extension_values = _option_values(_pop_any(spec_data, "extensions", "extension"), allow_none=True)
 
-    value_grid = [
-        ("suffix", suffix_values, False),
-        ("desc", desc_values, True),
+    shared_value_grid = [
         ("resolution", res_values, True),
         ("atlas", atlas_values, True),
         ("cohort", cohort_values, True),
@@ -416,16 +416,34 @@ def _normalize_query_dict(
         ("extension", extension_values, True),
     ]
 
-    for combo in product(*(values or [None] for _, values, _ in value_grid)):
-        query: Dict[str, Any] = {}
-        for (key, _, allow_none), value in zip(value_grid, combo):
-            if value in (None, ""):
+    for suffix in suffix_values:
+        if use_suffix_default_desc:
+            suffix_default_desc = DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)
+            suffix_desc_values = [suffix_default_desc]
+        else:
+            suffix_default_desc = None
+            suffix_desc_values = desc_values
+
+        value_grid = [
+            ("suffix", [suffix], False),
+            ("desc", suffix_desc_values, True),
+            *shared_value_grid,
+        ]
+
+        for combo in product(*(values or [None] for _, values, _ in value_grid)):
+            query: Dict[str, Any] = {}
+            for (key, _, allow_none), value in zip(value_grid, combo):
+                if value in (None, ""):
+                    continue
+                query[key] = value
+            if not query.get("suffix"):
                 continue
-            query[key] = value
-        if not query.get("suffix"):
-            continue
-        used_default_desc = default_desc_applied and query.get("desc") == "brain"
-        queries.append((query, used_default_desc))
+            used_default_desc = bool(
+                use_suffix_default_desc
+                and suffix_default_desc not in (None, "")
+                and query.get("desc") == suffix_default_desc
+            )
+            queries.append((query, used_default_desc))
 
     return queries
 
@@ -807,14 +825,16 @@ def build_queries_legacy(
         else:
             suffix_values = ["T1w", "mask"]
 
-        if override_desc:
-            desc_values = [override_desc]
-        elif token_desc not in (None, ""):
-            desc_values = [token_desc]
-        else:
-            desc_values = ["brain"] if (token_suffix in (None, "") and not override_suffix) else [None]
-
         for suffix in suffix_values:
+            if override_desc:
+                desc_values = [override_desc]
+            elif token_desc not in (None, ""):
+                desc_values = [token_desc]
+            elif token_suffix in (None, "") and not override_suffix:
+                desc_values = [DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)]
+            else:
+                desc_values = [None]
+
             for desc in desc_values:
                 query: Dict[str, Any] = dict(token_query)
                 query["suffix"] = suffix
@@ -824,7 +844,8 @@ def build_queries_legacy(
                     query["desc"] = desc
                 query_copy = dict(query)  # ensure stored query is immutable for later iterations
                 allow_desc_retry = (
-                    desc == "brain"
+                    desc == DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)
+                    and desc == "brain"
                     and not override_desc
                     and token_desc in (None, "")
                     and token_suffix in (None, "")
