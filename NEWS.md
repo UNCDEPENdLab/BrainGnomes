@@ -1,3 +1,7 @@
+# BrainGnomes 0.8-2
+
+* Update RSQLite connections to default to `synchronous=NULL` to prevent spurious warnings
+
 # BrainGnomes 0.8-1
 
 Released 2026-03-05
@@ -10,6 +14,7 @@ Released 2026-03-05
 * Harden prefetch caching and validation checks so that later failures invalidate skip logic
 * Make prefetch state query-specific so that an exact snapshot of templateflow files is retained
 * Move prefetch state files out of `templateflow_home` and into hashed project log paths; legacy state files in `templateflow_home` are now migrated and removed to avoid poisoning TemplateFlow standard-space discovery.
+* Expand TemplateFlow default to desc=None for T1w to mirror some versions of fmriprep.
 * Harden check on flywheel location to accommodate missing fw command.
 
 # BrainGnomes 0.8

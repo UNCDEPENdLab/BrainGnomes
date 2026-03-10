@@ -210,7 +210,7 @@ submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL,
   checkmate::assert_logical(return_result)
   if(is.null(str) | is.null(sqlite_db)) return(invisible(NULL))
 
-  con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+  con <- dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL) # establish connection
   sqliteSetBusyHandler(con, busy_timeout * 1000) # busy_timeout arg in seconds * 1000 ms
   
   if (isTRUE(return_result)) {
@@ -257,7 +257,7 @@ sqlite_table_exists <- function(sqlite_db, table_name) {
   }
   
   # Connect to database
-  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db)
+  con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   
   # Check if table exists
