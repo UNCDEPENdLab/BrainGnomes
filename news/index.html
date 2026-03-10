@@ -37,9 +37,13 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8-1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8-2" id="braingnomes-08-2">BrainGnomes 0.8-2<a class="anchor" aria-label="anchor" href="#braingnomes-08-2"></a></h2>
+<ul><li>Update RSQLite connections to default to <code>synchronous=NULL</code> to prevent spurious warnings</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8-1" id="braingnomes-08-1">BrainGnomes 0.8-1<a class="anchor" aria-label="anchor" href="#braingnomes-08-1"></a></h2>
 <p>Released 2026-03-05</p>
@@ -51,6 +55,7 @@
 <li>Harden prefetch caching and validation checks so that later failures invalidate skip logic</li>
 <li>Make prefetch state query-specific so that an exact snapshot of templateflow files is retained</li>
 <li>Move prefetch state files out of <code>templateflow_home</code> and into hashed project log paths; legacy state files in <code>templateflow_home</code> are now migrated and removed to avoid poisoning TemplateFlow standard-space discovery.</li>
+<li>Expand TemplateFlow default to desc=None for T1w to mirror some versions of fmriprep.</li>
 <li>Harden check on flywheel location to accommodate missing fw command.</li>
 </ul></div>
     <div class="section level2">
