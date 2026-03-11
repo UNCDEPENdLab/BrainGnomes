@@ -45,6 +45,65 @@ MRIQC_REQUIRED_PROBSEG = {
     ]
 }
 
+FMRIPREP_REQUIRED_RESOURCES = {
+    "OASIS30ANTs": [
+        {
+            "params": {
+                "suffix": "T1w",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep required: suffix=T1w, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "label": "brain",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "fallback_params": [
+                {
+                    "desc": "brain",
+                    "suffix": "mask",
+                    "resolution": 1,
+                }
+            ],
+            "label": "OASIS30ANTs (fMRIPrep required: brain mask/probseg, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "BrainCerebellumExtraction",
+                "suffix": "mask",
+                "resolution": 1,
+            },
+            "label": (
+                "OASIS30ANTs (fMRIPrep optional: "
+                "desc=BrainCerebellumExtraction, suffix=mask, resolution=1)"
+            ),
+            "optional": True,
+        },
+        {
+            "params": {
+                "label": "WM",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep optional: label=WM, suffix=probseg, resolution=1)",
+            "optional": True,
+        },
+        {
+            "params": {
+                "label": "BS",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep optional: label=BS, suffix=probseg, resolution=1)",
+            "optional": True,
+        }
+    ]
+}
+
 QueryFingerprint = Tuple[str, Tuple[Tuple[str, Any], ...]]
 
 
@@ -55,6 +114,7 @@ class QuerySpec:
     label: str
     optional: bool = False
     allow_desc_retry: bool = False
+    fallback_params: Optional[List[Dict[str, Any]]] = None
 
 
 DEBUG = False
@@ -525,6 +585,58 @@ def _format_query_detail(template: str, params: Dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _resolve_query_result(
+    template: str,
+    params: Dict[str, Any],
+    *,
+    label: str,
+    is_optional: bool,
+    allow_desc_retry: bool,
+    fallback_params: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[Optional[List[str]], Optional[Dict[str, Any]], Optional[str]]:
+    """Fetch a TemplateFlow resource, trying desc-retry and explicit fallbacks before failing."""
+    detail = _format_query_detail(template, params)
+    result, fetch_exc = _api_get_with_retry(
+        template=template,
+        params=params,
+        retry_transient=not is_optional,
+    )
+    if fetch_exc is not None:
+        return None, None, f"Failed to fetch '{label}': {fetch_exc}"
+
+    if result is not None and _paths_exist(result):
+        return _existing_paths(result), dict(params), None
+
+    retry_candidates: List[Tuple[Dict[str, Any], str]] = []
+    if allow_desc_retry and params.get("desc") == "brain":
+        retry_params = dict(params)
+        retry_params.pop("desc", None)
+        retry_candidates.append((retry_params, "retrying without desc=brain"))
+
+    for fallback in fallback_params or []:
+        retry_candidates.append((dict(fallback), "trying fallback query"))
+
+    for retry_params, retry_reason in retry_candidates:
+        retry_detail = _format_query_detail(template, retry_params)
+        print(
+            f"No files resolved for space '{label}' ({detail}); {retry_reason} ({retry_detail}).",
+            file=sys.stderr,
+        )
+        retry_result, retry_exc = _api_get_with_retry(
+            template=template,
+            params=retry_params,
+            retry_transient=not is_optional,
+        )
+        if retry_exc is not None:
+            detail = retry_detail
+            continue
+        if retry_result is not None and _paths_exist(retry_result):
+            return _existing_paths(retry_result), dict(retry_params), None
+        detail = retry_detail
+
+    return None, None, f"No files resolved for space '{label}' ({detail})."
+
+
 def _format_label_with_query(label: str, query: Dict[str, Any]) -> str:
     """Append key details to a label for logging."""
     extras: List[str] = []
@@ -543,12 +655,15 @@ def _utc_now() -> str:
 
 
 def _query_spec_payload(query: QuerySpec) -> Dict[str, Any]:
-    return {
+    payload = {
         "template": query.template,
         "params": dict(query.params),
         "optional": bool(query.optional),
         "label": query.label,
     }
+    if query.fallback_params:
+        payload["fallback_params"] = [dict(params) for params in query.fallback_params]
+    return payload
 
 
 def _query_signature_payload(queries: List[QuerySpec]) -> List[Dict[str, Any]]:
@@ -557,6 +672,7 @@ def _query_signature_payload(queries: List[QuerySpec]) -> List[Dict[str, Any]]:
             "template": query.template,
             "params": dict(query.params),
             "optional": bool(query.optional),
+            "fallback_params": [dict(params) for params in query.fallback_params] if query.fallback_params else [],
         }
         for query in queries
     ]
@@ -999,6 +1115,35 @@ def add_required_probseg_queries(
     return augmented
 
 
+def add_required_fmriprep_queries(
+    queries: List[QuerySpec],
+) -> List[QuerySpec]:
+    """Ensure offline-required TemplateFlow resources used internally by fMRIPrep are prefetched."""
+    existing: Set[QueryFingerprint] = {
+        _freeze_query(query.template, query.params) for query in queries
+    }
+    augmented = list(queries)
+    for template, required_queries in FMRIPREP_REQUIRED_RESOURCES.items():
+        for resource in required_queries:
+            query = dict(resource["params"])
+            fingerprint = _freeze_query(template, query)
+            if fingerprint in existing:
+                continue
+            existing.add(fingerprint)
+            augmented.append(
+                QuerySpec(
+                    template=template,
+                    params=query,
+                    label=resource["label"],
+                    optional=bool(resource.get("optional", False)),
+                    fallback_params=[
+                        dict(params) for params in resource.get("fallback_params", [])
+                    ] or None,
+                )
+            )
+    return augmented
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Prefetch TemplateFlow resources needed for the configured fMRIPrep output spaces."
@@ -1083,6 +1228,7 @@ def main() -> int:
         return 0
     queries = add_default_t2w_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
+    queries = add_required_fmriprep_queries(queries)
     query_signature = _compute_query_signature(queries)
 
     # Determine where TemplateFlow will place fetched files
@@ -1125,71 +1271,15 @@ def main() -> int:
         detail = _format_query_detail(template, params)
         is_optional = query_spec.optional
         print(f"Fetching TemplateFlow resource for '{label}' ({detail}) ...")
-
-        result, fetch_exc = _api_get_with_retry(
+        result_paths, resolved_params, error_message = _resolve_query_result(
             template=template,
             params=params,
-            retry_transient=not is_optional,
+            label=label,
+            is_optional=is_optional,
+            allow_desc_retry=bool(query_spec.allow_desc_retry),
+            fallback_params=query_spec.fallback_params,
         )
-        if fetch_exc is not None:
-            if is_optional:
-                print(f"Optional TemplateFlow resource failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
-                soft_failures.append(label)
-            else:
-                print(f"Failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
-                failures.append(label)
-            continue
-
-        if not _paths_exist(result):
-            allow_desc_retry = (
-                query_spec.allow_desc_retry
-                and params.get("desc") == "brain"
-            )
-            if allow_desc_retry:
-                retry_params = dict(params)
-                retry_params.pop("desc", None)
-                retry_detail = _format_query_detail(template, retry_params)
-                print(
-                    f"No files resolved for space '{label}' ({detail}); retrying without desc=brain ({retry_detail}).",
-                    file=sys.stderr,
-                )
-                retry_result, retry_exc = _api_get_with_retry(
-                    template=template,
-                    params=retry_params,
-                    retry_transient=not is_optional,
-                )
-                if retry_exc is not None:
-                    if is_optional:
-                        print(
-                            f"Optional retry without desc failed for '{label}': {retry_exc}",
-                            file=sys.stderr,
-                        )
-                        soft_failures.append(label)
-                    else:
-                        print(
-                            f"Retry without desc failed for '{label}': {retry_exc}",
-                            file=sys.stderr,
-                        )
-                        failures.append(label)
-                    continue
-                if retry_result is not None and _paths_exist(retry_result):
-                    retry_paths = _existing_paths(retry_result)
-                    resolved_resources.append(
-                        {
-                            "label": label,
-                            "template": template,
-                            "params": dict(retry_params),
-                            "paths": retry_paths,
-                        }
-                    )
-                    resolved_files.extend(retry_paths)
-                    print(
-                        f"Resolved space '{label}' after retrying without desc=brain.",
-                        file=sys.stderr,
-                    )
-                    fetched.append(label)
-                    continue
-
+        if result_paths is None or resolved_params is None:
             if is_optional:
                 print(
                     f"Optional TemplateFlow resource unavailable for space '{label}' ({detail}).",
@@ -1197,18 +1287,15 @@ def main() -> int:
                 )
                 soft_failures.append(label)
             else:
-                print(
-                    f"No files resolved for space '{label}' ({detail}).",
-                    file=sys.stderr,
-                )
+                if error_message:
+                    print(error_message, file=sys.stderr)
                 failures.append(label)
             continue
-        result_paths = _existing_paths(result)
         resolved_resources.append(
             {
                 "label": label,
                 "template": template,
-                "params": dict(params),
+                "params": dict(resolved_params),
                 "paths": result_paths,
             }
         )
