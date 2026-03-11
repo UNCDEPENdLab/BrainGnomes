@@ -72,3 +72,51 @@ test_that("construct_bids_filename accepts abbreviated entities", {
     "sub-01_task-rest_rec-abc_desc-preproc_bold.nii.gz"
   )
 })
+
+test_that("construct_bids_regex supports cohort-qualified spaces", {
+  pattern <- construct_bids_regex(
+    "task:emo1 dir:AP space:MNIPediatricAsym cohort:2 desc:preproc suffix:bold"
+  )
+
+  expect_true(grepl(
+    pattern,
+    "sub-03_task-emo1_dir-AP_run-02_space-MNIPediatricAsym_cohort-2_desc-preproc_bold.nii.gz"
+  ))
+  expect_false(grepl(
+    pattern,
+    "sub-03_task-emo1_dir-AP_run-02_space-MNIPediatricAsym_desc-preproc_bold.nii.gz"
+  ))
+})
+
+test_that("get_fmriprep_outputs resolves cohort-qualified bold and non-spatial derivatives", {
+  tmp_dir <- withr::local_tempdir()
+  in_file <- file.path(
+    tmp_dir,
+    "sub-03_task-emo1_dir-AP_run-02_space-MNIPediatricAsym_cohort-2_desc-preproc_bold.nii.gz"
+  )
+  brain_mask <- file.path(
+    tmp_dir,
+    "sub-03_task-emo1_dir-AP_run-02_space-MNIPediatricAsym_cohort-2_desc-brain_mask.nii.gz"
+  )
+  confounds <- file.path(
+    tmp_dir,
+    "sub-03_task-emo1_dir-AP_run-02_desc-confounds_timeseries.tsv"
+  )
+  melodic_mix <- file.path(
+    tmp_dir,
+    "sub-03_task-emo1_dir-AP_run-02_res-2_desc-melodic_mixing.tsv"
+  )
+
+  file.create(in_file)
+  file.create(brain_mask)
+  file.create(confounds)
+  file.create(melodic_mix)
+
+  outputs <- get_fmriprep_outputs(in_file)
+
+  expect_identical(outputs$bold, normalizePath(in_file))
+  expect_identical(outputs$brain_mask, normalizePath(brain_mask))
+  expect_identical(outputs$confounds, normalizePath(confounds))
+  expect_identical(outputs$melodic_mix, normalizePath(melodic_mix))
+  expect_identical(outputs$prefix, "sub-03_task-emo1_dir-AP_run-02")
+})
