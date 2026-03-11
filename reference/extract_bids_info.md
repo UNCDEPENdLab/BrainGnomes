@@ -50,10 +50,10 @@ extract_bids_info(filenames)
 #> 1      01      02    memory     highres             NA      <NA> <NA>       NA
 #> 2      02    <NA> attention      lowres             NA      <NA>    2       NA
 #> 3      03    <NA>     motor        <NA>             NA        PA <NA>       NA
-#>   echo hemisphere           space resolution description fieldmap suffix
-#> 1 <NA>         NA        MNI2009c         NA     preproc       NA   bold
-#> 2 <NA>         NA            <NA>         NA    smoothed       NA   bold
-#> 3    2         NA MNI152NLin6Asym         NA         raw       NA   bold
+#>   echo hemisphere           space cohort resolution description fieldmap suffix
+#> 1 <NA>         NA        MNI2009c     NA         NA     preproc       NA   bold
+#> 2 <NA>         NA            <NA>     NA         NA    smoothed       NA   bold
+#> 3    2         NA MNI152NLin6Asym     NA         NA         raw       NA   bold
 #>       ext directory
 #> 1 .nii.gz         .
 #> 2 .nii.gz         .

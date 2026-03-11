@@ -37,16 +37,12 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8-1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.8-2" id="braingnomes-08-2">BrainGnomes 0.8-2<a class="anchor" aria-label="anchor" href="#braingnomes-08-2"></a></h2>
-<ul><li>Update RSQLite connections to default to <code>synchronous=NULL</code> to prevent spurious warnings</li>
-</ul></div>
-    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8-1" id="braingnomes-08-1">BrainGnomes 0.8-1<a class="anchor" aria-label="anchor" href="#braingnomes-08-1"></a></h2>
-<p>Released 2026-03-05</p>
+<p>Released 2026-03-10</p>
 <ul><li>Improve CLI interface to support –help or BrainGnomes <command> help</command></li>
 <li>Add CLI status command to get project status from command line</li>
 <li>Add dry_run option to run_project to see what would be run without executing it</li>
@@ -57,6 +53,10 @@
 <li>Move prefetch state files out of <code>templateflow_home</code> and into hashed project log paths; legacy state files in <code>templateflow_home</code> are now migrated and removed to avoid poisoning TemplateFlow standard-space discovery.</li>
 <li>Expand TemplateFlow default to desc=None for T1w to mirror some versions of fmriprep.</li>
 <li>Harden check on flywheel location to accommodate missing fw command.</li>
+<li>Update RSQLite connections to default to <code>synchronous=NULL</code> to prevent spurious warnings</li>
+<li>Included OASIS30 as a default template space for prefetch because it is used by fmriprep</li>
+<li>bugfix: preserve <code>cohort-&lt;n&gt;</code> in BIDS parsing/reconstruction so postprocessing can resolve cohort-qualified fMRIPrep outputs such as <code>space-MNIPediatricAsym_cohort-2</code>
+</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8" id="braingnomes-08">BrainGnomes 0.8<a class="anchor" aria-label="anchor" href="#braingnomes-08"></a></h2>
