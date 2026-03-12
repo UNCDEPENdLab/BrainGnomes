@@ -602,6 +602,20 @@ normalize_prefetch_spaces <- function(spaces) {
   sort(unique(spaces))
 }
 
+fmriprep_cli_requests_cifti_defaults <- function(cli_options) {
+  cli_options <- validate_char(cli_options)
+  if (!checkmate::test_string(cli_options) || !nzchar(trimws(cli_options))) return(FALSE)
+
+  parsed <- tryCatch(args_to_df(cli_options), error = function(e) NULL)
+  if (is.null(parsed) || nrow(parsed) == 0L) return(FALSE)
+
+  cifti_rows <- parsed[parsed$lhs == "cifti-output", , drop = FALSE]
+  if (nrow(cifti_rows) == 0L) return(FALSE)
+
+  rhs <- tolower(trimws(ifelse(is.na(cifti_rows$rhs), "", cifti_rows$rhs)))
+  any(!rhs %in% c("", "0", "false", "off", "null", "none"))
+}
+
 prefetch_state_cache_hash <- function(templateflow_home) {
   normalized <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
   tmp <- tempfile("prefetch_state_hash_")
@@ -755,7 +769,8 @@ run_prefetch_query_plan_command <- function(runtime, cmd_args, env) {
   )
 }
 
-resolve_prefetch_query_plan <- function(container_path, script_path, requested_spaces, templateflow_home) {
+resolve_prefetch_query_plan <- function(container_path, script_path, requested_spaces, templateflow_home,
+                                        include_cifti_defaults = FALSE) {
   if (!checkmate::test_file_exists(container_path) || !checkmate::test_file_exists(script_path)) {
     return(NULL)
   }
@@ -785,6 +800,9 @@ resolve_prefetch_query_plan <- function(container_path, script_path, requested_s
     "--plan-only",
     "--summary-json", summary_file
   )
+  if (isTRUE(include_cifti_defaults)) {
+    cmd_args <- c(cmd_args, "--include-cifti-defaults")
+  }
 
   env <- c(
     TEMPLATEFLOW_HOME = normalizePath(templateflow_home, winslash = "/", mustWork = FALSE),
@@ -926,6 +944,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   skip_spaces <- c("anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6", "T1w", "T2w", "func")
   fetch_spaces <- normalize_prefetch_spaces(setdiff(spaces_vec, skip_spaces))
   if (length(fetch_spaces) == 0L) return(NULL)
+  include_cifti_defaults <- fmriprep_cli_requests_cifti_defaults(scfg$fmriprep$cli_options)
 
   script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
   if (!checkmate::test_file_exists(script_path)) {
@@ -954,7 +973,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     container_path = container_path,
     script_path = script_path,
     requested_spaces = fetch_spaces,
-    templateflow_home = tf_home
+    templateflow_home = tf_home,
+    include_cifti_defaults = include_cifti_defaults
   )
   current_query_signature <- if (!is.null(prefetch_plan$query_signature)) {
     as.character(prefetch_plan$query_signature)
@@ -1023,6 +1043,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     prefetch_container = container_path,
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
+    prefetch_include_cifti_defaults = if (isTRUE(include_cifti_defaults)) "TRUE" else "FALSE",
     templateflow_home = tf_home,
     prefetch_state_file = prefetch_state_file,
     log_level = scfg$log_level

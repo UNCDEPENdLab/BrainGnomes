@@ -46,6 +46,56 @@ MRIQC_REQUIRED_PROBSEG = {
 }
 
 FMRIPREP_REQUIRED_RESOURCES = {
+    "MNI152NLin2009cAsym": [
+        {
+            "params": {
+                "desc": "fMRIPrep",
+                "suffix": "boldref",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=fMRIPrep, suffix=boldref, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=brain, suffix=mask, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "label": "brain",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "label=brain, suffix=probseg, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "carpet",
+                "suffix": "dseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=carpet, suffix=dseg, resolution=1)"
+            ),
+            "optional": False,
+        }
+    ],
     "OASIS30ANTs": [
         {
             "params": {
@@ -102,6 +152,46 @@ FMRIPREP_REQUIRED_RESOURCES = {
             "optional": True,
         }
     ]
+}
+
+FMRIPREP_CIFTI_REQUIRED_RESOURCES = {
+    "MNI152NLin6Asym": [
+        {
+            "params": {
+                "suffix": "T1w",
+                "resolution": 1,
+            },
+            "label": "MNI152NLin6Asym (fMRIPrep CIFTI required: suffix=T1w, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin6Asym (fMRIPrep CIFTI required: "
+                "desc=brain, suffix=mask, resolution=1)"
+            ),
+            "optional": False,
+        },
+    ],
+    "fsLR": [
+        {
+            "params": {
+                "density": "32k",
+                "space": None,
+                "suffix": "sphere",
+                "extension": ".surf.gii",
+            },
+            "label": (
+                "fsLR (fMRIPrep CIFTI required: "
+                "density=32k, suffix=sphere, extension=.surf.gii)"
+            ),
+            "optional": False,
+        }
+    ],
 }
 
 QueryFingerprint = Tuple[str, Tuple[Tuple[str, Any], ...]]
@@ -1117,30 +1207,35 @@ def add_required_probseg_queries(
 
 def add_required_fmriprep_queries(
     queries: List[QuerySpec],
+    include_cifti_defaults: bool = False,
 ) -> List[QuerySpec]:
     """Ensure offline-required TemplateFlow resources used internally by fMRIPrep are prefetched."""
     existing: Set[QueryFingerprint] = {
         _freeze_query(query.template, query.params) for query in queries
     }
     augmented = list(queries)
-    for template, required_queries in FMRIPREP_REQUIRED_RESOURCES.items():
-        for resource in required_queries:
-            query = dict(resource["params"])
-            fingerprint = _freeze_query(template, query)
-            if fingerprint in existing:
-                continue
-            existing.add(fingerprint)
-            augmented.append(
-                QuerySpec(
-                    template=template,
-                    params=query,
-                    label=resource["label"],
-                    optional=bool(resource.get("optional", False)),
-                    fallback_params=[
-                        dict(params) for params in resource.get("fallback_params", [])
-                    ] or None,
+    resource_sets = [FMRIPREP_REQUIRED_RESOURCES]
+    if include_cifti_defaults:
+        resource_sets.append(FMRIPREP_CIFTI_REQUIRED_RESOURCES)
+    for resource_set in resource_sets:
+        for template, required_queries in resource_set.items():
+            for resource in required_queries:
+                query = dict(resource["params"])
+                fingerprint = _freeze_query(template, query)
+                if fingerprint in existing:
+                    continue
+                existing.add(fingerprint)
+                augmented.append(
+                    QuerySpec(
+                        template=template,
+                        params=query,
+                        label=resource["label"],
+                        optional=bool(resource.get("optional", False)),
+                        fallback_params=[
+                            dict(params) for params in resource.get("fallback_params", [])
+                        ] or None,
+                    )
                 )
-            )
     return augmented
 
 
@@ -1189,6 +1284,11 @@ def main() -> int:
         help="Resolve TemplateFlow queries and write summary metadata without fetching files.",
     )
     parser.add_argument(
+        "--include-cifti-defaults",
+        action="store_true",
+        help="Include additional TemplateFlow resources required when fMRIPrep is run with --cifti-output.",
+    )
+    parser.add_argument(
         "--summary-json",
         default=None,
         help="Path to a JSON file describing the resolved query plan and fetch outcome.",
@@ -1228,7 +1328,10 @@ def main() -> int:
         return 0
     queries = add_default_t2w_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
-    queries = add_required_fmriprep_queries(queries)
+    queries = add_required_fmriprep_queries(
+        queries,
+        include_cifti_defaults=bool(args.include_cifti_defaults),
+    )
     query_signature = _compute_query_signature(queries)
 
     # Determine where TemplateFlow will place fetched files

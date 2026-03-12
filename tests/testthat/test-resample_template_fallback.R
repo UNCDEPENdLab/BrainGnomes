@@ -84,7 +84,9 @@ test_that("resample_template_to_img forwards cohort-qualified template queries",
     .package = "reticulate"
   )
 
-  tmp_dir <- withr::local_tempdir()
+  tmp_dir <- tempfile("resample_template_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
   in_file <- file.path(
     tmp_dir,
     "sub-01_task-test_space-MNIPediatricAsym_cohort-2_desc-preproc_bold.nii.gz"

@@ -89,7 +89,9 @@ test_that("construct_bids_regex supports cohort-qualified spaces", {
 })
 
 test_that("get_fmriprep_outputs resolves cohort-qualified bold and non-spatial derivatives", {
-  tmp_dir <- withr::local_tempdir()
+  tmp_dir <- tempfile("fmriprep_outputs_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
   in_file <- file.path(
     tmp_dir,
     "sub-03_task-emo1_dir-AP_run-02_space-MNIPediatricAsym_cohort-2_desc-preproc_bold.nii.gz"

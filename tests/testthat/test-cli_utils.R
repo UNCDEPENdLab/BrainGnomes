@@ -64,3 +64,14 @@ test_that("set_cli_options updates and adds options", {
   # expect_equal(result, c("--foo=3", "--bar=2", "--baz=4"))
   expect_equal(result, c("--foo=3 --baz=4 --bar=2"))
 })
+
+test_that("fmriprep_cli_requests_cifti_defaults detects requested CIFTI output", {
+  expect_false(fmriprep_cli_requests_cifti_defaults(NULL))
+  expect_false(fmriprep_cli_requests_cifti_defaults(""))
+  expect_false(fmriprep_cli_requests_cifti_defaults("--output-spaces MNI152NLin2009cAsym"))
+  expect_false(fmriprep_cli_requests_cifti_defaults("--cifti-output FALSE"))
+  expect_false(fmriprep_cli_requests_cifti_defaults("--cifti-output=off"))
+
+  expect_true(fmriprep_cli_requests_cifti_defaults("--cifti-output 91k"))
+  expect_true(fmriprep_cli_requests_cifti_defaults("--dummy=1 --cifti-output=170k"))
+})

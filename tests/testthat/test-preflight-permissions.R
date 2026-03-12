@@ -362,6 +362,58 @@ test_that("submit_prefetch_templates proceeds when all paths are writable", {
   expect_equal(result, "77777")
 })
 
+test_that("submit_prefetch_templates forwards conditional CIFTI defaults when requested", {
+  root <- tempfile("pft_cifti_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  container <- file.path(root, "fmriprep.sif")
+  file.create(container)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  scfg <- list(
+    metadata = list(
+      log_directory = file.path(root, "logs"),
+      templateflow_home = tf_home
+    ),
+    compute_environment = list(
+      fmriprep_container = container,
+      scheduler = "slurm"
+    ),
+    fmriprep = list(
+      output_spaces = "MNI152NLin2009cAsym",
+      cli_options = "--cifti-output 91k"
+    ),
+    debug = FALSE,
+    log_level = "INFO"
+  )
+  class(scfg) <- "bg_project_cfg"
+
+  steps <- c(mriqc = FALSE, fmriprep = TRUE, aroma = FALSE)
+
+  captured_include_cifti_defaults <- NULL
+  captured_env <- NULL
+  local_mocked_bindings(
+    get_job_sched_args = function(...) "--time=00:30:00",
+    get_job_script = function(...) "/path/to/script.sbatch",
+    check_write_target = function(path, label) NULL,
+    resolve_prefetch_query_plan = function(..., include_cifti_defaults = FALSE) {
+      captured_include_cifti_defaults <<- include_cifti_defaults
+      list(query_signature = "sig-cifti", query_count = 3L)
+    },
+    cluster_job_submit = function(...) {
+      captured_env <<- list(...)[["env_variables"]]
+      "77778"
+    },
+    .package = "BrainGnomes"
+  )
+
+  result <- submit_prefetch_templates(scfg, steps = steps)
+  expect_true(isTRUE(captured_include_cifti_defaults))
+  expect_equal(unname(captured_env[["prefetch_include_cifti_defaults"]]), "TRUE")
+  expect_equal(result, "77778")
+})
+
 test_that("submit_prefetch_templates skips when cached state covers requested spaces", {
   root <- tempfile("pft_cached_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)

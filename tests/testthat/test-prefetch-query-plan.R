@@ -179,3 +179,44 @@ test_that("resolve_prefetch_query_plan returns NULL when summary json is malform
     templateflow_home = tf_home
   ))
 })
+
+test_that("resolve_prefetch_query_plan forwards conditional CIFTI defaults flag", {
+  root <- tempfile("prefetch_plan_cifti_")
+  dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
+
+  script_path <- file.path(root, "prefetch_wrapper.py")
+  writeLines("print('unused')", script_path)
+  container_path <- file.path(root, "fake_container.sif")
+  file.create(container_path)
+  tf_home <- file.path(root, "templateflow")
+  dir.create(tf_home, recursive = TRUE, showWarnings = FALSE)
+
+  local_mocked_bindings(
+    find_container_runtime = function() "/usr/bin/fake-runtime",
+    run_prefetch_query_plan_command = function(runtime, cmd_args, env) {
+      expect_true("--include-cifti-defaults" %in% cmd_args)
+
+      summary_idx <- match("--summary-json", cmd_args)
+      summary_file <- cmd_args[[summary_idx + 1L]]
+      jsonlite::write_json(
+        list(query_signature = "sig-cifti", query_count = 1L, queries = list()),
+        path = summary_file,
+        auto_unbox = TRUE
+      )
+
+      character(0)
+    }
+  )
+
+  plan <- resolve_prefetch_query_plan(
+    container_path = container_path,
+    script_path = script_path,
+    requested_spaces = "MNI152NLin2009cAsym",
+    templateflow_home = tf_home,
+    include_cifti_defaults = TRUE
+  )
+
+  expect_identical(plan$query_signature, "sig-cifti")
+  expect_equal(plan$query_count, 1L)
+})

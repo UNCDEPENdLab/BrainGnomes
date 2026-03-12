@@ -123,6 +123,10 @@ test_that("prefetch integration downloads default fMRIPrep TemplateFlow resource
   manifest_paths <- vapply(manifest$files, `[[`, character(1), "path")
   expected_required <- c(
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-brain_probseg.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-carpet_dseg.nii.gz",
     "tpl-OASIS30ANTs/tpl-OASIS30ANTs_res-01_T1w.nii.gz"
   )
   expect_true(all(expected_required %in% manifest_paths), info = failure_context)

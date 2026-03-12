@@ -142,12 +142,18 @@ rel $rel_flag $log_flag export TEMPLATEFLOW_HOME="$templateflow_home"
 rel $rel_flag $log_flag export APPTAINERENV_TEMPLATEFLOW_HOME="$templateflow_home"
 
 # run the TemplateFlow prefetch helper inside the fMRIPrep container
+prefetch_extra_args=()
+if [[ "$prefetch_include_cifti_defaults" == "TRUE" || "$prefetch_include_cifti_defaults" == "1" ]]; then
+  prefetch_extra_args+=(--include-cifti-defaults)
+fi
+
 rel $rel_flag $log_flag singularity exec --cleanenv --containall "${bind_args[@]}" \
   "$prefetch_container" python "$prefetch_script" \
   --output-spaces "$prefetch_spaces" \
   --summary-json "$prefetch_summary_file" \
   --manifest-json "$prefetch_manifest_file" \
   --state-file "$prefetch_state_file" \
+  "${prefetch_extra_args[@]}" \
   --scheduler-job-id "$SLURM_JOB_ID" &
 cmd_pid=$!
 run_bg_and_wait "$cmd_pid" cmd_status
