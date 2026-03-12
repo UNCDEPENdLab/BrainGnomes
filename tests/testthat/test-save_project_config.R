@@ -7,7 +7,7 @@ test_that("load_project records the YAML source path", {
   yaml::write_yaml(list(a = 1), yaml_path)
 
   cfg <- load_project(yaml_path, validate = FALSE)
-  expect_identical(attr(cfg, "yaml_file"), normalizePath(yaml_path, winslash = "/", mustWork = TRUE))
+  expect_path_identical(attr(cfg, "yaml_file"), yaml_path)
 })
 
 test_that("save_project_config uses stored YAML path", {
@@ -24,10 +24,7 @@ test_that("save_project_config uses stored YAML path", {
 
   result <- save_project_config(scfg)
   expect_true(file.exists(yaml_path))
-  expect_identical(
-    normalizePath(attr(result, "yaml_file"), winslash = "/", mustWork = TRUE),
-    normalizePath(yaml_path, winslash = "/", mustWork = TRUE)
-  )
+  expect_path_identical(attr(result, "yaml_file"), yaml_path)
 })
 
 test_that("save_project_config updates YAML path when file argument supplied", {
@@ -43,10 +40,7 @@ test_that("save_project_config updates YAML path when file argument supplied", {
 
   result <- save_project_config(scfg, file = new_yaml)
   expect_true(file.exists(new_yaml))
-  expect_identical(
-    normalizePath(attr(result, "yaml_file"), winslash = "/", mustWork = TRUE),
-    normalizePath(new_yaml, winslash = "/", mustWork = TRUE)
-  )
+  expect_path_identical(attr(result, "yaml_file"), new_yaml)
 })
 
 test_that("validate_char normalizes blank fmriprep output_spaces to NULL", {

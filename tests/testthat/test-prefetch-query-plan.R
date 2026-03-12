@@ -22,14 +22,8 @@ test_that("resolve_prefetch_query_plan returns parsed summary from plan step", {
       expect_true(any(grepl("MNI152NLin2009cAsym", cmd_args, fixed = TRUE)))
       expect_true("TEMPLATEFLOW_HOME" %in% names(env))
       expect_true("APPTAINERENV_TEMPLATEFLOW_HOME" %in% names(env))
-      expect_identical(
-        unname(env[["TEMPLATEFLOW_HOME"]]),
-        normalizePath(tf_home, winslash = "/", mustWork = FALSE)
-      )
-      expect_identical(
-        unname(env[["APPTAINERENV_TEMPLATEFLOW_HOME"]]),
-        normalizePath(tf_home, winslash = "/", mustWork = FALSE)
-      )
+      expect_path_identical(unname(env[["TEMPLATEFLOW_HOME"]]), tf_home, mustWork = FALSE)
+      expect_path_identical(unname(env[["APPTAINERENV_TEMPLATEFLOW_HOME"]]), tf_home, mustWork = FALSE)
 
       summary_idx <- match("--summary-json", cmd_args)
       summary_file <- cmd_args[[summary_idx + 1L]]

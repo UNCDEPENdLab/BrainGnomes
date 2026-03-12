@@ -116,9 +116,9 @@ test_that("get_fmriprep_outputs resolves cohort-qualified bold and non-spatial d
 
   outputs <- get_fmriprep_outputs(in_file)
 
-  expect_identical(outputs$bold, normalizePath(in_file))
-  expect_identical(outputs$brain_mask, normalizePath(brain_mask))
-  expect_identical(outputs$confounds, normalizePath(confounds))
-  expect_identical(outputs$melodic_mix, normalizePath(melodic_mix))
+  expect_path_identical(outputs$bold, in_file)
+  expect_path_identical(outputs$brain_mask, brain_mask)
+  expect_path_identical(outputs$confounds, confounds)
+  expect_path_identical(outputs$melodic_mix, melodic_mix)
   expect_identical(outputs$prefix, "sub-03_task-emo1_dir-AP_run-02")
 })

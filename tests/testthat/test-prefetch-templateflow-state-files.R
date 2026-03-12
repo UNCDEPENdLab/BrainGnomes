@@ -100,7 +100,7 @@ test_that("prefetch overwrites stale success state with FAILED state on fetch fa
   state_file <- file.path(root, ".braingnomes_prefetch_state.dcf")
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", normalizePath(root, winslash = "/", mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path(root, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: old-job",
     "query_signature: oldsig"

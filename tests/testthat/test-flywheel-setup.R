@@ -87,9 +87,6 @@ test_that("setup_compute_environment prompts for Flywheel path when CLI is absen
 
   result <- setup_compute_environment(scfg, fields = "compute_environment/flywheel")
 
-  expect_identical(
-    normalizePath(result$compute_environment$flywheel, winslash = "/", mustWork = TRUE),
-    normalizePath(fw_path, winslash = "/", mustWork = TRUE)
-  )
+  expect_path_identical(result$compute_environment$flywheel, fw_path)
   expect_true(any(grepl("not found on your PATH", prompts, fixed = TRUE)))
 })

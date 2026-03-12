@@ -1,14 +1,3 @@
-norm_path <- function(path, mustWork = FALSE) {
-  out <- normalizePath(path, winslash = "/", mustWork = mustWork)
-  if (.Platform$OS.type == "unix" && startsWith(out, "/private/var/")) {
-    out <- sub("^/private", "", out)
-  }
-  if (grepl("/T/Rtmp", out, fixed = TRUE)) {
-    out <- sub("/T/(Rtmp[^/]+)", "/T//\\1", out, perl = TRUE)
-  }
-  out
-}
-
 test_that("postprocess_subject stages outputs in scratch workspace", {
   tmp_dir <- norm_path(tempfile("pp-scratch-"), mustWork = FALSE)
   dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
