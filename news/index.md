@@ -11,6 +11,12 @@ Released 2026-03-10
 - Refactor prefetch to accept cohort specifications and extend them to
   T2w fetch.
 - Refactor prefetch to fall back to no desc field if desc:brain fails
+- Expand fMRIPrep TemplateFlow defaults to include MNI152NLin2009cAsym
+  boldref, res-2 brain mask, brain probseg, and carpet dseg assets
+  observed during workflow construction
+- Add conditional CIFTI TemplateFlow defaults so prefetch only stages
+  MNI152NLin6Asym and fsLR sphere assets when fMRIPrep CLI options
+  request `--cifti-output`
 - Harden prefetch caching and validation checks so that later failures
   invalidate skip logic
 - Make prefetch state query-specific so that an exact snapshot of
