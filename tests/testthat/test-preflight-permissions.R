@@ -426,7 +426,7 @@ test_that("submit_prefetch_templates skips when cached state covers requested sp
   state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym MNI152NLin6Asym:res-2",
     "query_signature: sig-current"
   ), state_file)
@@ -480,7 +480,7 @@ test_that("submit_prefetch_templates resubmits when state covers spaces but mani
   state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "query_signature: sig-current"
   ), state_file)
@@ -535,7 +535,7 @@ test_that("submit_prefetch_templates ignores FAILED cached state from prior reru
   state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: FAILED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: failed-job",
     "query_signature: sig-current"
@@ -596,7 +596,7 @@ test_that("submit_prefetch_templates resubmits when a new space is requested", {
   state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "query_signature: sig-old"
   ), state_file)
@@ -670,7 +670,7 @@ test_that("submit_prefetch_templates resubmits when cached manifest drifts after
     job_id = "job-drift",
     status = "COMPLETED",
     output_manifest = jsonlite::toJSON(list(
-      output_dir = norm_path(tf_home, mustWork = TRUE),
+      output_dir = norm_path_raw(tf_home, mustWork = TRUE),
       captured_at = "2026-03-01T00:00:00Z",
       query_signature = "sig-current",
       file_count = 1L,
@@ -685,7 +685,7 @@ test_that("submit_prefetch_templates resubmits when cached manifest drifts after
 
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: job-drift",
     "query_signature: sig-current"
@@ -744,7 +744,7 @@ test_that("submit_prefetch_templates resubmits when copied state file references
   state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(previous_tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(previous_tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: copied-job",
     "query_signature: sig-current"
@@ -806,7 +806,7 @@ test_that("submit_prefetch_templates migrates legacy state file into logs and re
   new_state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: migrated-job",
     "query_signature: sig-current"
@@ -865,14 +865,14 @@ test_that("submit_prefetch_templates prefers logs-based state when both state lo
   new_state_file <- get_prefetch_state_file(log_dir, tf_home)
   writeLines(c(
     "status: FAILED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: legacy-job",
     "query_signature: sig-current"
   ), legacy_state_file)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "scheduler_job_id: logs-job",
     "query_signature: sig-current"
@@ -930,7 +930,7 @@ test_that("submit_prefetch_templates stops when legacy state cannot be removed a
   legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "query_signature: sig-current"
   ), legacy_state_file)
@@ -985,7 +985,7 @@ test_that("submit_prefetch_templates warns when legacy state cannot be removed b
   legacy_state_file <- get_legacy_prefetch_state_file(tf_home)
   writeLines(c(
     "status: COMPLETED",
-    paste0("templateflow_home: ", norm_path(tf_home, mustWork = FALSE)),
+    paste0("templateflow_home: ", norm_path_raw(tf_home, mustWork = FALSE)),
     "spaces: MNI152NLin2009cAsym",
     "query_signature: sig-current"
   ), legacy_state_file)
@@ -1099,7 +1099,7 @@ test_that("prefetch_manifest_verified requires exact files and matching query si
   writeLines("csf", file_b)
 
   manifest_json <- jsonlite::toJSON(list(
-    output_dir = norm_path(tf_home, mustWork = TRUE),
+    output_dir = norm_path_raw(tf_home, mustWork = TRUE),
     captured_at = "2026-03-01T00:00:00Z",
     query_signature = "sig-required",
     file_count = 2L,
@@ -1222,8 +1222,8 @@ test_that("setup_project_directories primes check_cache with writable dirs", {
   setup_project_directories(scfg, check_cache = cache)
 
   # All created dirs should be primed in the cache
-  scratch_key <- norm_path(scratch_dir, mustWork = FALSE)
-  log_key <- norm_path(log_dir, mustWork = FALSE)
+  scratch_key <- norm_path_raw(scratch_dir, mustWork = FALSE)
+  log_key <- norm_path_raw(log_dir, mustWork = FALSE)
 
   expect_true(exists(scratch_key, envir = cache, inherits = FALSE))
   expect_true(exists(log_key, envir = cache, inherits = FALSE))
@@ -1288,7 +1288,7 @@ test_that("setup_project_directories warns and remediates unwritable directories
   )
 
   # proj_dir should be in cache (it was writable)
-  proj_key <- norm_path(proj_dir, mustWork = FALSE)
+  proj_key <- norm_path_raw(proj_dir, mustWork = FALSE)
   expect_true(exists(proj_key, envir = cache))
 })
 

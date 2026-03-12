@@ -1,7 +1,11 @@
-norm_path <- function(path, mustWork = FALSE) {
+norm_path_raw <- function(path, mustWork = FALSE) {
   if (is.null(path)) return(NULL)
 
-  out <- normalizePath(path, winslash = "/", mustWork = mustWork)
+  normalizePath(path, winslash = "/", mustWork = mustWork)
+}
+
+norm_path <- function(path, mustWork = FALSE) {
+  out <- norm_path_raw(path, mustWork = mustWork)
   if (.Platform$OS.type == "unix") {
     private_var <- startsWith(out, "/private/var/")
     out[private_var] <- sub("^/private", "", out[private_var])
