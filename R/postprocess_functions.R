@@ -1234,6 +1234,11 @@ resample_template_to_img <- function(
   force_managed_env <- isTRUE(getOption("BrainGnomes.py_force_managed_env", FALSE))
 
   f_info <- as.list(extract_bids_info(in_file))
+  normalize_templateflow_entity <- function(value) {
+    if (length(value) == 0L || is.null(value) || is.na(value) || !nzchar(value)) return(NULL)
+    if (grepl("^[0-9]+$", value)) return(as.integer(value))
+    value
+  }
   template_spaces <- c( # https://www.templateflow.org/browse/
     "Fischer344",
     "MNI152Lin",
@@ -1274,6 +1279,7 @@ resample_template_to_img <- function(
 
   # If we're in native/anatomical space, prefer the subject-specific fMRIPrep mask
   template_space <- f_info$space
+  template_cohort <- normalize_templateflow_entity(f_info$cohort)
   space_label <- if (is.null(template_space) || is.na(template_space)) "unknown" else template_space
   is_template_space <- !is.null(template_space) && !is.na(template_space) && template_space %in% template_spaces
   if (!is_template_space) {
@@ -1431,6 +1437,8 @@ resample_template_to_img <- function(
     in_file = in_file,
     output = output,
     template_resolution = template_resolution,
+    template_space = template_space,
+    template_cohort = template_cohort,
     suffix = suffix,
     desc = desc,
     extension = extension,
