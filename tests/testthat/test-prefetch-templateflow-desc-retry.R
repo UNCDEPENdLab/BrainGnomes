@@ -23,7 +23,7 @@ test_that("prefetch retries default desc=brain mask queries without desc on miss
     "    call = {'template': template}",
     "    call.update(kwargs)",
     "    calls.append(call)",
-    "    if kwargs.get('suffix') == 'mask' and kwargs.get('desc') == 'brain':",
+    "    if template == 'MNIPediatricAsym' and kwargs.get('suffix') == 'mask' and kwargs.get('desc') == 'brain':",
     "        return []",
     "    return [str(ok_file)]",
     "",
