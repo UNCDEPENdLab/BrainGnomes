@@ -1,3 +1,7 @@
+# BrainGnomes 0.8-2
+
+* Refactor postprocessing to use job arrays and sentinels for cleanup
+
 # BrainGnomes 0.8-1
 
 Released 2026-03-10

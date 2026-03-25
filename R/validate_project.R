@@ -793,6 +793,20 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
     }
   }
 
+  # validate max_concurrent_images (job array concurrency throttle)
+  if (!is.null(ppcfg$max_concurrent_images)) {
+    if (!checkmate::test_integerish(ppcfg$max_concurrent_images, len = 1L, lower = 1L, upper = 100L)) {
+      if (!quiet) message(glue("Invalid max_concurrent_images in $postprocess${cfg_name}. Must be an integer 1-100. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/max_concurrent_images")
+      ppcfg$max_concurrent_images <- NULL
+    } else {
+      ppcfg$max_concurrent_images <- as.integer(ppcfg$max_concurrent_images)
+    }
+  } else {
+    # default silently if not set (no gap — this is optional)
+    ppcfg$max_concurrent_images <- 4L
+  }
+
   if (!checkmate::test_flag(ppcfg$force_processing_order)) {
     gaps <- c(gaps, "postprocess/force_processing_order")
     ppcfg$force_processing_order <- FALSE

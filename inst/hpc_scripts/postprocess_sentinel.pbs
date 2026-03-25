@@ -1,0 +1,207 @@
+#!/bin/bash
+# Lightweight sentinel job that runs after all postprocess array tasks complete.
+# It checks per-task exit codes and writes .complete or marks failure in the tracking DB.
+#
+# This sentinel is submitted from R-side with an initial dependency of afterany:parent_jid.
+# The parent shell script updates the dependency to afterany:array_jid at runtime via qalter.
+# If the parent crashes before updating the dependency, the sentinel still starts (afterany
+# includes failure), discovers no array metadata, and marks the subject as FAILED.
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=0:15:00
+#PBS -l mem=2g
+
+set -eE
+cd "$PBS_O_WORKDIR"
+
+# source bash functions used in pipeline shell scripts
+[ -z "$pkg_dir" ] && echo "pkg_dir not set. Cannot locate required helper scripts" && exit 1
+source "${pkg_dir}/shell_functions"
+
+trap 'trap_job_failure postprocess_sentinel SIGTERM' SIGTERM
+trap 'trap_job_failure postprocess_sentinel SIGINT' SIGINT
+trap 'trap_job_failure postprocess_sentinel SIGHUP' SIGHUP
+trap 'trap_job_failure postprocess_sentinel SIGQUIT' SIGQUIT
+trap 'traperror postprocess_sentinel $? $LINENO ${BASH_LINENO[0]} "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
+
+# add the job id to the log file variables in case of crash
+[ -z "$stdout_log" ] && echo "stdout_log not set. Exiting." && exit 1
+[ -z "$stderr_log" ] && echo "stderr_log not set. Exiting." && exit 1
+stdout_log="${stdout_log//%j/$PBS_JOBID}"
+stderr_log="${stderr_log//%j/$PBS_JOBID}"
+
+# Verify required arguments
+[ -z "$complete_file" ] && echo "complete_file not set. Exiting." && exit 1
+[ -z "$parent_job_id" ] && echo "parent_job_id not set. Exiting." && exit 1
+[ -z "$out_dir" ] && echo "out_dir not set. Exiting." && exit 1
+[ -z "$stream_name" ] && echo "stream_name not set. Exiting." && exit 1
+
+ses_str=""
+if [ -n "$ses_id" ]; then
+  ses_str="session $ses_id"
+fi
+
+"${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
+
+# Read array metadata written by the parent shell script
+sentinel_meta_file="${out_dir}/.postprocess_${stream_name}_sentinel_meta.env"
+
+if [[ ! -f "$sentinel_meta_file" ]]; then
+  # Parent crashed before writing metadata — no array was submitted
+  log_message ERROR "No sentinel metadata found at $sentinel_meta_file. Parent job $parent_job_id likely failed before submitting the array."
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED"
+  exit 1
+fi
+
+# Source the metadata (sets array_job_id and n_tasks)
+source "$sentinel_meta_file"
+
+[ -z "$array_job_id" ] && echo "array_job_id not set in metadata. Exiting." && exit 1
+[ -z "$n_tasks" ] && echo "n_tasks not set in metadata. Exiting." && exit 1
+
+log_message INFO "Sentinel checking results for array job $array_job_id ($n_tasks tasks)"
+
+task_status_dir="${task_status_dir:-${out_dir}/.postprocess_${stream_name}_task_status}"
+summary_json="${summary_json:-${out_dir}/.postprocess_${stream_name}_array_summary.json}"
+summary_tsv="${summary_json%.json}.tsv"
+
+tsv_escape() {
+  local value="$1"
+  value="${value//$'	'/ }"
+  value="${value//$'
+'/ }"
+  printf '%s' "$value"
+}
+
+printf 'task_index	task_job_id	input_file	status	exit_code	stdout_log	stderr_log	status_source
+' > "$summary_tsv"
+
+# Check per-task results using qstat -xf
+failed=0
+failed_count=0
+failed_ids=()
+failed_inputs=()
+
+# Allow time for completed jobs to register
+sleep 10
+
+for task_idx in $(seq 0 $((n_tasks - 1))); do
+  task_jid="${array_job_id}[${task_idx}]"
+  task_status_file="${task_status_dir}/task_${task_idx}.env"
+  resolved_task_job_id="$task_jid"
+  resolved_input_file=""
+  resolved_status="UNKNOWN"
+  resolved_exit_code=""
+  resolved_stdout_log=""
+  resolved_stderr_log=""
+  status_source="scheduler"
+
+  if [[ -f "$task_status_file" ]]; then
+    unset task_index task_job_id task_array_job_id task_input_file task_status task_exit_code task_stdout_log task_stderr_log
+    source "$task_status_file"
+    resolved_task_job_id="${task_job_id:-$task_jid}"
+    resolved_input_file="${task_input_file:-}"
+    resolved_status="${task_status:-UNKNOWN}"
+    resolved_exit_code="${task_exit_code:-}"
+    resolved_stdout_log="${task_stdout_log:-}"
+    resolved_stderr_log="${task_stderr_log:-}"
+    status_source="sidecar"
+  else
+    if details=$(qstat -xf "$task_jid" 2>/dev/null); then
+      exit_status=$(printf "%s" "$details" | awk -F' = ' '/^\s*exit_status\s*=/{print $2}' | tail -n1)
+      state=$(printf "%s" "$details" | awk -F' = ' '/^\s*job_state\s*=/{print $2}' | tail -n1)
+      exit_status=${exit_status:-1}
+      if [[ "$exit_status" == "0" ]]; then
+        resolved_status="COMPLETED"
+        resolved_exit_code="0"
+      else
+        resolved_status="FAILED"
+        resolved_exit_code="$exit_status"
+      fi
+    else
+      resolved_status="FAILED"
+      resolved_exit_code="1"
+    fi
+  fi
+
+  printf '%s	%s	%s	%s	%s	%s	%s	%s
+'     "$(tsv_escape "$task_idx")"     "$(tsv_escape "$resolved_task_job_id")"     "$(tsv_escape "$resolved_input_file")"     "$(tsv_escape "$resolved_status")"     "$(tsv_escape "$resolved_exit_code")"     "$(tsv_escape "$resolved_stdout_log")"     "$(tsv_escape "$resolved_stderr_log")"     "$(tsv_escape "$status_source")" >> "$summary_tsv"
+
+  if [[ "$resolved_status" != "COMPLETED" ]]; then
+    log_message ERROR "Array task $resolved_task_job_id failed with status $resolved_status exit code ${resolved_exit_code:-unknown}"
+    failed=1
+    failed_count=$((failed_count + 1))
+    failed_ids+=("$resolved_task_job_id")
+    if [[ -n "$resolved_input_file" ]]; then
+      failed_inputs+=("$resolved_input_file")
+    fi
+  else
+    log_message DEBUG "Array task $resolved_task_job_id completed successfully"
+  fi
+done
+
+"${R_HOME}/bin/Rscript" --vanilla - "$summary_tsv" "$summary_json" "$array_job_id" "$stream_name" "$sub_id" "${ses_id:-}" "$failed_count" "$n_tasks" <<'RS'
+args <- commandArgs(trailingOnly = TRUE)
+summary_tsv <- args[[1]]
+summary_json <- args[[2]]
+array_job_id <- args[[3]]
+stream_name <- args[[4]]
+sub_id <- args[[5]]
+ses_id <- args[[6]]
+failed_count <- as.integer(args[[7]])
+n_tasks <- as.integer(args[[8]])
+pkg_dir <- Sys.getenv("pkg_dir", unset = "")
+if (nzchar(pkg_dir)) {
+  lib_dir <- dirname(pkg_dir)
+  if (!(lib_dir %in% .libPaths())) {
+    .libPaths(c(lib_dir, .libPaths()))
+  }
+}
+if (!requireNamespace("jsonlite", quietly = TRUE)) {
+  stop("jsonlite is required to write the postprocess array summary.")
+}
+summary_df <- utils::read.delim(summary_tsv, sep = "	", header = TRUE, stringsAsFactors = FALSE, quote = "", comment.char = "")
+summary_df[summary_df == ""] <- NA_character_
+task_records <- lapply(seq_len(nrow(summary_df)), function(i) {
+  rec <- as.list(summary_df[i, , drop = FALSE])
+  for (nm in names(rec)) {
+    if (length(rec[[nm]]) == 1L && is.na(rec[[nm]])) rec[[nm]] <- NULL
+  }
+  rec
+})
+payload <- list(
+  array_job_id = array_job_id,
+  stream_name = stream_name,
+  sub_id = sub_id,
+  ses_id = if (nzchar(ses_id)) ses_id else NULL,
+  n_tasks = n_tasks,
+  failed_count = failed_count,
+  succeeded_count = n_tasks - failed_count,
+  tasks = task_records
+)
+writeLines(jsonlite::toJSON(payload, auto_unbox = TRUE, pretty = TRUE, null = "null"), summary_json)
+RS
+log_message INFO "Wrote postprocess array summary to $summary_json"
+
+succeeded=$((n_tasks - failed_count))
+
+if [[ $failed -eq 0 ]]; then
+  cleanup_fail_marker "$complete_file"
+  date +"%Y-%m-%d %H:%M:%S" > "$complete_file"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$array_job_id" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  log_message INFO "Postprocessing completed for subject $sub_id $ses_str ($succeeded/$n_tasks tasks succeeded)."
+else
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$array_job_id" --sqlite_db "$sqlite_db" --status "FAILED"
+  "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED"
+  log_message ERROR "Postprocessing failed for subject $sub_id $ses_str ($failed_count/$n_tasks tasks failed)."
+  if [[ $failed_count -gt 0 ]]; then
+    log_message ERROR "Failed array task IDs: ${failed_ids[*]}"
+  fi
+  if [[ ${#failed_inputs[@]} -gt 0 ]]; then
+    log_message ERROR "Failed input files: ${failed_inputs[*]}"
+  fi
+fi
+exit $failed
