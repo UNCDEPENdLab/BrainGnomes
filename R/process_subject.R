@@ -762,7 +762,10 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   if (!is.null(ses_id) && !is.na(ses_id)) out_dir <- file.path(out_dir, glue("ses-{ses_id}"))
 
   # pull the requested postprocessing stream from the broader list
-  pp_cfg <- scfg$postprocess[[pp_stream]]
+  pp_job_cfg <- scfg$postprocess[[pp_stream]]
+  pp_cfg <- pp_job_cfg
+  pp_scfg <- scfg
+  pp_scfg$postprocess <- pp_job_cfg
   # Concurrency limit for per-subject image array jobs (default 4)
   max_concurrent_images <- pp_cfg$max_concurrent_images
   if (is.null(max_concurrent_images) || !is.numeric(max_concurrent_images) || max_concurrent_images < 1) {
@@ -808,23 +811,18 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   # before submitting the array). The parent shell script will update the sentinel's
   # dependency to afterany:array_jid via scontrol update / qalter once the array is submitted.
   if (checkmate::test_string(parent_jid) && nzchar(parent_jid)) {
+    sentinel_scfg <- pp_scfg
+    sentinel_scfg$postprocess$memgb <- 2L
+    sentinel_scfg$postprocess$nhours <- 0.25
+    sentinel_scfg$postprocess$ncores <- 1L
+
     sentinel_sched_args <- get_job_sched_args(
-      scfg,
+      sentinel_scfg,
       job_name = "postprocess",
       jobid_str = glue("postprocess_{pp_stream}_sentinel"),
       stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.out"),
       stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.err")
     )
-
-    # Override resource requests: sentinel is lightweight
-    scheduler_name <- scfg$compute_environment$scheduler
-    if (scheduler_name %in% c("slurm", "sbatch")) {
-      sentinel_sched_args <- sub("--mem=[^ ]+", "--mem=2g", sentinel_sched_args)
-      sentinel_sched_args <- sub("--time=[^ ]+", "--time=0:15:00", sentinel_sched_args)
-    } else if (scheduler_name %in% c("torque", "qsub")) {
-      sentinel_sched_args <- sub("-l mem=[^ ]+", "-l mem=2g", sentinel_sched_args)
-      sentinel_sched_args <- sub("-l walltime=[^ ]+", "-l walltime=0:15:00", sentinel_sched_args)
-    }
 
     sentinel_env <- c(
       env_variables,
@@ -833,6 +831,11 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
 
     sentinel_tracking_args <- tracking_args
     sentinel_tracking_args$job_name <- glue("postprocess_{pp_stream}_sentinel")
+    sentinel_tracking_args$n_cpus <- sentinel_scfg$postprocess$ncores
+    sentinel_tracking_args$wall_time <- hours_to_dhms(sentinel_scfg$postprocess$nhours)
+    sentinel_tracking_args$mem_total <- sentinel_scfg$postprocess$memgb
+    sentinel_tracking_args$scheduler <- scfg$compute_environment$scheduler
+    sentinel_tracking_args$scheduler_options <- sentinel_sched_args
 
     sentinel_jid <- cluster_job_submit(
       postprocess_sentinel_sched_script,
