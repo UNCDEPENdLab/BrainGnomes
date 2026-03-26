@@ -34,14 +34,88 @@ SKIP_TOKENS = {
     "fsLR",
 }
 
-MRIQC_REQUIRED_PROBSEG = {
+MRIQC_REQUIRED_RESOURCES = {
     "MNI152NLin2009cAsym": [
         {
-            "suffix": "probseg",
-            "label": "CSF",
-            "resolution": 1,
-            "extension": "nii.gz",
-        }
+            "params": {
+                "suffix": "T1w",
+                "resolution": 2,
+            },
+            "label": "MNI152NLin2009cAsym (MRIQC required: suffix=T1w, resolution=2)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=brain, suffix=mask, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "fMRIPrep",
+                "suffix": "boldref",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=fMRIPrep, suffix=boldref, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "carpet",
+                "suffix": "dseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=carpet, suffix=dseg, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "CSF",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=CSF, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "GM",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=GM, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "WM",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=WM, resolution=1)"
+            ),
+            "optional": False,
+        },
     ]
 }
 
@@ -1180,7 +1254,7 @@ def add_required_probseg_queries(
     queries: List[QuerySpec],
     tokens: List[str],
 ) -> List[QuerySpec]:
-    """Ensure known MRIQC-required tissue probability maps are prefetched."""
+    """Ensure known MRIQC-required TemplateFlow resources are prefetched."""
     templates = _template_names_from_tokens(tokens)
     if not templates:
         return queries
@@ -1190,18 +1264,24 @@ def add_required_probseg_queries(
     }
     augmented = list(queries)
     for template in templates:
-        required = MRIQC_REQUIRED_PROBSEG.get(template, [])
-        for params in required:
-            query = dict(params)
+        required = MRIQC_REQUIRED_RESOURCES.get(template, [])
+        for resource in required:
+            query = dict(resource["params"])
             fingerprint = _freeze_query(template, query)
             if fingerprint in existing:
                 continue
             existing.add(fingerprint)
-            label = (
-                f"{template} (MRIQC required: "
-                f"suffix={query.get('suffix')}, label={query.get('label')}, resolution={query.get('resolution')})"
+            augmented.append(
+                QuerySpec(
+                    template=template,
+                    params=query,
+                    label=resource["label"],
+                    optional=bool(resource.get("optional", False)),
+                    fallback_params=[
+                        dict(params) for params in resource.get("fallback_params", [])
+                    ] or None,
+                )
             )
-            augmented.append(QuerySpec(template=template, params=query, label=label))
     return augmented
 
 

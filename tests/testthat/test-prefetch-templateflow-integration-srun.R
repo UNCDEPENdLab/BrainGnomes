@@ -1,4 +1,4 @@
-test_that("prefetch integration downloads default fMRIPrep TemplateFlow resources via srun", {
+test_that("prefetch integration downloads default MRIQC and fMRIPrep TemplateFlow resources via srun", {
   skip_if(
     !identical(tolower(Sys.getenv("BG_RUN_SRUN_TEMPLATEFLOW_INTEGRATION", "false")), "true"),
     "Set BG_RUN_SRUN_TEMPLATEFLOW_INTEGRATION=true to run the HPC-backed TemplateFlow integration test."
@@ -123,8 +123,12 @@ test_that("prefetch integration downloads default fMRIPrep TemplateFlow resource
   manifest_paths <- vapply(manifest$files, `[[`, character(1), "path")
   expected_required <- c(
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_T1w.nii.gz",
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref.nii.gz",
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-02_desc-brain_mask.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-CSF_probseg.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-GM_probseg.nii.gz",
+    "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-WM_probseg.nii.gz",
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_label-brain_probseg.nii.gz",
     "tpl-MNI152NLin2009cAsym/tpl-MNI152NLin2009cAsym_res-01_desc-carpet_dseg.nii.gz",
     "tpl-OASIS30ANTs/tpl-OASIS30ANTs_res-01_T1w.nii.gz"
