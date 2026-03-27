@@ -40,8 +40,6 @@ ncores=${PBS_NP:-1}
 [ ! -f "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not found. Exiting" && exit 1
 [ ! -r "$postprocess_image_sched_script" ] && echo "postprocess_image_sched_script $postprocess_image_sched_script not readable. Exiting" && exit 1
 [ -z "$stream_name" ] && echo "stream_name not set. Exiting" && exit 1
-[ -z "$postprocess_sentinel_sched_script" ] && echo "postprocess_sentinel_sched_script is not set. Exiting" && exit 1
-[ ! -f "$postprocess_sentinel_sched_script" ] && echo "postprocess_sentinel_sched_script $postprocess_sentinel_sched_script not found. Exiting" && exit 1
 
 # Default concurrency limit if not set by caller
 [ -z "$max_concurrent_images" ] && max_concurrent_images=4
@@ -220,4 +218,3 @@ fi
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
 log_message INFO "Postprocess parent job completed for subject $sub_id $ses_str. Array ($array_jid) and sentinel (${sentinel_jid:-unknown}) are running."
 exit 0
-

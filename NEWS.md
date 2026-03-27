@@ -1,6 +1,7 @@
 # BrainGnomes 0.8-2
 
 * Refactor postprocessing to use job arrays and sentinels for cleanup
+* Add additional templates to prefetch needed by MRIQC
 
 # BrainGnomes 0.8-1
 

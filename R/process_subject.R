@@ -790,7 +790,6 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     input_dir = input_dir, # postprocess_subject.sbatch will figure out files to postprocess using input and input_regex
     input_regex = pp_cfg$input_regex,
     postprocess_image_sched_script = postprocess_image_sched_script,
-    postprocess_sentinel_sched_script = postprocess_sentinel_sched_script,
     max_concurrent_images = as.character(max_concurrent_images),
     sched_args = sched_args, # pass through to child processes
     stream_name = pp_stream,

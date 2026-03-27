@@ -86,6 +86,7 @@ test_that("submit_postprocess builds sentinel sched args from the selected strea
 
   expect_identical(job_id, "67890")
   expect_length(calls, 2L)
+  expect_false("postprocess_sentinel_sched_script" %in% names(calls[[1]]$env_variables))
   expect_match(calls[[2]]$sched_args, "--time=00:15:00")
   expect_match(calls[[2]]$sched_args, "--mem=2g")
   expect_match(calls[[2]]$sched_args, "-n 1", fixed = TRUE)
