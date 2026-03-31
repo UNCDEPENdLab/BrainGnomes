@@ -36,9 +36,30 @@ stderr_log="${stderr_log//%j/$PBS_JOBID}"
 [ -z "$stream_name" ] && echo "stream_name not set. Exiting." && exit 1
 
 ses_str=""
+ses_suffix=""
 if [ -n "$ses_id" ]; then
   ses_str="session $ses_id"
+  ses_suffix="_ses-${ses_id}"
 fi
+
+sentinel_jid_file="$(dirname "$stdout_log")/.postprocess_${stream_name}${ses_suffix}_sentinel_jid"
+filelist_path_default="${out_dir}/.postprocess_${stream_name}_filelist.txt"
+task_status_dir_default="${out_dir}/.postprocess_${stream_name}_task_status"
+summary_json_default="${out_dir}/.postprocess_${stream_name}_array_summary.json"
+summary_tsv_default="${summary_json_default%.json}.tsv"
+
+cleanup_postprocess_sidecars() {
+  local cleanup_filelist_path="${filelist_path:-$filelist_path_default}"
+  local cleanup_task_status_dir="${task_status_dir:-$task_status_dir_default}"
+  local cleanup_summary_tsv="${summary_tsv:-$summary_tsv_default}"
+
+  rm -f "$cleanup_filelist_path" "$sentinel_meta_file" "$sentinel_jid_file" "$cleanup_summary_tsv"
+  if [[ -d "$cleanup_task_status_dir" ]]; then
+    rm -f "$cleanup_task_status_dir"/*.env
+    rmdir "$cleanup_task_status_dir" 2>/dev/null || true
+  fi
+  log_message DEBUG "Cleaned up postprocess array handoff artifacts for stream $stream_name"
+}
 
 "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
 
@@ -50,6 +71,7 @@ if [[ ! -f "$sentinel_meta_file" ]]; then
   log_message ERROR "No sentinel metadata found at $sentinel_meta_file. Parent job $parent_job_id likely failed before submitting the array."
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "FAILED"
+  cleanup_postprocess_sidecars
   exit 1
 fi
 
@@ -191,6 +213,7 @@ if [[ $failed -eq 0 ]]; then
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$array_job_id" --sqlite_db "$sqlite_db" --status "COMPLETED" --output_dir "$out_dir"
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "COMPLETED"
+  cleanup_postprocess_sidecars
   log_message INFO "Postprocessing completed for subject $sub_id $ses_str ($succeeded/$n_tasks tasks succeeded)."
 else
   "${R_HOME}/bin/Rscript" "$upd_job_status_path" --job_id "$parent_job_id" --sqlite_db "$sqlite_db" --status "FAILED" --cascade
@@ -203,5 +226,6 @@ else
   if [[ ${#failed_inputs[@]} -gt 0 ]]; then
     log_message ERROR "Failed input files: ${failed_inputs[*]}"
   fi
+  cleanup_postprocess_sidecars
 fi
 exit $failed
