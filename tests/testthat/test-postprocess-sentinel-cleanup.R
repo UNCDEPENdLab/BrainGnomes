@@ -1,9 +1,21 @@
 test_that("postprocess sentinels clean up array handoff artifacts", {
-  script_dir <- test_path("..", "..", "inst", "hpc_scripts")
+  resolve_pkg_file <- function(inst_rel, fallback_rel) {
+    inst_path <- system.file(inst_rel, package = "BrainGnomes")
+    if (nzchar(inst_path) && file.exists(inst_path)) {
+      return(normalizePath(inst_path, mustWork = TRUE))
+    }
+    fallback <- do.call(testthat::test_path, as.list(c("..", "..", "inst", fallback_rel)))
+    normalizePath(fallback, mustWork = TRUE)
+  }
+
   scripts <- c("postprocess_sentinel.sbatch", "postprocess_sentinel.pbs")
 
   for (script in scripts) {
-    lines <- readLines(file.path(script_dir, script), warn = FALSE)
+    script_path <- resolve_pkg_file(
+      inst_rel = file.path("hpc_scripts", script),
+      fallback_rel = c("hpc_scripts", script)
+    )
+    lines <- readLines(script_path, warn = FALSE)
     text <- paste(lines, collapse = "\n")
 
     expect_match(text, "cleanup_postprocess_sidecars\\(\\)")
