@@ -79,7 +79,7 @@ validate_apply_mask <- function(mask_file, data_file) {
   return(result)
 }
 
-# --- multitaper helpers (from R/temp/power_multitaper.R, mtm_bandpower.R) ----
+# --- multitaper helpers ---
 
 .pp_power_multitaper <- function(
     y, dt,
@@ -382,25 +382,22 @@ validate_apply_mask <- function(mask_file, data_file) {
   )
 }
 
-#' Validate temporal filtering via multitaper spectra (pre vs post)
+#' Validate temporal filtering (multitaper pre vs post)
 #'
-#' Compares pre- and post-filter 4D NIfTIs using smoothed multitaper spectra and
-#' band-integrated power (same logic as `R/temp/temp_filter_check.R`).
+#' Band power outside / inside the passband; needs `multitaper` and `signal`.
 #'
-#' @param pre_file Path to 4D BOLD before the `temporal_filter` step.
-#' @param post_file Path to 4D BOLD after the `temporal_filter` step.
-#' @param tr Repetition time in seconds (same as `cfg$tr`).
-#' @param band_low_hz Lower passband edge in Hz (typically `high_pass_hz` from config). Use `NA` if open low end.
-#' @param band_high_hz Upper passband edge in Hz (typically `low_pass_hz` from config). Use `NA` if open high end.
-#' @param mask_file Optional path to a 3D mask NIfTI; if `NULL`, voxels are sampled from the whole volume.
-#' @param n_voxels Number of mask voxels to sample (default 30).
-#' @param seed Optional integer for reproducible voxel sampling.
-#' @param passband_loss_fail_db Fail validation if mean passband power increases by less than this many dB
-#'   below zero change (i.e. mean post - pre dB < `-passband_loss_fail_db`). Default 3 matches the script warning.
+#' @param pre_file Path to 4D BOLD before `temporal_filter`.
+#' @param post_file Path to 4D BOLD after `temporal_filter`.
+#' @param tr TR in seconds (`cfg$tr`).
+#' @param band_low_hz Lower passband edge (Hz); `NA` if open.
+#' @param band_high_hz Upper passband edge (Hz); `NA` if open.
+#' @param mask_file Optional 3D mask; if unset, sample the whole volume.
+#' @param n_voxels How many voxels to use.
+#' @param seed Optional RNG seed for sampling.
+#' @param passband_loss_fail_db Max allowed passband loss (dB) before fail (default 3).
 #'
-#' @return `logical(1)`. Attributes:
-#' - `message`: Human-readable summary.
-#' - `details`: List with `avg_reduction_outside_db`, `avg_passband_change_db`, `nyquist_hz`, `n_voxels_used`, etc.
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details` (numeric summaries and flags).
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
@@ -958,8 +955,6 @@ mad_over_time <- function(arr4d) {
 }
 
 
-# --- additional validate_<step> (logic aligned with R/temp/*.R) ------------------------------
-
 #' @keywords internal
 #' @noRd
 .pp_pixdim_mm <- function(path) {
@@ -985,6 +980,18 @@ mad_over_time <- function(arr4d) {
   return(max(abs(as.numeric(a) - as.numeric(b)), na.rm = TRUE))
 }
 
+#' Validate intensity normalization (global median in mask)
+#'
+#' Global median of in-mask values vs `target` within `tolerance`.
+#'
+#' @param data_file 4D NIfTI after `intensity_normalize`.
+#' @param mask_file 3D mask.
+#' @param target Target median (`cfg$intensity_normalize$global_median`).
+#' @param tolerance Absolute tolerance on `abs(median - target)`.
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details` (`global_median`, `target`, `abs_diff`).
+#'
 #' @keywords internal
 #' @importFrom RNifti readNifti
 validate_intensity_normalize <- function(data_file, mask_file, target, tolerance = 0) {
@@ -1055,6 +1062,18 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
   return(out)
 }
 
+#' Validate spatial smoothing (classic FWHM pre vs post)
+#'
+#' `estimate_classic_fwhm()$geom` inside the mask; compares to `fwhm_mm` from config.
+#'
+#' @param pre_file Path to 4D BOLD before `spatial_smooth`.
+#' @param post_file Path to 4D BOLD after `spatial_smooth`.
+#' @param mask_file 3D mask (same space as BOLD).
+#' @param fwhm_mm `cfg$spatial_smooth$fwhm_mm` (kernel requested).
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details` (pre/post/delta FWHM mm).
+#'
 #' @keywords internal
 validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_) {
   checkmate::assert_file_exists(pre_file)
@@ -1112,6 +1131,19 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   return(out)
 }
 
+#' Validate AROMA (`lmfit_residuals_4d` replay vs output)
+#'
+#' Replays `apply_aroma`; max abs voxel diff vs 0.05 (or skip if no noise ICs).
+#'
+#' @param pre_file Path to 4D BOLD before `apply_aroma`.
+#' @param post_file Path to 4D BOLD after `apply_aroma`.
+#' @param mixing_file MELODIC mixing matrix (no header).
+#' @param noise_ics Noise IC indices (1-based), same as pipeline.
+#' @param nonaggressive Same as `apply_aroma`.
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details`.
+#'
 #' @keywords internal
 validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics, nonaggressive = TRUE) {
   checkmate::assert_file_exists(pre_file)
@@ -1169,6 +1201,18 @@ validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics, no
   return(out)
 }
 
+#' Validate confound regression (replay vs output)
+#'
+#' Same `lmfit_residuals_4d` setup as `confound_regression` (`preserve_mean = TRUE`); max abs diff vs 0.05.
+#'
+#' @param pre_file Path to 4D BOLD before `confound_regression`.
+#' @param post_file Path to 4D BOLD after `confound_regression`.
+#' @param to_regress Regressor TSV (no header).
+#' @param censor_file Optional censor file (1 = keep TR).
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details` (`max_abs_diff`).
+#'
 #' @keywords internal
 validate_confound_regression <- function(pre_file, post_file, to_regress, censor_file = NULL) {
   checkmate::assert_file_exists(pre_file)
@@ -1209,6 +1253,17 @@ validate_confound_regression <- function(pre_file, post_file, to_regress, censor
   return(out)
 }
 
+#' Validate scrub interpolate (dims + finite at filled TRs)
+#'
+#' Same 4D shape as pre; interpolated TRs (censor 0) must be finite in post.
+#'
+#' @param pre_file Path to 4D BOLD before `scrub_interpolate`.
+#' @param post_file Path to 4D BOLD after `scrub_interpolate`.
+#' @param censor_file Censor file (1 = keep, 0 = interpolate).
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details`.
+#'
 #' @keywords internal
 validate_scrub_interpolate <- function(pre_file, post_file, censor_file) {
   checkmate::assert_file_exists(pre_file)
@@ -1245,6 +1300,17 @@ validate_scrub_interpolate <- function(pre_file, post_file, censor_file) {
   return(out)
 }
 
+#' Validate scrub timepoints (output TR count vs censor)
+#'
+#' Post TRs should equal pre TRs minus scrubbed count. Pass censor read **before** the step if the file is overwritten.
+#'
+#' @param pre_file Path to 4D BOLD before `scrub_timepoints`.
+#' @param post_file Path to 4D BOLD after `scrub_timepoints`.
+#' @param censor_vec Censor vector length = pre TRs (1 = keep, 0 = drop).
+#'
+#' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
+#'   Attributes: `message`, `details` (`n_pre_t`, `n_post_t`, `n_removed`).
+#'
 #' @keywords internal
 validate_scrub_timepoints <- function(pre_file, post_file, censor_vec) {
   checkmate::assert_file_exists(pre_file)
