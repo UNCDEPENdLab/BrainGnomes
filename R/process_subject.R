@@ -753,6 +753,7 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
 
   postprocess_rscript <- system.file("postprocess_cli.R", package = "BrainGnomes")
   postprocess_image_sched_script <- get_job_script(scfg, "postprocess_image")
+  postprocess_sentinel_sched_script <- get_job_script(scfg, "postprocess_sentinel", subject_suffix = FALSE)
 
   # postprocessing
   input_dir <- file.path(scfg$metadata$fmriprep_directory, glue("sub-{sub_id}")) # populate the location of this sub/ses dir into the config to pass on as CLI
@@ -761,7 +762,15 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
   if (!is.null(ses_id) && !is.na(ses_id)) out_dir <- file.path(out_dir, glue("ses-{ses_id}"))
 
   # pull the requested postprocessing stream from the broader list
-  pp_cfg <- scfg$postprocess[[pp_stream]]
+  pp_job_cfg <- scfg$postprocess[[pp_stream]]
+  pp_cfg <- pp_job_cfg
+  pp_scfg <- scfg
+  pp_scfg$postprocess <- pp_job_cfg
+  # Concurrency limit for per-subject image array jobs (default 4)
+  max_concurrent_images <- pp_cfg$max_concurrent_images
+  if (is.null(max_concurrent_images) || !is.numeric(max_concurrent_images) || max_concurrent_images < 1) {
+    max_concurrent_images <- 4L
+  }
   if (isTRUE(scfg$force)) pp_cfg$overwrite <- TRUE # overwrite existing postprocessed files
   pp_cfg$fsl_img <- scfg$compute_environment$fsl_container
   pp_cfg$input_regex <- construct_bids_regex(pp_cfg$input_regex)
@@ -781,21 +790,83 @@ sched_script = NULL, sched_args = NULL, parent_ids = NULL, lg = NULL, pp_stream 
     input_dir = input_dir, # postprocess_subject.sbatch will figure out files to postprocess using input and input_regex
     input_regex = pp_cfg$input_regex,
     postprocess_image_sched_script = postprocess_image_sched_script,
+    max_concurrent_images = as.character(max_concurrent_images),
     sched_args = sched_args, # pass through to child processes
     stream_name = pp_stream,
     out_dir = out_dir
   )
 
-  job_id <- cluster_job_submit(sched_script,
+  parent_jid <- cluster_job_submit(sched_script,
     scheduler = scfg$compute_environment$scheduler,
     sched_args = sched_args, env_variables = env_variables,
     wait_jobs = parent_ids, echo = FALSE,
     tracking_sqlite_db = tracking_sqlite_db, tracking_args = tracking_args
   )
 
-  log_submission_command(lg, job_id, glue("postprocess stream {pp_stream} job"))
+  log_submission_command(lg, parent_jid, glue("postprocess stream {pp_stream} parent job"))
 
-  return(job_id)
+  # Submit sentinel from R so its job ID is available for downstream dependencies.
+  # The sentinel initially depends on afterany:parent_jid (safety net if parent crashes
+  # before submitting the array). The parent shell script will update the sentinel's
+  # dependency to afterany:array_jid via scontrol update / qalter once the array is submitted.
+  if (checkmate::test_string(parent_jid) && nzchar(parent_jid)) {
+    sentinel_scfg <- pp_scfg
+    sentinel_scfg$postprocess$memgb <- 2L
+    sentinel_scfg$postprocess$nhours <- 0.25
+    sentinel_scfg$postprocess$ncores <- 1L
+
+    sentinel_sched_args <- get_job_sched_args(
+      sentinel_scfg,
+      job_name = "postprocess",
+      jobid_str = glue("postprocess_{pp_stream}_sentinel"),
+      stdout_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.out"),
+      stderr_log = glue("{scfg$metadata$log_directory}/sub-{sub_id}/postprocess_{pp_stream}_sentinel_jobid-%j.err")
+    )
+
+    sentinel_env <- c(
+      env_variables,
+      parent_job_id = parent_jid
+    )
+
+    sentinel_tracking_args <- tracking_args
+    sentinel_tracking_args$job_name <- glue("postprocess_{pp_stream}_sentinel")
+    sentinel_tracking_args$n_cpus <- sentinel_scfg$postprocess$ncores
+    sentinel_tracking_args$wall_time <- hours_to_dhms(sentinel_scfg$postprocess$nhours)
+    sentinel_tracking_args$mem_total <- sentinel_scfg$postprocess$memgb
+    sentinel_tracking_args$scheduler <- scfg$compute_environment$scheduler
+    sentinel_tracking_args$scheduler_options <- sentinel_sched_args
+
+    sentinel_jid <- cluster_job_submit(
+      postprocess_sentinel_sched_script,
+      scheduler = scfg$compute_environment$scheduler,
+      sched_args = sentinel_sched_args,
+      env_variables = sentinel_env,
+      wait_jobs = parent_jid,
+      wait_signal = "afterany",
+      echo = FALSE,
+      tracking_sqlite_db = tracking_sqlite_db,
+      tracking_args = sentinel_tracking_args
+    )
+
+    log_submission_command(lg, sentinel_jid, glue("postprocess stream {pp_stream} sentinel job"))
+
+    if (checkmate::test_string(sentinel_jid) && nzchar(sentinel_jid)) {
+      ses_suffix <- if (!is.null(ses_id) && !is.na(ses_id)) glue("_ses-{ses_id}") else ""
+      # Pass sentinel_jid back to the parent shell script via a known file path
+      # so the parent can update the sentinel's dependency after submitting the array.
+      sentinel_jid_file <- file.path(
+        scfg$metadata$log_directory, glue("sub-{sub_id}"),
+        glue(".postprocess_{pp_stream}{ses_suffix}_sentinel_jid")
+      )
+      writeLines(sentinel_jid, sentinel_jid_file)
+
+      # Return sentinel_jid — downstream steps depend on the sentinel, not the parent
+      return(sentinel_jid)
+    }
+  }
+
+  # Fallback: if sentinel submission failed, return parent_jid
+  return(parent_jid)
 }
 
 

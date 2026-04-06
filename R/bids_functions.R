@@ -8,7 +8,7 @@
 #' 
 #'   This function recognizes standard BIDS entities such as subject (`sub-`), session (`ses-`), task (`task-`), 
 #'   acquisition (`acq-`), run, modality (`mod-`), echo (`echo-`), direction (`dir-`), reconstruction (`rec-`), 
-#'   hemisphere (`hemi-`), space (`space-`), resolution (`res-`), description (`desc-`), and fieldmap (`fmap-`),
+#'   hemisphere (`hemi-`), space (`space-`), cohort (`cohort-`), resolution (`res-`), description (`desc-`), and fieldmap (`fmap-`),
 #'   as well as the file suffix and extension.
 #' @examples 
 #' filenames <- c(
@@ -38,6 +38,7 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
     echo = "echo-(\\d+)",
     hemisphere = "hemi-([a-zA-Z0-9]+)",
     space = "space-([a-zA-Z0-9]+)",
+    cohort = "cohort-([a-zA-Z0-9]+)",
     resolution = "res-(\\d+)",
     description = "desc-([a-zA-Z0-9]+)",
     fieldmap = "fmap-([a-zA-Z0-9]+)"
@@ -110,7 +111,7 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
 #' @param bids_df A `data.frame` containing one or more rows of BIDS entities.
 #'   Must include at least the columns `suffix` and `ext`, and optionally:
 #'   `subject`, `session`, `task`, `acquisition`, `run`, `modality`, `echo`,
-#'   `direction`, `reconstruction`, `hemisphere`, `space`, `resolution`,
+#'   `direction`, `reconstruction`, `hemisphere`, `space`, `cohort`, `resolution`,
 #'   `description`, and `fieldmap`.
 #' @param full.names If TRUE, return the full path to the file using the `$directory`
 #'   field of `bids_df`.
@@ -154,6 +155,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
   entity_order <- c(
     "subject", "session", "task", "acquisition", "reconstruction", 
     "direction", "run", "modality", "echo",  "hemisphere", "space",
+    "cohort",
     "resolution", "description", "fieldmap",
     "rois", "cor" # custom entities for extract_rois
   )
@@ -163,6 +165,7 @@ construct_bids_filename <- function(bids_df, full.names = FALSE) {
     subject = "sub", session = "ses", task = "task", acquisition = "acq", reconstruction = "rec", 
     direction = "dir", run = "run", modality = "mod", echo = "echo",
     hemisphere = "hemi", space = "space",
+    cohort = "cohort",
     resolution = "res", description = "desc", fieldmap = "fmap",
     rois = "rois", correlation = "cor"
   )
@@ -309,12 +312,14 @@ construct_bids_regex <- function(spec, add_niigz_ext = TRUE) {
   entity_order <- c(
     "subject", "session", "task", "acquisition", "reconstruction", 
     "direction", "run", "modality", "echo",  "hemisphere", "space",
+    "cohort",
     "resolution", "description", "fieldmap"
   )
   prefixes <- c(
     subject = "sub", session = "ses", task = "task", acquisition = "acq", reconstruction = "rec", 
     direction = "dir", run = "run", modality = "mod", echo = "echo",
     hemisphere = "hemi", space = "space",
+    cohort = "cohort",
     resolution = "res", description = "desc", fieldmap = "fmap"
   )
   
@@ -389,48 +394,44 @@ get_fmriprep_outputs <- function(in_file) {
   in_file <- normalizePath(in_file)
   f_info <- as.list(extract_bids_info(in_file)) # pull into BIDS fields for file expectations
 
+  with_spatial_entities <- f_info
+  without_spatial_entities <- modifyList(f_info, list(space = NA, cohort = NA, resolution = NA))
+  legacy_prefix <- construct_bids_filename(modifyList(
+    without_spatial_entities,
+    list(description = NA, suffix = NA, ext = NA)
+  ))
+
   # Extract directory and filename
   dir_path <- dirname(in_file)
-  base <- basename(in_file)
-
-  # Remove extension
-  base <- sub("\\.nii(\\.gz)?$", "", base)
-
-  # Extract core identifier (everything up to desc-*)
-  # prefix <- sub("_desc-preproc_bold$", "", base)
-
-  ses_str <- if (!is.na(f_info$session)) paste0('_ses-', f_info$session) else '' # optional session identifier
-  prefix <- glue("sub-{f_info$subject}{ses_str}_task-{f_info$task}")
-  if (!is.na(f_info$run)) prefix <- glue("{prefix}_run-{f_info$run}")
 
   # Possible base path (prefix may include space/acq/etc)
-  bold <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(suffix = "bold"))))
-  brain_mask <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(description = "brain", suffix = "mask"))))
+  bold <- file.path(dir_path, construct_bids_filename(modifyList(with_spatial_entities, list(suffix = "bold"))))
+  brain_mask <- file.path(dir_path, construct_bids_filename(modifyList(with_spatial_entities, list(description = "brain", suffix = "mask"))))
 
   # Check for two variants of confounds using full BIDS stem reconstruction
   conf1 <- file.path(dir_path, construct_bids_filename(modifyList(
-    f_info,
-    list(description = "confounds", suffix = "timeseries", ext = ".tsv", space = NA, resolution = NA)
+    without_spatial_entities,
+    list(description = "confounds", suffix = "timeseries", ext = ".tsv")
   )))
   conf2 <- file.path(dir_path, construct_bids_filename(modifyList(
-    f_info,
-    list(description = "confounds", suffix = "regressors", ext = ".tsv", space = NA, resolution = NA)
+    without_spatial_entities,
+    list(description = "confounds", suffix = "regressors", ext = ".tsv")
   )))
   confounds <- if (file.exists(conf1)) conf1 else if (file.exists(conf2)) conf2 else NA
 
   # Check for mixing matrix from AROMA. This is the variant from fmripost aroma (newer)
-  melodic_mix <- file.path(dir_path, construct_bids_filename(modifyList(f_info, list(resolution = "2", space = NA, description = "melodic", suffix = "mixing", ext = ".tsv"))))
-  if (!test_file_exists(melodic_mix)) melodic_mix <- file.path(dir_path, glue("{prefix}_desc-MELODIC_mixing.tsv")) # older version internal to fmriprep (< 23)
+  melodic_mix <- file.path(dir_path, construct_bids_filename(modifyList(without_spatial_entities, list(resolution = "2", description = "melodic", suffix = "mixing", ext = ".tsv"))))
+  if (!test_file_exists(melodic_mix)) melodic_mix <- file.path(dir_path, glue("{legacy_prefix}_desc-MELODIC_mixing.tsv")) # older version internal to fmriprep (< 23)
 
   # need to read the aroma metrics file and figure it out.
-  aroma_metrics <- file.path(dir_path, glue("{prefix}_desc-aroma_metrics.tsv"))
+  aroma_metrics <- file.path(dir_path, glue("{legacy_prefix}_desc-aroma_metrics.tsv"))
 
   if (test_file_exists(aroma_metrics)) {
     adat <- read.table(aroma_metrics, header = TRUE, sep = "\t")
     noise_ics <- which(adat$classification == "rejected")
   } else {
     # attempt to look for old fmriprep version (internal to fmriprep 23 and before)
-    f <- file.path(dir_path, paste0(prefix, "_AROMAnoiseICs.csv"))
+    f <- file.path(dir_path, paste0(legacy_prefix, "_AROMAnoiseICs.csv"))
     if (test_file_exists(f)) {
       noise_ics <- as.integer(strsplit(readLines(f, n = 1L, warn = FALSE), ",")[[1]])
     } else {
@@ -446,7 +447,7 @@ get_fmriprep_outputs <- function(in_file) {
     melodic_mix = if (test_file_exists(melodic_mix)) melodic_mix else NULL,
     aroma_metrics = if (test_file_exists(aroma_metrics)) aroma_metrics else NULL,
     noise_ics = noise_ics,
-    prefix = prefix
+    prefix = legacy_prefix
   )
 
   return(output)

@@ -1,10 +1,27 @@
+# BrainGnomes 0.8-2
+
+* Refactor postprocessing to use job arrays and sentinels for cleanup
+* Add additional templates to prefetch needed by MRIQC
+
 # BrainGnomes 0.8-1
 
-* Refactor prefetch to accept cohort specifications and extend them to T2w fetch.
-* Refactor prefetch to fall back to no desc field if desc:brain fails
+Released 2026-03-10
+
 * Improve CLI interface to support --help or BrainGnomes <command> help
 * Add CLI status command to get project status from command line
 * Add dry_run option to run_project to see what would be run without executing it
+* Refactor prefetch to accept cohort specifications and extend them to T2w fetch.
+* Refactor prefetch to fall back to no desc field if desc:brain fails
+* Expand fMRIPrep TemplateFlow defaults to include MNI152NLin2009cAsym boldref, res-2 brain mask, brain probseg, and carpet dseg assets observed during workflow construction
+* Add conditional CIFTI TemplateFlow defaults so prefetch only stages MNI152NLin6Asym and fsLR sphere assets when fMRIPrep CLI options request `--cifti-output`
+* Harden prefetch caching and validation checks so that later failures invalidate skip logic
+* Make prefetch state query-specific so that an exact snapshot of templateflow files is retained
+* Move prefetch state files out of `templateflow_home` and into hashed project log paths; legacy state files in `templateflow_home` are now migrated and removed to avoid poisoning TemplateFlow standard-space discovery.
+* Expand TemplateFlow default to desc=None for T1w to mirror some versions of fmriprep.
+* Harden check on flywheel location to accommodate missing fw command.
+* Update RSQLite connections to default to `synchronous=NULL` to prevent spurious warnings
+* Included OASIS30 as a default template space for prefetch because it is used by fmriprep
+* bugfix: preserve `cohort-<n>` in BIDS parsing/reconstruction so postprocessing can resolve cohort-qualified fMRIPrep outputs such as `space-MNIPediatricAsym_cohort-2`
 
 # BrainGnomes 0.8
 

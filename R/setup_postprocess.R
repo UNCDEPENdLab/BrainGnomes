@@ -30,7 +30,8 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "motion_filter/enable", "motion_filter/filter_type",
       "motion_filter/bandstop_min_bpm", "motion_filter/bandstop_max_bpm",
       "motion_filter/lowpass_bpm", "motion_filter/filter_order",
-      "force_processing_order", "processing_steps"
+      "force_processing_order", "processing_steps",
+      "max_concurrent_images"
     )
   }
 
@@ -419,6 +420,7 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
     if (is.null(ppcfg$validate_postproc_steps)) fields <- c(fields, "postprocess/validate_postproc_steps")
     if (is.null(ppcfg$stop_on_failed_validation)) fields <- c(fields, "postprocess/stop_on_failed_validation")
     if (is.null(ppcfg$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
+    if (is.null(ppcfg$max_concurrent_images)) fields <- c(fields, "postprocess/max_concurrent_images")
   }
 
   # global postprocessing settings
@@ -468,6 +470,18 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
     ppcfg$tr <- prompt_input("Repetition time (in seconds) of the scan sequence", type = "numeric", lower = 0.01, upper = 100, len = 1)
   }
 
+  if ("postprocess/max_concurrent_images" %in% fields) {
+    ppcfg$max_concurrent_images <- prompt_input(
+      prompt = "Max concurrent image jobs per subject:",
+      type = "integer", lower = 1, upper = 100, len = 1L, default = 4L,
+      instruct = glue("\n
+        How many image-level postprocessing jobs should run simultaneously for a single subject?
+        This controls the Slurm/PBS job array concurrency throttle (e.g., --array=0-N%M).
+        Higher values process faster but consume more scheduler resources.
+        A value of 4 is usually a good balance.\n
+      ")
+    )
+  }
   if ("postprocess/validate_postproc_steps" %in% fields) {
     ppcfg$validate_postproc_steps <- prompt_input(
       instruct = glue("\n

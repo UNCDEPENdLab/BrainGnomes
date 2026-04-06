@@ -23,6 +23,8 @@ print_help <- function() {
             "                     One of QUEUED, STARTED, COMPLETED, FAILED, or FAILED_BY_EXT",
             "  --output_dir <dir>: Directory to capture output manifest from (only used when status is COMPLETED).",
             "                      If provided, captures file inventory (paths, sizes, mtimes) for later verification.",
+            "  --output_manifest_file <file>: JSON manifest file to store directly when status is COMPLETED.",
+            "                                Takes precedence over --output_dir.",
             "  --cascade: If specified, then new status will cascade to child jobs.",
             "             Only works for status 'FAILED'/'FAILED_BY_EXT'",
             "  --help: Print the help menu",
@@ -43,11 +45,16 @@ if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
 if (isTRUE(args$status == "NULL")) args$status <- NULL
 args$cascade <- isTRUE(args$cascade)
 if (isTRUE(args$output_dir == "NULL")) args$output_dir <- NULL
+if (isTRUE(args$output_manifest_file == "NULL")) args$output_manifest_file <- NULL
 
-# Capture output manifest if status is COMPLETED and output_dir is provided
+# Capture output manifest if status is COMPLETED.
 output_manifest <- NULL
-if (isTRUE(toupper(args$status) == "COMPLETED") && !is.null(args$output_dir)) {
-  output_manifest <- BrainGnomes:::capture_output_manifest(args$output_dir)
+if (isTRUE(toupper(args$status) == "COMPLETED")) {
+  if (!is.null(args$output_manifest_file) && file.exists(args$output_manifest_file)) {
+    output_manifest <- paste(readLines(args$output_manifest_file, warn = FALSE), collapse = "\n")
+  } else if (!is.null(args$output_dir)) {
+    output_manifest <- BrainGnomes:::capture_output_manifest(args$output_dir)
+  }
 }
 
 tryCatch({

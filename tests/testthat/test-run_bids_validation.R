@@ -123,13 +123,10 @@ test_that("submit_bids_validation routes relative outfile under log directory", 
 
   expect_equal(job_id, "777")
   expect_true("outfile" %in% names(captured_env))
-  expect_equal(
+  expect_path_identical(
     captured_env[["outfile"]],
-    normalizePath(
-      file.path(scfg$metadata$log_directory, "bids_validation_project.html"),
-      winslash = "/",
-      mustWork = FALSE
-    )
+    file.path(scfg$metadata$log_directory, "bids_validation_project.html"),
+    mustWork = FALSE
   )
 })
 

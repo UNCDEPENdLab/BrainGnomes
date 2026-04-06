@@ -61,3 +61,41 @@ test_that("resample_template_to_img falls back to a managed env when Python is n
   expect_true(grepl("templatemask\\.nii\\.gz$", out))
   expect_setequal(pkg_state$installed, c("nibabel", "nilearn", "templateflow"))
 })
+
+test_that("resample_template_to_img forwards cohort-qualified template queries", {
+  skip_if_not_installed("reticulate")
+
+  captured <- new.env(parent = emptyenv())
+
+  local_mocked_bindings(
+    py_available = function(initialize = FALSE) TRUE,
+    py_module_available = function(module) TRUE,
+    source_python = function(file, envir = parent.frame(), convert = TRUE) {
+      if (!is.null(envir)) {
+        assign("resample_template_to_bold", function(in_file, output, template_space = NULL,
+                                                     template_cohort = NULL, ...) {
+          captured$template_space <- template_space
+          captured$template_cohort <- template_cohort
+          output
+        }, envir = envir)
+      }
+      invisible(NULL)
+    },
+    .package = "reticulate"
+  )
+
+  tmp_dir <- tempfile("resample_template_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  in_file <- file.path(
+    tmp_dir,
+    "sub-01_task-test_space-MNIPediatricAsym_cohort-2_desc-preproc_bold.nii.gz"
+  )
+  file.create(in_file)
+
+  out <- resample_template_to_img(in_file, install_dependencies = FALSE, overwrite = TRUE, lg = NULL)
+
+  expect_identical(captured$template_space, "MNIPediatricAsym")
+  expect_identical(captured$template_cohort, 2L)
+  expect_true(grepl("cohort-2", basename(out), fixed = TRUE))
+})

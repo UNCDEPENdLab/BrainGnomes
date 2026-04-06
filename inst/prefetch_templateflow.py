@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import hashlib
+import json
 import os
 import sys
 import time
 from dataclasses import asdict, dataclass, is_dataclass
+from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
@@ -31,15 +34,238 @@ SKIP_TOKENS = {
     "fsLR",
 }
 
-MRIQC_REQUIRED_PROBSEG = {
+MRIQC_REQUIRED_RESOURCES = {
     "MNI152NLin2009cAsym": [
         {
-            "suffix": "probseg",
-            "label": "CSF",
-            "resolution": 1,
-            "extension": "nii.gz",
+            "params": {
+                "suffix": "T1w",
+                "resolution": 2,
+            },
+            "label": "MNI152NLin2009cAsym (MRIQC required: suffix=T1w, resolution=2)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=brain, suffix=mask, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "fMRIPrep",
+                "suffix": "boldref",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=fMRIPrep, suffix=boldref, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "carpet",
+                "suffix": "dseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "desc=carpet, suffix=dseg, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "CSF",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=CSF, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "GM",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=GM, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "suffix": "probseg",
+                "label": "WM",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (MRIQC required: "
+                "suffix=probseg, label=WM, resolution=1)"
+            ),
+            "optional": False,
+        },
+    ]
+}
+
+FMRIPREP_REQUIRED_RESOURCES = {
+    "MNI152NLin2009cAsym": [
+        {
+            "params": {
+                "desc": "fMRIPrep",
+                "suffix": "boldref",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=fMRIPrep, suffix=boldref, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 2,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=brain, suffix=mask, resolution=2)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "label": "brain",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "label=brain, suffix=probseg, resolution=1)"
+            ),
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "carpet",
+                "suffix": "dseg",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin2009cAsym (fMRIPrep required: "
+                "desc=carpet, suffix=dseg, resolution=1)"
+            ),
+            "optional": False,
+        }
+    ],
+    "OASIS30ANTs": [
+        {
+            "params": {
+                "suffix": "T1w",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep required: suffix=T1w, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "label": "brain",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "fallback_params": [
+                {
+                    "desc": "brain",
+                    "suffix": "mask",
+                    "resolution": 1,
+                }
+            ],
+            "label": "OASIS30ANTs (fMRIPrep required: brain mask/probseg, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "BrainCerebellumExtraction",
+                "suffix": "mask",
+                "resolution": 1,
+            },
+            "label": (
+                "OASIS30ANTs (fMRIPrep optional: "
+                "desc=BrainCerebellumExtraction, suffix=mask, resolution=1)"
+            ),
+            "optional": True,
+        },
+        {
+            "params": {
+                "label": "WM",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep optional: label=WM, suffix=probseg, resolution=1)",
+            "optional": True,
+        },
+        {
+            "params": {
+                "label": "BS",
+                "suffix": "probseg",
+                "resolution": 1,
+            },
+            "label": "OASIS30ANTs (fMRIPrep optional: label=BS, suffix=probseg, resolution=1)",
+            "optional": True,
         }
     ]
+}
+
+FMRIPREP_CIFTI_REQUIRED_RESOURCES = {
+    "MNI152NLin6Asym": [
+        {
+            "params": {
+                "suffix": "T1w",
+                "resolution": 1,
+            },
+            "label": "MNI152NLin6Asym (fMRIPrep CIFTI required: suffix=T1w, resolution=1)",
+            "optional": False,
+        },
+        {
+            "params": {
+                "desc": "brain",
+                "suffix": "mask",
+                "resolution": 1,
+            },
+            "label": (
+                "MNI152NLin6Asym (fMRIPrep CIFTI required: "
+                "desc=brain, suffix=mask, resolution=1)"
+            ),
+            "optional": False,
+        },
+    ],
+    "fsLR": [
+        {
+            "params": {
+                "density": "32k",
+                "space": None,
+                "suffix": "sphere",
+                "extension": ".surf.gii",
+            },
+            "label": (
+                "fsLR (fMRIPrep CIFTI required: "
+                "density=32k, suffix=sphere, extension=.surf.gii)"
+            ),
+            "optional": False,
+        }
+    ],
 }
 
 QueryFingerprint = Tuple[str, Tuple[Tuple[str, Any], ...]]
@@ -52,12 +278,17 @@ class QuerySpec:
     label: str
     optional: bool = False
     allow_desc_retry: bool = False
+    fallback_params: Optional[List[Dict[str, Any]]] = None
 
 
 DEBUG = False
 DEFAULT_RESOLUTION = 1
 DEFAULT_API_GET_MAX_RETRIES = 2
 DEFAULT_API_GET_RETRY_DELAY_SECONDS = 1.0
+DEFAULT_FALLBACK_DESC_BY_SUFFIX = {
+    "T1w": None,
+    "mask": "brain",
+}
 
 
 def dbg(message: str) -> None:
@@ -230,6 +461,30 @@ def _paths_exist(result: Union[str, os.PathLike, Sequence[Union[str, os.PathLike
     return any(Path(p).exists() for p in seq)
 
 
+def _existing_paths(result: Union[str, os.PathLike, Sequence[Union[str, os.PathLike]]]) -> List[str]:
+    """Return existing file paths resolved by TemplateFlow api.get."""
+    if isinstance(result, (str, os.PathLike)):
+        paths = [result]
+    else:
+        try:
+            paths = list(result)  # type: ignore[arg-type]
+        except TypeError:
+            return []
+
+    existing: List[str] = []
+    seen: Set[str] = set()
+    for path_obj in paths:
+        path_str = os.fspath(path_obj)
+        if not path_str:
+            continue
+        abs_path = os.path.abspath(path_str)
+        if abs_path in seen or not Path(abs_path).exists():
+            continue
+        seen.add(abs_path)
+        existing.append(abs_path)
+    return existing
+
+
 def _space_label(space_obj: Any) -> str:
     """Best-effort string label for a SpatialReferences space."""
     if isinstance(space_obj, str):
@@ -354,11 +609,9 @@ def _normalize_query_dict(
 
     desc_source = override_desc if override_desc else _pop_any(spec_data, "descs", "desc")
     desc_values = _option_values(desc_source, allow_none=True)
-    default_desc_applied = False
-    if fallback_suffix:
-        if not desc_values or desc_values == [None]:
-            desc_values = ["brain"]
-            default_desc_applied = True
+    use_suffix_default_desc = bool(
+        fallback_suffix and (not desc_values or desc_values == [None])
+    )
 
     if override_res is not None:
         res_source = override_res
@@ -376,9 +629,7 @@ def _normalize_query_dict(
     space_values = _option_values(_pop_any(spec_data, "spaces", "space"), allow_none=True)
     extension_values = _option_values(_pop_any(spec_data, "extensions", "extension"), allow_none=True)
 
-    value_grid = [
-        ("suffix", suffix_values, False),
-        ("desc", desc_values, True),
+    shared_value_grid = [
         ("resolution", res_values, True),
         ("atlas", atlas_values, True),
         ("cohort", cohort_values, True),
@@ -389,16 +640,34 @@ def _normalize_query_dict(
         ("extension", extension_values, True),
     ]
 
-    for combo in product(*(values or [None] for _, values, _ in value_grid)):
-        query: Dict[str, Any] = {}
-        for (key, _, allow_none), value in zip(value_grid, combo):
-            if value in (None, ""):
+    for suffix in suffix_values:
+        if use_suffix_default_desc:
+            suffix_default_desc = DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)
+            suffix_desc_values = [suffix_default_desc]
+        else:
+            suffix_default_desc = None
+            suffix_desc_values = desc_values
+
+        value_grid = [
+            ("suffix", [suffix], False),
+            ("desc", suffix_desc_values, True),
+            *shared_value_grid,
+        ]
+
+        for combo in product(*(values or [None] for _, values, _ in value_grid)):
+            query: Dict[str, Any] = {}
+            for (key, _, allow_none), value in zip(value_grid, combo):
+                if value in (None, ""):
+                    continue
+                query[key] = value
+            if not query.get("suffix"):
                 continue
-            query[key] = value
-        if not query.get("suffix"):
-            continue
-        used_default_desc = default_desc_applied and query.get("desc") == "brain"
-        queries.append((query, used_default_desc))
+            used_default_desc = bool(
+                use_suffix_default_desc
+                and suffix_default_desc not in (None, "")
+                and query.get("desc") == suffix_default_desc
+            )
+            queries.append((query, used_default_desc))
 
     return queries
 
@@ -480,6 +749,58 @@ def _format_query_detail(template: str, params: Dict[str, Any]) -> str:
     return ", ".join(parts)
 
 
+def _resolve_query_result(
+    template: str,
+    params: Dict[str, Any],
+    *,
+    label: str,
+    is_optional: bool,
+    allow_desc_retry: bool,
+    fallback_params: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[Optional[List[str]], Optional[Dict[str, Any]], Optional[str]]:
+    """Fetch a TemplateFlow resource, trying desc-retry and explicit fallbacks before failing."""
+    detail = _format_query_detail(template, params)
+    result, fetch_exc = _api_get_with_retry(
+        template=template,
+        params=params,
+        retry_transient=not is_optional,
+    )
+    if fetch_exc is not None:
+        return None, None, f"Failed to fetch '{label}': {fetch_exc}"
+
+    if result is not None and _paths_exist(result):
+        return _existing_paths(result), dict(params), None
+
+    retry_candidates: List[Tuple[Dict[str, Any], str]] = []
+    if allow_desc_retry and params.get("desc") == "brain":
+        retry_params = dict(params)
+        retry_params.pop("desc", None)
+        retry_candidates.append((retry_params, "retrying without desc=brain"))
+
+    for fallback in fallback_params or []:
+        retry_candidates.append((dict(fallback), "trying fallback query"))
+
+    for retry_params, retry_reason in retry_candidates:
+        retry_detail = _format_query_detail(template, retry_params)
+        print(
+            f"No files resolved for space '{label}' ({detail}); {retry_reason} ({retry_detail}).",
+            file=sys.stderr,
+        )
+        retry_result, retry_exc = _api_get_with_retry(
+            template=template,
+            params=retry_params,
+            retry_transient=not is_optional,
+        )
+        if retry_exc is not None:
+            detail = retry_detail
+            continue
+        if retry_result is not None and _paths_exist(retry_result):
+            return _existing_paths(retry_result), dict(retry_params), None
+        detail = retry_detail
+
+    return None, None, f"No files resolved for space '{label}' ({detail})."
+
+
 def _format_label_with_query(label: str, query: Dict[str, Any]) -> str:
     """Append key details to a label for logging."""
     extras: List[str] = []
@@ -491,6 +812,126 @@ def _format_label_with_query(label: str, query: Dict[str, Any]) -> str:
     if extras:
         return f"{label} ({', '.join(extras)})"
     return label
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _query_spec_payload(query: QuerySpec) -> Dict[str, Any]:
+    payload = {
+        "template": query.template,
+        "params": dict(query.params),
+        "optional": bool(query.optional),
+        "label": query.label,
+    }
+    if query.fallback_params:
+        payload["fallback_params"] = [dict(params) for params in query.fallback_params]
+    return payload
+
+
+def _query_signature_payload(queries: List[QuerySpec]) -> List[Dict[str, Any]]:
+    payload = [
+        {
+            "template": query.template,
+            "params": dict(query.params),
+            "optional": bool(query.optional),
+            "fallback_params": [dict(params) for params in query.fallback_params] if query.fallback_params else [],
+        }
+        for query in queries
+    ]
+    return sorted(
+        payload,
+        key=lambda item: (
+            item["template"],
+            json.dumps(item["params"], sort_keys=True, separators=(",", ":")),
+            item["optional"],
+        ),
+    )
+
+
+def _compute_query_signature(queries: List[QuerySpec]) -> str:
+    payload = json.dumps(
+        _query_signature_payload(queries),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _write_json(path: Optional[str], payload: Dict[str, Any]) -> None:
+    if not path:
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(target)
+
+
+def _write_prefetch_state(
+    state_file: Optional[str],
+    *,
+    status: str,
+    templateflow_home: str,
+    spaces: List[str],
+    scheduler_job_id: Optional[str],
+    query_signature: Optional[str],
+    query_count: int,
+) -> None:
+    if not state_file:
+        return
+
+    target = Path(state_file)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f"{target.name}.tmp.{os.getpid()}")
+    lines = [
+        f"status: {status}",
+        f"templateflow_home: {templateflow_home}",
+        f"spaces: {' '.join(spaces)}",
+        f"updated_at_utc: {_utc_now()}",
+    ]
+    if scheduler_job_id:
+        lines.append(f"scheduler_job_id: {scheduler_job_id}")
+    if query_signature:
+        lines.append(f"query_signature: {query_signature}")
+    lines.append(f"query_count: {query_count}")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    tmp.replace(target)
+
+
+def _build_manifest_payload(
+    templateflow_home: str,
+    query_signature: str,
+    resolved_paths: List[str],
+) -> Dict[str, Any]:
+    root = os.path.abspath(templateflow_home)
+    entries: List[Dict[str, Any]] = []
+    total_size = 0
+
+    for path_str in sorted(set(resolved_paths)):
+        path = Path(path_str)
+        if not path.exists():
+            continue
+        stat = path.stat()
+        rel_path = Path(os.path.relpath(str(path), root)).as_posix()
+        entries.append(
+            {
+                "path": rel_path,
+                "size": stat.st_size,
+                "mtime": stat.st_mtime,
+            }
+        )
+        total_size += stat.st_size
+
+    return {
+        "output_dir": root,
+        "captured_at": _utc_now(),
+        "query_signature": query_signature,
+        "file_count": len(entries),
+        "total_size_bytes": total_size,
+        "files": entries,
+    }
 
 
 def _extract_entry(entry: Any) -> Tuple[str, List[Any], str]:
@@ -664,14 +1105,16 @@ def build_queries_legacy(
         else:
             suffix_values = ["T1w", "mask"]
 
-        if override_desc:
-            desc_values = [override_desc]
-        elif token_desc not in (None, ""):
-            desc_values = [token_desc]
-        else:
-            desc_values = ["brain"] if (token_suffix in (None, "") and not override_suffix) else [None]
-
         for suffix in suffix_values:
+            if override_desc:
+                desc_values = [override_desc]
+            elif token_desc not in (None, ""):
+                desc_values = [token_desc]
+            elif token_suffix in (None, "") and not override_suffix:
+                desc_values = [DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)]
+            else:
+                desc_values = [None]
+
             for desc in desc_values:
                 query: Dict[str, Any] = dict(token_query)
                 query["suffix"] = suffix
@@ -681,7 +1124,8 @@ def build_queries_legacy(
                     query["desc"] = desc
                 query_copy = dict(query)  # ensure stored query is immutable for later iterations
                 allow_desc_retry = (
-                    desc == "brain"
+                    desc == DEFAULT_FALLBACK_DESC_BY_SUFFIX.get(suffix)
+                    and desc == "brain"
                     and not override_desc
                     and token_desc in (None, "")
                     and token_suffix in (None, "")
@@ -810,7 +1254,7 @@ def add_required_probseg_queries(
     queries: List[QuerySpec],
     tokens: List[str],
 ) -> List[QuerySpec]:
-    """Ensure known MRIQC-required tissue probability maps are prefetched."""
+    """Ensure known MRIQC-required TemplateFlow resources are prefetched."""
     templates = _template_names_from_tokens(tokens)
     if not templates:
         return queries
@@ -820,18 +1264,58 @@ def add_required_probseg_queries(
     }
     augmented = list(queries)
     for template in templates:
-        required = MRIQC_REQUIRED_PROBSEG.get(template, [])
-        for params in required:
-            query = dict(params)
+        required = MRIQC_REQUIRED_RESOURCES.get(template, [])
+        for resource in required:
+            query = dict(resource["params"])
             fingerprint = _freeze_query(template, query)
             if fingerprint in existing:
                 continue
             existing.add(fingerprint)
-            label = (
-                f"{template} (MRIQC required: "
-                f"suffix={query.get('suffix')}, label={query.get('label')}, resolution={query.get('resolution')})"
+            augmented.append(
+                QuerySpec(
+                    template=template,
+                    params=query,
+                    label=resource["label"],
+                    optional=bool(resource.get("optional", False)),
+                    fallback_params=[
+                        dict(params) for params in resource.get("fallback_params", [])
+                    ] or None,
+                )
             )
-            augmented.append(QuerySpec(template=template, params=query, label=label))
+    return augmented
+
+
+def add_required_fmriprep_queries(
+    queries: List[QuerySpec],
+    include_cifti_defaults: bool = False,
+) -> List[QuerySpec]:
+    """Ensure offline-required TemplateFlow resources used internally by fMRIPrep are prefetched."""
+    existing: Set[QueryFingerprint] = {
+        _freeze_query(query.template, query.params) for query in queries
+    }
+    augmented = list(queries)
+    resource_sets = [FMRIPREP_REQUIRED_RESOURCES]
+    if include_cifti_defaults:
+        resource_sets.append(FMRIPREP_CIFTI_REQUIRED_RESOURCES)
+    for resource_set in resource_sets:
+        for template, required_queries in resource_set.items():
+            for resource in required_queries:
+                query = dict(resource["params"])
+                fingerprint = _freeze_query(template, query)
+                if fingerprint in existing:
+                    continue
+                existing.add(fingerprint)
+                augmented.append(
+                    QuerySpec(
+                        template=template,
+                        params=query,
+                        label=resource["label"],
+                        optional=bool(resource.get("optional", False)),
+                        fallback_params=[
+                            dict(params) for params in resource.get("fallback_params", [])
+                        ] or None,
+                    )
+                )
     return augmented
 
 
@@ -874,6 +1358,36 @@ def main() -> int:
         action="store_true",
         help="Emit verbose debugging information about TemplateFlow query resolution.",
     )
+    parser.add_argument(
+        "--plan-only",
+        action="store_true",
+        help="Resolve TemplateFlow queries and write summary metadata without fetching files.",
+    )
+    parser.add_argument(
+        "--include-cifti-defaults",
+        action="store_true",
+        help="Include additional TemplateFlow resources required when fMRIPrep is run with --cifti-output.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default=None,
+        help="Path to a JSON file describing the resolved query plan and fetch outcome.",
+    )
+    parser.add_argument(
+        "--manifest-json",
+        default=None,
+        help="Path to a JSON file containing the resolved-file manifest written on success.",
+    )
+    parser.add_argument(
+        "--state-file",
+        default=None,
+        help="Path to the BrainGnomes prefetch state DCF file to update.",
+    )
+    parser.add_argument(
+        "--scheduler-job-id",
+        default=None,
+        help="Scheduler job id to record in the prefetch state file.",
+    )
     args = parser.parse_args()
 
     global DEBUG
@@ -894,6 +1408,11 @@ def main() -> int:
         return 0
     queries = add_default_t2w_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
+    queries = add_required_fmriprep_queries(
+        queries,
+        include_cifti_defaults=bool(args.include_cifti_defaults),
+    )
+    query_signature = _compute_query_signature(queries)
 
     # Determine where TemplateFlow will place fetched files
     tf_home = os.environ.get("TEMPLATEFLOW_HOME")
@@ -901,9 +1420,33 @@ def main() -> int:
         tf_home = str(Path.home() / ".cache" / "templateflow")
     print(f"TemplateFlow cache directory: {tf_home}")
 
+    summary_payload: Dict[str, Any] = {
+        "status": "PLANNED",
+        "captured_at": _utc_now(),
+        "templateflow_home": os.path.abspath(tf_home),
+        "output_spaces": spaces,
+        "query_signature": query_signature,
+        "query_count": len(queries),
+        "queries": [_query_spec_payload(query) for query in queries],
+        "resolved_resources": [],
+        "resolved_files": [],
+        "failures": [],
+        "optional_failures": [],
+    }
+    _write_json(args.summary_json, summary_payload)
+
+    if args.plan_only:
+        print(
+            "Resolved TemplateFlow prefetch plan for spaces: "
+            + " ".join(spaces)
+        )
+        return 0
+
     failures: List[str] = []
     soft_failures: List[str] = []
     fetched: List[str] = []
+    resolved_resources: List[Dict[str, Any]] = []
+    resolved_files: List[str] = []
     for query_spec in queries:
         template = query_spec.template
         params = query_spec.params
@@ -911,61 +1454,15 @@ def main() -> int:
         detail = _format_query_detail(template, params)
         is_optional = query_spec.optional
         print(f"Fetching TemplateFlow resource for '{label}' ({detail}) ...")
-
-        result, fetch_exc = _api_get_with_retry(
+        result_paths, resolved_params, error_message = _resolve_query_result(
             template=template,
             params=params,
-            retry_transient=not is_optional,
+            label=label,
+            is_optional=is_optional,
+            allow_desc_retry=bool(query_spec.allow_desc_retry),
+            fallback_params=query_spec.fallback_params,
         )
-        if fetch_exc is not None:
-            if is_optional:
-                print(f"Optional TemplateFlow resource failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
-                soft_failures.append(label)
-            else:
-                print(f"Failed to fetch '{label}': {fetch_exc}", file=sys.stderr)
-                failures.append(label)
-            continue
-
-        if not _paths_exist(result):
-            allow_desc_retry = (
-                query_spec.allow_desc_retry
-                and params.get("desc") == "brain"
-            )
-            if allow_desc_retry:
-                retry_params = dict(params)
-                retry_params.pop("desc", None)
-                retry_detail = _format_query_detail(template, retry_params)
-                print(
-                    f"No files resolved for space '{label}' ({detail}); retrying without desc=brain ({retry_detail}).",
-                    file=sys.stderr,
-                )
-                retry_result, retry_exc = _api_get_with_retry(
-                    template=template,
-                    params=retry_params,
-                    retry_transient=not is_optional,
-                )
-                if retry_exc is not None:
-                    if is_optional:
-                        print(
-                            f"Optional retry without desc failed for '{label}': {retry_exc}",
-                            file=sys.stderr,
-                        )
-                        soft_failures.append(label)
-                    else:
-                        print(
-                            f"Retry without desc failed for '{label}': {retry_exc}",
-                            file=sys.stderr,
-                        )
-                        failures.append(label)
-                    continue
-                if retry_result is not None and _paths_exist(retry_result):
-                    print(
-                        f"Resolved space '{label}' after retrying without desc=brain.",
-                        file=sys.stderr,
-                    )
-                    fetched.append(label)
-                    continue
-
+        if result_paths is None or resolved_params is None:
             if is_optional:
                 print(
                     f"Optional TemplateFlow resource unavailable for space '{label}' ({detail}).",
@@ -973,12 +1470,19 @@ def main() -> int:
                 )
                 soft_failures.append(label)
             else:
-                print(
-                    f"No files resolved for space '{label}' ({detail}).",
-                    file=sys.stderr,
-                )
+                if error_message:
+                    print(error_message, file=sys.stderr)
                 failures.append(label)
             continue
+        resolved_resources.append(
+            {
+                "label": label,
+                "template": template,
+                "params": dict(resolved_params),
+                "paths": result_paths,
+            }
+        )
+        resolved_files.extend(result_paths)
         fetched.append(label)
 
     if soft_failures:
@@ -989,6 +1493,26 @@ def main() -> int:
         )
 
     if failures:
+        summary_payload.update(
+            {
+                "status": "FAILED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_prefetch_state(
+            args.state_file,
+            status="FAILED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print(
             "TemplateFlow prefetch completed with failures for: " + ", ".join(failures),
             file=sys.stderr,
@@ -996,12 +1520,57 @@ def main() -> int:
         return 1
 
     if fetched:
+        manifest_payload = _build_manifest_payload(tf_home, query_signature, resolved_files)
+        _write_json(args.manifest_json, manifest_payload)
+        summary_payload.update(
+            {
+                "status": "COMPLETED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+                "manifest_file_count": manifest_payload["file_count"],
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_prefetch_state(
+            args.state_file,
+            status="COMPLETED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print(
             "Successfully prefetched TemplateFlow resources for: "
             + ", ".join(fetched)
             + f"\nFiles stored under: {tf_home}"
         )
     else:
+        summary_payload.update(
+            {
+                "status": "COMPLETED",
+                "captured_at": _utc_now(),
+                "resolved_resources": resolved_resources,
+                "resolved_files": sorted(set(resolved_files)),
+                "failures": failures,
+                "optional_failures": soft_failures,
+                "manifest_file_count": 0,
+            }
+        )
+        _write_json(args.summary_json, summary_payload)
+        _write_json(args.manifest_json, _build_manifest_payload(tf_home, query_signature, resolved_files))
+        _write_prefetch_state(
+            args.state_file,
+            status="COMPLETED",
+            templateflow_home=os.path.abspath(tf_home),
+            spaces=spaces,
+            scheduler_job_id=args.scheduler_job_id,
+            query_signature=query_signature,
+            query_count=len(queries),
+        )
         print("No TemplateFlow resources were prefetched.")
     return 0
 

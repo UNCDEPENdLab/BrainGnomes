@@ -7,7 +7,7 @@ test_that("load_project records the YAML source path", {
   yaml::write_yaml(list(a = 1), yaml_path)
 
   cfg <- load_project(yaml_path, validate = FALSE)
-  expect_identical(attr(cfg, "yaml_file"), normalizePath(yaml_path, winslash = "/", mustWork = TRUE))
+  expect_path_identical(attr(cfg, "yaml_file"), yaml_path)
 })
 
 test_that("save_project_config uses stored YAML path", {
@@ -24,10 +24,7 @@ test_that("save_project_config uses stored YAML path", {
 
   result <- save_project_config(scfg)
   expect_true(file.exists(yaml_path))
-  expect_identical(
-    normalizePath(attr(result, "yaml_file"), winslash = "/", mustWork = TRUE),
-    normalizePath(yaml_path, winslash = "/", mustWork = TRUE)
-  )
+  expect_path_identical(attr(result, "yaml_file"), yaml_path)
 })
 
 test_that("save_project_config updates YAML path when file argument supplied", {
@@ -43,8 +40,20 @@ test_that("save_project_config updates YAML path when file argument supplied", {
 
   result <- save_project_config(scfg, file = new_yaml)
   expect_true(file.exists(new_yaml))
-  expect_identical(
-    normalizePath(attr(result, "yaml_file"), winslash = "/", mustWork = TRUE),
-    normalizePath(new_yaml, winslash = "/", mustWork = TRUE)
-  )
+  expect_path_identical(attr(result, "yaml_file"), new_yaml)
+})
+
+test_that("validate_char normalizes blank fmriprep output_spaces to NULL", {
+  # Normalization now happens via validate_char (called in validate_project and
+
+  # ensure_aroma_output_space), not in load_project directly.
+  expect_null(validate_char("", empty_value = NULL))
+  expect_null(validate_char(NA_character_, empty_value = NULL))
+})
+
+test_that("validate_char normalizes .na.character fmriprep output_spaces to NULL", {
+  expect_null(validate_char(".na.character", empty_value = NULL))
+  expect_null(validate_char(".na", empty_value = NULL))
+  # A real value passes through
+  expect_identical(validate_char("MNI152NLin2009cAsym", empty_value = NULL), "MNI152NLin2009cAsym")
 })

@@ -1,9 +1,64 @@
-# helper to convert NULL, empty list, or "", character(0) to NA for conformity
-validate_char <- function(arg) {
-  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L || (length(arg) == 1L && (is.na(arg[1L]) || arg[1L] == ""))) {
-    arg <- NA_character_
+# Normalize optional character config fields to a canonical empty value.
+# Handles NULL, list(), character(0), NA (any type), "",
+# and YAML sentinel strings ".na" / ".na.character".
+# @param arg The value to normalise.
+# @param empty_value What to return when the field is effectively empty.
+#   Use \code{NA_character_} (default) for fields stored with that convention
+#   (e.g. cli_options, sched_args) or \code{NULL} for fields where
+#   NULL means "not set" (e.g. output_spaces, mask_file).
+# @return A trimmed character scalar, vector, or \code{empty_value}.
+validate_char <- function(arg, empty_value = NA_character_) {
+  sentinels <- c(".na", ".na.character")
+
+  if (is.null(arg) || identical(arg, list()) || length(arg) == 0L) {
+    return(empty_value)
   }
-  return(arg)
+
+  # Coerce to character, discard true NAs
+  values <- trimws(as.character(arg))
+  values <- values[!is.na(values)]
+
+  # Drop empty strings and sentinel tokens
+  keep <- nzchar(values) & !(tolower(values) %in% sentinels)
+  values <- values[keep]
+
+  if (length(values) == 0L) return(empty_value)
+  if (length(values) == 1L) return(values)
+  values
+}
+
+# Coerce common YAML-style boolean strings to logical scalars while leaving
+# unrelated values untouched so validation can decide what to do next.
+normalize_flag_value <- function(arg) {
+  if (is.logical(arg) && length(arg) == 1L) return(arg)
+  if (is.null(arg) || length(arg) != 1L) return(arg)
+
+  if (is.factor(arg)) arg <- as.character(arg)
+  if (!is.character(arg) || is.na(arg)) return(arg)
+
+  key <- tolower(trimws(arg))
+  if (key %in% c("true", "t", "yes", "y", "on")) return(TRUE)
+  if (key %in% c("false", "f", "no", "n", "off")) return(FALSE)
+
+  arg
+}
+
+normalize_project_flags <- function(scfg, paths) {
+  assignments <- list()
+
+  for (path in paths) {
+    value <- get_nested_values(scfg, path, simplify = FALSE)[[1L]]
+    if (is.null(value)) next
+
+    normalized <- normalize_flag_value(value)
+    if (!identical(normalized, value)) assignments[[path]] <- normalized
+  }
+
+  if (length(assignments) > 0L) {
+    scfg <- set_nested_values(assignments, lst = scfg, type_values = FALSE)
+  }
+
+  scfg
 }
 
 # check memgb, nhours, ncores, cli_options, and sched_args for all jobs
@@ -44,6 +99,12 @@ validate_job_settings <- function(scfg, job_name = NULL) {
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
 validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
+  scfg <- normalize_project_flags(scfg, c(
+    "bids_conversion/enable",
+    "bids_conversion/overwrite",
+    "bids_conversion/clear_cache"
+  ))
+
   # BIDS conversion validation -- only relevant if enabled
   if (!checkmate::test_flag(scfg$bids_conversion$enable)) {
     if (!quiet) message("Invalid bids_conversion/enable flag. You will be asked for this.")
@@ -139,6 +200,22 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
 
   checkmate::assert_flag(quiet)
   checkmate::assert_flag(correct_problems)
+
+  scfg <- normalize_project_flags(scfg, c(
+    "flywheel_sync/enable",
+    "flywheel_sync/save_audit_logs",
+    "bids_conversion/enable",
+    "bids_conversion/overwrite",
+    "bids_conversion/clear_cache",
+    "bids_validation/enable",
+    "fmriprep/enable",
+    "mriqc/enable",
+    "aroma/enable",
+    "aroma/cleanup",
+    "postprocess/enable",
+    "extract_rois/enable",
+    "extract_rois/rtoz"
+  ))
 
   gaps <- c()
 
@@ -267,6 +344,9 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, attr(scfg, "gaps"))
     }
   }
+
+  # normalize fmriprep output_spaces (NULL = not set, real string = user value)
+  scfg$fmriprep$output_spaces <- validate_char(scfg$fmriprep$output_spaces, empty_value = NULL)
 
   if (!checkmate::test_flag(scfg$bids_validation$enable)) {
     message("Invalid bids_validation/enable flag. You will be asked for this.")
@@ -643,7 +723,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/confound_calculate/columns")
       ppcfg$confound_calculate$columns <- NULL
     }
-    if (!checkmate::test_character(ppcfg$confound_calculate$noproc_columns)) {
+    ppcfg$confound_calculate$noproc_columns <- validate_char(ppcfg$confound_calculate$noproc_columns, empty_value = NULL)
+    if (!is.null(ppcfg$confound_calculate$noproc_columns) && !checkmate::test_character(ppcfg$confound_calculate$noproc_columns)) {
       if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_calculate"))
       gaps <- c(gaps, "postprocess/confound_calculate/noproc_columns")
       ppcfg$confound_calculate$noproc_columns <- NULL
@@ -690,7 +771,8 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       gaps <- c(gaps, "postprocess/confound_regression/columns")
       ppcfg$confound_regression$columns <- NULL
     }
-    if (!checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
+    ppcfg$confound_regression$noproc_columns <- validate_char(ppcfg$confound_regression$noproc_columns, empty_value = NULL)
+    if (!is.null(ppcfg$confound_regression$noproc_columns) && !checkmate::test_character(ppcfg$confound_regression$noproc_columns)) {
       if (!quiet) message(glue("Invalid noproc_columns field in $postprocess${cfg_name}$confound_regression."))
       gaps <- c(gaps, "postprocess/confound_regression/noproc_columns")
       ppcfg$confound_regression$noproc_columns <- NULL
@@ -727,6 +809,20 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
       if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$apply_aroma. Defaulting to 'a'"))
       ppcfg$apply_aroma$prefix <- "a"
     }
+  }
+
+  # validate max_concurrent_images (job array concurrency throttle)
+  if (!is.null(ppcfg$max_concurrent_images)) {
+    if (!checkmate::test_integerish(ppcfg$max_concurrent_images, len = 1L, lower = 1L, upper = 100L)) {
+      if (!quiet) message(glue("Invalid max_concurrent_images in $postprocess${cfg_name}. Must be an integer 1-100. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/max_concurrent_images")
+      ppcfg$max_concurrent_images <- NULL
+    } else {
+      ppcfg$max_concurrent_images <- as.integer(ppcfg$max_concurrent_images)
+    }
+  } else {
+    # default silently if not set (no gap — this is optional)
+    ppcfg$max_concurrent_images <- 4L
   }
 
   if (!checkmate::test_flag(ppcfg$force_processing_order)) {
@@ -801,10 +897,9 @@ validate_extract_config_single <- function(ecfg, cfg_name = NULL, quiet = FALSE)
   }
 
   if ("mask_file" %in% names(ecfg)) {
-    mask_val <- ecfg$mask_file
-    if (length(mask_val) == 1L && (is.na(mask_val) || mask_val %in% c("", ".na", ".na.character"))) {
-      ecfg$mask_file <- NULL
-    } else if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
+    mask_val <- validate_char(ecfg$mask_file, empty_value = NULL)
+    ecfg$mask_file <- mask_val
+    if (!is.null(mask_val) && !checkmate::test_string(mask_val)) {
       if (!quiet) message(glue("Invalid mask_file in $extract_rois${cfg_name}. You will be asked for this."))
       gaps <- c(gaps, "extract_rois/mask_file")
       ecfg$mask_file <- NULL

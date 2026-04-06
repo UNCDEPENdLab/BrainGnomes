@@ -1,4 +1,4 @@
-test_that("prefetch retries default desc=brain queries without desc on miss", {
+test_that("prefetch retries default desc=brain mask queries without desc on miss", {
   py <- Sys.which("python")
   skip_if(py == "", "python is required for prefetch desc retry test")
 
@@ -8,6 +8,7 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
   py_code <- paste(
     "import json",
     "import pathlib",
+    "import shutil",
     "import tempfile",
     "import types",
     "import importlib.util",
@@ -22,7 +23,7 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
     "    call = {'template': template}",
     "    call.update(kwargs)",
     "    calls.append(call)",
-    "    if kwargs.get('suffix') == 'T1w' and kwargs.get('desc') == 'brain':",
+    "    if template == 'MNIPediatricAsym' and kwargs.get('suffix') == 'mask' and kwargs.get('desc') == 'brain':",
     "        return []",
     "    return [str(ok_file)]",
     "",
@@ -56,10 +57,13 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
     "mod = importlib.util.module_from_spec(spec)",
     "spec.loader.exec_module(mod)",
     "",
-    "sys.argv = [str(script), '--output-spaces', 'MNIPediatricAsym']",
-    "rc = mod.main()",
-    "print(f'RC|{rc}')",
-    "print('CALLS|' + json.dumps(calls, sort_keys=True))",
+    "try:",
+    "    sys.argv = [str(script), '--output-spaces', 'MNIPediatricAsym']",
+    "    rc = mod.main()",
+    "    print(f'RC|{rc}')",
+    "    print('CALLS|' + json.dumps(calls, sort_keys=True))",
+    "finally:",
+    "    shutil.rmtree(tmpdir, ignore_errors=True)",
     sep = "\n"
   )
 
@@ -89,9 +93,14 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
   calls <- jsonlite::fromJSON(calls_json, simplifyDataFrame = FALSE)
   expect_true(length(calls) >= 4L)
 
-  saw_t1w_with_desc <- any(vapply(
+  saw_mask_with_desc <- any(vapply(
     calls,
-    function(x) identical(x[["suffix"]], "T1w") && identical(x[["desc"]], "brain"),
+    function(x) identical(x[["suffix"]], "mask") && identical(x[["desc"]], "brain"),
+    logical(1)
+  ))
+  saw_mask_without_desc <- any(vapply(
+    calls,
+    function(x) identical(x[["suffix"]], "mask") && is.null(x[["desc"]]),
     logical(1)
   ))
   saw_t1w_without_desc <- any(vapply(
@@ -100,6 +109,7 @@ test_that("prefetch retries default desc=brain queries without desc on miss", {
     logical(1)
   ))
 
-  expect_true(saw_t1w_with_desc)
+  expect_true(saw_mask_with_desc)
+  expect_true(saw_mask_without_desc)
   expect_true(saw_t1w_without_desc)
 })

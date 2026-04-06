@@ -473,7 +473,7 @@ submit_flywheel_sync <- function(scfg, lg = NULL, sequence_id = NULL) {
 
   cli_options <- set_cli_options(scfg$flywheel_sync$cli_options, c(
     "--include dicom", "-y",
-    glue("--tmp-path '{scfg$metadata$flywheel_temp_directory}'"),
+    glue("--tmp-path {scfg$metadata$flywheel_temp_directory}"),
     audit_str
   ), collapse = TRUE)
 
@@ -602,7 +602,42 @@ normalize_prefetch_spaces <- function(spaces) {
   sort(unique(spaces))
 }
 
-get_prefetch_state_file <- function(templateflow_home) {
+fmriprep_cli_requests_cifti_defaults <- function(cli_options) {
+  cli_options <- validate_char(cli_options)
+  if (!checkmate::test_string(cli_options) || !nzchar(trimws(cli_options))) return(FALSE)
+
+  parsed <- tryCatch(args_to_df(cli_options), error = function(e) NULL)
+  if (is.null(parsed) || nrow(parsed) == 0L) return(FALSE)
+
+  cifti_rows <- parsed[parsed$lhs == "cifti-output", , drop = FALSE]
+  if (nrow(cifti_rows) == 0L) return(FALSE)
+
+  rhs <- tolower(trimws(ifelse(is.na(cifti_rows$rhs), "", cifti_rows$rhs)))
+  any(!rhs %in% c("", "0", "false", "off", "null", "none"))
+}
+
+prefetch_state_cache_hash <- function(templateflow_home) {
+  normalized <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
+  tmp <- tempfile("prefetch_state_hash_")
+  on.exit(unlink(tmp), add = TRUE)
+  writeLines(normalized, tmp, useBytes = TRUE)
+  unname(tools::md5sum(tmp))
+}
+
+get_prefetch_state_file <- function(log_directory, templateflow_home) {
+  if (!checkmate::test_string(log_directory) || !nzchar(log_directory)) {
+    stop("log_directory must be a non-empty string when resolving prefetch state file.", call. = FALSE)
+  }
+  if (!checkmate::test_string(templateflow_home) || !nzchar(templateflow_home)) {
+    stop("templateflow_home must be a non-empty string when resolving prefetch state file.", call. = FALSE)
+  }
+
+  log_directory <- normalizePath(log_directory, winslash = "/", mustWork = FALSE)
+  cache_hash <- prefetch_state_cache_hash(templateflow_home)
+  file.path(log_directory, sprintf(".braingnomes_prefetch_state_%s.dcf", cache_hash))
+}
+
+get_legacy_prefetch_state_file <- function(templateflow_home) {
   file.path(templateflow_home, ".braingnomes_prefetch_state.dcf")
 }
 
@@ -639,7 +674,160 @@ read_prefetch_state <- function(state_file) {
   state
 }
 
-prefetch_state_covers_spaces <- function(state, requested_spaces, templateflow_home) {
+prefetch_templateflow_cache_initialized <- function(templateflow_home) {
+  if (!checkmate::test_directory_exists(templateflow_home)) return(FALSE)
+  entries <- list.files(templateflow_home, all.files = FALSE, no.. = TRUE, full.names = FALSE)
+  any(grepl("^tpl-", entries))
+}
+
+copy_prefetch_state_file <- function(from, to) {
+  if (!checkmate::test_file_exists(from)) {
+    stop(glue::glue("Cannot copy prefetch state; source file does not exist: {from}"), call. = FALSE)
+  }
+
+  target_dir <- dirname(to)
+  if (!dir.exists(target_dir)) dir.create(target_dir, recursive = TRUE, showWarnings = FALSE)
+  tmp <- paste0(to, ".tmp.", Sys.getpid())
+
+  copied <- isTRUE(file.copy(from, tmp, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE))
+  if (!copied || !file.exists(tmp)) {
+    stop(glue::glue("Failed to stage copied prefetch state file: {tmp}"), call. = FALSE)
+  }
+
+  renamed <- isTRUE(file.rename(tmp, to))
+  if (!renamed) {
+    copied_final <- isTRUE(file.copy(tmp, to, overwrite = TRUE, copy.mode = TRUE, copy.date = TRUE))
+    suppressWarnings(unlink(tmp))
+    if (!copied_final || !file.exists(to)) {
+      stop(glue::glue("Failed to finalize copied prefetch state file: {to}"), call. = FALSE)
+    }
+  }
+
+  invisible(to)
+}
+
+migrate_prefetch_state_file <- function(state_file, legacy_state_file, templateflow_home) {
+  if (!checkmate::test_file_exists(legacy_state_file)) return(invisible(NULL))
+
+  if (!checkmate::test_file_exists(state_file)) {
+    copy_prefetch_state_file(legacy_state_file, state_file)
+    message(glue::glue(
+      "Migrated legacy TemplateFlow prefetch state from {legacy_state_file} to {state_file}."
+    ))
+  } else {
+    message(glue::glue(
+      "Found legacy TemplateFlow prefetch state at {legacy_state_file}; using logs-based state file at {state_file}."
+    ))
+  }
+
+  removed <- suppressWarnings(unlink(legacy_state_file))
+  if (!checkmate::test_file_exists(legacy_state_file) || identical(removed, 0L)) {
+    message(glue::glue(
+      "Removed legacy TemplateFlow prefetch state file from templateflow_home: {legacy_state_file}"
+    ))
+    return(invisible(NULL))
+  }
+
+  cache_initialized <- prefetch_templateflow_cache_initialized(templateflow_home)
+  base_msg <- glue::glue(
+    "Unable to remove legacy TemplateFlow prefetch state file at {legacy_state_file}. "
+  )
+  guidance <- "Remove it manually to avoid TemplateFlow standard-space resolution failures."
+
+  if (!cache_initialized) {
+    stop(
+      paste0(
+        base_msg,
+        "TemplateFlow cache appears uninitialized (no tpl-* directories). ",
+        guidance
+      ),
+      call. = FALSE
+    )
+  }
+
+  warning(
+    paste0(
+      base_msg,
+      "Continuing because TemplateFlow cache appears initialized (tpl-* directories detected). ",
+      guidance
+    ),
+    call. = FALSE
+  )
+}
+
+find_container_runtime <- function() {
+  runtimes <- Sys.which(c("singularity", "apptainer"))
+  available <- unname(runtimes[nzchar(runtimes)])
+  if (length(available) == 0L) return(NULL)
+  available[[1L]]
+}
+
+run_prefetch_query_plan_command <- function(runtime, cmd_args, env) {
+  tryCatch(
+    suppressWarnings(system2(runtime, cmd_args, stdout = TRUE, stderr = TRUE, env = env)),
+    error = function(e) structure(character(0), status = 1L)
+  )
+}
+
+resolve_prefetch_query_plan <- function(container_path, script_path, requested_spaces, templateflow_home,
+                                        include_cifti_defaults = FALSE) {
+  if (!checkmate::test_file_exists(container_path) || !checkmate::test_file_exists(script_path)) {
+    return(NULL)
+  }
+
+  runtime <- find_container_runtime()
+  if (!checkmate::test_string(runtime)) return(NULL)
+
+  summary_dir <- tempfile("prefetch_plan_")
+  dir.create(summary_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(summary_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  summary_file <- file.path(summary_dir, "prefetch_summary.json")
+  script_dir <- normalizePath(dirname(script_path), winslash = "/", mustWork = TRUE)
+  bind_dirs <- unique(c(
+    script_dir,
+    normalizePath(summary_dir, winslash = "/", mustWork = TRUE)
+  ))
+  bind_args <- unlist(lapply(bind_dirs, function(path) c("-B", paste0(path, ":", path))), use.names = FALSE)
+
+  cmd_args <- c(
+    "exec", "--cleanenv", "--containall",
+    bind_args,
+    normalizePath(container_path, winslash = "/", mustWork = TRUE),
+    "python",
+    normalizePath(script_path, winslash = "/", mustWork = TRUE),
+    "--output-spaces", paste(requested_spaces, collapse = " "),
+    "--plan-only",
+    "--summary-json", summary_file
+  )
+  if (isTRUE(include_cifti_defaults)) {
+    cmd_args <- c(cmd_args, "--include-cifti-defaults")
+  }
+
+  env <- c(
+    TEMPLATEFLOW_HOME = normalizePath(templateflow_home, winslash = "/", mustWork = FALSE),
+    APPTAINERENV_TEMPLATEFLOW_HOME = normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
+  )
+
+  out <- run_prefetch_query_plan_command(runtime, cmd_args, env)
+  status <- attr(out, "status")
+  if (!is.null(status) && !identical(status, 0L)) return(NULL)
+  if (!checkmate::test_file_exists(summary_file)) return(NULL)
+
+  plan <- tryCatch(
+    jsonlite::fromJSON(summary_file, simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(plan)) return(NULL)
+
+  list(
+    query_signature = if (!is.null(plan$query_signature)) plan$query_signature else NULL,
+    query_count = if (!is.null(plan$query_count)) plan$query_count else NULL,
+    queries = if (!is.null(plan$queries)) plan$queries else list()
+  )
+}
+
+prefetch_state_covers_request <- function(state, requested_spaces, requested_query_signature, templateflow_home) {
   if (is.null(state)) return(FALSE)
 
   status <- if (!is.null(state$status)) toupper(trimws(as.character(state$status))) else ""
@@ -653,10 +841,14 @@ prefetch_state_covers_spaces <- function(state, requested_spaces, templateflow_h
   current_tf_home <- normalizePath(templateflow_home, winslash = "/", mustWork = FALSE)
   if (!identical(state_tf_home, current_tf_home)) return(FALSE)
 
-  all(requested_spaces %in% state$spaces)
+  if (!all(requested_spaces %in% state$spaces)) return(FALSE)
+
+  state_query_signature <- if (!is.null(state$query_signature)) trimws(as.character(state$query_signature)) else ""
+  if (!checkmate::test_string(requested_query_signature) || !nzchar(requested_query_signature)) return(FALSE)
+  identical(state_query_signature, requested_query_signature)
 }
 
-prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NULL) {
+prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NULL, query_signature = NULL) {
   if (!checkmate::test_string(sqlite_db) || !checkmate::test_file_exists(sqlite_db)) {
     return(FALSE)
   }
@@ -703,6 +895,16 @@ prefetch_manifest_verified <- function(sqlite_db, templateflow_home, job_id = NU
     return(FALSE)
   }
 
+  manifest <- tryCatch(
+    jsonlite::fromJSON(manifest_json, simplifyVector = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(manifest)) return(FALSE)
+  if (checkmate::test_string(query_signature)) {
+    manifest_signature <- if (!is.null(manifest$query_signature)) manifest$query_signature else NULL
+    if (!identical(manifest_signature, query_signature)) return(FALSE)
+  }
+
   verification <- verify_output_manifest(templateflow_home, manifest_json, check_mtime = FALSE)
   isTRUE(verification$verified)
 }
@@ -726,6 +928,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
 
   tf_home <- normalizePath(tf_home, mustWork = FALSE)
   if (!dir.exists(tf_home)) dir.create(tf_home, showWarnings = FALSE, recursive = TRUE)
+  prefetch_state_file <- get_prefetch_state_file(scfg$metadata$log_directory, tf_home)
+  legacy_prefetch_state_file <- get_legacy_prefetch_state_file(tf_home)
 
   spaces <- scfg$fmriprep$output_spaces
   if (isTRUE(steps["aroma"]) && (is.null(spaces) || !grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE))) {
@@ -740,6 +944,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   skip_spaces <- c("anat", "fsnative", "fsaverage", "fsaverage5", "fsaverage6", "T1w", "T2w", "func")
   fetch_spaces <- normalize_prefetch_spaces(setdiff(spaces_vec, skip_spaces))
   if (length(fetch_spaces) == 0L) return(NULL)
+  include_cifti_defaults <- fmriprep_cli_requests_cifti_defaults(scfg$fmriprep$cli_options)
 
   script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
   if (!checkmate::test_file_exists(script_path)) {
@@ -750,17 +955,40 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
   # preflight permission checks for project-level paths
   pf_issues <- c(
     check_write_target(scfg$metadata$log_directory, "log directory"),
-    check_write_target(tf_home, "templateflow_home directory")
+    check_write_target(tf_home, "templateflow_home directory"),
+    check_write_target(prefetch_state_file, "prefetch state file")
   )
   if (length(pf_issues) > 0L) {
     stop("Preflight permission check failed for prefetch_templates:\n",
          paste(paste0("  - ", pf_issues), collapse = "\n"), call. = FALSE)
   }
 
-  prefetch_state_file <- get_prefetch_state_file(tf_home)
+  migrate_prefetch_state_file(
+    state_file = prefetch_state_file,
+    legacy_state_file = legacy_prefetch_state_file,
+    templateflow_home = tf_home
+  )
   prefetch_state <- read_prefetch_state(prefetch_state_file)
-  state_covers_spaces <- prefetch_state_covers_spaces(prefetch_state, fetch_spaces, tf_home)
-  if (state_covers_spaces) {
+  prefetch_plan <- resolve_prefetch_query_plan(
+    container_path = container_path,
+    script_path = script_path,
+    requested_spaces = fetch_spaces,
+    templateflow_home = tf_home,
+    include_cifti_defaults = include_cifti_defaults
+  )
+  current_query_signature <- if (!is.null(prefetch_plan$query_signature)) {
+    as.character(prefetch_plan$query_signature)
+  } else {
+    NULL
+  }
+
+  state_covers_request <- prefetch_state_covers_request(
+    prefetch_state,
+    fetch_spaces,
+    current_query_signature,
+    tf_home
+  )
+  if (state_covers_request) {
     state_job_id <- if (!is.null(prefetch_state$scheduler_job_id) && checkmate::test_string(prefetch_state$scheduler_job_id)) {
       prefetch_state$scheduler_job_id
     } else {
@@ -769,7 +997,8 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     manifest_ok <- prefetch_manifest_verified(
       sqlite_db = scfg$metadata$sqlite_db,
       templateflow_home = tf_home,
-      job_id = state_job_id
+      job_id = state_job_id,
+      query_signature = current_query_signature
     )
 
     if (manifest_ok) {
@@ -781,6 +1010,13 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
 
     message(glue::glue(
       "Re-running TemplateFlow prefetch because prior manifest verification failed or files are missing in {tf_home}."
+    ))
+  } else if (!is.null(prefetch_state) && identical(
+    toupper(trimws(as.character(if (!is.null(prefetch_state$status)) prefetch_state$status else ""))),
+    "COMPLETED"
+  )) {
+    message(glue::glue(
+      "Re-running TemplateFlow prefetch because cached state in {tf_home} does not match the current query set."
     ))
   }
 
@@ -807,6 +1043,7 @@ submit_prefetch_templates <- function(scfg, steps, sequence_id = NULL) {
     prefetch_container = container_path,
     prefetch_script = script_path,
     prefetch_spaces = spaces_arg,
+    prefetch_include_cifti_defaults = if (isTRUE(include_cifti_defaults)) "TRUE" else "FALSE",
     templateflow_home = tf_home,
     prefetch_state_file = prefetch_state_file,
     log_level = scfg$log_level
@@ -843,19 +1080,29 @@ ensure_aroma_output_space <- function(scfg, require_aroma = isTRUE(scfg$aroma$en
 
   if (is.null(scfg$fmriprep$auto_added_aroma_space)) scfg$fmriprep$auto_added_aroma_space <- FALSE
 
-  spaces <- scfg$fmriprep$output_spaces
+  spaces <- validate_char(scfg$fmriprep$output_spaces, empty_value = NULL)
   has_required_space <- !is.null(spaces) && grepl("MNI152NLin6Asym:res-2", spaces, fixed = TRUE)
-  if (has_required_space) return(scfg)
+  if (has_required_space) {
+    scfg$fmriprep$output_spaces <- spaces # persist normalized value
+    return(scfg)
+  }
 
   addition <- "MNI152NLin6Asym:res-2"
-  if (is.null(spaces) || !nzchar(trimws(spaces))) {
-    scfg$fmriprep$output_spaces <- addition
+  default_space <- "MNI152NLin2009cAsym"
+  blank <- is.null(spaces) || !nzchar(trimws(spaces))
+
+  scfg$fmriprep$output_spaces <- if (blank) {
+    paste(default_space, addition)
   } else {
-    scfg$fmriprep$output_spaces <- trimws(paste(spaces, addition))
+    trimws(paste(spaces, addition))
   }
 
   if (isTRUE(verbose)) {
-    message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+    if (blank) {
+      message("No fmriprep output spaces specified. Using default MNI152NLin2009cAsym and adding MNI152NLin6Asym:res-2 so AROMA can run.")
+    } else {
+      message("Adding MNI152NLin6Asym:res-2 to output spaces for fmriprep to allow AROMA to run.")
+    }
   }
 
   scfg$fmriprep$auto_added_aroma_space <- TRUE

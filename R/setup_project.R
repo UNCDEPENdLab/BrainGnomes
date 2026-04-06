@@ -794,6 +794,24 @@ setup_aroma <- function(scfg, fields = NULL) {
   return(scfg)
 }
 
+# Safely resolve a CLI on PATH without propagating the zero-length result from
+# `command -v` when the executable is absent.
+discover_cli_path <- function(command) {
+  if (!checkmate::test_string(command)) return("")
+
+  path <- tryCatch(
+    suppressWarnings(system(sprintf("command -v %s", shQuote(command)), intern = TRUE, ignore.stderr = TRUE)),
+    error = function(e) character()
+  )
+
+  if (length(path) == 0L) return("")
+
+  path <- trimws(path[[1L]])
+  if (!nzchar(path)) return("")
+
+  path
+}
+
 
 #' Setup the compute environment for a study
 #' @param scfg a project configuration object, as produced by `load_project` or `setup_project`
@@ -827,7 +845,7 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
   }
 
   if ("compute_environment/flywheel" %in% fields) {
-    fw_path <- tryCatch(system("command -v fw", intern = TRUE, ignore.stderr = TRUE), error = function(e) "")
+    fw_path <- discover_cli_path("fw")
     if (nzchar(fw_path)) {
       use_fw <- prompt_input(
         instruct = glue("Found Flywheel CLI at {fw_path}"),
@@ -838,11 +856,21 @@ setup_compute_environment <- function(scfg = list(), fields = NULL) {
       if (isTRUE(use_fw)) scfg$compute_environment$flywheel <- fw_path
     }
     if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) {
+      default_fw <- scfg$compute_environment$flywheel
+      if (!checkmate::test_file_exists(default_fw)) default_fw <- NULL
+
       scfg$compute_environment$flywheel <- prompt_input(
-        instruct = "Specify the location of the Flywheel CLI (fw):",
+        instruct = if (nzchar(fw_path)) {
+          "Specify the location of the Flywheel CLI (fw):"
+        } else {
+          paste(
+            "Flywheel CLI (fw) was not found on your PATH.",
+            "Install it or provide the full path to the executable."
+          )
+        },
         prompt = "Location of Flywheel CLI:",
         type = "file",
-        default = scfg$compute_environment$flywheel
+        default = default_fw
       ) |> normalizePath(mustWork = TRUE)
     }
   }

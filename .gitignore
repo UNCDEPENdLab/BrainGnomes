@@ -51,6 +51,12 @@ site-library/
 
 # Local files for development
 local/
-docs
+tmp/
+.cache/
 
 .DS_Store
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc

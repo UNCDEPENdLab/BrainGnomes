@@ -66,7 +66,7 @@ submit_tracking_query = function(str, sqlite_db, param = NULL) {
   
   # check if tracking table exists in sqlite_db; if not, create it
   table_exists <- tryCatch({
-    con <- dbConnect(RSQLite::SQLite(), sqlite_db) # establish connection
+    con <- dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL) # establish connection
     on.exit(try(dbDisconnect(con), silent = TRUE), add = TRUE)
     sqliteSetBusyHandler(con, 10 * 1000) # busy_timeout of 10 seconds
     dbExistsTable(con, "job_tracking")
@@ -99,7 +99,7 @@ submit_tracking_query = function(str, sqlite_db, param = NULL) {
 
 ensure_tracking_db_schema <- function(sqlite_db) {
   con <- tryCatch({
-    dbConnect(RSQLite::SQLite(), sqlite_db)
+    dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL)
   }, error = function(e) {
     stop(format_tracking_db_error(sqlite_db, operation = "ensure_tracking_db_schema connect", err = e), call. = FALSE)
   })
@@ -479,7 +479,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
   }
   
   con <- tryCatch({
-    dbConnect(RSQLite::SQLite(), sqlite_db)
+    dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL)
   }, error = function(e) {
     stop(format_tracking_db_error(sqlite_db, operation = "get_tracked_job_status connect", err = e), call. = FALSE)
   })
