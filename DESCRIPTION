@@ -26,6 +26,7 @@ Imports:
     jsonlite,
     lubridate,
     lgr,
+    matrixStats,
     reticulate,
     Rcpp,
     RNifti,
@@ -34,6 +35,7 @@ Imports:
     uuid,
     yaml
 Suggests: 
+    multitaper,
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,

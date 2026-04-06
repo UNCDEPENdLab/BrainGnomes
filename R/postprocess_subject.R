@@ -278,6 +278,23 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   
   n_steps <- length(processing_sequence)
 
+  postproc_validate_or_stop <- function(step_name, v_ok) {
+    v_msg <- attr(v_ok, "message")
+    if (isTRUE(v_ok)) {
+      to_log(lg, "info", glue("{step_name} validation passed: {v_msg}"))
+    } else {
+      to_log(lg, "error", glue("{step_name} validation failed: {v_msg}"))
+      if (isTRUE(cfg$stop_on_failed_validation)) {
+        stop(
+          glue(
+            "{step_name} validation failed: {v_msg} ",
+            "stop_on_failed_validation is TRUE. STOPPING postprocessing for this dataset."
+          )
+        )
+      }
+    }
+  }
+
   #### Loop over fMRI processing steps in sequence
   for (ii in seq_along(processing_sequence)) {
     step <- processing_sequence[[ii]]
@@ -341,31 +358,68 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       cur_file <- apply_mask(cur_file,
         mask_file = apply_mask_file,
         out_file = out_file,
-        overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
+        overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
+      
+      
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_apply_mask(mask_file = apply_mask_file, data_file = cur_file)
+        postproc_validate_or_stop("apply_mask", v_ok)
+      }
     } else if (step == "spatial_smooth") {
+      pre_spatial_smooth_file <- cur_file
       cur_file <- spatial_smooth(cur_file,
         out_file = out_file,
         brain_mask = brain_mask, fwhm_mm = cfg$spatial_smooth$fwhm_mm,
         overwrite = cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_spatial_smooth(
+          pre_file = pre_spatial_smooth_file,
+          post_file = cur_file,
+          mask_file = brain_mask,
+          fwhm_mm = cfg$spatial_smooth$fwhm_mm
+        )
+        postproc_validate_or_stop("spatial_smooth", v_ok)
+      }
     } else if (step == "apply_aroma") {
       to_log(lg, "info", "Removing AROMA noise components from fMRI data")
       nonaggressive_val <- cfg$apply_aroma$nonaggressive
       nonaggressive_flag <- if (is.null(nonaggressive_val) || is.na(nonaggressive_val)) TRUE else isTRUE(nonaggressive_val)
+      pre_apply_aroma_file <- cur_file
       cur_file <- apply_aroma(cur_file,
         out_file = out_file,
         mixing_file = proc_files$melodic_mix,
         noise_ics = proc_files$noise_ics,
         overwrite=cfg$overwrite, lg=lg, nonaggressive = nonaggressive_flag
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_apply_aroma(
+          pre_file = pre_apply_aroma_file,
+          post_file = cur_file,
+          mixing_file = proc_files$melodic_mix,
+          noise_ics = proc_files$noise_ics,
+          nonaggressive = nonaggressive_flag
+        )
+        postproc_validate_or_stop("apply_aroma", v_ok)
+      }
     } else if (step == "scrub_interpolate") {
+      pre_scrub_interpolate_file <- cur_file
       cur_file <- scrub_interpolate(cur_file,
         out_file = out_file,
         censor_file = censor_file, confound_files = to_regress,
         overwrite=cfg$overwrite, lg=lg
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_scrub_interpolate(
+          pre_file = pre_scrub_interpolate_file,
+          post_file = cur_file,
+          censor_file = censor_file
+        )
+        postproc_validate_or_stop("scrub_interpolate", v_ok)
+      }
     } else if (step == "temporal_filter") {
+      pre_temporal_filter_file <- cur_file
       cur_file <- temporal_filter(cur_file,
         out_file = out_file,
         tr = cfg$tr, low_pass_hz = cfg$temporal_filter$low_pass_hz,
@@ -373,26 +427,76 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img,
         method = cfg$temporal_filter$method
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        hp <- cfg$temporal_filter$high_pass_hz
+        lp <- cfg$temporal_filter$low_pass_hz
+        v_ok <- validate_temporal_filter(
+          pre_file = pre_temporal_filter_file,
+          post_file = cur_file,
+          tr = cfg$tr,
+          band_low_hz = hp,
+          band_high_hz = lp,
+          mask_file = brain_mask
+        )
+        postproc_validate_or_stop("temporal_filter", v_ok)
+      }
     } else if (step == "confound_regression") {
       to_log(lg, "info", "Removing confound regressors from fMRI data using file: {to_regress}")
+      pre_confound_regression_file <- cur_file
       cur_file <- confound_regression(cur_file,
         out_file = out_file,
         to_regress = to_regress, censor_file = censor_file,
         overwrite=cfg$overwrite, lg = lg, fsl_img = fsl_img
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_confound_regression(
+          pre_file = pre_confound_regression_file,
+          post_file = cur_file,
+          to_regress = to_regress,
+          censor_file = censor_file
+        )
+        postproc_validate_or_stop("confound_regression", v_ok)
+      }
     } else if (step == "scrub_timepoints") {
+      censor_vec_before_scrub_tp <- if (checkmate::test_file_exists(censor_file)) {
+        as.integer(readLines(censor_file))
+      } else {
+        integer()
+      }
+      pre_scrub_timepoints_file <- cur_file
       cur_file <- scrub_timepoints(cur_file,
         out_file = out_file,
         censor_file = censor_file,
         overwrite = cfg$overwrite, lg = lg
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        v_ok <- validate_scrub_timepoints(
+          pre_file = pre_scrub_timepoints_file,
+          post_file = cur_file,
+          censor_vec = censor_vec_before_scrub_tp
+        )
+        postproc_validate_or_stop("scrub_timepoints", v_ok)
+      }
     } else if (step == "intensity_normalize") {
+      pre_intensity_normalize_file <- cur_file
       cur_file <- intensity_normalize(cur_file,
         out_file = out_file,
         brain_mask = brain_mask,
         global_median = cfg$intensity_normalize$global_median,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
+      if (isTRUE(cfg$validate_postproc_steps)) {
+        gm <- cfg$intensity_normalize$global_median
+        if (checkmate::test_number(gm, finite = TRUE)) {
+          v_ok <- validate_intensity_normalize(
+            data_file = cur_file,
+            mask_file = brain_mask,
+            target = gm,
+            tolerance = 0
+          )
+          postproc_validate_or_stop("intensity_normalize", v_ok)
+        }
+      }
     } else {
       stop("Unknown step: ", step)
     }

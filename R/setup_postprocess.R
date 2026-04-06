@@ -417,6 +417,8 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
     if (is.null(ppcfg$keep_intermediates)) fields <- c(fields, "postprocess/keep_intermediates")
     if (is.null(ppcfg$overwrite)) fields <- c(fields, "postprocess/overwrite")
     if (is.null(ppcfg$tr)) fields <- c(fields, "postprocess/tr")
+    if (is.null(ppcfg$validate_postproc_steps)) fields <- c(fields, "postprocess/validate_postproc_steps")
+    if (is.null(ppcfg$stop_on_failed_validation)) fields <- c(fields, "postprocess/stop_on_failed_validation")
     if (is.null(ppcfg$apply_mask)) fields <- c(fields, "postprocess/apply_mask")
     if (is.null(ppcfg$max_concurrent_images)) fields <- c(fields, "postprocess/max_concurrent_images")
   }
@@ -478,6 +480,34 @@ setup_postprocess_globals <- function(ppcfg = list(), fields = NULL, all_bids_de
         Higher values process faster but consume more scheduler resources.
         A value of 4 is usually a good balance.\n
       ")
+    )
+  }
+  if ("postprocess/validate_postproc_steps" %in% fields) {
+    ppcfg$validate_postproc_steps <- prompt_input(
+      instruct = glue("\n
+        Validation steps allow you to verify that the postprocessing steps were applied correctly.
+        \n
+      "),
+      prompt = "Enable validation checks for postprocessing steps?",
+      type = "flag",
+      default = if (is.null(ppcfg$validate_postproc_steps)) FALSE else isTRUE(ppcfg$validate_postproc_steps)
+    )
+  }
+
+  if ("postprocess/stop_on_failed_validation" %in% fields) {
+    ppcfg$stop_on_failed_validation <- prompt_input(
+      instruct = glue("\n\n
+        When a validation check fails (for example, if masking appears incorrect),
+        you can either stop postprocessing immediately for that dataset or continue
+        running later steps while recording the validation failure in the logs.\n
+
+        If you set this to TRUE, postprocessing for a given dataset will halt as soon
+        a validation step fails. If FALSE, validation failures will be logged but the
+        remaining steps will still run.\n
+      "),
+      prompt = "Stop postprocessing when a validation check fails?",
+      type = "flag",
+      default = if (is.null(ppcfg$stop_on_failed_validation)) FALSE else isTRUE(ppcfg$stop_on_failed_validation)
     )
   }
 
