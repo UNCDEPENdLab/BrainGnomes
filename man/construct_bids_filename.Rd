@@ -10,7 +10,7 @@ construct_bids_filename(bids_df, full.names = FALSE)
 \item{bids_df}{A \code{data.frame} containing one or more rows of BIDS entities.
 Must include at least the columns \code{suffix} and \code{ext}, and optionally:
 \code{subject}, \code{session}, \code{task}, \code{acquisition}, \code{run}, \code{modality}, \code{echo},
-\code{direction}, \code{reconstruction}, \code{hemisphere}, \code{space}, \code{resolution},
+\code{direction}, \code{reconstruction}, \code{hemisphere}, \code{space}, \code{cohort}, \code{resolution},
 \code{description}, and \code{fieldmap}.}
 
 \item{full.names}{If TRUE, return the full path to the file using the \verb{$directory}

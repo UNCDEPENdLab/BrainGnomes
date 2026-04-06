@@ -7,3 +7,7 @@
 local
 AGENTS.md
 CONTRIBUTING.md
+.cache
+.vscode
+^tmp$
+^\\.codex$

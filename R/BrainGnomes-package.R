@@ -42,5 +42,10 @@ NULL
 
 # Add globals to avoid R CMD check complaint
 if (getRversion() >= "2.15.1") {
-  utils::globalVariables(c(":=", "resample_template_to_bold"))
+  utils::globalVariables(c(
+    ".", ":=",
+    "freq", "high", "label", "low",
+    "power_db", "power_linear", "relative_power",
+    "resample_template_to_bold"
+  ))
 }

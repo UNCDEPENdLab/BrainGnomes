@@ -23,7 +23,7 @@ For more detail, see: https://bids-specification.readthedocs.io/en/stable/append
 
 This function recognizes standard BIDS entities such as subject (\verb{sub-}), session (\verb{ses-}), task (\verb{task-}),
 acquisition (\verb{acq-}), run, modality (\verb{mod-}), echo (\verb{echo-}), direction (\verb{dir-}), reconstruction (\verb{rec-}),
-hemisphere (\verb{hemi-}), space (\verb{space-}), resolution (\verb{res-}), description (\verb{desc-}), and fieldmap (\verb{fmap-}),
+hemisphere (\verb{hemi-}), space (\verb{space-}), cohort (\verb{cohort-}), resolution (\verb{res-}), description (\verb{desc-}), and fieldmap (\verb{fmap-}),
 as well as the file suffix and extension.
 }
 \examples{
