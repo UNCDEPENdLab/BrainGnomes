@@ -131,9 +131,17 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/temporal_filter.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/tracking_df_to_tree.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/update_tracked_job_status.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_apply_aroma.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_apply_mask.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_bids_conversion.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_confound_regression.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_exists.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_intensity_normalize.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_project.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_scrub_interpolate.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_scrub_timepoints.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_spatial_smooth.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/validate_temporal_filter.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/verify_output_manifest.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/wait_for_job.html</loc></url>
 </urlset>

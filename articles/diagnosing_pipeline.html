@@ -62,9 +62,9 @@
 
       <h1>Diagnosing Pipeline Runs</h1>
                         <h4 data-toc-skip class="author">Michael
-Hallquist</h4>
+Hallquist &amp; Dan Shallal</h4>
             
-            <h4 data-toc-skip class="date">16 Feb 2026</h4>
+            <h4 data-toc-skip class="date">25 Feb 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/vignettes/diagnosing_pipeline.Rmd" class="external-link"><code>vignettes/diagnosing_pipeline.Rmd</code></a></small>
       <div class="d-none name"><code>diagnosing_pipeline.Rmd</code></div>
@@ -75,25 +75,38 @@ Hallquist</h4>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h2>
-<p>When <code><a href="../reference/run_project.html">run_project()</a></code> launches many jobs, it can be hard to
-quickly answer:</p>
+<p>Running an fMRI pipeline with BrainGnomes typically means launching
+<strong>many</strong> dependent jobs: BIDS conversion, MRIQC, fMRIPrep,
+ICA‑AROMA, one or more postprocessing streams, and optional ROI
+extraction. Each job writes its own logs and completion markers, and
+jobs depend on one another, often across multiple runs (sequences) of
+the same project. Without help, it is hard to answer even basic
+questions:</p>
 <ul>
 <li>What already succeeded?</li>
-<li>What is still running?</li>
-<li>What failed?</li>
-<li>What should I inspect next?</li>
+<li>What is still running or queued?</li>
+<li>What failed, and was it the <em>root cause</em> or just downstream
+of another failure?</li>
+<li>Where should I look next in the logs?</li>
 </ul>
-<p>This vignette shows a practical diagnosis workflow using:</p>
+<p>BrainGnomes provides three complementary tools for this:</p>
 <ul>
 <li>
-<code><a href="../reference/get_project_status.html">get_project_status()</a></code> for a project-wide status
-table</li>
+<code><a href="../reference/get_project_status.html">get_project_status()</a></code> gives a project‑wide table of
+step‑level completion flags and times for all subjects.</li>
 <li>
-<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code> for one subject</li>
+<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code> focuses that same information on a
+single subject (and session), making it easy to see where one subject is
+stuck.</li>
 <li>
-<code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> for interactive, log-driven
-debugging</li>
+<code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> ties together the job‑tracking
+database and log paths into an interactive tree view for deep,
+log‑driven debugging.</li>
 </ul>
+<p>This vignette walks through a practical workflow that starts with the
+high‑level <code>*_status()</code> summaries and then uses
+<code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> when you need to understand
+<em>why</em> something failed and which specific jobs are involved.</p>
 <p>The examples below were run on this project:</p>
 <p><code>/proj/mnhallqlab/projects/bg08test_14feb2026</code></p>
 <div class="section level3">
@@ -137,6 +150,17 @@ task_complete               0</code></pre>
 <p>This gives a quick pass/fail style view. In this run, BIDS conversion
 and MRIQC are complete for all subjects, while downstream steps are not
 yet complete.</p>
+<p>Under the hood, <code><a href="../reference/get_project_status.html">get_project_status()</a></code> and
+<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code>:</p>
+<ul>
+<li>look in the project’s BIDS directory to discover which
+subjects/sessions exist, and</li>
+<li>scan each subject’s log directory for BrainGnomes
+<code>.complete</code> (and related) marker files.</li>
+</ul>
+<p>From these filesystem markers, they derive strict
+<code>*_complete</code> flags and completion times for each enabled
+step.</p>
 <p>You can also scan log markers for explicit failures:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html" class="external-link">list.files</a></span><span class="op">(</span></span>
@@ -171,108 +195,150 @@ stuck?”</p>
 <div class="section level2">
 <h2 id="interactive-diagnosis-with-diagnose_pipeline">Interactive diagnosis with <code>diagnose_pipeline()</code><a class="anchor" aria-label="anchor" href="#interactive-diagnosis-with-diagnose_pipeline"></a>
 </h2>
-<p><code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> gives a tree view plus optional
-log-tail inspection.</p>
+<p>Running a full fMRI preprocessing + postprocessing pipeline generates
+many jobs, log files, and potential failure points. Manually chasing
+SLURM job IDs and log files quickly becomes unmanageable. The goal of
+<code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> is to wrap all of this job-tracking
+information into a single, interactive view.</p>
+<p>Behind the scenes, every job submitted by <code><a href="../reference/run_project.html">run_project()</a></code>
+is recorded in an SQLite database associated with the project. Each
+record stores:</p>
+<ul>
+<li>the <strong>sequence ID</strong> (a particular end‑to‑end run of the
+pipeline),</li>
+<li>the <strong>subject</strong>, job name, scheduler ID, and
+parent/child relationships,</li>
+<li>timestamps (submitted, started, finished),</li>
+<li>scheduler options and exit codes,</li>
+<li>and a derived <strong>status</strong> (<code>COMPLETED</code>,
+<code>STARTED</code>, <code>QUEUED</code>, <code>FAILED</code>,
+<code>FAILED_BY_EXT</code>).</li>
+</ul>
+<p><code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> reads this SQLite database,
+reconstructs the job dependency tree, and then guides you through it
+interactively. The function returns that raw tree structure invisibly so
+you can also inspect it yourself:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_pipeline.html">diagnose_pipeline</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="va">tree</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/diagnose_pipeline.html">diagnose_pipeline</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">tree</span><span class="op">)</span></span></code></pre></div>
+<p>Each node in <code>tree</code> corresponds to a single tracked job
+and includes its subject, status, scheduler metadata, and parent/child
+links. This is the same structure BrainGnomes uses internally to
+understand job dependencies.</p>
 <div class="section level3">
-<h3 id="sequence-first-walkthrough">Sequence-first walkthrough<a class="anchor" aria-label="anchor" href="#sequence-first-walkthrough"></a>
+<h3 id="sequencelevel-diagnosis">Sequence‑level diagnosis<a class="anchor" aria-label="anchor" href="#sequencelevel-diagnosis"></a>
 </h3>
-<p>Prompt decisions used:</p>
+<p>The first prompt asks whether to diagnose by <strong>subject</strong>
+or by <strong>sequence ID</strong>:</p>
 <pre><code>Enter 1 for subject summary or 2 for sequence ID
 &gt; 2
 
 Enter which pipeline run to diagnose. The default is the most recent.
 &gt; [Enter]</code></pre>
-<p>Captured output excerpt:</p>
-<pre><code>The run you selected had 2 top-level jobs:
-
-Subject: sub-540296
-  bids_conversion_sub-540296 [COMPLETED]
-  mriqc_sub-540296           [COMPLETED]
-  fmriprep_sub-540296        [COMPLETED]
-  aroma_sub-540296           [STARTED]
-  postprocess_task_sub-540296[QUEUED]
-  extract_rois_sub-540296    [QUEUED]
-...
-Would you like to examine any of these jobs more closely?</code></pre>
+<p>Choosing the sequence‑first path lets you pick a specific pipeline
+run (for example, if you re‑ran the project with a different
+configuration). Once you select a sequence,
+<code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> shows all <strong>top‑level
+jobs</strong> for that run, grouped by subject, with their current
+status:</p>
+<pre><code>Postprocess stream1
+  postprocess_stream1_sub-540294                  [STARTED]
+  ---postprocess_sub-540294_task-ridl_run-01_...   [FAILED]</code></pre>
+<p>For postprocessing, this view expands nested structure: the
+subject‑level postprocess job has <strong>child jobs</strong> for each
+postprocess stream, and those in turn have children for each image‑level
+job (e.g., individual BOLD runs). At a glance you can see which specific
+image(s) caused a stream or subject to fail.</p>
+<p>From the sequence‑level view you can choose a job and drill down:</p>
+<ul>
+<li>show a detailed summary (times, parent/child jobs, exit codes),</li>
+<li>open the associated stdout or stderr log in the console,</li>
+<li>or return the log contents as a character vector for further
+inspection.</li>
+</ul>
+<p>This is usually the fastest way to answer, <em>“Why did this
+particular run of the pipeline fail?”</em> and <em>“Which exact job
+needs debugging?”</em></p>
 </div>
 <div class="section level3">
-<h3 id="drill-down-to-a-specific-job-and-inspect-logs">Drill down to a specific job and inspect logs<a class="anchor" aria-label="anchor" href="#drill-down-to-a-specific-job-and-inspect-logs"></a>
+<h3 id="subjectlevel-diagnosis-across-sequences">Subject‑level diagnosis across sequences<a class="anchor" aria-label="anchor" href="#subjectlevel-diagnosis-across-sequences"></a>
 </h3>
-<p>Prompt decisions used:</p>
-<pre><code>Would you like to examine any of these jobs more closely?
-&gt; yes
-
-Enter the job number from the list above
-&gt; 17
-
-Further diagnosis...
-1. View the output file in console
-2. Return output file as character object
-3. View the error file in the console
-4. Return error file as character object
-5. Exit</code></pre>
-<p>For this run, job <code>17</code> was
-<code>fmriprep_sub-540296</code>.</p>
-<p>Captured details:</p>
-<pre><code>Job `fmriprep_sub-540296`...
-...was submitted at 2026-02-14 17:53:38.310812
-...was started at 2026-02-14 18:27:15.174171
-...successfully completed at 2026-02-14 23:56:17.037141
-...had 1 child job
-Child job details:
-1 of 1 [STARTED]: aroma_sub-540296</code></pre>
-<p>Example error-tail output excerpt:</p>
-<pre><code>Warning: The system is configured to read the RTC time in the local time zone...</code></pre>
-<p>Example output-tail excerpt:</p>
-<pre><code>... nipype.workflow IMPORTANT: fMRIPrep finished successfully!
-... Finished fmriprep for subject 540296 (time elapsed: 5h 29m 5s)</code></pre>
-</div>
-</div>
-<div class="section level2">
-<h2 id="subject-first-diagnosis-path">Subject-first diagnosis path<a class="anchor" aria-label="anchor" href="#subject-first-diagnosis-path"></a>
-</h2>
-<p>If you already know the subject you care about, use the
-subject-summary branch:</p>
+<p>If you already know which subject you care about, you can start with
+the subject‑summary branch:</p>
 <pre><code>Enter 1 for subject summary or 2 for sequence ID
 &gt; 1
 
 Found 10 subject(s) across all runs.
 Enter the number corresponding to the subject you want to view
 &gt; 3</code></pre>
-<p>Captured output excerpt for <code>sub-540296</code>:</p>
-<pre><code>Subject Summary: sub-540296
-  bids_conversion_sub-540296 [COMPLETED]
-  mriqc_sub-540296           [COMPLETED]
-  fmriprep_sub-540296        [COMPLETED]
-  aroma_sub-540296           [STARTED]
-  postprocess_task_sub-540296[QUEUED]
-  extract_rois_sub-540296    [QUEUED]</code></pre>
-<p>You can then continue into sequence-level and job-level inspection
-from there.</p>
+<p>Here, <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> looks across <strong>all
+sequences</strong> in the SQLite database and shows, for the chosen
+subject, which combination of runs produced the best overall completion
+pattern. This helps with questions like:</p>
+<ul>
+<li>Did subject <code>sub-540303</code> ever complete fMRIPrep + AROMA +
+postprocessing?</li>
+<li>If so, which sequence (which configuration / run) produced that
+success?</li>
+</ul>
+<p>The summary groups jobs by step (BIDS conversion, MRIQC, fMRIPrep,
+AROMA, postprocessing streams, etc.) and highlights, for each step,
+which sequence had the most successful outcome. You can then jump from
+this high‑level summary back into sequence‑ or job‑level inspection for
+detailed debugging.</p>
+<p>Example subject‑level summary for <code>sub-540303</code>:</p>
+<pre><code>BIDS Conversion
+  ✓ bids_conversion_sub-540303 (job 15135998, sequence 18303423-c037-477a-91af-b6289525dad2) [COMPLETED]
+
+fMRIPrep
+  • fmriprep_sub-540303 (job 15136000, sequence 18303423-c037-477a-91af-b6289525dad2) [STARTED]</code></pre>
 </div>
-<div class="section level2">
-<h2 id="interpreting-success-vs-failure">Interpreting success vs failure<a class="anchor" aria-label="anchor" href="#interpreting-success-vs-failure"></a>
-</h2>
-<p>In <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code>:</p>
+<div class="section level3">
+<h3 id="interpreting-job-statuses">Interpreting job statuses<a class="anchor" aria-label="anchor" href="#interpreting-job-statuses"></a>
+</h3>
+<p><code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> uses the following job‑level
+statuses:</p>
 <ul>
 <li>
-<code>COMPLETED</code> means the tracked job finished.</li>
+<code>COMPLETED</code>: the job finished successfully (based on
+scheduler status and BrainGnomes tracking).</li>
 <li>
-<code>STARTED</code> means running (or previously started without
-terminal status yet).</li>
+<code>STARTED</code>: the job has begun running or previously ran
+without a terminal status yet recorded.</li>
 <li>
-<code>QUEUED</code> means waiting on scheduler
-dependencies/resources.</li>
+<code>QUEUED</code>: the scheduler knows about the job, but it is
+waiting on dependencies or resources.</li>
 <li>
-<code>FAILED</code> or <code>FAILED_BY_EXT</code> indicate hard
-failure (direct or upstream-caused).</li>
+<code>FAILED</code>: the job itself failed (non‑zero exit code or
+explicit failure marker).</li>
+<li>
+<code>FAILED_BY_EXT</code>: the job was never allowed to run
+successfully because an upstream dependency failed. For example, if one
+image‑level postprocess job in a stream fails, its parent stream‑level
+job and other dependent jobs are marked <code>FAILED_BY_EXT</code>.</li>
 </ul>
-<p>In <code><a href="../reference/get_project_status.html">get_project_status()</a></code> and
-<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code>, <code>*_complete</code> flags are
-stricter and include checks beyond simple queue status (for example,
-completion markers and output state).</p>
+<p>This distinction is important: <code>FAILED_BY_EXT</code> tells you
+which jobs are <em>victims</em> of an upstream problem versus the
+<strong>true root cause</strong> that needs debugging.</p>
+<p>In contrast, <code><a href="../reference/get_project_status.html">get_project_status()</a></code> and
+<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code> report simple <code>*_complete</code>
+flags per step; these are stricter than raw scheduler status and rely on
+BrainGnomes completion markers and expected outputs. A common workflow
+is:</p>
+<ol style="list-style-type: decimal">
+<li>Use <code><a href="../reference/get_project_status.html">get_project_status()</a></code> or
+<code><a href="../reference/get_subject_status.html">get_subject_status()</a></code> for a quick overview of which steps
+are done. These functions do <strong>not</strong> consult the SQLite
+database; instead they scan the project’s BIDS and log directories for
+<code>.complete</code> marker files and expected outputs, then derive
+strict <code>*_complete</code> flags and completion times per step.</li>
+<li>Use <code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> when you need to chase down
+<em>why</em> a particular job or subject failed and which logs to read
+next. This function <em>does</em> read from the SQLite job‑tracking
+database in order to reconstruct the full job dependency tree and status
+history across all runs.</li>
+</ol>
+</div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

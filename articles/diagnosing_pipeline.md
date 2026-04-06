@@ -2,23 +2,36 @@
 
 ## Overview
 
-When
-[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
-launches many jobs, it can be hard to quickly answer:
+Running an fMRI pipeline with BrainGnomes typically means launching
+**many** dependent jobs: BIDS conversion, MRIQC, fMRIPrep, ICA‑AROMA,
+one or more postprocessing streams, and optional ROI extraction. Each
+job writes its own logs and completion markers, and jobs depend on one
+another, often across multiple runs (sequences) of the same project.
+Without help, it is hard to answer even basic questions:
 
 - What already succeeded?
-- What is still running?
-- What failed?
-- What should I inspect next?
+- What is still running or queued?
+- What failed, and was it the *root cause* or just downstream of another
+  failure?
+- Where should I look next in the logs?
 
-This vignette shows a practical diagnosis workflow using:
+BrainGnomes provides three complementary tools for this:
 
 - [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
-  for a project-wide status table
+  gives a project‑wide table of step‑level completion flags and times
+  for all subjects.
 - [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
-  for one subject
+  focuses that same information on a single subject (and session),
+  making it easy to see where one subject is stuck.
 - [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  for interactive, log-driven debugging
+  ties together the job‑tracking database and log paths into an
+  interactive tree view for deep, log‑driven debugging.
+
+This vignette walks through a practical workflow that starts with the
+high‑level `*_status()` summaries and then uses
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+when you need to understand *why* something failed and which specific
+jobs are involved.
 
 The examples below were run on this project:
 
@@ -68,6 +81,19 @@ This gives a quick pass/fail style view. In this run, BIDS conversion
 and MRIQC are complete for all subjects, while downstream steps are not
 yet complete.
 
+Under the hood,
+[`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+and
+[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md):
+
+- look in the project’s BIDS directory to discover which
+  subjects/sessions exist, and
+- scan each subject’s log directory for BrainGnomes `.complete` (and
+  related) marker files.
+
+From these filesystem markers, they derive strict `*_complete` flags and
+completion times for each enabled step.
+
 You can also scan log markers for explicit failures:
 
 ``` r
@@ -108,16 +134,45 @@ This is often the fastest way to answer, “Where is subject X stuck?”
 
 ## Interactive diagnosis with `diagnose_pipeline()`
 
+Running a full fMRI preprocessing + postprocessing pipeline generates
+many jobs, log files, and potential failure points. Manually chasing
+SLURM job IDs and log files quickly becomes unmanageable. The goal of
 [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-gives a tree view plus optional log-tail inspection.
+is to wrap all of this job-tracking information into a single,
+interactive view.
+
+Behind the scenes, every job submitted by
+[`run_project()`](https://uncdependlab.github.io/BrainGnomes/reference/run_project.md)
+is recorded in an SQLite database associated with the project. Each
+record stores:
+
+- the **sequence ID** (a particular end‑to‑end run of the pipeline),
+- the **subject**, job name, scheduler ID, and parent/child
+  relationships,
+- timestamps (submitted, started, finished),
+- scheduler options and exit codes,
+- and a derived **status** (`COMPLETED`, `STARTED`, `QUEUED`, `FAILED`,
+  `FAILED_BY_EXT`).
+
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+reads this SQLite database, reconstructs the job dependency tree, and
+then guides you through it interactively. The function returns that raw
+tree structure invisibly so you can also inspect it yourself:
 
 ``` r
-diagnose_pipeline(scfg)
+tree <- diagnose_pipeline(scfg)
+print(tree)
 ```
 
-### Sequence-first walkthrough
+Each node in `tree` corresponds to a single tracked job and includes its
+subject, status, scheduler metadata, and parent/child links. This is the
+same structure BrainGnomes uses internally to understand job
+dependencies.
 
-Prompt decisions used:
+### Sequence‑level diagnosis
+
+The first prompt asks whether to diagnose by **subject** or by
+**sequence ID**:
 
     Enter 1 for subject summary or 2 for sequence ID
     > 2
@@ -125,62 +180,37 @@ Prompt decisions used:
     Enter which pipeline run to diagnose. The default is the most recent.
     > [Enter]
 
-Captured output excerpt:
+Choosing the sequence‑first path lets you pick a specific pipeline run
+(for example, if you re‑ran the project with a different configuration).
+Once you select a sequence,
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+shows all **top‑level jobs** for that run, grouped by subject, with
+their current status:
 
-    The run you selected had 2 top-level jobs:
+    Postprocess stream1
+      postprocess_stream1_sub-540294                  [STARTED]
+      ---postprocess_sub-540294_task-ridl_run-01_...   [FAILED]
 
-    Subject: sub-540296
-      bids_conversion_sub-540296 [COMPLETED]
-      mriqc_sub-540296           [COMPLETED]
-      fmriprep_sub-540296        [COMPLETED]
-      aroma_sub-540296           [STARTED]
-      postprocess_task_sub-540296[QUEUED]
-      extract_rois_sub-540296    [QUEUED]
-    ...
-    Would you like to examine any of these jobs more closely?
+For postprocessing, this view expands nested structure: the
+subject‑level postprocess job has **child jobs** for each postprocess
+stream, and those in turn have children for each image‑level job (e.g.,
+individual BOLD runs). At a glance you can see which specific image(s)
+caused a stream or subject to fail.
 
-### Drill down to a specific job and inspect logs
+From the sequence‑level view you can choose a job and drill down:
 
-Prompt decisions used:
+- show a detailed summary (times, parent/child jobs, exit codes),
+- open the associated stdout or stderr log in the console,
+- or return the log contents as a character vector for further
+  inspection.
 
-    Would you like to examine any of these jobs more closely?
-    > yes
+This is usually the fastest way to answer, *“Why did this particular run
+of the pipeline fail?”* and *“Which exact job needs debugging?”*
 
-    Enter the job number from the list above
-    > 17
+### Subject‑level diagnosis across sequences
 
-    Further diagnosis...
-    1. View the output file in console
-    2. Return output file as character object
-    3. View the error file in the console
-    4. Return error file as character object
-    5. Exit
-
-For this run, job `17` was `fmriprep_sub-540296`.
-
-Captured details:
-
-    Job `fmriprep_sub-540296`...
-    ...was submitted at 2026-02-14 17:53:38.310812
-    ...was started at 2026-02-14 18:27:15.174171
-    ...successfully completed at 2026-02-14 23:56:17.037141
-    ...had 1 child job
-    Child job details:
-    1 of 1 [STARTED]: aroma_sub-540296
-
-Example error-tail output excerpt:
-
-    Warning: The system is configured to read the RTC time in the local time zone...
-
-Example output-tail excerpt:
-
-    ... nipype.workflow IMPORTANT: fMRIPrep finished successfully!
-    ... Finished fmriprep for subject 540296 (time elapsed: 5h 29m 5s)
-
-## Subject-first diagnosis path
-
-If you already know the subject you care about, use the subject-summary
-branch:
+If you already know which subject you care about, you can start with the
+subject‑summary branch:
 
     Enter 1 for subject summary or 2 for sequence ID
     > 1
@@ -189,34 +219,73 @@ branch:
     Enter the number corresponding to the subject you want to view
     > 3
 
-Captured output excerpt for `sub-540296`:
+Here,
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+looks across **all sequences** in the SQLite database and shows, for the
+chosen subject, which combination of runs produced the best overall
+completion pattern. This helps with questions like:
 
-    Subject Summary: sub-540296
-      bids_conversion_sub-540296 [COMPLETED]
-      mriqc_sub-540296           [COMPLETED]
-      fmriprep_sub-540296        [COMPLETED]
-      aroma_sub-540296           [STARTED]
-      postprocess_task_sub-540296[QUEUED]
-      extract_rois_sub-540296    [QUEUED]
+- Did subject `sub-540303` ever complete fMRIPrep + AROMA +
+  postprocessing?
+- If so, which sequence (which configuration / run) produced that
+  success?
 
-You can then continue into sequence-level and job-level inspection from
-there.
+The summary groups jobs by step (BIDS conversion, MRIQC, fMRIPrep,
+AROMA, postprocessing streams, etc.) and highlights, for each step,
+which sequence had the most successful outcome. You can then jump from
+this high‑level summary back into sequence‑ or job‑level inspection for
+detailed debugging.
 
-## Interpreting success vs failure
+Example subject‑level summary for `sub-540303`:
 
-In
-[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md):
+    BIDS Conversion
+      ✓ bids_conversion_sub-540303 (job 15135998, sequence 18303423-c037-477a-91af-b6289525dad2) [COMPLETED]
 
-- `COMPLETED` means the tracked job finished.
-- `STARTED` means running (or previously started without terminal status
-  yet).
-- `QUEUED` means waiting on scheduler dependencies/resources.
-- `FAILED` or `FAILED_BY_EXT` indicate hard failure (direct or
-  upstream-caused).
+    fMRIPrep
+      • fmriprep_sub-540303 (job 15136000, sequence 18303423-c037-477a-91af-b6289525dad2) [STARTED]
 
-In
+### Interpreting job statuses
+
+[`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+uses the following job‑level statuses:
+
+- `COMPLETED`: the job finished successfully (based on scheduler status
+  and BrainGnomes tracking).
+- `STARTED`: the job has begun running or previously ran without a
+  terminal status yet recorded.
+- `QUEUED`: the scheduler knows about the job, but it is waiting on
+  dependencies or resources.
+- `FAILED`: the job itself failed (non‑zero exit code or explicit
+  failure marker).
+- `FAILED_BY_EXT`: the job was never allowed to run successfully because
+  an upstream dependency failed. For example, if one image‑level
+  postprocess job in a stream fails, its parent stream‑level job and
+  other dependent jobs are marked `FAILED_BY_EXT`.
+
+This distinction is important: `FAILED_BY_EXT` tells you which jobs are
+*victims* of an upstream problem versus the **true root cause** that
+needs debugging.
+
+In contrast,
 [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
 and
-[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md),
-`*_complete` flags are stricter and include checks beyond simple queue
-status (for example, completion markers and output state).
+[`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+report simple `*_complete` flags per step; these are stricter than raw
+scheduler status and rely on BrainGnomes completion markers and expected
+outputs. A common workflow is:
+
+1.  Use
+    [`get_project_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_project_status.md)
+    or
+    [`get_subject_status()`](https://uncdependlab.github.io/BrainGnomes/reference/get_subject_status.md)
+    for a quick overview of which steps are done. These functions do
+    **not** consult the SQLite database; instead they scan the project’s
+    BIDS and log directories for `.complete` marker files and expected
+    outputs, then derive strict `*_complete` flags and completion times
+    per step.
+2.  Use
+    [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+    when you need to chase down *why* a particular job or subject failed
+    and which logs to read next. This function *does* read from the
+    SQLite job‑tracking database in order to reconstruct the full job
+    dependency tree and status history across all runs.
