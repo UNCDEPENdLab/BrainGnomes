@@ -33,9 +33,9 @@ https://bids-specification.readthedocs.io/en/stable/appendices/entities.html
 This function recognizes standard BIDS entities such as subject
 (`sub-`), session (`ses-`), task (`task-`), acquisition (`acq-`), run,
 modality (`mod-`), echo (`echo-`), direction (`dir-`), reconstruction
-(`rec-`), hemisphere (`hemi-`), space (`space-`), resolution (`res-`),
-description (`desc-`), and fieldmap (`fmap-`), as well as the file
-suffix and extension.
+(`rec-`), hemisphere (`hemi-`), space (`space-`), cohort (`cohort-`),
+resolution (`res-`), description (`desc-`), and fieldmap (`fmap-`), as
+well as the file suffix and extension.
 
 ## Examples
 

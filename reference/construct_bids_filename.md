@@ -21,7 +21,7 @@ construct_bids_filename(bids_df, full.names = FALSE)
   include at least the columns `suffix` and `ext`, and optionally:
   `subject`, `session`, `task`, `acquisition`, `run`, `modality`,
   `echo`, `direction`, `reconstruction`, `hemisphere`, `space`,
-  `resolution`, `description`, and `fieldmap`.
+  `cohort`, `resolution`, `description`, and `fieldmap`.
 
 - full.names:
 
