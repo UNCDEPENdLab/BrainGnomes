@@ -364,22 +364,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       
       if (isTRUE(cfg$validate_postproc_steps)) {
         v_ok <- validate_apply_mask(mask_file = apply_mask_file, data_file = cur_file)
-        v_msg <- attr(v_ok, "message")
-        external_violations <- attr(v_ok, "external_violations")
-
-        if (isTRUE(v_ok)) {
-          to_log(lg, "info", glue("apply_mask validation passed: {v_msg}"))
-        } else {
-          to_log(lg, "error", glue("apply_mask validation failed: {v_msg}"))
-          if (isTRUE(cfg$stop_on_failed_validation)) {
-            stop(
-              glue(
-                "apply_mask validation failed with {external_violations} voxels outside the mask having non-zero signal ",
-                "and stop_on_failed_validation is TRUE. STOPPING postprocessing for this dataset."
-              )
-            )
-          }
-        }
+        postproc_validate_or_stop("apply_mask", v_ok)
       }
     } else if (step == "spatial_smooth") {
       pre_spatial_smooth_file <- cur_file

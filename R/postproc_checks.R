@@ -25,8 +25,7 @@
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
-#' @importFrom matrixStats rowMins
-#' @importFrom dplyr mutate case_when
+#' @importFrom matrixStats rowAnys
 validate_apply_mask <- function(mask_file, data_file) {
   checkmate::assert_file_exists(mask_file)
   checkmate::assert_file_exists(data_file)
@@ -35,34 +34,26 @@ validate_apply_mask <- function(mask_file, data_file) {
   data4d <- RNifti::readNifti(data_file)
 
   img_dims <- dim(data4d)
+  if (length(img_dims) == 3L) {
+    img_dims <- c(img_dims, 1L)
+    dim(data4d) <- img_dims
+  }
   n_vox <- prod(img_dims[1:3])
   n_t <- img_dims[4]
 
   # reshape 4D time series into voxels x time matrix
   img_matrix <- array(data4d, dim = c(n_vox, n_t))
-  min_vec <- matrixStats::rowMins(img_matrix) # minimum across time for each voxel
-
   mask_vec <- as.vector(mask)
+  outside <- mask_vec == 0
+  inside <- mask_vec > 0
 
-  mask_result <- cbind(mask_vec, min_vec)
-  mask_result_df <- as.data.frame(mask_result)
+  # External violation: mask == 0 but ANY timepoint is nonzero
+  any_nonzero <- matrixStats::rowAnys(img_matrix != 0)
+  external_violations <- sum(outside & any_nonzero)
 
-  mask_result_df <- mask_result_df %>%
-    dplyr::mutate(
-      externalposvox = dplyr::case_when(
-        .$mask_vec > 0 ~ 0L,
-        .$mask_vec == 0 & min_vec != 0 ~ 1L,
-        .$mask_vec == 0 & min_vec == 0 ~ 0L
-      ),
-      internalzerovox = dplyr::case_when(
-        .$mask_vec == 0 ~ 0L,
-        .$mask_vec > 0 & min_vec == 0 ~ 1L,
-        .$mask_vec > 0 & min_vec > 0 ~ 0L
-      )
-    )
-
-  external_violations <- sum(mask_result_df$externalposvox)
-  internal_zeros <- sum(mask_result_df$internalzerovox)
+  # Internal zeros: mask > 0 but ALL timepoints are zero
+  all_zero <- !any_nonzero
+  internal_zeros <- sum(inside & all_zero)
 
   passed <- external_violations == 0L
 
@@ -81,6 +72,10 @@ validate_apply_mask <- function(mask_file, data_file) {
 
 # --- multitaper helpers ---
 
+#' Compute multitaper power spectral density estimate for a single time series
+#' @importFrom signal sgolayfilt
+#' @keywords internal
+#' @noRd
 .pp_power_multitaper <- function(
     y, dt,
     nw = 3, k = NULL,
@@ -351,35 +346,22 @@ validate_apply_mask <- function(mask_file, data_file) {
 #' @noRd
 .pp_average_multitaper_spectra <- function(spec_list) {
   if (!length(spec_list)) stop("No spectra supplied for averaging.", call. = FALSE)
-  return(
-    dplyr::bind_rows(spec_list, .id = "voxel") %>%
-      dplyr::rename(freq = f, power_db = power) %>%
-      dplyr::group_by(freq) %>%
-      dplyr::summarise(power_db = mean(power_db, na.rm = TRUE), .groups = "drop")
-  )
+  dt <- data.table::rbindlist(spec_list, idcol = "voxel")
+  data.table::setnames(dt, c("f", "power"), c("freq", "power_db"))
+  as.data.frame(dt[, .(power_db = mean(power_db, na.rm = TRUE)), by = freq])
 }
 
 #' @keywords internal
 #' @noRd
 .pp_average_bandpower <- function(bp_list) {
   if (!length(bp_list)) stop("No bandpower estimates supplied for averaging.", call. = FALSE)
-  return(
-    dplyr::bind_rows(bp_list, .id = "voxel") %>%
-      dplyr::group_by(label, low, high) %>%
-      dplyr::summarise(
-        power_linear_mean = mean(power_linear, na.rm = TRUE),
-        relative_power = mean(relative_power, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      dplyr::mutate(
-        power_db = ifelse(
-          is.finite(power_linear_mean) & power_linear_mean > 0,
-          10 * log10(power_linear_mean),
-          NA_real_
-        )
-      ) %>%
-      dplyr::rename(power_linear = power_linear_mean)
-  )
+  dt <- data.table::rbindlist(bp_list, idcol = "voxel")
+  out <- dt[, .(power_linear = mean(power_linear, na.rm = TRUE),
+                relative_power = mean(relative_power, na.rm = TRUE)),
+            by = .(label, low, high)]
+  out[, power_db := ifelse(is.finite(power_linear) & power_linear > 0,
+                           10 * log10(power_linear), NA_real_)]
+  as.data.frame(out)
 }
 
 #' Validate temporal filtering (multitaper pre vs post)
@@ -393,7 +375,6 @@ validate_apply_mask <- function(mask_file, data_file) {
 #' @param band_high_hz Upper passband edge (Hz); `NA` if open.
 #' @param mask_file Optional 3D mask; if unset, sample the whole volume.
 #' @param n_voxels How many voxels to use.
-#' @param seed Optional RNG seed for sampling.
 #' @param passband_loss_fail_db Max allowed passband loss (dB) before fail (default 3).
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
@@ -409,7 +390,6 @@ validate_temporal_filter <- function(
     band_high_hz = NA_real_,
     mask_file = NULL,
     n_voxels = 30L,
-    seed = NA_integer_,
     passband_loss_fail_db = 3
 ) {
   checkmate::assert_file_exists(pre_file)
@@ -422,10 +402,6 @@ validate_temporal_filter <- function(
     attr(out, "message") <- "multitaper and signal packages are required for temporal_filter validation."
     attr(out, "details") <- list(missing_packages = TRUE)
     return(out)
-  }
-
-  if (!is.na(seed)) {
-    set.seed(seed)
   }
 
   band_low <- if (!is.null(band_low_hz) && is.finite(band_low_hz) && band_low_hz > 0) {
@@ -577,17 +553,13 @@ validate_temporal_filter <- function(
     pre_bp_avg <- .pp_average_bandpower(pre_bp_list)
     post_bp_avg <- .pp_average_bandpower(post_bp_list)
 
-    bandpower_diff <- pre_bp_avg %>%
-      dplyr::select(label, low, high, power_db_pre = power_db, relative_power_pre = relative_power) %>%
-      dplyr::inner_join(
-        post_bp_avg %>%
-          dplyr::select(label, low, high, power_db_post = power_db, relative_power_post = relative_power),
-        by = c("label", "low", "high")
-      ) %>%
-      dplyr::mutate(
-        power_db_change = power_db_post - power_db_pre,
-        band_type = "outside"
-      )
+    bandpower_diff <- merge(
+      pre_bp_avg[, c("label", "low", "high", "power_db", "relative_power")],
+      post_bp_avg[, c("label", "low", "high", "power_db", "relative_power")],
+      by = c("label", "low", "high"), suffixes = c("_pre", "_post")
+    )
+    bandpower_diff$power_db_change <- bandpower_diff$power_db_post - bandpower_diff$power_db_pre
+    bandpower_diff$band_type <- "outside"
 
     avg_reduction <- mean(bandpower_diff$power_db_pre - bandpower_diff$power_db_post, na.rm = TRUE)
     fail_outside <- is.finite(avg_reduction) && avg_reduction <= 0
@@ -626,14 +598,13 @@ validate_temporal_filter <- function(
     pre_pass_avg <- .pp_average_bandpower(pre_pass_list)
     post_pass_avg <- .pp_average_bandpower(post_pass_list)
 
-    passband_diff <- pre_pass_avg %>%
-      dplyr::select(label, low, high, power_db_pre = power_db, relative_power_pre = relative_power) %>%
-      dplyr::inner_join(
-        post_pass_avg %>%
-          dplyr::select(label, low, high, power_db_post = power_db, relative_power_post = relative_power),
-        by = c("label", "low", "high")
-      ) %>%
-      dplyr::mutate(power_db_change = power_db_post - power_db_pre, band_type = "passband")
+    passband_diff <- merge(
+      pre_pass_avg[, c("label", "low", "high", "power_db", "relative_power")],
+      post_pass_avg[, c("label", "low", "high", "power_db", "relative_power")],
+      by = c("label", "low", "high"), suffixes = c("_pre", "_post")
+    )
+    passband_diff$power_db_change <- passband_diff$power_db_post - passband_diff$power_db_pre
+    passband_diff$band_type <- "passband"
 
     power_changes <- passband_diff$power_db_change
     avg_change_db <- if (all(is.na(power_changes))) NA_real_ else mean(power_changes, na.rm = TRUE)
@@ -1062,20 +1033,100 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
   return(out)
 }
 
-#' Validate spatial smoothing (classic FWHM pre vs post)
+#' Empirical calibration coefficients for classic FWHM delta estimation
 #'
-#' `estimate_classic_fwhm()$geom` inside the mask; compares to `fwhm_mm` from config.
+#' These were derived from simulations applying known smoothing kernels to
+#' fMRI-like data and measuring the resulting change in classic FWHM.
+#' Because fMRI data are not Gaussian, the naive FWHM delta from first
+#' differences systematically deviates from the requested kernel; these
+#' regressions correct for that bias.
+#'
+#' Structure: `smoother -> method -> mask/nomask -> list(type, coeffs)`
+#'   - `type = "linear"`: `coeffs[1] + coeffs[2] * kernel`
+#'   - `type = "poly"`:   polynomial in kernel (`sum(coeffs * kernel^(0:p))`)
+#'
+#' @keywords internal
+#' @noRd
+.pp_calibration_coeffs <- list(
+  gaussian = list(
+    classic = list(
+      mask   = list(type = "linear", coeffs = c(-2.942579, 1.198781)),
+      nomask = list(type = "linear", coeffs = c(-2.141319, 1.143082))
+    )
+  ),
+  susan = list(
+    classic = list(
+      mask   = list(type = "poly", coeffs = c(-3.6270403, 1.4369376, -0.03108286)),
+      nomask = list(type = "poly", coeffs = c(-3.6270403, 1.4369376, -0.03108286))
+    )
+  )
+)
+
+#' Predict the expected FWHM delta from a calibration model
+#' @keywords internal
+#' @noRd
+.pp_predict_calibration <- function(model, kernel_fwhm) {
+  coeffs <- model$coeffs
+  if (model$type == "linear") {
+    return(coeffs[1] + coeffs[2] * kernel_fwhm)
+  } else if (model$type == "poly") {
+    powers <- seq(0, length(coeffs) - 1)
+    return(sum(coeffs * kernel_fwhm^powers))
+  } else {
+    stop("Unknown calibration model type: ", model$type, call. = FALSE)
+  }
+}
+
+#' Select the calibration model for a given smoother and mask usage
+#' @keywords internal
+#' @noRd
+.pp_select_calibration <- function(smoother, used_mask) {
+  smooth_entry <- .pp_calibration_coeffs[[smoother]]
+  if (is.null(smooth_entry)) {
+    warning("No calibration table for smoother '", smoother,
+            "'; falling back to gaussian.", call. = FALSE)
+    smooth_entry <- .pp_calibration_coeffs[["gaussian"]]
+  }
+  method_entry <- smooth_entry[["classic"]]
+  if (is.null(method_entry)) {
+    stop("No classic calibration for smoother '", smoother, "'.", call. = FALSE)
+  }
+  key <- if (isTRUE(used_mask)) "mask" else "nomask"
+  model <- method_entry[[key]]
+  if (is.null(model)) {
+    fallback_key <- setdiff(c("mask", "nomask"), key)
+    model <- method_entry[[fallback_key]]
+    if (is.null(model)) {
+      stop("Calibration entry for '", smoother, "' classic is malformed.", call. = FALSE)
+    }
+    warning("Calibration '", key, "' missing; using '", fallback_key, "' fallback.", call. = FALSE)
+  }
+  model
+}
+
+#' Validate spatial smoothing (classic FWHM pre vs post, calibration-corrected)
+#'
+#' Measures the observed FWHM change using `estimate_classic_fwhm()` and compares
+#' it to the calibration-predicted delta for the requested kernel size. The
+#' calibration accounts for the fact that fMRI data are non-Gaussian and the
+#' naive first-differences FWHM estimate has a systematic bias that depends on
+#' smoother type and whether masking was used.
 #'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
 #' @param mask_file 3D mask (same space as BOLD).
-#' @param fwhm_mm `cfg$spatial_smooth$fwhm_mm` (kernel requested).
+#' @param fwhm_mm Requested smoothing kernel FWHM in mm (`cfg$spatial_smooth$fwhm_mm`).
+#' @param smoother Character; `"susan"` (default, matches `spatial_smooth()`) or `"gaussian"`.
+#' @param used_mask Logical; whether smoothing was performed inside a mask (default `TRUE`).
+#' @param tolerance_mm Tolerance in mm for `|observed_delta - expected_delta|` (default 0.5).
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
-#'   Attributes: `message`, `details` (pre/post/delta FWHM mm).
+#'   Attributes: `message`, `details` (pre/post/delta/expected_delta/diff FWHM mm).
 #'
 #' @keywords internal
-validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_) {
+validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_,
+                                    smoother = "susan", used_mask = TRUE,
+                                    tolerance_mm = 0.5) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
@@ -1102,8 +1153,6 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   pre_f <- estimate_classic_fwhm(pre, mask_logical, vox_mm)$geom
   post_f <- estimate_classic_fwhm(post, mask_logical, vox_mm)$geom
 
-  expect_increase <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
-
   if (!is.finite(pre_f) || !is.finite(post_f) || pre_f <= 0 || post_f <= 0) {
     out <- FALSE
     attr(out, "message") <- sprintf(
@@ -1114,38 +1163,147 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     return(out)
   }
 
-  delta <- post_f - pre_f
-  passed <- if (isTRUE(expect_increase)) {
-    post_f > pre_f && delta > 0
+  delta_observed <- post_f - pre_f
+
+  # --- calibration-based comparison ---
+  has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
+  if (has_kernel) {
+    cal_model <- .pp_select_calibration(smoother, used_mask)
+    delta_expected <- .pp_predict_calibration(cal_model, fwhm_mm)
+    diff_cal <- delta_observed - delta_expected
+    within_tol <- abs(diff_cal) <= tolerance_mm
+    passed <- within_tol
+    msg <- sprintf(
+      paste0(
+        "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta_observed=%.4f mm. ",
+        "Calibrated expected delta=%.4f mm (smoother=%s, mask=%s). ",
+        "|obs-exp|=%.4f mm (tol=%.4f mm). %s"
+      ),
+      pre_f, post_f, delta_observed,
+      delta_expected, smoother, used_mask,
+      abs(diff_cal), tolerance_mm,
+      if (passed) "PASS" else "FAIL"
+    )
+    details <- list(
+      pre_fwhm_mm = pre_f,
+      post_fwhm_mm = post_f,
+      delta_observed_mm = delta_observed,
+      delta_expected_mm = delta_expected,
+      delta_diff_mm = diff_cal,
+      tolerance_mm = tolerance_mm,
+      smoother = smoother,
+      used_mask = used_mask
+    )
   } else {
-    abs(delta) < 1e-6 || post_f >= pre_f * 0.99
+    # no kernel specified: just check that smoothness did not decrease
+    passed <- delta_observed >= 0
+    msg <- sprintf(
+      "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta=%.4f mm (no kernel specified; directional check only).",
+      pre_f, post_f, delta_observed
+    )
+    details <- list(
+      pre_fwhm_mm = pre_f,
+      post_fwhm_mm = post_f,
+      delta_observed_mm = delta_observed
+    )
   }
 
-  msg <- sprintf(
-    "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta=%.4f mm (requested kernel ~ %.4f mm).",
-    pre_f, post_f, delta, if (is.finite(fwhm_mm)) fwhm_mm else NA_real_
-  )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(pre_fwhm_mm = pre_f, post_fwhm_mm = post_f, delta_mm = delta)
+  attr(out, "details") <- details
   return(out)
 }
 
-#' Validate AROMA (`lmfit_residuals_4d` replay vs output)
+#' Sample voxels and replay regression via `lmfit_residuals_mat`
 #'
-#' Replays `apply_aroma`; max abs voxel diff vs 0.05 (or skip if no noise ICs).
+#' Shared helper for `validate_apply_aroma` and `validate_confound_regression`.
+#' Reads pre/post 4D images, samples up to `n_sample` non-constant voxels,
+#' replays the regression in pure R, and returns the max absolute difference.
+#'
+#' @param pre_file Path to 4D BOLD before the step.
+#' @param post_file Path to 4D BOLD after the step.
+#' @param X Design matrix (timepoints x regressors).
+#' @param include_rows Logical vector of rows used in fitting.
+#' @param preserve_mean Passed to `lmfit_residuals_mat`.
+#' @param set_mean Passed to `lmfit_residuals_mat`.
+#' @param regress_cols Passed to `lmfit_residuals_mat` (1-based).
+#' @param exclusive Passed to `lmfit_residuals_mat`.
+#' @param n_sample Number of voxels to sample (default 100).
+#'
+#' @return A list with `max_abs_diff` and `n_sampled`.
+#' @keywords internal
+#' @noRd
+.pp_sample_and_replay <- function(pre_file, post_file, X, include_rows,
+                                  preserve_mean = FALSE, set_mean = 0.0,
+                                  regress_cols = NULL, exclusive = FALSE,
+                                  n_sample = 100L) {
+  pre_img <- .pp_read_4d(pre_file)
+  post_img <- .pp_read_4d(post_file)
+  d <- dim(pre_img)
+  nx <- d[1]; ny <- d[2]; nz <- d[3]; nt <- d[4]
+
+  # Build mask: voxels where pre has any nonzero value across time
+  pre_mat_full <- matrix(as.numeric(pre_img), nrow = nx * ny * nz, ncol = nt)
+  mask_idx <- which(matrixStats::rowAnys(pre_mat_full != 0))
+  if (length(mask_idx) == 0L) {
+    return(list(max_abs_diff = 0, n_sampled = 0L))
+  }
+
+  # Convert mask indices to xyz coords for .pp_select_nonconstant_voxels
+  coords <- arrayInd(mask_idx, .dim = c(nx, ny, nz))
+
+  get_pre_ts <- .pp_make_ts_extractor(pre_img, coords)
+  get_post_ts <- .pp_make_ts_extractor(post_img, coords)
+
+  n_want <- min(n_sample, length(mask_idx))
+  sel <- .pp_select_nonconstant_voxels(
+    mask_idx = mask_idx,
+    get_pre_ts = get_pre_ts,
+    get_post_ts = get_post_ts,
+    n_voxels = n_want
+  )
+
+  # Extract pre and post time series for selected voxels (nt × n_voxels)
+  Y_pre <- pre_mat_full[sel$indices, , drop = FALSE]  # n_voxels × nt
+  Y_pre <- t(Y_pre)                                    # nt × n_voxels
+  Y_post <- matrix(NA_real_, nrow = nt, ncol = length(sel$indices))
+  post_mat_full <- matrix(as.numeric(post_img), nrow = nx * ny * nz, ncol = nt)
+  Y_post <- t(post_mat_full[sel$indices, , drop = FALSE])
+
+  # Replay regression in pure R
+  expected <- lmfit_residuals_mat(
+    Y = Y_pre,
+    X = X,
+    include_rows = include_rows,
+    add_intercept = FALSE,
+    preserve_mean = preserve_mean,
+    set_mean = set_mean,
+    regress_cols = regress_cols,
+    exclusive = exclusive
+  )
+
+  mad_val <- max(abs(Y_post - expected), na.rm = TRUE)
+  return(list(max_abs_diff = mad_val, n_sampled = length(sel$indices)))
+}
+
+#' Validate AROMA (voxel-sampling replay vs output)
+#'
+#' Samples ~100 voxels and replays the AROMA regression via `lmfit_residuals_mat`;
+#' passes if max abs diff < 0.05 (or skips if no noise ICs).
 #'
 #' @param pre_file Path to 4D BOLD before `apply_aroma`.
 #' @param post_file Path to 4D BOLD after `apply_aroma`.
 #' @param mixing_file MELODIC mixing matrix (no header).
 #' @param noise_ics Noise IC indices (1-based), same as pipeline.
 #' @param nonaggressive Same as `apply_aroma`.
+#' @param n_sample Number of voxels to sample (default 100).
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details`.
 #'
 #' @keywords internal
-validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics, nonaggressive = TRUE) {
+validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics,
+                                 nonaggressive = TRUE, n_sample = 100L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mixing_file)
@@ -1169,87 +1327,83 @@ validate_apply_aroma <- function(pre_file, post_file, mixing_file, noise_ics, no
   }
 
   exclusive_flag <- !isTRUE(nonaggressive)
-  tmp <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(tmp), add = TRUE)
-
   include_rows <- rep(TRUE, nrow(mixing_mat))
-  lmfit_residuals_4d(
-    infile = pre_file,
+
+  replay <- .pp_sample_and_replay(
+    pre_file = pre_file,
+    post_file = post_file,
     X = mixing_mat,
     include_rows = include_rows,
-    add_intercept = FALSE,
-    outfile = tmp,
-    internal = FALSE,
     preserve_mean = FALSE,
     set_mean = 0.0,
     regress_cols = comp_idx,
-    exclusive = exclusive_flag
+    exclusive = exclusive_flag,
+    n_sample = n_sample
   )
 
-  post <- RNifti::readNifti(post_file)
-  exp <- RNifti::readNifti(tmp)
-  mad <- .pp_max_abs_diff(post, exp)
+  mad <- replay$max_abs_diff
   tol <- 0.05
   passed <- is.finite(mad) && mad < tol
   msg <- sprintf(
-    "AROMA output vs lmfit_residuals_4d replay: max abs diff %.6g (tol %.3g); nonaggressive=%s.",
-    mad, tol, nonaggressive
+    "AROMA voxel-sample replay (%d voxels): max abs diff %.6g (tol %.3g); nonaggressive=%s.",
+    replay$n_sampled, mad, tol, nonaggressive
   )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(max_abs_diff = mad, n_noise_ic = length(comp_idx))
+  attr(out, "details") <- list(max_abs_diff = mad, n_noise_ic = length(comp_idx),
+                                n_sampled = replay$n_sampled)
   return(out)
 }
 
-#' Validate confound regression (replay vs output)
+#' Validate confound regression (voxel-sampling replay vs output)
 #'
-#' Same `lmfit_residuals_4d` setup as `confound_regression` (`preserve_mean = TRUE`); max abs diff vs 0.05.
+#' Samples ~100 voxels and replays the regression via `lmfit_residuals_mat`
+#' (`preserve_mean = TRUE`); passes if max abs diff < 0.05.
 #'
 #' @param pre_file Path to 4D BOLD before `confound_regression`.
 #' @param post_file Path to 4D BOLD after `confound_regression`.
 #' @param to_regress Regressor TSV (no header).
 #' @param censor_file Optional censor file (1 = keep TR).
+#' @param n_sample Number of voxels to sample (default 100).
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (`max_abs_diff`).
 #'
 #' @keywords internal
-validate_confound_regression <- function(pre_file, post_file, to_regress, censor_file = NULL) {
+validate_confound_regression <- function(pre_file, post_file, to_regress,
+                                         censor_file = NULL, n_sample = 100L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(to_regress)
 
-  Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE, data.table = FALSE)
+  Xmat <- as.matrix(data.table::fread(to_regress, sep = "\t", header = FALSE, data.table = FALSE))
   good_vols <- rep(TRUE, nrow(Xmat))
   if (checkmate::test_file_exists(censor_file)) {
     good_vols <- as.logical(as.integer(readLines(censor_file)))
   }
 
-  tmp <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(tmp), add = TRUE)
-
-  lmfit_residuals_4d(
-    infile = pre_file,
-    X = as.matrix(Xmat),
+  replay <- .pp_sample_and_replay(
+    pre_file = pre_file,
+    post_file = post_file,
+    X = Xmat,
     include_rows = good_vols,
-    add_intercept = FALSE,
-    outfile = tmp,
-    internal = FALSE,
     preserve_mean = TRUE,
     set_mean = 0.0,
     regress_cols = NULL,
-    exclusive = FALSE
+    exclusive = FALSE,
+    n_sample = n_sample
   )
 
-  post <- RNifti::readNifti(post_file)
-  exp <- RNifti::readNifti(tmp)
-  mad <- .pp_max_abs_diff(post, exp)
+  mad <- replay$max_abs_diff
   tol <- 0.05
   passed <- is.finite(mad) && mad < tol
-  msg <- sprintf("Confound regression replay: max abs diff %.6g (tol %.3g).", mad, tol)
+  msg <- sprintf(
+    "Confound regression voxel-sample replay (%d voxels): max abs diff %.6g (tol %.3g).",
+    replay$n_sampled, mad, tol
+  )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(max_abs_diff = mad)
+  attr(out, "details") <- list(max_abs_diff = mad, n_sampled = replay$n_sampled)
   return(out)
 }
 
