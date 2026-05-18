@@ -500,9 +500,12 @@ test_that("validate_spatial_smooth falls back to directional check without fwhm_
   write_synth_4d(data4d, post_file)
   write_synth_mask(mask, mask_file)
 
-  result <- validate_spatial_smooth(pre_file, post_file, mask_file, fwhm_mm = NA_real_)
+  result <- validate_spatial_smooth(pre_file, post_file, mask_file,
+    fwhm_mm = NA_real_, max_volumes = 3)
   expect_true(is.logical(result))
   expect_match(attr(result, "message"), "directional check only")
+  expect_equal(attr(result, "details")$volumes_used, 3L)
+  expect_equal(attr(result, "details")$total_volumes, nt)
   # no calibration fields expected
   expect_null(attr(result, "details")$delta_expected_mm)
 })
@@ -540,6 +543,19 @@ test_that(".pp_predict_calibration poly model works", {
   # kernel=6 -> -3.6270403 + 1.4369376*6 + -0.03108286*36
   expected <- -3.6270403 + 1.4369376 * 6 + (-0.03108286) * 36
   expect_equal(.pp_predict_calibration(model, 6), expected, tolerance = 1e-6)
+})
+
+test_that(".pp_smoothness_volume_indices limits or preserves volumes", {
+  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 3L), 1:3)
+  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 10L), 1:5)
+  expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = Inf), 1:5)
+})
+
+test_that(".pp_mad_scale_matrix matches row-wise MAD scaling", {
+  mat <- matrix(c(1, 2, 3, 3, 3, 3, 10, 12, 14), nrow = 3, byrow = TRUE)
+  expected_mad <- apply(mat, 1L, stats::mad, constant = 1.4826, na.rm = TRUE)
+  expected_mad[!is.finite(expected_mad) | expected_mad <= 1e-6] <- 1
+  expect_equal(.pp_mad_scale_matrix(mat), mat / expected_mad)
 })
 
 test_that(".pp_select_calibration selects correct model", {

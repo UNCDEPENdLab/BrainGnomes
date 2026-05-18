@@ -492,7 +492,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
             data_file = cur_file,
             mask_file = brain_mask,
             target = gm,
-            tolerance = 0
+            tolerance = 0.01
           )
           postproc_validate_or_stop("intensity_normalize", v_ok)
         }

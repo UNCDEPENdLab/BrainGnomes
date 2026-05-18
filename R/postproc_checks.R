@@ -734,6 +734,85 @@ estimate_classic_fwhm <- function(arr4d, mask3d, vox_mm, agg = "geom") {
   return(list(per_axis = per_axis, geom_axes = geom_axes, geom = overall))
 }
 
+#' Build an orthonormal polynomial trend matrix for smoothness validation
+#' @keywords internal
+#' @noRd
+.pp_build_trend_matrix <- function(nt, degree = 3L, demean = TRUE) {
+  degree <- max(0L, as.integer(degree))
+  cols <- list()
+  tvec <- seq_len(nt)
+  if (isTRUE(demean)) cols[[length(cols) + 1L]] <- rep(1, nt)
+  if (degree >= 1L && nt >= 2L) {
+    degree <- min(degree, nt - 1L)
+    rng <- range(tvec)
+    scaled <- if (diff(rng) > 0) {
+      2 * (tvec - mean(tvec)) / diff(rng)
+    } else {
+      rep(0, nt)
+    }
+    poly_mat <- stats::poly(scaled, degree = degree, raw = FALSE, simple = FALSE)
+    for (p in seq_len(degree)) cols[[length(cols) + 1L]] <- poly_mat[, p]
+  }
+  if (!length(cols)) return(NULL)
+  do.call(cbind, cols)
+}
+
+#' Apply voxelwise polynomial detrending for smoothness validation
+#' @keywords internal
+#' @noRd
+.pp_detrend_voxels <- function(mat, degree = 3L, demean = TRUE) {
+  nt <- ncol(mat)
+  if (!length(mat) || nt == 0L) return(mat)
+  X <- .pp_build_trend_matrix(nt, degree = degree, demean = demean)
+  if (is.null(X)) return(mat)
+  coeff <- qr.solve(X, t(mat))
+  fitted <- t(X %*% coeff)
+  mat - fitted
+}
+
+#' Normalize voxel time series by temporal MAD for smoothness validation
+#' @keywords internal
+#' @noRd
+.pp_mad_scale_matrix <- function(mat) {
+  mad_vals <- matrixStats::rowMads(mat, constant = 1.4826, na.rm = TRUE)
+  mad_vals[!is.finite(mad_vals) | mad_vals <= 1e-6] <- 1
+  mat / mad_vals
+}
+
+#' Select timepoints for smoothness validation
+#' @keywords internal
+#' @noRd
+.pp_smoothness_volume_indices <- function(nt, max_volumes = 300L) {
+  if (!checkmate::test_count(nt, positive = TRUE)) {
+    stop("nt must be a positive integer.", call. = FALSE)
+  }
+  if (is.null(max_volumes) ||
+      (length(max_volumes) == 1L && (is.na(max_volumes) || is.infinite(max_volumes)))) {
+    return(seq_len(nt))
+  }
+  checkmate::assert_count(max_volumes, positive = TRUE)
+  seq_len(min(nt, as.integer(max_volumes)))
+}
+
+#' Match the classic smoothness preprocessing used by 3dSmoothnessChange.R
+#' @keywords internal
+#' @noRd
+.pp_prepare_classic_smoothness <- function(arr4d, mask3d, polydeg = 3L,
+                                           demean = TRUE, unif = TRUE) {
+  dims <- dim(arr4d)
+  n_vox <- prod(dims[1:3])
+  nt <- dims[4]
+  mask_vec <- as.vector(mask3d)
+  mat <- array(arr4d, dim = c(n_vox, nt))
+  if (any(mask_vec)) {
+    mat_mask <- mat[mask_vec, , drop = FALSE]
+    mat_mask <- .pp_detrend_voxels(mat_mask, degree = polydeg, demean = demean)
+    if (isTRUE(unif)) mat_mask <- .pp_mad_scale_matrix(mat_mask)
+    mat[mask_vec, ] <- mat_mask
+  }
+  array(mat, dim = dims)
+}
+
 median_over_time <- function(arr4d) {
   return(apply(arr4d, c(1, 2, 3), stats::median, na.rm = TRUE))
 }
@@ -927,7 +1006,9 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
 #' it to the calibration-predicted delta for the requested kernel size. The
 #' calibration accounts for the fact that fMRI data are non-Gaussian and the
 #' naive first-differences FWHM estimate has a systematic bias that depends on
-#' smoother type and whether masking was used.
+#' smoother type and whether masking was used. Before estimating FWHM, voxel time
+#' series are polynomial-detrended and MAD-normalized to match the preprocessing
+#' used by the calibration script.
 #'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
@@ -936,6 +1017,12 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
 #' @param smoother Character; `"susan"` (default, matches `spatial_smooth()`) or `"gaussian"`.
 #' @param used_mask Logical; whether smoothing was performed inside a mask (default `TRUE`).
 #' @param tolerance_mm Tolerance in mm for `|observed_delta - expected_delta|` (default 0.5).
+#' @param preprocess Logical; if `TRUE`, apply calibration-matched preprocessing.
+#' @param polydeg Polynomial detrending degree used when `preprocess = TRUE`.
+#' @param demean Logical; include mean removal in preprocessing.
+#' @param unif Logical; normalize each voxel by temporal MAD in preprocessing.
+#' @param max_volumes Maximum number of timepoints used for validation. The
+#'   first `max_volumes` are used; `Inf` uses all volumes.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   Attributes: `message`, `details` (pre/post/delta/expected_delta/diff FWHM mm).
@@ -943,7 +1030,9 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
 #' @keywords internal
 validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_,
                                     smoother = "susan", used_mask = TRUE,
-                                    tolerance_mm = 0.5) {
+                                    tolerance_mm = 0.5, preprocess = TRUE,
+                                    polydeg = 3L, demean = TRUE, unif = TRUE,
+                                    max_volumes = 300L) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
@@ -966,7 +1055,21 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     return(out)
   }
 
+  total_volumes <- dim(pre)[4]
+  volume_idx <- .pp_smoothness_volume_indices(total_volumes, max_volumes = max_volumes)
+  if (length(volume_idx) < total_volumes) {
+    pre <- pre[, , , volume_idx, drop = FALSE]
+    post <- post[, , , volume_idx, drop = FALSE]
+  }
+  volumes_used <- length(volume_idx)
+
   vox_mm <- .pp_pixdim_mm(pre_file)
+  if (isTRUE(preprocess)) {
+    pre <- .pp_prepare_classic_smoothness(pre, mask_logical,
+      polydeg = polydeg, demean = demean, unif = unif)
+    post <- .pp_prepare_classic_smoothness(post, mask_logical,
+      polydeg = polydeg, demean = demean, unif = unif)
+  }
   pre_f <- estimate_classic_fwhm(pre, mask_logical, vox_mm)$geom
   post_f <- estimate_classic_fwhm(post, mask_logical, vox_mm)$geom
 
@@ -994,10 +1097,12 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       paste0(
         "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta_observed=%.4f mm. ",
         "Calibrated expected delta=%.4f mm (smoother=%s, mask=%s). ",
+        "Volumes used=%d/%d. ",
         "|obs-exp|=%.4f mm (tol=%.4f mm). %s"
       ),
       pre_f, post_f, delta_observed,
       delta_expected, smoother, used_mask,
+      volumes_used, total_volumes,
       abs(diff_cal), tolerance_mm,
       if (passed) "PASS" else "FAIL"
     )
@@ -1009,19 +1114,40 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       delta_diff_mm = diff_cal,
       tolerance_mm = tolerance_mm,
       smoother = smoother,
-      used_mask = used_mask
+      used_mask = used_mask,
+      volumes_used = volumes_used,
+      total_volumes = total_volumes,
+      max_volumes = max_volumes,
+      preprocessing = list(
+        enabled = isTRUE(preprocess),
+        polydeg = polydeg,
+        demean = isTRUE(demean),
+        unif = isTRUE(unif)
+      )
     )
   } else {
     # no kernel specified: just check that smoothness did not decrease
     passed <- delta_observed >= 0
     msg <- sprintf(
-      "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta=%.4f mm (no kernel specified; directional check only).",
-      pre_f, post_f, delta_observed
+      paste0(
+        "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta=%.4f mm. ",
+        "Volumes used=%d/%d (no kernel specified; directional check only)."
+      ),
+      pre_f, post_f, delta_observed, volumes_used, total_volumes
     )
     details <- list(
       pre_fwhm_mm = pre_f,
       post_fwhm_mm = post_f,
-      delta_observed_mm = delta_observed
+      delta_observed_mm = delta_observed,
+      volumes_used = volumes_used,
+      total_volumes = total_volumes,
+      max_volumes = max_volumes,
+      preprocessing = list(
+        enabled = isTRUE(preprocess),
+        polydeg = polydeg,
+        demean = isTRUE(demean),
+        unif = isTRUE(unif)
+      )
     )
   }
 
