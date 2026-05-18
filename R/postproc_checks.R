@@ -1010,6 +1010,18 @@ validate_intensity_normalize <- function(data_file, mask_file, target, tolerance
 #' series are polynomial-detrended and MAD-normalized to match the preprocessing
 #' used by the calibration script.
 #'
+#' The preprocessing is important because the classic first-difference FWHM
+#' estimator is sensitive to non-smooth sources of spatial variance that are not
+#' the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
+#' large between-voxel variance differences can inflate or deflate the ratio of
+#' spatial-difference variance to total variance, making the measured FWHM change
+#' disagree with the calibration even when smoothing was applied correctly. The
+#' validation therefore mirrors `local/3dSmoothnessChange.R`: it removes a
+#' low-order polynomial trend from each in-mask voxel time series, removes the
+#' mean when `demean = TRUE`, and scales each voxel by its temporal MAD when
+#' `unif = TRUE`. This puts pre/post data on the same residualized, variance-
+#' normalized scale used to derive the empirical calibration coefficients.
+#'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
 #' @param mask_file 3D mask (same space as BOLD).

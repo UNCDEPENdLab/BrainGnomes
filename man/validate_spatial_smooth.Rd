@@ -11,7 +11,12 @@ validate_spatial_smooth(
   fwhm_mm = NA_real_,
   smoother = "susan",
   used_mask = TRUE,
-  tolerance_mm = 0.5
+  tolerance_mm = 0.5,
+  preprocess = TRUE,
+  polydeg = 3L,
+  demean = TRUE,
+  unif = TRUE,
+  max_volumes = 300L
 )
 }
 \arguments{
@@ -28,6 +33,17 @@ validate_spatial_smooth(
 \item{used_mask}{Logical; whether smoothing was performed inside a mask (default \code{TRUE}).}
 
 \item{tolerance_mm}{Tolerance in mm for \verb{|observed_delta - expected_delta|} (default 0.5).}
+
+\item{preprocess}{Logical; if \code{TRUE}, apply calibration-matched preprocessing.}
+
+\item{polydeg}{Polynomial detrending degree used when \code{preprocess = TRUE}.}
+
+\item{demean}{Logical; include mean removal in preprocessing.}
+
+\item{unif}{Logical; normalize each voxel by temporal MAD in preprocessing.}
+
+\item{max_volumes}{Maximum number of timepoints used for validation. The
+first \code{max_volumes} are used; \code{Inf} uses all volumes.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
@@ -38,6 +54,21 @@ Measures the observed FWHM change using \code{estimate_classic_fwhm()} and compa
 it to the calibration-predicted delta for the requested kernel size. The
 calibration accounts for the fact that fMRI data are non-Gaussian and the
 naive first-differences FWHM estimate has a systematic bias that depends on
-smoother type and whether masking was used.
+smoother type and whether masking was used. Before estimating FWHM, voxel time
+series are polynomial-detrended and MAD-normalized to match the preprocessing
+used by the calibration script.
+}
+\details{
+The preprocessing is important because the classic first-difference FWHM
+estimator is sensitive to non-smooth sources of spatial variance that are not
+the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
+large between-voxel variance differences can inflate or deflate the ratio of
+spatial-difference variance to total variance, making the measured FWHM change
+disagree with the calibration even when smoothing was applied correctly. The
+validation therefore mirrors \verb{local/3dSmoothnessChange.R}: it removes a
+low-order polynomial trend from each in-mask voxel time series, removes the
+mean when \code{demean = TRUE}, and scales each voxel by its temporal MAD when
+\code{unif = TRUE}. This puts pre/post data on the same residualized, variance-
+normalized scale used to derive the empirical calibration coefficients.
 }
 \keyword{internal}
