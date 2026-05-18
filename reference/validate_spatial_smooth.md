@@ -5,7 +5,9 @@ compares it to the calibration-predicted delta for the requested kernel
 size. The calibration accounts for the fact that fMRI data are
 non-Gaussian and the naive first-differences FWHM estimate has a
 systematic bias that depends on smoother type and whether masking was
-used.
+used. Before estimating FWHM, voxel time series are polynomial-detrended
+and MAD-normalized to match the preprocessing used by the calibration
+script.
 
 ## Usage
 
@@ -17,7 +19,12 @@ validate_spatial_smooth(
   fwhm_mm = NA_real_,
   smoother = "susan",
   used_mask = TRUE,
-  tolerance_mm = 0.5
+  tolerance_mm = 0.5,
+  preprocess = TRUE,
+  polydeg = 3L,
+  demean = TRUE,
+  unif = TRUE,
+  max_volumes = 300L
 )
 ```
 
@@ -54,8 +61,45 @@ validate_spatial_smooth(
 
   Tolerance in mm for `|observed_delta - expected_delta|` (default 0.5).
 
+- preprocess:
+
+  Logical; if `TRUE`, apply calibration-matched preprocessing.
+
+- polydeg:
+
+  Polynomial detrending degree used when `preprocess = TRUE`.
+
+- demean:
+
+  Logical; include mean removal in preprocessing.
+
+- unif:
+
+  Logical; normalize each voxel by temporal MAD in preprocessing.
+
+- max_volumes:
+
+  Maximum number of timepoints used for validation. The first
+  `max_volumes` are used; `Inf` uses all volumes.
+
 ## Value
 
 A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 Attributes: `message`, `details` (pre/post/delta/expected_delta/diff
 FWHM mm).
+
+## Details
+
+The preprocessing is important because the classic first-difference FWHM
+estimator is sensitive to non-smooth sources of spatial variance that
+are not the target of the smoothing check. Slow voxelwise drifts, mean
+offsets, and large between-voxel variance differences can inflate or
+deflate the ratio of spatial-difference variance to total variance,
+making the measured FWHM change disagree with the calibration even when
+smoothing was applied correctly. The validation therefore mirrors
+`local/3dSmoothnessChange.R`: it removes a low-order polynomial trend
+from each in-mask voxel time series, removes the mean when
+`demean = TRUE`, and scales each voxel by its temporal MAD when
+`unif = TRUE`. This puts pre/post data on the same residualized,
+variance- normalized scale used to derive the empirical calibration
+coefficients.

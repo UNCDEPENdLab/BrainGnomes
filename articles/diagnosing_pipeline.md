@@ -40,6 +40,7 @@ The examples below were run on this project:
 ### Load the project
 
 ``` r
+
 library(BrainGnomes)
 
 project_dir <- "/proj/mnhallqlab/projects/bg08test_14feb2026"
@@ -54,6 +55,7 @@ because validation can otherwise trigger interactive correction prompts.
 Start with a table of completion flags and times for all subjects:
 
 ``` r
+
 status_df <- get_project_status(scfg)
 status_df
 summary(status_df)
@@ -97,6 +99,7 @@ completion times for each enabled step.
 You can also scan log markers for explicit failures:
 
 ``` r
+
 list.files(
   scfg$metadata$log_directory,
   pattern = "_fail$",
@@ -118,6 +121,7 @@ Captured output:
 To check one subject:
 
 ``` r
+
 get_subject_status(scfg, "540296")
 ```
 
@@ -160,6 +164,7 @@ then guides you through it interactively. The function returns that raw
 tree structure invisibly so you can also inspect it yourself:
 
 ``` r
+
 tree <- diagnose_pipeline(scfg)
 print(tree)
 ```

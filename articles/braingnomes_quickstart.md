@@ -110,6 +110,7 @@ Before using `BrainGnomes`, attend to the following prerequisites:
     it in your R session:
 
 ``` r
+
 # Install (if needed) and load BrainGnomes
 # devtools::install_github("UNCDEPENdLab/BrainGnomes")
 library(BrainGnomes)
@@ -179,6 +180,7 @@ Let’s run
 to initialize a new project config:
 
 ``` r
+
 # Start an interactive setup for a new fMRI project
 scfg <- setup_project()
 ```
@@ -301,6 +303,7 @@ Usage tip: You can include Flywheel sync as part of a larger unattended
 run, for example:
 
 ``` r
+
 run_project(scfg, steps = c("flywheel_sync", "bids_conversion", "fmriprep"))
 ```
 
@@ -534,6 +537,7 @@ Use
 to interactively complete or correct configuration entries:
 
 ``` r
+
 scfg <- setup_project()
 ```
 
@@ -549,6 +553,7 @@ where you left off. You can use
 to load an existing configuration:
 
 ``` r
+
 scfg <- load_project("/path/to/my/project")
 ```
 
@@ -560,6 +565,7 @@ for a menu-driven interface to modify parts of the project
 configuration.
 
 ``` r
+
 scfg <- edit_project(scfg)
 ```
 
@@ -572,6 +578,7 @@ options for specific pipeline steps.
 Once your configuration is complete, you can run the pipeline.
 
 ``` r
+
 run_project(scfg)
 ```
 
@@ -583,6 +590,7 @@ If you want to run only a subset of subjects, you can use the
 `subject_filter` argument like:
 
 ``` r
+
 # run subjects 242 and 510 only
 run_project(scfg, subject_filter=c("242", "510"))
 ```
@@ -592,6 +600,7 @@ you can use the `steps` argument. For example, to run only
 postprocessing on these subjects:
 
 ``` r
+
 # run subjects 242 and 510 only
 run_project(scfg, subject_filter=c("242", "510"), steps="postprocess")
 ```
@@ -614,6 +623,7 @@ the package to your Linux path. If you don’t know where it is installed,
 run this in an R session.
 
 ``` r
+
 find.package("BrainGnomes")
 ```
 

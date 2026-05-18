@@ -73,7 +73,7 @@ no connectivity calculations will be done. Supported options include:
 - **pearson** – standard product–moment correlation.
 - **spearman** – rank‑based correlation that is robust to non‑linear but
   monotonic relationships.
-- **kendall** – Kendall’s $\tau$ for ordinal or small sample data.
+- **kendall** – Kendall’s $`\tau`$ for ordinal or small sample data.
 - **cor.shrink** – shrinkage estimator from the `corpcor` package,
   useful when the number of ROIs is large relative to the number of time
   points.
@@ -86,7 +86,7 @@ be helpful if you want to run external analyses on ROI time series. If
 you answer “yes” to `Output ROI time series?`, then BrainGnomes will
 output timeseries files ending in `_timeseries.tsv`.
 
-The `rtoz` flag applies Fisher’s $z$ (aka `atanh`) transform to
+The `rtoz` flag applies Fisher’s $`z`$ (aka `atanh`) transform to
 correlations, producing unbounded values better suited for group
 analysis.
 
@@ -165,6 +165,7 @@ compute directly within the R session, rather than scheduling jobs on
 the HPC.
 
 ``` r
+
 library(BrainGnomes)
 extract_rois(
   bold_file = "sub-01_task-rest_desc-clean_bold.nii.gz",

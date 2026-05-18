@@ -19,6 +19,7 @@ or loaded one with
 [`load_project()`](https://uncdependlab.github.io/BrainGnomes/reference/load_project.md).
 
 ``` r
+
 library(BrainGnomes)
 # scfg <- setup_project()  # or load_project("/path/to/project")
 ```
@@ -31,6 +32,7 @@ you will be asked whether to enable postprocessing for BOLD data. You
 can toggle this choice later with `edit_project(scfg)`.
 
 ``` r
+
 scfg <- edit_project(scfg)  # choose "Postprocessing" from the menu
 ```
 
@@ -454,6 +456,7 @@ After configuration, running
 will execute the selected postprocessing steps for each subject.
 
 ``` r
+
 run_project(scfg, steps = "postprocess")
 ```
 
