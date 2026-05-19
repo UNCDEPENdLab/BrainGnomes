@@ -1042,6 +1042,16 @@ run_logged <- function(fun, ..., logger = NULL, fun_label = NULL, log_level = "i
   res
 }
 
+#' Helper to safely log possibly NULL values via glue
+#' @param x The value to check
+#' @param default The string to return if x is NULL or length 0
+#' @keywords internal
+#' @noRd
+log_val <- function(x, default = "[Not Set]") {
+  if (is.null(x) || length(x) == 0L || (is.character(x) && all(nchar(x) == 0L))) return(default)
+  x
+}
+
 to_log <- function(logger, condition = "info", msg, info_message = FALSE, ...) {
   logger <- resolve_logger(logger)
 

@@ -115,11 +115,11 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
       )
       confounds$framewise_displacement <- fd
       if (filter_type == "notch") {
-        to_log(lg, "info", "Updated framewise_displacement after notch filtering ({motion_filter_cfg$bandstop_min_bpm}-{motion_filter_cfg$bandstop_max_bpm} BPM).")
+        to_log(lg, "info", "Updated framewise_displacement after notch filtering ({log_val(motion_filter_cfg$bandstop_min_bpm)}-{log_val(motion_filter_cfg$bandstop_max_bpm)} BPM).")
       } else {
         order_label <- motion_filter_cfg$filter_order
         if (is.null(order_label)) order_label <- 2L
-        to_log(lg, "info", "Updated framewise_displacement after low-pass filtering (cutoff {motion_filter_cfg$lowpass_bpm} BPM, order {order_label}).")
+        to_log(lg, "info", "Updated framewise_displacement after low-pass filtering (cutoff {log_val(motion_filter_cfg$lowpass_bpm)} BPM, order {order_label}).")
       }
     } else {
       to_log(lg, "warn", "Filtered motion parameters available but required columns are missing; cannot recompute framewise displacement.")
@@ -153,7 +153,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
   confounds_to_filt <- NULL
   if (isTRUE(cfg$scrubbing$enable)) {
-    to_log(lg, "info", "Computing spike regressors using expression: {paste(cfg$scrubbing$expression, collapse=', ')}")
+    to_log(lg, "info", "Computing spike regressors using expression: {log_val(paste(cfg$scrubbing$expression, collapse=', '))}")
     spike_mat <- compute_spike_regressors(confounds, cfg$scrubbing$expression, lg = lg)
     scrub_file <- construct_bids_filename(
       modifyList(output_bids_info, list(suffix = "scrub", ext = ".tsv")), full.names = TRUE
@@ -252,7 +252,7 @@ postprocess_confounds <- function(proc_files, cfg, processing_sequence,
 
     # Temporally filter confounds, if requested (overwrites file in place)
     if ("temporal_filter" %in% processing_sequence) {
-      to_log(lg, "info", "Temporally filtering confounds with low-pass cutoff {cfg$temporal_filter$low_pass_hz}, high-pass cutoff {cfg$temporal_filter$high_pass_hz}, method {cfg$temporal_filter$method}")
+      to_log(lg, "info", "Temporally filtering confounds with low-pass cutoff {log_val(cfg$temporal_filter$low_pass_hz)}, high-pass cutoff {log_val(cfg$temporal_filter$high_pass_hz)}, method {log_val(cfg$temporal_filter$method)}")
       confound_nii <- temporal_filter(confound_nii,
         out_file = confound_nii,
         tr = cfg$tr,
