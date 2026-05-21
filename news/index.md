@@ -4,6 +4,16 @@
 
 - Refactor postprocessing to use job arrays and sentinels for cleanup
 - Add additional templates to prefetch needed by MRIQC
+- Preserve user-specified `metadata/sqlite_db` values and expose
+  `sqlite_db` in
+  [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md).
+- Clean postprocessing scratch workspaces and temporary automask files
+  on errors as well as successful exits.
+- Use exit-time cleanup for temporary FSL postprocessing files generated
+  during temporal filtering, smoothing, confound regression, and
+  brain-mask computation.
+- Add regression tests for editable SQLite database configuration and
+  postprocessing temp-file cleanup after failures.
 
 ## BrainGnomes 0.8-1
 
