@@ -162,3 +162,77 @@ test_that("postprocess_subject moves intermediates when requested", {
   staged_exists <- dir.exists(workspace_dir)
   expect_false(staged_exists)
 })
+
+test_that("postprocess_subject cleans scratch workspace and temp mask after errors", {
+  tmp_dir <- norm_path(tempfile("pp-scratch-error-"), mustWork = FALSE)
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  log_dir <- file.path(tmp_dir, "logs", "sub-TEST")
+  dir.create(log_dir, recursive = TRUE, showWarnings = FALSE)
+  old_log <- Sys.getenv("log_file")
+  on.exit(Sys.setenv(log_file = old_log), add = TRUE)
+  Sys.setenv(log_file = file.path(log_dir, "postprocess.log"))
+
+  bold_dir <- file.path(tmp_dir, "pp-bold-error", "sub-TEST", "func")
+  dir.create(bold_dir, recursive = TRUE, showWarnings = FALSE)
+  bold_file <- file.path(bold_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-preproc_bold.nii.gz")
+  con <- gzfile(bold_file, "wb")
+  writeChar("fake-bold", con, eos = NULL)
+  close(con)
+
+  mask_file <- file.path(tmp_dir, "pp-mask-error.nii.gz")
+  writeLines("mask", mask_file)
+
+  output_dir <- file.path(tmp_dir, "pp-out-error", "sub-TEST")
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  scratch_dir <- file.path(tmp_dir, "pp-scratch-error")
+  dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+  scratch_dir <- norm_path(scratch_dir, mustWork = TRUE)
+  workspace_dir <- file.path(
+    scratch_dir, "demo_project_error", "sub-TEST",
+    gsub("[^A-Za-z0-9]+", "_", tools::file_path_sans_ext(basename(bold_file)))
+  )
+
+  cfg <- list(
+    bids_desc = "postproc",
+    keep_intermediates = TRUE,
+    overwrite = TRUE,
+    tr = 0.8,
+    output_dir = output_dir,
+    scratch_directory = scratch_dir,
+    project_name = "demo_project_error",
+    fsl_img = NULL,
+    force_processing_order = FALSE,
+    apply_mask = list(enable = TRUE, prefix = "m", mask_file = mask_file),
+    spatial_smooth = list(enable = FALSE, prefix = "s", fwhm_mm = 4),
+    apply_aroma = list(enable = FALSE, prefix = "a", nonaggressive = TRUE),
+    temporal_filter = list(enable = FALSE, prefix = "f", method = "fslmaths"),
+    intensity_normalize = list(enable = TRUE, prefix = "n", global_median = 10000),
+    confound_regression = list(enable = FALSE, prefix = "r"),
+    confound_calculate = list(enable = FALSE, columns = NULL, noproc_columns = NULL, demean = FALSE),
+    scrubbing = list(enable = FALSE, expression = NULL, interpolate = FALSE, interpolate_prefix = "i", apply = FALSE, prefix = "x", add_to_confounds = FALSE),
+    motion_filter = list(enable = FALSE)
+  )
+
+  recorded_paths <- new.env(parent = emptyenv())
+
+  with_mocked_bindings({
+    expect_error(postprocess_subject(bold_file, cfg), "forced apply_mask failure")
+  }, automask = function(in_file, outfile, ...) {
+    recorded_paths$brain_mask <- outfile
+    file.copy(in_file, outfile, overwrite = TRUE)
+    outfile
+  }, apply_mask = function(cur_file, mask_file, out_file, ...) {
+    recorded_paths$apply_mask <- out_file
+    dir.create(dirname(out_file), recursive = TRUE, showWarnings = FALSE)
+    file.copy(cur_file, out_file, overwrite = TRUE)
+    stop("forced apply_mask failure")
+  }, postprocess_confounds = function(...) NULL)
+
+  expect_true(exists("brain_mask", envir = recorded_paths, inherits = FALSE))
+  expect_true(exists("apply_mask", envir = recorded_paths, inherits = FALSE))
+  expect_false(file.exists(recorded_paths$brain_mask))
+  expect_false(file.exists(recorded_paths$apply_mask))
+  expect_false(dir.exists(workspace_dir))
+})

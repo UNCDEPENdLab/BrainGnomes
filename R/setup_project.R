@@ -114,6 +114,13 @@ setup_project <- function(input = NULL, fields = NULL) {
 #' @return A modified version of `scfg` with the `$metadata` field populated with validated paths and project details.
 #' @keywords internal
 setup_project_metadata <- function(scfg = NULL, fields = NULL) {
+  default_sqlite_db <- function(scfg) {
+    if (!test_string(scfg$metadata$project_directory) || !test_string(scfg$metadata$project_name)) {
+      return(NULL)
+    }
+    file.path(scfg$metadata$project_directory, paste0(scfg$metadata$project_name, ".sqlite"))
+  }
+
   # If fields is not null, then the caller wants to make specific edits to config. Thus, don't prompt for invalid settings for other fields.
   # For dicom_directory, bids_directory, and fmriprep_directory, only prompt if relevant parts of the pipeline are enabled (e.g., DICOMs for BIDS conversion)
   if (is.null(fields)) {
@@ -224,6 +231,19 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
     )
   }
 
+  if ("metadata/sqlite_db" %in% fields) {
+    default <- if (!test_string(scfg$metadata$sqlite_db)) {
+      default_sqlite_db(scfg)
+    } else {
+      scfg$metadata$sqlite_db
+    }
+    scfg$metadata$sqlite_db <- prompt_input(
+      prompt = "SQLite database for job tracking:",
+      type = "character",
+      default = default
+    )
+  }
+
   # singularity bind paths are unhappy with symbolic links and ~/ notation
   scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
 
@@ -243,8 +263,10 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
 
-  # define SQLite database path
-  scfg$metadata$sqlite_db <- file.path(scfg$metadata$project_directory, paste0(scfg$metadata$project_name, ".sqlite"))
+  # Define the default SQLite database path only when it has not been set.
+  if (!test_string(scfg$metadata$sqlite_db)) {
+    scfg$metadata$sqlite_db <- default_sqlite_db(scfg)
+  }
 
   return(scfg)
 }

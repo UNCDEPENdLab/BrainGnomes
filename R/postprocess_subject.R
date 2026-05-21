@@ -149,6 +149,19 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   dir.create(workspace_dir, recursive = TRUE, showWarnings = FALSE)
   to_log(lg, "debug", "Postprocess intermediates will be staged in: {workspace_dir}")
 
+  # track temporary files and directories to ensure they're removed on function exit or crash
+  temp_files_to_cleanup <- c(workspace_dir)
+  on.exit({
+    for (tf in temp_files_to_cleanup) {
+      if (file.exists(tf) || dir.exists(tf)) {
+        unlink_status <- unlink(tf, recursive = TRUE, force = TRUE)
+        if (!identical(unlink_status, 0L)) {
+          to_log(lg, "warn", "Unable to fully remove temporary path {tf}; unlink() returned {unlink_status}.")
+        }
+      }
+    }
+  }, add = TRUE)
+
   # Reconstruct expected output files for final destination and workspace staging
   final_bids_info <- modifyList(input_bids_info, list(description = cfg$bids_desc, directory = cfg$output_dir))
   final_filename <- construct_bids_filename(final_bids_info, full.names = TRUE)
@@ -182,6 +195,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   
   # compute a data-driven whole-brain mask using automask
   brain_mask <- tempfile(fileext = ".nii.gz")
+  temp_files_to_cleanup <- c(temp_files_to_cleanup, brain_mask)
   automask(proc_files$bold, outfile = brain_mask, clfrac = 0.5, NN = 1L,
            SIhh = 0, peels = 1L, fill_holes = TRUE, dilate_steps = 1L)
 
@@ -558,14 +572,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       dest <- intermediate_outputs[[src]]
       if (is.null(dest) || !nzchar(dest)) next
       move_staged_file(src, dest, overwrite = isTRUE(cfg$overwrite), label = "intermediate file")
-    }
-  }
-
-  # clean up scratch workspace once outputs are handled
-  if (dir.exists(workspace_dir)) {
-    unlink_status <- unlink(workspace_dir, recursive = TRUE, force = TRUE)
-    if (!identical(unlink_status, 0L)) {
-      to_log(lg, "warn", "Unable to fully remove scratch workspace {workspace_dir}; unlink() returned {unlink_status}. You may want to inspect and clean up manually.")
     }
   }
   

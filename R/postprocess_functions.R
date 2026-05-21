@@ -596,10 +596,9 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
     lp_volumes <- if (is.infinite(low_pass_hz)) -1 else 1 / (low_pass_hz * fwhm_to_sigma * tr)
 
     temp_tmean <- tempfile(pattern="tmean")
+    on.exit(rm_niftis(temp_tmean), add = TRUE)
     run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
     run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -bptf {hp_volumes} {lp_volumes} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean, out_file)))
-
-    rm_niftis(temp_tmean) # clean up temporal mean image
   } else {
     to_log(lg, "info", "Using internal Butterworth temporal filtering function")
     # Note that butterworth_filter_4d accepts frequency cutoffs -- anything below low_hz is cut (high-pass), anything above high_hz is cut (low-pass)
@@ -755,17 +754,19 @@ spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, ov
 
   # always compute extents mask that is reapplied to data post-smoothing to avoid any "new" voxels
   extents_mask <- tempfile(pattern = "extents_mask")
+  # susan generates a _usan_size.nii.gz file implicitly based on the out_file, track that too
+  usan_file <- glue("{file_sans_ext(out_file)}_usan_size")
+  on.exit(rm_niftis(c(extents_mask, usan_file)), add = TRUE)
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmin -bin {extents_mask} -odt char"), log_file = log_file, fsl_img = fsl_img, bind_paths = dirname(c(in_file, extents_mask))) # save extents to temp file
 
   # compute mean functional image used in susan
   temp_tmean <- tempfile(pattern = "tmean")
+  on.exit(rm_niftis(temp_tmean), add = TRUE)
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file = log_file, fsl_img = fsl_img, bind_paths = dirname(c(in_file, temp_tmean))) # save tmean to temporary file
   run_fsl_command(glue("susan {file_sans_ext(in_file)} {susan_thresh} {sigma} 3 1 1 {temp_tmean} {susan_thresh} {file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths = dirname(c(in_file, temp_tmean, out_file)))
 
   # apply extents mask
   run_fsl_command(glue("fslmaths {file_sans_ext(out_file)} -mul {extents_mask} {file_sans_ext(out_file)} -odt float"), log_file = log_file, fsl_img = fsl_img, bind_paths = dirname(c(in_file, extents_mask, out_file)))
-
-  rm_niftis(c(temp_tmean, extents_mask, glue("{file_sans_ext(out_file)}_usan_size"))) # cleanup temp files
 
   return(out_file)
 }
@@ -1072,18 +1073,18 @@ confound_regression <- function(in_file, out_file, to_regress=NULL, censor_file 
   if (method == "fsl") {
     # convert text file to FSL vest file for fsl_glm to accept it
     vest_file <- tempfile(pattern = "regressors", fileext = ".mat")
+    on.exit(unlink(vest_file), add = TRUE)
     run_fsl_command(glue("Text2Vest {to_regress} {vest_file}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(to_regress, vest_file)))
     
     # because the residuals will be demeaned and intensity normalization should follow this step, add back in the temporal mean from the pre-regression image
     temp_tmean <- tempfile(pattern="tmean")
+    on.exit(rm_niftis(temp_tmean), add = TRUE)
     run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {temp_tmean}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_tmean)))
     run_fsl_command(glue("fsl_glm -i {file_sans_ext(in_file)} -d {vest_file} --out_res={file_sans_ext(out_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, vest_file, out_file)))
     run_fsl_command(glue("fslmaths {file_sans_ext(out_file)} -add {temp_tmean} {file_sans_ext(out_file)}"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(out_file, temp_tmean)))
 
     # 3dTproject for regression (deprecated to keep all commands in FSL)
     # regress_cmd <- glue("3dTproject -input {in_file} -prefix {out_file}_afni -ort {to_regress} -polort 0")
-
-    rm_niftis(temp_tmean)
   } else if (method == "lmfit") {
     to_log(lg, "info", "Using internal lmfit confound regression function")
     Xmat <- data.table::fread(to_regress, sep = "\t", header = FALSE)
@@ -1146,12 +1147,13 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 
   # first use FSL bet on the mean functional to get a starting point
   tmean_file <- tempfile(pattern="tmean")
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {file_sans_ext(tmean_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, tmean_file)))
-  
   temp_bet <- tempfile()
-  run_fsl_command(glue("bet {tmean_file} {temp_bet} -R -f 0.3 -m -n"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(tmean_file, temp_bet)))
-
   temp_stripped <- tempfile(pattern="epi_bet")
+  # Use on.exit to guarantee cleanup even if run_fsl_command fails
+  on.exit(rm_niftis(c(tmean_file, temp_bet, glue::glue("{temp_bet}_mask"), temp_stripped)), add = TRUE)
+  
+  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -Tmean {file_sans_ext(tmean_file)}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, tmean_file)))
+  run_fsl_command(glue("bet {tmean_file} {temp_bet} -R -f 0.3 -m -n"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(tmean_file, temp_bet)))
   run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mas {temp_bet}_mask {temp_stripped}"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, temp_bet, temp_stripped)))
 
   # now compute 2nd and 98th percentiles on skull-stripped image
@@ -1166,9 +1168,6 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 
   # create dil1x copy as well if this is used elsewhere
   run_fsl_command(glue("fslmaths {temp_mask} -dilF {temp_mask}_dil1x"), log_file = log_file, fsl_img = fsl_img, bind_paths=dirname(temp_mask))
-
-  # cleanup temp files
-  rm_niftis(c(tmean_file, temp_bet, temp_stripped))
   
   return(temp_mask)
 }
