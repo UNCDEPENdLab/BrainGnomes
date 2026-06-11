@@ -44,6 +44,7 @@ test_that("prefetch plan includes default TemplateFlow resources required by off
     "",
     "queries = mod._resolve_queries_with_token_fallback(['MNI152NLin2009cAsym'], None, None, None)",
     "queries = mod.add_default_t2w_queries(queries, ['MNI152NLin2009cAsym'])",
+    "queries = mod.add_required_fmriprep_anat_report_queries(queries, ['MNI152NLin2009cAsym'])",
     "queries = mod.add_required_probseg_queries(queries, ['MNI152NLin2009cAsym'])",
     "queries = mod.add_required_fmriprep_queries(queries)",
     "serialized = [{'template': q.template, 'params': q.params, 'label': q.label, 'optional': q.optional, 'fallback_params': q.fallback_params} for q in queries]",
@@ -183,6 +184,92 @@ test_that("prefetch plan includes default TemplateFlow resources required by off
   expect_true(saw_oasis_regmask)
   expect_true(saw_oasis_wm)
   expect_true(saw_oasis_bs)
+})
+
+test_that("prefetch includes res-1 templates used by fMRIPrep anatomical reports", {
+  py <- Sys.which("python")
+  skip_if(py == "", "python is required for prefetch anatomical-report test")
+
+  script_path <- system.file("prefetch_templateflow.py", package = "BrainGnomes")
+  expect_true(nzchar(script_path))
+
+  py_code <- paste(
+    "import json",
+    "import types",
+    "import importlib.util",
+    "import pathlib",
+    "import sys",
+    "",
+    "templateflow = types.ModuleType('templateflow')",
+    "templateflow.api = types.SimpleNamespace(get=lambda **kwargs: [])",
+    "sys.modules['templateflow'] = templateflow",
+    "",
+    "niworkflows = types.ModuleType('niworkflows')",
+    "niworkflows_utils = types.ModuleType('niworkflows.utils')",
+    "niworkflows_spaces = types.ModuleType('niworkflows.utils.spaces')",
+    "niworkflows_spaces.Reference = None",
+    "niworkflows_spaces.SpatialReferences = None",
+    "sys.modules['niworkflows'] = niworkflows",
+    "sys.modules['niworkflows.utils'] = niworkflows_utils",
+    "sys.modules['niworkflows.utils.spaces'] = niworkflows_spaces",
+    "",
+    "script = pathlib.Path(sys.argv[1])",
+    "spec = importlib.util.spec_from_file_location('prefetch_templateflow', script)",
+    "mod = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(mod)",
+    "",
+    "queries = [",
+    "    mod.QuerySpec('MNI152NLin6Asym', {'suffix': 'T1w', 'resolution': 2}, 'res-2 T1w'),",
+    "    mod.QuerySpec('MNI152NLin6Asym', {'desc': 'brain', 'suffix': 'mask', 'resolution': 2}, 'res-2 mask'),",
+    "    mod.QuerySpec('MNIPediatricAsym', {'suffix': 'T1w', 'resolution': 2, 'cohort': 2}, 'cohort res-2 T1w'),",
+    "]",
+    "tokens = ['MNI152NLin6Asym:res-2', 'MNIPediatricAsym:cohort-2:res-2']",
+    "queries = mod.add_required_fmriprep_anat_report_queries(queries, tokens)",
+    "serialized = [{'template': q.template, 'params': q.params, 'optional': q.optional} for q in queries]",
+    "print('QUERIES|' + json.dumps(serialized, sort_keys=True))",
+    sep = "\n"
+  )
+
+  py_file <- tempfile("prefetch_fmriprep_anat_report_", fileext = ".py")
+  writeLines(py_code, py_file)
+  on.exit(unlink(py_file), add = TRUE)
+
+  out <- suppressWarnings(
+    system2(
+      py,
+      c(py_file, script_path),
+      stdout = TRUE,
+      stderr = TRUE
+    )
+  )
+
+  status <- attr(out, "status")
+  expect_true(is.null(status) || identical(status, 0L), info = paste(out, collapse = "\n"))
+
+  query_line <- out[grepl("^QUERIES\\|", out)]
+  expect_length(query_line, 1L)
+  queries <- jsonlite::fromJSON(sub("^QUERIES\\|", "", query_line), simplifyDataFrame = FALSE)
+
+  has_query <- function(template, suffix, desc = NULL, cohort = NULL) {
+    any(vapply(
+      queries,
+      function(q) {
+        params <- q[["params"]]
+        identical(q[["template"]], template) &&
+          identical(params[["suffix"]], suffix) &&
+          identical(params[["resolution"]], 1L) &&
+          identical(params[["desc"]], desc) &&
+          identical(params[["cohort"]], cohort) &&
+          identical(q[["optional"]], FALSE)
+      },
+      logical(1)
+    ))
+  }
+
+  expect_true(has_query("MNI152NLin6Asym", "T1w"))
+  expect_true(has_query("MNI152NLin6Asym", "mask", desc = "brain"))
+  expect_true(has_query("MNIPediatricAsym", "T1w", cohort = 2L))
+  expect_true(has_query("MNIPediatricAsym", "mask", desc = "brain", cohort = 2L))
 })
 
 test_that("prefetch plan includes additional TemplateFlow resources for fMRIPrep CIFTI output", {

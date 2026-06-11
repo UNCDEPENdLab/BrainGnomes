@@ -6,6 +6,7 @@
 * Clean postprocessing scratch workspaces and temporary automask files on errors as well as successful exits.
 * Use exit-time cleanup for temporary FSL postprocessing files generated during temporal filtering, smoothing, confound regression, and brain-mask computation.
 * Add regression tests for editable SQLite database configuration and postprocessing temp-file cleanup after failures.
+* Prefetch resolution-1 T1w and brain-mask assets used by fMRIPrep anatomical reports, including when an output space explicitly requests another resolution.
 
 # BrainGnomes 0.8-1
 

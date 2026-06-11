@@ -1250,6 +1250,56 @@ def add_default_t2w_queries(
     return augmented
 
 
+def add_required_fmriprep_anat_report_queries(
+    queries: List[QuerySpec],
+    tokens: List[str],
+) -> List[QuerySpec]:
+    """Ensure fMRIPrep anatomical report templates are available offline."""
+    templates = _template_names_from_tokens(tokens)
+    if not templates:
+        return queries
+
+    cohorts_by_template: Dict[str, List[Any]] = {}
+    for query in queries:
+        cohort_value = query.params.get("cohort")
+        if cohort_value in (None, ""):
+            continue
+        cohorts_by_template.setdefault(query.template, [])
+        if cohort_value not in cohorts_by_template[query.template]:
+            cohorts_by_template[query.template].append(cohort_value)
+
+    existing: Set[QueryFingerprint] = {
+        _freeze_query(query.template, query.params) for query in queries
+    }
+    augmented = list(queries)
+    for template in templates:
+        cohort_values = cohorts_by_template.get(template, [None])
+        for cohort_value in cohort_values:
+            required = [
+                {"suffix": "T1w", "resolution": 1},
+                {"desc": "brain", "suffix": "mask", "resolution": 1},
+            ]
+            for params in required:
+                query = dict(params)
+                if cohort_value not in (None, ""):
+                    query["cohort"] = cohort_value
+                fingerprint = _freeze_query(template, query)
+                if fingerprint in existing:
+                    continue
+                existing.add(fingerprint)
+                augmented.append(
+                    QuerySpec(
+                        template=template,
+                        params=query,
+                        label=_format_label_with_query(
+                            f"{template} (fMRIPrep anatomical report required)",
+                            query,
+                        ),
+                    )
+                )
+    return augmented
+
+
 def add_required_probseg_queries(
     queries: List[QuerySpec],
     tokens: List[str],
@@ -1407,6 +1457,7 @@ def main() -> int:
         print("No TemplateFlow queries were resolved; nothing to prefetch.")
         return 0
     queries = add_default_t2w_queries(queries, spaces)
+    queries = add_required_fmriprep_anat_report_queries(queries, spaces)
     queries = add_required_probseg_queries(queries, spaces)
     queries = add_required_fmriprep_queries(
         queries,
