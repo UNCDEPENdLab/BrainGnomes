@@ -14,6 +14,9 @@
   brain-mask computation.
 - Add regression tests for editable SQLite database configuration and
   postprocessing temp-file cleanup after failures.
+- Prefetch resolution-1 T1w and brain-mask assets used by fMRIPrep
+  anatomical reports, including when an output space explicitly requests
+  another resolution.
 
 ## BrainGnomes 0.8-1
 
