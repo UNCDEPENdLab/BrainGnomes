@@ -1,33 +1,77 @@
-# Validate intensity normalization (global median in mask)
+# Validate run-wise intensity normalization
 
-Global median of in-mask values vs `target` within `tolerance`.
+Checks that the requested target and stored multiplier agree, that every
+finite image value was multiplied by that same constant, and that image
+dimensions and missing-value locations did not change. When the
+reference mask is supplied, the function also remeasures the normalized
+image to confirm that the requested target was reached at the point of
+scaling.
 
 ## Usage
 
 ``` r
-validate_intensity_normalize(data_file, mask_file, target, tolerance = 0)
+validate_intensity_normalize(
+  pre_file,
+  post_file,
+  reference_location,
+  target,
+  scale_factor,
+  core_file = NULL,
+  include_frames = NULL,
+  tolerance = 1e-05
+)
 ```
 
 ## Arguments
 
-- data_file:
+- pre_file:
 
-  4D NIfTI after `intensity_normalize`.
+  Path to the 4D NIfTI image immediately before scaling.
 
-- mask_file:
+- post_file:
 
-  3D mask.
+  Path to the 4D NIfTI image immediately after scaling.
+
+- reference_location:
+
+  Positive run reference intensity measured after masking and smoothing
+  and before temporal denoising.
 
 - target:
 
-  Target median (`cfg$intensity_normalize$global_median`).
+  Desired value of the run reference intensity after scaling.
+
+- scale_factor:
+
+  Positive constant applied to every voxel and volume.
+
+- core_file:
+
+  Optional path to the fixed 3D reference-region mask. The BrainGnomes
+  pipeline supplies this to verify the achieved target directly.
+
+- include_frames:
+
+  Optional logical vector with one value per volume. `TRUE` identifies a
+  volume used to estimate the temporal baselines. The pipeline supplies
+  the same vector used for `reference_location`.
 
 - tolerance:
 
-  Absolute tolerance on `abs(median - target)`.
+  Maximum allowed relative numerical error for each check.
 
 ## Value
 
-A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
-Attributes: `message`, `details` (`global_median`, `target`,
-`abs_diff`).
+A logical scalar (`TRUE` if validation passed, `FALSE` if failed). The
+`message` attribute gives a readable summary. The `details` attribute
+reports the target, multiplier, expected and remeasured reference
+intensities, and relative multiplication errors.
+
+## Details
+
+`reference_location` is the run reference intensity before scaling: the
+spatial median across reference voxels of their 10%-trimmed temporal
+means. Therefore, `reference_location * scale_factor` should equal
+`target`. If `core_file` is supplied, the function independently repeats
+this two-stage calculation on `post_file`, using `include_frames` to
+select the same baseline-estimation volumes.

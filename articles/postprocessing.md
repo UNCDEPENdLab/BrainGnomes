@@ -1,4 +1,4 @@
-# BrainGnomes Postprocessing Walkthrough
+# Postprocessing Walkthrough
 
 ## Overview
 
@@ -370,9 +370,107 @@ postprocessed confounds file (if relevant).
 ### Intensity Normalisation
 
 [`setup_intensity_normalization()`](https://uncdependlab.github.io/BrainGnomes/reference/setup_intensity_normalization.md)
-rescales each run so that the global median intensity matches a
-user‑specified value (default 10,000). This helps make signal units
-comparable across subjects.
+places different runs on a common intensity scale by multiplying every
+value in a run by one run-specific constant. The user selects a `target`
+(default 10,000), which should be kept the same across all runs and
+participants that will be compared in an analysis. BrainGnomes estimates
+the multiplier from a conservative region of stable, positive-signal
+functional voxels; an external fMRIPrep or template mask is not
+required. This reference region is an intensity-calibration mask, not an
+anatomical ROI or the mask that determines which voxels may be analyzed.
+It is restricted to voxels with adequate signal and without extreme
+temporal noise or frequent intensity spikes.
+
+More precisely, the target refers to a two-stage summary:
+
+1.  For each voxel in the reference region, BrainGnomes calculates its
+    temporal baseline using a 10% trimmed mean. That is, it removes the
+    lowest and highest 10% of that voxel’s included observations and
+    averages the rest.
+2.  It takes the spatial median of these voxelwise temporal baselines.
+
+If this spatial median is $`L`$, BrainGnomes multiplies the entire run
+by `target / L`. Thus, a target of 10,000 means that, immediately after
+scaling, the spatial median across reference-region voxels of their
+10%-trimmed temporal means is 10,000. It does **not** mean that the
+temporal median, whole-brain mean, or median of every value in the final
+4D image is 10,000.
+
+Only suitable volumes contribute to the baseline calculation. By default
+this means all volumes. When the necessary metadata are available,
+BrainGnomes excludes non-steady-state volumes identified by fMRIPrep and
+volumes marked for censoring by the postprocessing scrubbing rule. These
+exclusions affect only estimation of the multiplier; scaling is still
+applied to every volume in the run.
+
+#### Placement in the postprocessing sequence
+
+BrainGnomes deliberately separates choosing the reference voxels from
+measuring their intensity:
+
+1.  Using the input BOLD series, before BrainGnomes postprocessing, it
+    identifies the volumes that can contribute to baseline estimation
+    and selects the stable functional voxels that form the reference
+    region. The voxel membership of this region is then held fixed:
+    later processing cannot change which anatomical locations determine
+    the run’s scale.
+2.  It performs the enabled spatial processing steps that can change the
+    set of included voxels or redistribute intensity: `apply_mask`,
+    followed by `spatial_smooth`.
+3.  In the image produced by those spatial steps, it calculates each
+    reference voxel’s 10%-trimmed temporal mean and then the spatial
+    median $`L`$ described above. It immediately applies `target / L` to
+    the entire 4D run.
+4.  It then performs AROMA, scrub interpolation, temporal filtering,
+    confound regression, and timepoint removal, as enabled.
+
+The resulting default boundary is:
+
+``` text
+apply mask -> spatial smoothing -> intensity normalization
+           -> AROMA/interpolation/filtering/regression/scrubbing
+```
+
+If masking or smoothing is disabled, normalization follows the last
+enabled spatial operation. A forced processing order must respect the
+same boundary; BrainGnomes stops rather than allowing temporal denoising
+before normalization or spatial processing afterward.
+
+This placement ensures that $`L`$ describes the masked and smoothed data
+that actually enter temporal processing. At the same time, it prevents
+the amount of temporal denoising required by a particular run from
+determining that run’s multiplier. For example, confound regression may
+remove much more variance from a noisy run than from a clean run. That
+difference should remain visible in the processed data. Renormalizing
+after regression would instead amplify the more strongly affected run
+and could obscure a meaningful data-quality difference. Because the
+temporal operations are linear, applying them after scaling does not
+change the intensity units established before denoising, even though
+they may change individual runs by different amounts.
+
+This matches the ordering principle in AFNI’s `afni_proc.py`. Its
+default block order places `blur` and `mask` before `scale`, and `scale`
+before `regress`; its order checks warn about the opposite arrangements.
+AFNI’s default numerical operation is different—voxelwise mean-100
+scaling with an upper cap—whereas BrainGnomes applies one uncapped
+robust scalar to the complete run. The shared design choice is to scale
+after spatial preprocessing and before temporal modeling.
+
+AROMA and confound regression explicitly preserve each voxel’s temporal
+mean. After the multiplier is applied, BrainGnomes does not estimate
+another factor from filtered or residualized data. Validation remeasures
+the normalized image at the point of scaling, using the same reference
+voxels and included volumes, to confirm that the requested target was
+reached. Later steps can change the distribution of intensities, so
+summaries calculated from the final output need not equal the target
+exactly. The purpose of normalization is to give runs common input units
+before temporal denoising, not to force every final image summary to a
+particular value.
+
+See the dedicated
+[`Run-wise Intensity Normalization in BrainGnomes`](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.md)
+vignette for configuration, equations, internal safeguards, outputs, QA,
+and limitations.
 
 ### Confound Calculation and Regression
 

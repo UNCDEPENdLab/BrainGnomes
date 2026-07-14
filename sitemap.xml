@@ -7,6 +7,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/index.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/authors.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/index.html</loc></url>
@@ -32,6 +33,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_filename.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_regex.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/create_tracking_db.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/derive_reference_core.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/edit_project.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.html</loc></url>
@@ -61,6 +63,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/insert_df_sqlite.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/insert_tracked_job.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/intensity_normalize.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/intensity_reference_frames.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/is_external_path.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/is_step_complete.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/lmfit_residuals_4d.html</loc></url>
@@ -69,6 +72,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/manage_postprocess_streams.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/mat_to_nii.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/maybe_add_framewise_displacement.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/measure_reference_location.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/menu_safe.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_4d.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/natural_spline_interp.html</loc></url>
@@ -80,6 +84,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/populate_list_arg.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/postprocess_confounds.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/postprocess_subject.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/prepare_intensity_reference.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/print_step_tree_by_type.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/print_subject_summary_tree.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/process_subject.html</loc></url>
@@ -90,6 +95,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/remove_nifti_volumes.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/resample_template_to_img.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/reset_tracking_sqlite_db.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_target.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/rm_niftis.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/run_fsl_command.html</loc></url>

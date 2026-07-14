@@ -22,8 +22,9 @@ superior–inferior cutoff).
 
 - clfrac:
 
-  Fraction of the robust intensity range used to set the clip level for
-  initial thresholding. Default is 0.5.
+  Fraction of the median intensity above the current clip used by the
+  iterative clip estimator. Smaller values produce larger masks. Default
+  is 0.5.
 
 - NN:
 
@@ -50,9 +51,10 @@ superior–inferior cutoff).
 
 - peels:
 
-  Number of "peel/unpeel" operations (erode then dilate with NN2
-  neighborhood) applied to remove thin protuberances. Default is 1,
-  matching AFNI `3dAutomask`.
+  Number of layer-aware peel/restore operations using the NN2
+  neighborhood and AFNI's 17-of-18 survival rule. These remove thin
+  protuberances while restoring boundary voxels connected to the
+  surviving core. Default is 1, matching AFNI `3dAutomask`.
 
 - fill_holes:
 
@@ -71,11 +73,15 @@ The processing pipeline is as follows:
 
 1.  Collapse 4D inputs to a 3D mean volume.
 
-2.  Compute robust clip threshold and apply initial thresholding.
+2.  Compute an iterative global clip threshold, estimate local clip
+    levels in eight overlapping regions, and apply the smoothly
+    interpolated spatial threshold.
 
 3.  Retain only the largest connected component (NN as specified).
 
-4.  Apply AFNI-style peel/unpeel (`peels` times, NN2).
+4.  Apply AFNI-style 17-of-18 layer-aware peeling and restoration
+    (`peels` times, NN2), then retain the largest face-connected
+    surviving component.
 
 5.  Optionally fill interior holes.
 

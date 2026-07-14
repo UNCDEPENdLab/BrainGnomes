@@ -6,7 +6,9 @@ components from an fMRI time series using the internal
 helper. When `nonaggressive = TRUE` (the default) only the unique
 variance attributable to the specified components is removed, matching
 FSL's non-aggressive `fsl_regfilt` behavior. Set `nonaggressive = FALSE`
-for aggressive regression that fully removes the listed components.
+for aggressive regression that fully removes the listed components. An
+intercept is included and each voxel's pre-AROMA temporal mean is added
+back so that denoising preserves the positive baseline intensity.
 
 ## Usage
 

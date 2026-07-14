@@ -3,11 +3,15 @@
 time series using the internal lmfit_residuals_4d() helper. When nonaggressive = TRUE
 (the default) only the unique variance attributable to the specified components is removed,
 matching FSL's non-aggressive fsl_regfilt behavior. Set nonaggressive = FALSE for
-aggressive regression that fully removes the listed components."><meta property="og:description" content="Performs ICA-AROMA denoising by regressing out identified noise components from an fMRI
+aggressive regression that fully removes the listed components. An intercept
+is included and each voxel's pre-AROMA temporal mean is added back so that
+denoising preserves the positive baseline intensity."><meta property="og:description" content="Performs ICA-AROMA denoising by regressing out identified noise components from an fMRI
 time series using the internal lmfit_residuals_4d() helper. When nonaggressive = TRUE
 (the default) only the unique variance attributable to the specified components is removed,
 matching FSL's non-aggressive fsl_regfilt behavior. Set nonaggressive = FALSE for
-aggressive regression that fully removes the listed components."></head><body>
+aggressive regression that fully removes the listed components. An intercept
+is included and each voxel's pre-AROMA temporal mean is added back so that
+denoising preserves the positive baseline intensity."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -30,7 +34,8 @@ aggressive regression that fully removes the listed components."></head><body>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -54,7 +59,9 @@ aggressive regression that fully removes the listed components."></head><body>
 time series using the internal <code><a href="lmfit_residuals_4d.html">lmfit_residuals_4d()</a></code> helper. When <code>nonaggressive = TRUE</code>
 (the default) only the unique variance attributable to the specified components is removed,
 matching FSL's non-aggressive <code>fsl_regfilt</code> behavior. Set <code>nonaggressive = FALSE</code> for
-aggressive regression that fully removes the listed components.</p>
+aggressive regression that fully removes the listed components. An intercept
+is included and each voxel's pre-AROMA temporal mean is added back so that
+denoising preserves the positive baseline intensity.</p>
     </div>
 
     <div class="section level2">
@@ -117,7 +124,7 @@ non-aggressive AROMA. Set to <code>FALSE</code> for aggressive regression.</p></
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

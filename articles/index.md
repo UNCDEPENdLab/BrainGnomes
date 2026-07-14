@@ -10,5 +10,7 @@
   Runs](https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.md):
 - [Extracting ROI Timeseries and
   Connectivity](https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.md):
-- [BrainGnomes Postprocessing
+- [Run-wise Intensity Normalization in
+  BrainGnomes](https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.md):
+- [Postprocessing
   Walkthrough](https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.md):

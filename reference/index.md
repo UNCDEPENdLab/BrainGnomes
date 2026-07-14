@@ -20,6 +20,8 @@
   : Construct BIDS-Compatible Filenames from Extracted Entity Data
 - [`construct_bids_regex()`](https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_regex.md)
   : Construct a Regular Expression for Matching BIDS Filenames
+- [`derive_reference_core()`](https://uncdependlab.github.io/BrainGnomes/reference/derive_reference_core.md)
+  : Derive a conservative functional reference core from 4D BOLD data
 - [`diagnose_pipeline()`](https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
   : Function for diagnosing errors in a run of the pipeline
 - [`edit_project()`](https://uncdependlab.github.io/BrainGnomes/reference/edit_project.md)

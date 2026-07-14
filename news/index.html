@@ -22,7 +22,8 @@
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="active nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -42,7 +43,13 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8-2" id="braingnomes-08-2">BrainGnomes 0.8-2<a class="anchor" aria-label="anchor" href="#braingnomes-08-2"></a></h2>
-<ul><li>Refactor postprocessing to use job arrays and sentinels for cleanup</li>
+<ul><li>Add a user-oriented intensity-normalization vignette documenting the <code>target</code> convention, robust reference-core policy, provenance outputs, QA, and limitations.</li>
+<li>Replace <code><a href="../reference/automask.html">automask()</a></code>’s background-sensitive positive-voxel quantile interpolation with an iterative AFNI-style clip estimator and a smoothly varying local threshold field.</li>
+<li>Match AFNI’s <code><a href="../reference/automask.html">automask()</a></code> peeling more closely with a 17-of-18 NN2 survival rule, layer-aware restoration, and post-peel face-connected reclustering.</li>
+<li>Replace postprocessing’s late 4D-median intensity estimate with an automask-based robust reference core selected from the original positive-scale BOLD image; measure and apply the run factor after masking/smoothing but before AROMA, temporal filtering, confound regression, or timepoint removal, and save the core mask and JSON provenance.</li>
+<li>Accept <code>postprocess/intensity_normalize/target</code> as the simplified normalization setting while retaining <code>global_median</code> as a backward-compatible alias.</li>
+<li>Preserve each voxel’s pre-AROMA temporal mean during both aggressive and non-aggressive AROMA denoising, retaining the positive baseline intensity used for cross-run scaling.</li>
+<li>Refactor postprocessing to use job arrays and sentinels for cleanup</li>
 <li>Add additional templates to prefetch needed by MRIQC</li>
 <li>Preserve user-specified <code>metadata/sqlite_db</code> values and expose <code>sqlite_db</code> in <code><a href="../reference/edit_project.html">edit_project()</a></code>.</li>
 <li>Clean postprocessing scratch workspaces and temporary automask files on errors as well as successful exits.</li>
@@ -210,7 +217,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

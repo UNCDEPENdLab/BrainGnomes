@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>BrainGnomes Postprocessing Walkthrough • BrainGnomes</title>
+<title>Postprocessing Walkthrough • BrainGnomes</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="BrainGnomes Postprocessing Walkthrough">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Postprocessing Walkthrough">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -37,7 +37,8 @@
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -60,7 +61,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>BrainGnomes Postprocessing Walkthrough</h1>
+      <h1>Postprocessing Walkthrough</h1>
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
@@ -409,9 +410,105 @@ your postprocessed confounds file (if relevant).</p>
 <div class="section level3">
 <h3 id="intensity-normalisation">Intensity Normalisation<a class="anchor" aria-label="anchor" href="#intensity-normalisation"></a>
 </h3>
-<p><code><a href="../reference/setup_intensity_normalization.html">setup_intensity_normalization()</a></code> rescales each run so
-that the global median intensity matches a user‑specified value (default
-10,000). This helps make signal units comparable across subjects.</p>
+<p><code><a href="../reference/setup_intensity_normalization.html">setup_intensity_normalization()</a></code> places different runs on
+a common intensity scale by multiplying every value in a run by one
+run-specific constant. The user selects a <code>target</code> (default
+10,000), which should be kept the same across all runs and participants
+that will be compared in an analysis. BrainGnomes estimates the
+multiplier from a conservative region of stable, positive-signal
+functional voxels; an external fMRIPrep or template mask is not
+required. This reference region is an intensity-calibration mask, not an
+anatomical ROI or the mask that determines which voxels may be analyzed.
+It is restricted to voxels with adequate signal and without extreme
+temporal noise or frequent intensity spikes.</p>
+<p>More precisely, the target refers to a two-stage summary:</p>
+<ol style="list-style-type: decimal">
+<li>For each voxel in the reference region, BrainGnomes calculates its
+temporal baseline using a 10% trimmed mean. That is, it removes the
+lowest and highest 10% of that voxel’s included observations and
+averages the rest.</li>
+<li>It takes the spatial median of these voxelwise temporal
+baselines.</li>
+</ol>
+<p>If this spatial median is
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>L</mi><annotation encoding="application/x-tex">L</annotation></semantics></math>,
+BrainGnomes multiplies the entire run by <code>target / L</code>. Thus,
+a target of 10,000 means that, immediately after scaling, the spatial
+median across reference-region voxels of their 10%-trimmed temporal
+means is 10,000. It does <strong>not</strong> mean that the temporal
+median, whole-brain mean, or median of every value in the final 4D image
+is 10,000.</p>
+<p>Only suitable volumes contribute to the baseline calculation. By
+default this means all volumes. When the necessary metadata are
+available, BrainGnomes excludes non-steady-state volumes identified by
+fMRIPrep and volumes marked for censoring by the postprocessing
+scrubbing rule. These exclusions affect only estimation of the
+multiplier; scaling is still applied to every volume in the run.</p>
+<div class="section level4">
+<h4 id="placement-in-the-postprocessing-sequence">Placement in the postprocessing sequence<a class="anchor" aria-label="anchor" href="#placement-in-the-postprocessing-sequence"></a>
+</h4>
+<p>BrainGnomes deliberately separates choosing the reference voxels from
+measuring their intensity:</p>
+<ol style="list-style-type: decimal">
+<li>Using the input BOLD series, before BrainGnomes postprocessing, it
+identifies the volumes that can contribute to baseline estimation and
+selects the stable functional voxels that form the reference region. The
+voxel membership of this region is then held fixed: later processing
+cannot change which anatomical locations determine the run’s scale.</li>
+<li>It performs the enabled spatial processing steps that can change the
+set of included voxels or redistribute intensity:
+<code>apply_mask</code>, followed by <code>spatial_smooth</code>.</li>
+<li>In the image produced by those spatial steps, it calculates each
+reference voxel’s 10%-trimmed temporal mean and then the spatial median
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>L</mi><annotation encoding="application/x-tex">L</annotation></semantics></math>
+described above. It immediately applies <code>target / L</code> to the
+entire 4D run.</li>
+<li>It then performs AROMA, scrub interpolation, temporal filtering,
+confound regression, and timepoint removal, as enabled.</li>
+</ol>
+<p>The resulting default boundary is:</p>
+<pre class="text"><code>apply mask -&gt; spatial smoothing -&gt; intensity normalization
+           -&gt; AROMA/interpolation/filtering/regression/scrubbing</code></pre>
+<p>If masking or smoothing is disabled, normalization follows the last
+enabled spatial operation. A forced processing order must respect the
+same boundary; BrainGnomes stops rather than allowing temporal denoising
+before normalization or spatial processing afterward.</p>
+<p>This placement ensures that
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>L</mi><annotation encoding="application/x-tex">L</annotation></semantics></math>
+describes the masked and smoothed data that actually enter temporal
+processing. At the same time, it prevents the amount of temporal
+denoising required by a particular run from determining that run’s
+multiplier. For example, confound regression may remove much more
+variance from a noisy run than from a clean run. That difference should
+remain visible in the processed data. Renormalizing after regression
+would instead amplify the more strongly affected run and could obscure a
+meaningful data-quality difference. Because the temporal operations are
+linear, applying them after scaling does not change the intensity units
+established before denoising, even though they may change individual
+runs by different amounts.</p>
+<p>This matches the ordering principle in AFNI’s
+<code>afni_proc.py</code>. Its default block order places
+<code>blur</code> and <code>mask</code> before <code>scale</code>, and
+<code>scale</code> before <code>regress</code>; its order checks warn
+about the opposite arrangements. AFNI’s default numerical operation is
+different—voxelwise mean-100 scaling with an upper cap—whereas
+BrainGnomes applies one uncapped robust scalar to the complete run. The
+shared design choice is to scale after spatial preprocessing and before
+temporal modeling.</p>
+<p>AROMA and confound regression explicitly preserve each voxel’s
+temporal mean. After the multiplier is applied, BrainGnomes does not
+estimate another factor from filtered or residualized data. Validation
+remeasures the normalized image at the point of scaling, using the same
+reference voxels and included volumes, to confirm that the requested
+target was reached. Later steps can change the distribution of
+intensities, so summaries calculated from the final output need not
+equal the target exactly. The purpose of normalization is to give runs
+common input units before temporal denoising, not to force every final
+image summary to a particular value.</p>
+<p>See the dedicated <a href="intensity_normalization.html"><code>Run-wise Intensity Normalization in BrainGnomes</code></a>
+vignette for configuration, equations, internal safeguards, outputs, QA,
+and limitations.</p>
+</div>
 </div>
 <div class="section level3">
 <h3 id="confound-calculation-and-regression">Confound Calculation and Regression<a class="anchor" aria-label="anchor" href="#confound-calculation-and-regression"></a>
@@ -491,7 +588,7 @@ below.【F:R/setup_postprocess.R†L321-L358】</p>
 </h2>
 <p>After configuration, running <code><a href="../reference/run_project.html">run_project()</a></code> will execute
 the selected postprocessing steps for each subject.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
 <p>The processing log for each subject is written to the project’s
 <code>logs</code> folder, and the final postprocessed NIfTIs receive the
@@ -529,7 +626,7 @@ documentation and the help pages referenced above.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

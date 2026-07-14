@@ -4,8 +4,10 @@ Applies a sequence of postprocessing operations to a single
 subject-level BOLD NIfTI file, as specified by the user-defined
 configuration object. Operations may include brain masking, spatial
 smoothing, ICA-AROMA denoising, temporal filtering, confound regression,
-and intensity normalization. The function also optionally computes and
-saves a filtered confounds file for downstream analyses.
+and intensity normalization. Intensity normalization is applied after
+masking/smoothing and before temporal denoising. The function also
+optionally computes and saves a filtered confounds file for downstream
+analyses.
 
 ## Usage
 
@@ -24,9 +26,10 @@ postprocess_subject(in_file, cfg = NULL)
   A list containing configuration options, including TR (`cfg$tr`),
   enabled processing steps (`cfg$<step>$enable`), logging
   (`cfg$log_file`), and paths to resources such as singularity images
-  (`cfg$fsl_img`). A whole-brain mask is automatically generated using
+  (`cfg$fsl_img`). Processing and intensity- reference masks are
+  generated internally with
   [`automask()`](https://uncdependlab.github.io/BrainGnomes/reference/automask.md)
-  and used for relevant processing steps.
+  for their distinct roles.
 
 ## Value
 

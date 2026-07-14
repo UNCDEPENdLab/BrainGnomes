@@ -32,7 +32,8 @@ erosion/dilation, optional superior–inferior cutoff)."></head><body>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/postprocessing.html">BrainGnomes Postprocessing Walkthrough</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -76,8 +77,9 @@ a NIfTI file. If <code>""</code> (default), no file is written.</p></dd>
 
 
 <dt id="arg-clfrac">clfrac<a class="anchor" aria-label="anchor" href="#arg-clfrac"></a></dt>
-<dd><p>Fraction of the robust intensity range used to set the clip
-level for initial thresholding. Default is 0.5.</p></dd>
+<dd><p>Fraction of the median intensity above the current clip used
+by the iterative clip estimator. Smaller values produce larger masks.
+Default is 0.5.</p></dd>
 
 
 <dt id="arg-nn">NN<a class="anchor" aria-label="anchor" href="#arg-nn"></a></dt>
@@ -104,9 +106,10 @@ to retain. Voxels inferior to this cutoff are set to zero. Default is 0
 
 
 <dt id="arg-peels">peels<a class="anchor" aria-label="anchor" href="#arg-peels"></a></dt>
-<dd><p>Number of "peel/unpeel" operations (erode then dilate with NN2
-neighborhood) applied to remove thin protuberances. Default is 1, matching
-AFNI <code>3dAutomask</code>.</p></dd>
+<dd><p>Number of layer-aware peel/restore operations using the NN2
+neighborhood and AFNI's 17-of-18 survival rule. These remove thin
+protuberances while restoring boundary voxels connected to the surviving
+core. Default is 1, matching AFNI <code>3dAutomask</code>.</p></dd>
 
 
 <dt id="arg-fill-holes">fill_holes<a class="anchor" aria-label="anchor" href="#arg-fill-holes"></a></dt>
@@ -123,9 +126,13 @@ values <code>0/1</code>. If <code>outfile</code> is provided, the mask is also w
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The processing pipeline is as follows:</p><ol><li><p>Collapse 4D inputs to a 3D mean volume.</p></li>
-<li><p>Compute robust clip threshold and apply initial thresholding.</p></li>
+<li><p>Compute an iterative global clip threshold, estimate local clip
+levels in eight overlapping regions, and apply the smoothly interpolated
+spatial threshold.</p></li>
 <li><p>Retain only the largest connected component (NN as specified).</p></li>
-<li><p>Apply AFNI-style peel/unpeel (<code>peels</code> times, NN2).</p></li>
+<li><p>Apply AFNI-style 17-of-18 layer-aware peeling and restoration
+(<code>peels</code> times, NN2), then retain the largest face-connected
+surviving component.</p></li>
 <li><p>Optionally fill interior holes.</p></li>
 <li><p>Apply user-specified erosion/dilation steps (NN as specified).</p></li>
 <li><p>Apply optional superior–inferior cutoff (<code>SIhh</code>).</p></li>
@@ -154,7 +161,7 @@ values <code>0/1</code>. If <code>outfile</code> is provided, the mask is also w
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>
