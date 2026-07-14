@@ -1,8 +1,8 @@
-# Apply a run-wise intensity multiplier to a 4D fMRI image
+# Apply run-scalar or denominator-guarded voxelwise PSC normalization
 
-Multiplies every voxel and volume by one previously estimated positive
-constant. BrainGnomes estimates this multiplier after masking and
-smoothing and applies it before temporal denoising.
+Applies either one previously estimated positive run multiplier or a
+positive 3D voxelwise multiplier map. BrainGnomes estimates both after
+masking and smoothing and applies them before temporal denoising.
 
 ## Usage
 
@@ -10,7 +10,9 @@ smoothing and applies it before temporal denoising.
 intensity_normalize(
   in_file,
   out_file,
-  scale_factor,
+  scale_factor = NULL,
+  mode = "run_scalar",
+  scale_file = NULL,
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL
@@ -31,7 +33,17 @@ intensity_normalize(
 
   Finite positive multiplier calculated as `target / L`, where `L` is
   the spatial median across reference voxels of their 10%-trimmed
-  temporal means.
+  temporal means. Required for `run_scalar`.
+
+- mode:
+
+  Either `"run_scalar"` (default) or `"voxel_psc"`.
+
+- scale_file:
+
+  Path to the 3D denominator-guarded PSC multiplier map. Reliable voxels
+  use `100 / local_baseline`; floor and fallback multipliers are already
+  encoded in this map. Required for `voxel_psc`.
 
 - overwrite:
 
@@ -51,7 +63,9 @@ Path to the intensity-normalized output NIfTI file.
 
 ## Details
 
-The input is rescaled using `fslmaths -mul`. This function only applies
-the supplied multiplier; reference selection and estimation occur
-upstream. The multiplier is not clipped, replaced, or re-estimated from
-filtered or residualized data.
+The input is rescaled using `fslmaths -mul`; FSL broadcasts a 3D PSC map
+across the 4D series. This function only applies the supplied
+multiplier. "Guarded" describes how the map's denominators were bounded
+or replaced during calibration; this application step does not clip
+observations, apply the reference core as a mask, or re-estimate a
+baseline from filtered or residualized data.

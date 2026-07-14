@@ -1,11 +1,13 @@
-# Select reference voxels and calculate the run intensity multiplier
+# Prepare robust run-scalar or denominator-guarded voxelwise PSC normalization
 
 Selects a fixed region of stable, positive-signal functional voxels from
 the input BOLD image. It then measures the reference intensity after
 enabled masking and smoothing: a 10% trimmed temporal mean is calculated
 for each reference voxel, followed by the spatial median across voxels.
-The function returns `target / reference_location`, which is applied to
-the complete run before temporal denoising.
+In `run_scalar` mode, the function returns
+`target / reference_location`. In `voxel_psc` mode, it calculates a
+robust temporal baseline at every voxel and writes a denominator-guarded
+multiplier map targeting 100.
 
 ## Usage
 
@@ -13,6 +15,7 @@ the complete run before temporal denoising.
 prepare_intensity_reference(
   in_file,
   target = 10000,
+  mode = "run_scalar",
   calibration_file = in_file,
   calibration_steps = character(),
   confounds_file = NULL,
@@ -20,6 +23,7 @@ prepare_intensity_reference(
   automask_file = NULL,
   core_file = "",
   sidecar_file = NULL,
+  scale_file = "",
   lg = NULL
 )
 ```
@@ -35,7 +39,14 @@ prepare_intensity_reference(
 
   Desired run reference intensity after scaling. Specifically, this is
   the desired spatial median across reference voxels of their
-  10%-trimmed temporal means.
+  10%-trimmed temporal means for `run_scalar`. It is fixed to 100 for
+  `voxel_psc`.
+
+- mode:
+
+  Either `"run_scalar"` (default) or `"voxel_psc"`. The latter uses
+  ordinary local PSC where possible and denominator floor/fallback
+  factors elsewhere; it does not clip or mask the image.
 
 - calibration_file:
 
@@ -73,6 +84,11 @@ prepare_intensity_reference(
 
   Optional JSON provenance sidecar path.
 
+- scale_file:
+
+  Optional output path for the 3D voxelwise multiplier map. Used only
+  for `voxel_psc`; an empty string keeps the map in memory only.
+
 - lg:
 
   Optional logger.
@@ -80,8 +96,8 @@ prepare_intensity_reference(
 ## Value
 
 List containing paths to the reference-region outputs, the run reference
-intensity (`reference_location`), requested `target`, calculated
-`scale_factor`, logical baseline-estimation volume vector
+intensity (`reference_location`), requested `target`, calculated scalar
+factor or PSC multiplier map, logical baseline-estimation volume vector
 (`include_frames`), and QA summaries.
 
 ## Details
@@ -92,3 +108,22 @@ to support consistent scaling across projects rather than exposed as
 tuning options. The input image must retain a finite, positive temporal
 baseline; an image that has already been demeaned or residualized is
 unsuitable.
+
+"Guarded PSC" refers specifically to protection against unstable
+division by a local baseline. A reliable voxel uses
+`100 / local_baseline`; a finite positive baseline below 20% of the core
+reference location uses that lower denominator bound; and a baseline
+that is nonfinite, nonpositive, or based on too few eligible frames uses
+the conservative run multiplier `100 / reference_location`. The floor
+and fallback voxels remain in the output but are not exact local PSC.
+The guards do not clip observations, impute data, or create a binary
+validity mask. Only `apply_mask` controls spatial inclusion in the
+output.
+
+When a logger is supplied, the function reports PSC category counts and
+percentages within the conservative functional automask at info level.
+Counts across the complete image grid are reported at debug level
+because they commonly include many background voxels and are less useful
+for routine QA. Both summaries distinguish ordinary PSC,
+denominator-floor, insufficient-frame fallback, and invalid-baseline
+fallback voxels.

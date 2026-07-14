@@ -34,6 +34,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/construct_bids_regex.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/create_tracking_db.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/derive_reference_core.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/derive_voxel_psc_scale.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/diagnose_pipeline.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/edit_project.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/extract_bids_info.html</loc></url>
@@ -95,6 +96,7 @@
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/remove_nifti_volumes.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/resample_template_to_img.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/reset_tracking_sqlite_db.html</loc></url>
+<url><loc>https://uncdependlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_mode.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/resolve_intensity_normalization_target.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/rm_niftis.html</loc></url>
 <url><loc>https://uncdependlab.github.io/BrainGnomes/reference/run_bids_validation.html</loc></url>

@@ -3,11 +3,29 @@
 the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
 temporal filtering, confound regression, and intensity normalization. Intensity
 normalization is applied after masking/smoothing and before temporal denoising.
+It can use one robust run multiplier (run_scalar) or a denominator-guarded
+positive voxelwise multiplier map targeting percent signal change
+(voxel_psc). Guarding bounds very low positive denominators and replaces
+denominators that are invalid or based on too few eligible frames with a
+run-level fallback; it does not clip BOLD observations or mask voxels. Both
+modes share the configured prefix and never apply the reference core as an
+output mask. PSC is defined relative to the smoothed signal when smoothing
+is enabled; users requiring unsmoothed voxelwise PSC should disable
+smoothing in that postprocessing stream.
 The function also optionally computes and saves
 a filtered confounds file for downstream analyses."><meta property="og:description" content="Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by
 the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
 temporal filtering, confound regression, and intensity normalization. Intensity
 normalization is applied after masking/smoothing and before temporal denoising.
+It can use one robust run multiplier (run_scalar) or a denominator-guarded
+positive voxelwise multiplier map targeting percent signal change
+(voxel_psc). Guarding bounds very low positive denominators and replaces
+denominators that are invalid or based on too few eligible frames with a
+run-level fallback; it does not clip BOLD observations or mask voxels. Both
+modes share the configured prefix and never apply the reference core as an
+output mask. PSC is defined relative to the smoothed signal when smoothing
+is enabled; users requiring unsmoothed voxelwise PSC should disable
+smoothing in that postprocessing stream.
 The function also optionally computes and saves
 a filtered confounds file for downstream analyses."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -32,7 +50,7 @@ a filtered confounds file for downstream analyses."></head><body>
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -57,6 +75,15 @@ a filtered confounds file for downstream analyses."></head><body>
 the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
 temporal filtering, confound regression, and intensity normalization. Intensity
 normalization is applied after masking/smoothing and before temporal denoising.
+It can use one robust run multiplier (<code>run_scalar</code>) or a denominator-guarded
+positive voxelwise multiplier map targeting percent signal change
+(<code>voxel_psc</code>). Guarding bounds very low positive denominators and replaces
+denominators that are invalid or based on too few eligible frames with a
+run-level fallback; it does not clip BOLD observations or mask voxels. Both
+modes share the configured prefix and never apply the reference core as an
+output mask. PSC is defined relative to the smoothed signal when smoothing
+is enabled; users requiring unsmoothed voxelwise PSC should disable
+smoothing in that postprocessing stream.
 The function also optionally computes and saves
 a filtered confounds file for downstream analyses.</p>
     </div>
@@ -83,7 +110,8 @@ reference masks are generated internally with <code><a href="automask.html">auto
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
-and logging to a subject-level log file.</p>
+intensity-reference provenance, the reference-core mask, a PSC multiplier
+map when requested, and logging to a subject-level log file.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

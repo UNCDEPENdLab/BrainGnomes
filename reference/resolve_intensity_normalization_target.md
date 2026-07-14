@@ -1,16 +1,22 @@
 # Resolve the configured intensity-normalization target
 
 The target is the desired spatial median across reference-region voxels
-of their 10%-trimmed temporal means at the point when scaling is
-applied. `target` is the canonical configuration field. `global_median`
-remains accepted for backward compatibility, although that older name is
-misleading: the method does not target the median of all values in the
-4D image.
+of their 10%-trimmed temporal means for `run_scalar`. `target` is the
+canonical configuration field and `global_median` remains accepted for
+backward compatibility. Denominator-guarded `voxel_psc` always uses 100:
+reliable local baselines are scaled to 100, while floor or fallback
+denominators prevent unstable division without clipping or masking data.
+The fixed target is required for regression coefficients to be expressed
+in approximate percent-signal-change units; any configured scalar target
+is ignored in that mode.
 
 ## Usage
 
 ``` r
-resolve_intensity_normalization_target(intensity_cfg)
+resolve_intensity_normalization_target(
+  intensity_cfg,
+  mode = resolve_intensity_normalization_mode(intensity_cfg)
+)
 ```
 
 ## Arguments
@@ -18,6 +24,10 @@ resolve_intensity_normalization_target(intensity_cfg)
 - intensity_cfg:
 
   Intensity-normalization configuration list.
+
+- mode:
+
+  Optional resolved normalization mode.
 
 ## Value
 

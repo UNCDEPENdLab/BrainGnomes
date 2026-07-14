@@ -5,12 +5,12 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Run-wise Intensity Normalization in BrainGnomes • BrainGnomes</title>
+<title>Intensity Normalization in BrainGnomes • BrainGnomes</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Run-wise Intensity Normalization in BrainGnomes">
+<script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Intensity Normalization in BrainGnomes">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -37,7 +37,7 @@
     <li><a class="dropdown-item" href="../articles/building_containers.html">Building Singularity containers for BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a></li>
     <li><a class="dropdown-item" href="../articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a></li>
-    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Run-wise Intensity Normalization in BrainGnomes</a></li>
+    <li><a class="dropdown-item" href="../articles/intensity_normalization.html">Intensity Normalization in BrainGnomes</a></li>
     <li><a class="dropdown-item" href="../articles/postprocessing.html">Postprocessing Walkthrough</a></li>
   </ul>
 </li>
@@ -61,7 +61,7 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
-      <h1>Run-wise Intensity Normalization in BrainGnomes</h1>
+      <h1>Intensity Normalization in BrainGnomes</h1>
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
@@ -82,13 +82,24 @@ reconstruction, or other acquisition details. This is inconvenient for
 task-regression coefficients: the same underlying response may produce
 coefficients with different numerical scales across runs and
 participants.</p>
-<p>BrainGnomes addresses the run-wide part of this problem by applying
-<strong>one positive multiplier to each 4D run</strong>. At the point
-when scaling is applied, the multiplier sets the robust intensity
-summary of stable reference voxels to a user-selected target,
-conventionally 10,000. The same multiplier is applied to every voxel and
-volume in that run.</p>
-<p>The approach has three defining properties:</p>
+<p>BrainGnomes offers two explicit intensity conventions.
+<code>run_scalar</code> applies one positive multiplier to the complete
+4D run and maps a robust reference intensity to a user-selected target,
+conventionally 10,000. <code>voxel_psc</code> applies a positive,
+denominator-guarded multiplier at each voxel so that reliable local
+temporal baselines equal 100 and task coefficients can be interpreted
+approximately as local percent signal change.</p>
+<p>Here, <strong>guarded PSC</strong> has a specific meaning.
+BrainGnomes uses ordinary local PSC scaling,
+<code>100 / local_baseline</code>, whenever that baseline is reliable.
+It replaces a very low positive denominator with a fixed lower bound and
+replaces an unidentified denominator with the conservative run-level
+denominator. The guard therefore prevents division by a tiny, missing,
+or invalid baseline. It does <strong>not</strong> clip BOLD
+observations, repair noisy data, impute a local baseline, or decide
+which voxels remain in the image. Voxels that receive a floor or
+fallback remain present, but their values are not exact local PSC.</p>
+<p>The approach has four defining properties:</p>
 <ol style="list-style-type: decimal">
 <li>Before postprocessing, BrainGnomes selects a conservative set of
 stable, positive-signal functional voxels to serve as the
@@ -98,9 +109,12 @@ mask, not an anatomical ROI or an analysis mask.</li>
 intensity after masking and spatial smoothing. The multiplier therefore
 reflects the spatially processed image that will enter temporal
 denoising.</li>
-<li>The resulting factor is applied immediately, before AROMA,
-interpolation, temporal filtering, confound regression, or timepoint
-removal.</li>
+<li>Both modes use the same eligible volumes, robust 10%-trimmed
+temporal location, filename prefix, and post-spatial/pre-temporal
+checkpoint.</li>
+<li>The reference core is calibration support, not an analysis or
+PSC-validity mask. Only <code>apply_mask</code> determines which voxels
+are removed.</li>
 </ol>
 <p>This makes intensity normalization straightforward for users while
 protecting against division by a near-zero reference intensity, unstable
@@ -110,32 +124,59 @@ voxels, and variable external masks.</p>
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
 <p>Intensity normalization is configured separately for each
-postprocessing stream. Interactive project setup asks whether to enable
-it and prompts for the target. The equivalent YAML structure is:</p>
+postprocessing stream. Interactive setup asks for the mode and uses the
+same prefix setting for either choice. The practical decision is:</p>
+<ul>
+<li>Choose <code>run_scalar</code> for conventional FSL-style run
+scaling and comparable target-based coefficient units. This is the
+default and does not make the data percent signal change.</li>
+<li>Choose <code>voxel_psc</code> when local fractional response size is
+the intended estimand and coefficients should approximate percent signal
+change.</li>
+</ul>
+<p>Use the same mode for every run and participant in an analysis.
+BrainGnomes handles reference estimation and low-signal safeguards
+automatically.</p>
+<p>Run-scalar configuration is:</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">postprocess</span><span class="kw">:</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="at">  </span><span class="fu">task</span><span class="kw">:</span></span>
 <span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="at">    </span><span class="fu">intensity_normalize</span><span class="kw">:</span></span>
 <span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="at">      </span><span class="fu">enable</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="at">      </span><span class="fu">target</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
-<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="at">      </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">"n"</span></span></code></pre></div>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="at">      </span><span class="fu">mode</span><span class="kw">:</span><span class="at"> run_scalar</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="at">      </span><span class="fu">target</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="at">      </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">"n"</span></span></code></pre></div>
 <p>The default target is 10,000. Use the same target for every run and
 participant that will contribute coefficients to the same group
 analysis.</p>
+<p>Denominator-guarded PSC configuration is:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">postprocess</span><span class="kw">:</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="at">  </span><span class="fu">task</span><span class="kw">:</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="at">    </span><span class="fu">intensity_normalize</span><span class="kw">:</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="at">      </span><span class="fu">enable</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="at">      </span><span class="fu">mode</span><span class="kw">:</span><span class="at"> voxel_psc</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="at">      </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">"n"</span></span></code></pre></div>
+<p>PSC always targets 100; a configured scalar <code>target</code> is
+ignored in this mode. The prefix deliberately does not change with the
+mode. The selected mode is recorded in the JSON provenance and
+processing log. Because both modes use the same output naming
+convention, set <code>overwrite: true</code> when rerunning an existing
+stream after changing its mode; otherwise the normal pipeline cache
+rules may reuse the previously generated output.</p>
 <p>Existing configurations may contain <code>global_median</code>
 instead of <code>target</code>:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">intensity_normalize</span><span class="kw">:</span></span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="at">  </span><span class="fu">enable</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="at">  </span><span class="fu">global_median</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="at">  </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">"n"</span></span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">intensity_normalize</span><span class="kw">:</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="at">  </span><span class="fu">enable</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="at">  </span><span class="fu">global_median</span><span class="kw">:</span><span class="at"> </span><span class="dv">10000</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="at">  </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">"n"</span></span></code></pre></div>
 <p>BrainGnomes continues to accept this legacy field, but
 <code>target</code> is now the canonical name. The older name is
-potentially misleading because the current method does not target the
-median of every value in the 4D image.</p>
+potentially misleading because the current scalar method does not target
+the median of every value in the 4D image.</p>
 </div>
 <div class="section level2">
-<h2 id="what-exactly-does-the-target-mean">What exactly does the target mean?<a class="anchor" aria-label="anchor" href="#what-exactly-does-the-target-mean"></a>
+<h2 id="how-the-two-modes-are-calculated">How the two modes are calculated<a class="anchor" aria-label="anchor" href="#how-the-two-modes-are-calculated"></a>
 </h2>
-<p>The target refers to a two-stage summary calculated at the
+<p>The run-scalar target refers to a two-stage summary calculated at the
 <strong>normalization point</strong>: after the enabled masking and
 smoothing steps, but before temporal denoising. BrainGnomes first
 identifies which volumes can contribute to this calculation. These
@@ -160,7 +201,8 @@ L = \operatorname{median}\{\hat\mu_v:v\in M_{\mathrm{ref}}\},
 </annotation></semantics></math></p>
 <p>where
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>M</mi><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">f</mi></mrow></msub><annotation encoding="application/x-tex">M_{\mathrm{ref}}</annotation></semantics></math>
-is the fixed reference region. Given the user’s target
+is the fixed reference region. For <code>run_scalar</code>, given the
+user’s target
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>T</mi><annotation encoding="application/x-tex">T</annotation></semantics></math>,
 the run multiplier is</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi><mo>=</mo><mfrac><mi>T</mi><mi>L</mi></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
@@ -186,6 +228,144 @@ mean.</p>
 changing the target from 10,000 to 1,000 divides every normalized value
 and regression coefficient by 10. It does not improve signal quality or
 statistical power.</p>
+<div class="section level3">
+<h3 id="why-trim-10-from-each-tail">Why trim 10% from each tail?<a class="anchor" aria-label="anchor" href="#why-trim-10-from-each-tail"></a>
+</h3>
+<p>AFNI’s voxelwise scale block uses the ordinary temporal mean and then
+caps individual scaled observations. BrainGnomes instead protects the
+denominator while retaining a time-constant linear multiplier. Censoring
+removes known bad volumes, but it cannot identify every regional spike
+or transient dropout; one remaining extreme observation can bias every
+scaled value and coefficient at that voxel.</p>
+<p>The internal value <code>trim = 0.10</code> means that 10% is removed
+from each tail and the central 80% is averaged. Development checks
+compared 0%, 5%, 10%, and 15% trimming. In 5,000 sampled mask voxels
+from each of two long fMRIPrep runs, the 10%-trimmed baseline differed
+from the ordinary mean by less than about 0.5–0.6% for 95% of voxels,
+while the spatial-median run reference changed by no more than 0.01%.
+Across eight low-noise 480-volume synthetic runs, the 95th percentile
+difference was about 0.01–0.02%. Injected-spike checks showed a clear
+gain over the ordinary mean and only small additional benefit beyond
+10%.</p>
+<table class="table">
+<colgroup>
+<col width="15%">
+<col width="21%">
+<col width="21%">
+<col width="21%">
+<col width="21%">
+</colgroup>
+<thead><tr class="header">
+<th>Development dataset</th>
+<th align="right">Eligible volumes</th>
+<th align="right">95th percentile absolute change, 10% trim versus
+mean</th>
+<th align="right">99th percentile</th>
+<th align="right">Spatial-median reference change</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>fMRIPrep clock run</td>
+<td align="right">1,323</td>
+<td align="right">0.466%</td>
+<td align="right">1.293%</td>
+<td align="right">-0.003%</td>
+</tr>
+<tr class="even">
+<td>fMRIPrep trust run</td>
+<td align="right">1,084</td>
+<td align="right">0.605%</td>
+<td align="right">1.717%</td>
+<td align="right">-0.010%</td>
+</tr>
+<tr class="odd">
+<td>Eight low-noise synthetic runs</td>
+<td align="right">480 each</td>
+<td align="right">0.013–0.021%</td>
+<td align="right">0.026–0.083%</td>
+<td align="right">-0.004% to -0.006%</td>
+</tr>
+</tbody>
+</table>
+<p>In a separate stress test, 5% of observations in 1,000
+positive-baseline synthetic voxel series were replaced by positive 10-SD
+spikes. Median absolute baseline error fell from 0.066% with the
+ordinary mean to 0.015% with 5% trimming, 0.012% with 10%, and 0.011%
+with 15%. The corresponding 95th percentiles were 0.281%, 0.060%,
+0.056%, and 0.056%. Thus, moving from no trim to 10% is consequential
+under contamination, while moving from 10% to 15% buys little.</p>
+<p>As an end-to-end check, a supplied 1,325-volume fMRIPrep run produced
+a 60,231-voxel reference core from a 60,640-voxel automask; every
+automask voxel received ordinary PSC, while denominator guards were
+confined to low-signal or background grid voxels outside that
+conservative functional mask.</p>
+<p>Ten percent is therefore a useful fixed compromise: it has negligible
+effect on clean baselines, protects against residual voxel-specific
+contamination, and is less aggressive than 15–20% trimming. It is an
+internal policy rather than a user tuning parameter.</p>
+<p>For <code>voxel_psc</code>, BrainGnomes calculates the same
+10%-trimmed baseline
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub><annotation encoding="application/x-tex">\hat\mu_v</annotation></semantics></math>
+at every voxel in the image present at the normalization point. A
+reliable positive denominator receives</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mi>v</mi></msub><mo>=</mo><mfrac><mn>100</mn><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub></mfrac><mo>,</mo><mspace width="2.0em"></mspace><msubsup><mi>y</mi><mrow><mi>v</mi><mi>t</mi></mrow><mo>*</mo></msubsup><mo>=</mo><msub><mi>s</mi><mi>v</mi></msub><msub><mi>y</mi><mrow><mi>v</mi><mi>t</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+s_v = \frac{100}{\hat\mu_v}, \qquad y^*_{vt}=s_vy_{vt}.
+</annotation></semantics></math></p>
+<p>The robust temporal baseline, rather than necessarily the ordinary
+arithmetic mean, is therefore 100. In clean data these summaries are
+nearly identical. The fixed value 100 is what makes a regression
+coefficient interpretable in percentage-point units when the regressor
+amplitude has the intended meaning.</p>
+</div>
+<div class="section level3">
+<h3 id="what-guarded-psc-means-mathematically">What “guarded PSC” means mathematically<a class="anchor" aria-label="anchor" href="#what-guarded-psc-means-mathematically"></a>
+</h3>
+<p>Local PSC requires division by a voxel-specific baseline, so it needs
+stronger denominator protection than <code>run_scalar</code>. Let
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mn>0.20</mn><mi>L</mi></mrow><annotation encoding="application/x-tex">F=0.20L</annotation></semantics></math>,
+where
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>L</mi><annotation encoding="application/x-tex">L</annotation></semantics></math>
+is the stable reference-core location. BrainGnomes applies the internal
+policy</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mi>v</mi></msub><mo>=</mo><mrow><mo stretchy="true" form="prefix">{</mo><mtable><mtr><mtd columnalign="left" style="text-align: left"><mrow><mi mathvariant="normal">max</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub><mo>,</mo><mi>F</mi><mo stretchy="false" form="postfix">)</mo><mo>,</mo></mtd><mtd columnalign="left" style="text-align: left"><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> is finite, positive, and identified</mtext></mrow><mo>,</mo></mtd></mtr><mtr><mtd columnalign="left" style="text-align: left"><mi>L</mi><mo>,</mo></mtd><mtd columnalign="left" style="text-align: left"><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub><mrow><mspace width="0.333em"></mspace><mtext mathvariant="normal"> is nonfinite, nonpositive, or insufficiently observed</mtext></mrow><mo>,</mo></mtd></mtr></mtable></mrow><mspace width="2.0em"></mspace><msub><mi>s</mi><mi>v</mi></msub><mo>=</mo><mn>100</mn><mi>/</mi><msub><mi>d</mi><mi>v</mi></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+d_v =
+\begin{cases}
+\max(\hat\mu_v,F), &amp; \hat\mu_v\text{ is finite, positive, and identified},\\
+L, &amp; \hat\mu_v\text{ is nonfinite, nonpositive, or insufficiently observed},
+\end{cases}
+\qquad s_v=100/d_v.
+</annotation></semantics></math></p>
+<p>This creates three interpretable outcomes:</p>
+<ul>
+<li>
+<strong>Ordinary PSC:</strong> a finite positive baseline at or
+above
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>
+uses
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn><mi>/</mi><msub><mover><mi>μ</mi><mo accent="true">̂</mo></mover><mi>v</mi></msub></mrow><annotation encoding="application/x-tex">100/\hat\mu_v</annotation></semantics></math>.
+Its robust baseline is 100 and its coefficient has the usual approximate
+local PSC interpretation.</li>
+<li>
+<strong>Denominator floor:</strong> a finite positive baseline below
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>
+uses
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn><mi>/</mi><mi>F</mi></mrow><annotation encoding="application/x-tex">100/F</annotation></semantics></math>.
+Amplification is bounded, but the voxel is not exact local PSC.</li>
+<li>
+<strong>Run-reference fallback:</strong> a baseline that is
+nonfinite, nonpositive, or based on fewer than 20 finite eligible frames
+uses
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn><mi>/</mi><mi>L</mi></mrow><annotation encoding="application/x-tex">100/L</annotation></semantics></math>.
+The voxel remains in broadly comparable run units but is not local
+PSC.</li>
+</ul>
+<p>The word <em>guarded</em> describes only these denominator
+substitutions. Every resulting multiplier is positive and constant over
+time. BrainGnomes does not cap the scaled time series, replace
+individual observations, zero guarded voxels, or apply a PSC validity
+mask. Counts in all three categories are saved so users can distinguish
+exact robust local PSC from retained guard cases.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="where-normalization-occurs-and-why">Where normalization occurs and why<a class="anchor" aria-label="anchor" href="#where-normalization-occurs-and-why"></a>
@@ -214,7 +394,8 @@ differ substantially by run:</p>
                               |
                               +--&gt; measure run reference intensity L
                                    in the fixed reference voxels
-                              +--&gt; multiply immediately by T/L
+                              +--&gt; run_scalar: multiply by T/L
+                                   voxel_psc: derive and apply 100/d_v
                                          |
                                          +--&gt; AROMA/interpolation/filtering/
                                               confound regression/scrubbing</code></pre>
@@ -232,22 +413,86 @@ little. BrainGnomes therefore puts all runs into common units
 <em>before</em> those run-specific temporal effects occur. It does not
 renormalize afterward, because doing so could amplify the more strongly
 affected run and obscure a meaningful data-quality difference.</p>
-<p>For a linear processing operation
+<p>For a voxelwise linear temporal operation
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>,
-scalar multiplication commutes with that operation:
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo stretchy="false" form="prefix">(</mo><mi>s</mi><mi>y</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>s</mi><mi>F</mi><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">F(sy)=sF(y)</annotation></semantics></math>.
-Subsequent linear denoising can therefore affect runs by different
-amounts while retaining the common input units.</p>
+either time-constant multiplier commutes with that operation. Subsequent
+linear denoising can therefore affect runs by different amounts while
+retaining the units established at this checkpoint.</p>
+<div class="section level3">
+<h3 id="why-voxelwise-psc-follows-spatial-smoothing">Why voxelwise PSC follows spatial smoothing<a class="anchor" aria-label="anchor" href="#why-voxelwise-psc-follows-spatial-smoothing"></a>
+</h3>
+<p>This issue is specific to spatially varying multipliers. With
+<code>run_scalar</code>, the same constant
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>s</mi><annotation encoding="application/x-tex">s</annotation></semantics></math>
+applies everywhere, so a linear spatial smoother satisfies
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo stretchy="false" form="prefix">(</mo><mi>s</mi><mi>y</mi><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mi>s</mi><mi>S</mi><mo stretchy="false" form="prefix">(</mo><mi>y</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">S(sy)=sS(y)</annotation></semantics></math>
+and the two orders are equivalent apart from implementation and rounding
+details.</p>
+<p>Spatial smoothing and voxelwise PSC are different because the PSC
+multiplier varies across voxels. To see this, let
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>S</mi><annotation encoding="application/x-tex">S</annotation></semantics></math>
+denote a spatial weighted average and let
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>m</mi><mi>v</mi></msub><annotation encoding="application/x-tex">m_v</annotation></semantics></math>
+be voxel
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>v</mi><annotation encoding="application/x-tex">v</annotation></semantics></math>’s
+baseline. Scaling before smoothing would produce</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mrow><mo stretchy="true" form="prefix">(</mo><mn>100</mn><mfrac><msub><mi>y</mi><mrow><mi>v</mi><mi>t</mi></mrow></msub><msub><mi>m</mi><mi>v</mi></msub></mfrac><mo stretchy="true" form="postfix">)</mo></mrow><mo>,</mo></mrow><annotation encoding="application/x-tex">
+S\left(100\frac{y_{vt}}{m_v}\right),
+</annotation></semantics></math></p>
+<p>which averages the neighboring voxels’ fractional time series.
+Smoothing first and then scaling instead produces, approximately,</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn><mfrac><mrow><mi>S</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>y</mi><mrow><mi>v</mi><mi>t</mi></mrow></msub><mo stretchy="false" form="postfix">)</mo></mrow><mrow><mi>S</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>m</mi><mi>v</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow></mfrac><mi>.</mi></mrow><annotation encoding="application/x-tex">
+100\frac{S(y_{vt})}{S(m_v)}.
+</annotation></semantics></math></p>
+<p>The second expression is the fractional change of the <em>smoothed
+signal</em>. It weights a neighbor’s fractional response partly
+according to how much baseline signal that neighbor contributes to the
+smoothed voxel. The two expressions are equal only in special cases,
+such as when neighboring baselines are the same. BrainGnomes uses a
+trimmed baseline and contrast-sensitive SUSAN smoothing, so the
+displayed equations are an intuitive linear approximation, but the
+ordering distinction remains.</p>
+<p>This can matter substantively, not just cosmetically. Smoothing after
+PSC would give a low-baseline or dropout-prone voxel approximately the
+same spatial weight as a high-signal neighbor once both had been
+normalized to 100. It could also spread the influence of a denominator
+guard into adjacent voxels. BrainGnomes instead smooths the acquired
+signal first and derives the local baseline and any denominator guard
+from that same smoothed series. This generally makes the denominator
+more stable and ensures that the PSC coefficient describes the exact
+spatially processed signal supplied to the first-level model.</p>
+<p>The corresponding interpretation is important: after smoothing, a
+beta of 1 means approximately a one-percentage-point change relative to
+the local <em>smoothed</em> baseline. It is not the simple spatial
+average of the pre-smoothing voxels’ PSC values. Differences between the
+two orderings should be small in locally homogeneous tissue when
+neighboring baselines and fractional responses are similar. They can be
+larger near gray/white or brain/CSF boundaries, near susceptibility
+dropout, across strong receive-field gradients, around large vessels or
+lesions, and with larger smoothing kernels. In those locations,
+smoothing itself already produces partial-volume estimates;
+post-smoothing PSC makes those mixed-signal units explicit rather than
+restoring pre-smoothing voxel specificity.</p>
+<p>Consequently, the chosen order is conventional and internally
+coherent, but it does define the estimand and can change both
+coefficients and statistics where spatial signals are heterogeneous. A
+project that requires unsmoothed voxelwise PSC should disable spatial
+smoothing or create a separate unsmoothed postprocessing stream, rather
+than interpreting post-smoothing PSC as pre-smoothing voxel percent
+change.</p>
 <p>This ordering follows the design boundary in AFNI’s
 <code>afni_proc.py</code>: its default blocks place <code>blur</code>
 and <code>mask</code> before <code>scale</code>, and <code>scale</code>
 before <code>regress</code>; the script explicitly warns when blur
-follows scale or regression precedes scale. The numerical operation
-differs, however. AFNI’s default <code>scale</code> block performs
-voxelwise mean-100 scaling with an upper cap, whereas BrainGnomes
-applies one uncapped run-wide multiplier, estimated robustly, to the
-entire 4D run. The shared principle is the placement of scaling between
-spatial preprocessing and temporal modeling.</p>
+follows scale or regression precedes scale. AFNI’s default
+<code>scale</code> block performs voxelwise ordinary-mean scaling and
+caps individual output observations, normally at 200. BrainGnomes
+<code>voxel_psc</code> instead guards the denominator while retaining a
+time-constant linear multiplier, so it does not clip response peaks.
+<code>run_scalar</code> remains the compatible run-wide alternative. All
+modes share the placement of scaling between spatial preprocessing and
+temporal modeling.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="how-the-reference-region-is-constructed">How the reference region is constructed<a class="anchor" aria-label="anchor" href="#how-the-reference-region-is-constructed"></a>
@@ -359,8 +604,8 @@ across projects than a large menu of poorly identified thresholds.</p>
 <li>fewer than 50% of candidate voxels survive reference-region
 refinement;</li>
 <li>no finite positive run reference intensity can be estimated; or</li>
-<li>the requested target or resulting multiplier is not finite and
-positive.</li>
+<li>the requested target or resulting scalar/PSC multiplier is not
+finite and positive.</li>
 </ul>
 <p>BrainGnomes does not replace an invalid reference intensity with 1,
 add an arbitrary offset, or silently switch to a different mask.</p>
@@ -393,7 +638,8 @@ and applies temporal stability criteria to that candidate.</p>
 <tbody>
 <tr class="odd">
 <td>Reference region (saved as the reference core)</td>
-<td>Defines the run multiplier</td>
+<td>Defines the run multiplier and, for PSC, the denominator floor and
+fallback</td>
 <td>Conservative functional automask plus temporal QA</td>
 </tr>
 <tr class="even">
@@ -416,25 +662,30 @@ than half of the fixed reference voxels with a finite positive baseline,
 normalization stops rather than switching reference populations
 silently. The reference region is not applied to the 4D data as an
 analysis mask; valid analysis voxels outside it remain in the output and
-receive the same run multiplier.</p>
+receive either the run multiplier or their own denominator-guarded PSC
+multiplier. The guard protects division; it does not construct or apply
+a binary validity mask. Noisy voxels remain noisy; deciding whether to
+exclude them belongs to <code>apply_mask</code> or downstream analysis
+masking.</p>
 </div>
 <div class="section level2">
 <h2 id="outputs-and-provenance">Outputs and provenance<a class="anchor" aria-label="anchor" href="#outputs-and-provenance"></a>
 </h2>
-<p>When normalization is enabled, BrainGnomes saves two files beside the
-final postprocessed BOLD output. Their BIDS entities match the input
-run:</p>
+<p>When normalization is enabled, BrainGnomes saves the reference core
+and its JSON provenance beside the final postprocessed BOLD output.
+Their BIDS entities match the input run:</p>
 <pre class="text"><code>sub-01_task-example_run-1_space-..._desc-intensityReferenceCore_mask.nii.gz
 sub-01_task-example_run-1_space-..._desc-intensityReferenceCore_mask.json</code></pre>
 <p>The NIfTI file is the final binary reference core. The JSON sidecar
 records:</p>
 <ul>
-<li>method identifier (<code>automask_reference_core_v1</code>);</li>
+<li>reference-core and normalization method identifiers and the selected
+mode;</li>
 <li>original source BOLD file and the image present at the normalization
 point;</li>
 <li>normalization stage and the spatial steps completed before it;</li>
 <li>target, run reference intensity (<code>reference_location</code>),
-and applied scale factor;</li>
+and the scalar factor or PSC guard policy;</li>
 <li>numbers of volumes used for baseline estimation and total
 volumes;</li>
 <li>candidate and core voxel counts and retained fraction;</li>
@@ -444,22 +695,36 @@ volumes;</li>
 <li>the number and fraction of fixed reference voxels usable when
 scaling is applied.</li>
 </ul>
+<p><code>voxel_psc</code> additionally saves the exact positive
+multiplier map:</p>
+<pre class="text"><code>sub-01_task-example_run-1_space-..._desc-intensityNormalizationScale_map.nii.gz</code></pre>
+<p>The JSON defines guarded PSC explicitly and records the denominator
+floor, maximum multiplier, reference fallback multiplier, and counts
+receiving ordinary PSC, the low-baseline floor, insufficient-frame
+fallback, or invalid- baseline fallback. It also labels which categories
+are exact robust local PSC. Counts are reported for the complete grid
+and separately within the conservative functional automask. The latter
+is more useful for QA when the user intentionally leaves background
+voxels unmasked.</p>
+<p>The same category counts and percentages within the conservative
+automask are written to the routine info-level processing log. The
+complete-grid counts are written at debug level because they often
+contain many intentional background voxels and can obscure the
+functional-tissue summary.</p>
 <p>The temporary conservative automask is not retained. The core and its
 sidecar contain the information needed for routine QA and factor
 provenance.</p>
 <p>If <code>validate_postproc_steps</code> is enabled, BrainGnomes also
 verifies that:</p>
 <ol style="list-style-type: decimal">
-<li>
-<code>reference_location * scale_factor</code> equals the requested
-target;</li>
 <li>the pre- and post-normalization images have the same dimensions and
 finite value pattern;</li>
-<li>every finite output value equals its input value times the fixed
-factor, within numerical tolerance; and</li>
-<li>remeasurement using the same reference voxels and
-baseline-estimation volumes confirms that the image at the normalization
-point reaches the requested target.</li>
+<li>every finite output value equals its input value times the scalar or
+mapped factor, within numerical tolerance; and</li>
+<li>scalar mode maps <code>reference_location</code> to its requested
+target and remeasurement confirms it; or</li>
+<li>PSC mode uses a finite positive 3D multiplier map matching the BOLD
+spatial grid and a fixed target of 100.</li>
 </ol>
 </div>
 <div class="section level2">
@@ -502,23 +767,37 @@ corresponding units. Within-run
 statistics are unchanged apart from numerical precision. Correlations
 are also unchanged, so run-wise intensity normalization is usually
 irrelevant for analyses based only on correlation coefficients.</p>
-<p>If the scientific estimand is local fractional signal change, a
-carefully guarded voxelwise percent-signal-change transformation is more
-direct. That is a different operation and requires stricter protection
-against low local temporal baselines. The BrainGnomes
-<code>target</code> option implements only the run-multiplier method
-described here.</p>
+<p>With <code>voxel_psc</code>, a reliable voxel has</p>
+<p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>β</mi><mrow><mi>r</mi><mi>v</mi></mrow><mrow><mi>P</mi><mi>S</mi><mi>C</mi></mrow></msubsup><mo>≈</mo><mn>100</mn><msub><mi>p</mi><mrow><mi>r</mi><mi>v</mi></mrow></msub><mi>.</mi></mrow><annotation encoding="application/x-tex">
+\beta^{PSC}_{rv}\approx100p_{rv}.
+</annotation></semantics></math></p>
+<p>This removes both the run gain and the local baseline from the
+coefficient scale. A beta of 1 corresponds approximately to a
+one-percentage-point response for a unit-amplitude regressor. This
+interpretation applies to ordinary-PSC voxels. Floor and fallback voxels
+are retained specifically to avoid silently changing the analysis mask,
+but they do not have exact local PSC interpretation; the provenance
+counts indicate how often this occurred. PSC does not repair dropout,
+increase temporal SNR, or harmonize neurovascular response. A positive
+voxelwise multiplier leaves each voxel’s
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>
+statistic unchanged apart from numerical precision.</p>
 </div>
 <div class="section level2">
-<h2 id="choosing-and-evaluating-the-target">Choosing and evaluating the target<a class="anchor" aria-label="anchor" href="#choosing-and-evaluating-the-target"></a>
+<h2 id="choosing-and-evaluating-the-mode-and-target">Choosing and evaluating the mode and target<a class="anchor" aria-label="anchor" href="#choosing-and-evaluating-the-mode-and-target"></a>
 </h2>
-<p>For most projects, keep the default target of 10,000. The exact
-number is a convention; consistency is more important than whether the
-convention is 10,000, 1,000, or 100.</p>
+<p>For compatible run-wide scaling, use <code>run_scalar</code> and keep
+the default target of 10,000. The exact number is a convention;
+consistency is more important than whether the convention is 10,000,
+1,000, or 100.</p>
 <p>Do not choose a different target for different subjects, tasks,
 scanners, or runs. Doing so would reintroduce arbitrary unit
 differences. If an external analysis pipeline expects a specific scale,
 choose that scale once and document it.</p>
+<p>Use <code>voxel_psc</code> when local fractional task amplitudes are
+the intended first-level estimand. Its target is always 100 and is not
+user-tunable. Use the same mode throughout a group analysis; scalar and
+PSC coefficients are not the same units.</p>
 <p>Recommended project-level QA includes:</p>
 <ul>
 <li>plotting the multiplier (<code>scale_factor</code>) and run
@@ -533,7 +812,9 @@ project distribution; and</li>
 <li>confirming that first-level
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>
 statistics remain unchanged while beta and uncertainty units change as
-expected.</li>
+expected; and</li>
+<li>for PSC, plotting the fractions of automask voxels receiving the
+denominator floor or run-scalar fallback.</li>
 </ul>
 <p>A factor that differs from the rest of the project is not
 automatically wrong: it may correctly remove a different acquisition
@@ -553,10 +834,21 @@ values. Later temporal operations can also change summary statistics
 while preserving the calibrated input units.</p>
 </div>
 <div class="section level3">
+<h3 id="a-psc-voxels-ordinary-mean-is-not-exactly-100">A PSC voxel’s ordinary mean is not exactly 100<a class="anchor" aria-label="anchor" href="#a-psc-voxels-ordinary-mean-is-not-exactly-100"></a>
+</h3>
+<p>BrainGnomes targets the 10%-trimmed mean of eligible volumes.
+Censored and non-steady-state volumes do not define the denominator, and
+residual extremes do not dominate it. Consequently, the ordinary mean
+over every volume need not be exactly 100. In clean voxels the
+difference should be small.</p>
+</div>
+<div class="section level3">
 <h3 id="the-reference-core-is-much-smaller-than-the-brain">The reference core is much smaller than the brain<a class="anchor" aria-label="anchor" href="#the-reference-core-is-much-smaller-than-the-brain"></a>
 </h3>
 <p>The saved reference-core mask contains a stable population used only
-to estimate the run multiplier; it is not an analysis mask. It may
+to estimate the run multiplier or the reference location
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>L</mi><annotation encoding="application/x-tex">L</annotation></semantics></math>
+that sets the PSC floor and fallback; it is not an analysis mask. It may
 exclude valid but low-signal or noisy analysis voxels. Those voxels
 remain in the BOLD output unless removed by a separate apply mask.</p>
 </div>
@@ -583,6 +875,11 @@ and the core mask in the JSON sidecar. Confirm that the source is the
 preprocessed BOLD image retaining a finite, positive temporal baseline
 and that all runs use the same target. Extreme factors should be treated
 as QA flags rather than automatically clipped.</p>
+<p>For PSC, inspect the saved multiplier map and <code>psc_guard</code>
+counts. A large floored or fallback fraction inside the conservative
+automask indicates that local percentage units are poorly identified in
+substantial functional tissue. BrainGnomes reports this condition but
+does not silently remove those voxels.</p>
 </div>
 <div class="section level3">
 <h3 id="should-normalization-occur-before-or-after-filtering">Should normalization occur before or after filtering?<a class="anchor" aria-label="anchor" href="#should-normalization-occur-before-or-after-filtering"></a>
@@ -597,17 +894,22 @@ processing.</p>
 <div class="section level2">
 <h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
 </h2>
-<p>BrainGnomes intensity normalization removes one arbitrary
-multiplicative degree of freedom per run. It selects a stable set of
-reference voxels from the input BOLD image, measures their run reference
-intensity after spatial preprocessing, and immediately multiplies the
-full run by <code>target / reference_location</code> before temporal
-denoising. Users choose only the target; reference-region construction,
-placement, and quality thresholds follow a fixed internal policy.</p>
-<p>This produces more consistent coefficient units without claiming to
-equalize local tissue intensities, repair dropout, or create
-percent-signal-change data. The saved reference-core mask and JSON
-sidecar make the transformation explicit and auditable.</p>
+<p>BrainGnomes selects a stable reference core from the original
+positive-scale BOLD image and measures its intensity after spatial
+preprocessing. At that checkpoint, <code>run_scalar</code> applies
+<code>target / reference_location</code>, while <code>voxel_psc</code>
+applies a denominator-guarded local multiplier targeting 100. A reliable
+baseline receives ordinary PSC scaling, a very low positive baseline
+uses the denominator floor, and an unidentified baseline uses a
+run-reference fallback. These guards prevent unstable division without
+clipping observations or masking voxels. Both modes use the same prefix,
+eligible volumes, robust 10%-trimmed baseline, and placement before
+temporal denoising.</p>
+<p>The reference core is never an analysis or PSC-validity mask. The
+user’s <code>apply_mask</code> choice controls spatial removal, while
+denominator floors and fallbacks prevent unstable division without
+hiding the affected voxels. Saved reference, multiplier, and JSON
+outputs make either transformation auditable.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
