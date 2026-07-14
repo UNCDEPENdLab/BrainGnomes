@@ -60,41 +60,86 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="braingnomes">BrainGnomes<a class="anchor" aria-label="anchor" href="#braingnomes"></a>
 </h1></div>
-<p>BrainGnomes streamlines preprocessing and analysis of fMRI data on high performance computing (HPC) clusters. The package wraps common neuroimaging tools (HeuDiConv, MRIQC, fMRIPrep and others) and provides helper functions for managing configuration files, submitting jobs and running post‑processing steps. All heavy weight dependencies are executed through Singularity containers so that pipelines are reproducible across systems.</p>
+<!-- badges: start -->
+
+<p>BrainGnomes is an R package for configuring, submitting, and monitoring reproducible fMRI workflows on high-performance computing (HPC) systems. It coordinates containerized neuroimaging tools and scheduler jobs from one project configuration, while retaining logs and job-tracking information for each run.</p>
+<p>The package supports the parts of a workflow that you need: optional Flywheel synchronization, DICOM-to-BIDS conversion with HeuDiConv, BIDS validation, MRIQC, fMRIPrep, ICA-AROMA, postprocessing, and ROI time-series/connectivity extraction. You can begin with raw DICOMs or use it only for later steps when BIDS or fMRIPrep outputs already exist.</p>
 <div class="section level2">
-<h2 id="vignettes">Vignettes<a class="anchor" aria-label="anchor" href="#vignettes"></a>
+<h2 id="is-braingnomes-a-good-fit">Is BrainGnomes a good fit?<a class="anchor" aria-label="anchor" href="#is-braingnomes-a-good-fit"></a>
 </h2>
-<p>Documentation is provided as several vignettes found in the <code>vignettes/</code> folder:</p>
+<p>BrainGnomes is designed for studies run on an HPC cluster with a SLURM or TORQUE scheduler and containerized imaging software. It is especially useful when a project needs repeatable per-subject processing, configured resource requests, dependency-aware job submission, and a clear record of what completed or failed.</p>
+<p>Before starting, make sure you have:</p>
+<ul>
+<li>R (version 4.1 or later) on the system from which you will submit jobs;</li>
+<li>access to a SLURM or TORQUE cluster and appropriate filesystem locations for project data, scratch space, and logs;</li>
+<li>Singularity-compatible images and any required licenses for the steps you enable (for example, fMRIPrep and its FreeSurfer license); and</li>
+<li>source data, a HeuDiConv heuristic when converting DICOMs, and any site-specific scheduler requirements.</li>
+</ul>
+<p>See the <a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> for a fuller checklist and configuration guidance.</p>
+</div>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<p>BrainGnomes is installed from GitHub. In R:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span>  <span class="co"># once, if needed</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/BrainGnomes"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="install-a-specific-release">Install a specific release<a class="anchor" aria-label="anchor" href="#install-a-specific-release"></a>
+</h3>
+<p>To install a particular tagged release rather than the latest development version, supply its tag with <code>ref</code>. For example:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"UNCDEPENdLab/BrainGnomes"</span>, ref <span class="op">=</span> <span class="st">"0.8-1"</span><span class="op">)</span></span></code></pre></div>
+<p>See the <a href="https://github.com/UNCDEPENdLab/BrainGnomes/tags" class="external-link">available tags</a> to choose an available tag.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="typical-workflow">Typical workflow<a class="anchor" aria-label="anchor" href="#typical-workflow"></a>
+</h2>
+<ol style="list-style-type: decimal">
+<li>Create an interactive project configuration. <code><a href="reference/setup_project.html">setup_project()</a></code> records project paths, enabled pipeline stages, container locations, scheduler settings, and resource requests in <code>project_config.yaml</code>.</li>
+<li>Review or update that configuration with <code><a href="reference/edit_project.html">edit_project()</a></code>, or reload it later with <code><a href="reference/load_project.html">load_project()</a></code>.</li>
+<li>Submit the enabled stages with <code><a href="reference/run_project.html">run_project()</a></code>. Jobs are submitted per subject/session with their dependencies tracked automatically.</li>
+<li>Check progress with <code><a href="reference/get_project_status.html">get_project_status()</a></code> or <code><a href="reference/get_subject_status.html">get_subject_status()</a></code>. Use <code><a href="reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> to inspect the tracked job tree and logs when a run needs attention.</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://uncdependlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Creates and saves project_config.yaml after guided setup.</span></span>
+<span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Validate the planned work without submitting jobs.</span></span>
+<span><span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># When ready, submit enabled processing stages.</span></span>
+<span><span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="reference/run_project.html">run_project()</a></code> can also target selected subjects, stages, postprocessing streams, or ROI-extraction streams. The <a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows both interactive and scripted examples.</p>
+</div>
+<div class="section level2">
+<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
+</h2>
+<p>The <a href="https://uncdependlab.github.io/BrainGnomes/">package website</a> includes function reference pages, release notes, and the following guides:</p>
 <ul>
 <li>
-<strong>BrainGnomes Quickstart</strong> – an end to end introduction to setting up and running a study <a href="vignettes/braingnomes_quickstart.html"><code>vignettes/braingnomes_quickstart.html</code></a>.</li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">BrainGnomes Quickstart</a> — set up a project and run an end-to-end workflow.</li>
 <li>
-<strong>Building Singularity containers for BrainGnomes</strong> – instructions on creating the container images used by the pipeline <a href="vignettes/building_containers.html"><code>vignettes/building_containers.html</code></a>.</li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/building_containers.html">Building Singularity containers for BrainGnomes</a> — create the container images used by pipeline stages.</li>
 <li>
-<strong>BrainGnomes Postprocessing Walkthrough</strong> – details the optional post‑processing utilities such as smoothing, scrubbing and denoising <a href="vignettes/postprocessing.html"><code>vignettes/postprocessing.html</code></a>.</li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/postprocessing.html">Postprocessing Walkthrough</a> — configure masking, smoothing, AROMA, filtering, scrubbing, intensity normalization, and confound regression.</li>
 <li>
-<strong>ROI extraction and connectivity calculation</strong> – details the optional step of extracting ROIs from a mask/atlas and computing correlations among them <a href="vignettes/extract_rois.html"><code>vignettes/extract_rois.html</code></a>.</li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a> — configure atlas/mask ROI extraction and connectivity outputs.</li>
+<li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a> — triage project or subject status and investigate failures from job-tracking records and logs.</li>
+<li>
+<a href="https://uncdependlab.github.io/BrainGnomes/articles/intensity_normalization.html">Run-wise Intensity Normalization</a> — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.</li>
 </ul>
 </div>
 <div class="section level2">
-<h2 id="key-source-files">Key source files<a class="anchor" aria-label="anchor" href="#key-source-files"></a>
+<h2 id="getting-help-and-contributing">Getting help and contributing<a class="anchor" aria-label="anchor" href="#getting-help-and-contributing"></a>
 </h2>
-<p>Core functionality resides in a handful of scripts:</p>
-<ul>
-<li>
-<code>R/setup_project.R</code> – interactive functions for creating and validating project configuration files.</li>
-<li>
-<code>R/process_subject.R</code> – runs preprocessing for a single participant.</li>
-<li>
-<code>R/run_project.R</code> – orchestrates multi‑subject pipelines on the cluster.</li>
-<li>
-<code>R/pipeline_functions.R</code> – utilities for job scripts and pipeline bookkeeping.</li>
-<li>
-<code>src/</code> – C++ helpers for filtering, interpolation and other fast numerical routines.</li>
-<li>
-<code>inst/hpc_scripts/</code> – SLURM and TORQUE templates for submitting container jobs.</li>
-</ul>
-<p>Together these components allow BrainGnomes to manage the full workflow from raw BIDS conversion through fMRIPrep and optional post‑processing steps.</p>
+<p>Please <a href="https://github.com/UNCDEPENdLab/BrainGnomes/issues" class="external-link">open an issue</a> for bugs, questions, or feature requests. Contributions are welcome; see <a href="CONTRIBUTING.html">CONTRIBUTING.md</a> for the development workflow.</p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
@@ -133,7 +178,13 @@
 </ul>
 </div>
 
-
+<div class="dev-status">
+<h2 data-toc-skip>Dev status</h2>
+<ul class="list-unstyled">
+<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml" class="external-link"><img src="https://github.com/UNCDEPENdLab/BrainGnomes/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a></li>
+</ul>
+</div>
 
   </aside>
 </div>
