@@ -1,5 +1,11 @@
 # BrainGnomes 0.8-2
 
+* Add a user-oriented intensity-normalization vignette documenting the `target` convention, robust reference-core policy, provenance outputs, QA, and limitations.
+* Replace `automask()`'s background-sensitive positive-voxel quantile interpolation with an iterative AFNI-style clip estimator and a smoothly varying local threshold field.
+* Match AFNI's `automask()` peeling more closely with a 17-of-18 NN2 survival rule, layer-aware restoration, and post-peel face-connected reclustering.
+* Replace postprocessing's late 4D-median intensity estimate with an automask-based robust reference core selected from the original positive-scale BOLD image; measure and apply the run factor after masking/smoothing but before AROMA, temporal filtering, confound regression, or timepoint removal, and save the core mask and JSON provenance.
+* Accept `postprocess/intensity_normalize/target` as the simplified normalization setting while retaining `global_median` as a backward-compatible alias.
+* Preserve each voxel's pre-AROMA temporal mean during both aggressive and non-aggressive AROMA denoising, retaining the positive baseline intensity used for cross-run scaling.
 * Refactor postprocessing to use job arrays and sentinels for cleanup
 * Add additional templates to prefetch needed by MRIQC
 * Preserve user-specified `metadata/sqlite_db` values and expose `sqlite_db` in `edit_project()`.

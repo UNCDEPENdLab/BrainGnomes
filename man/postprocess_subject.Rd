@@ -10,8 +10,8 @@ postprocess_subject(in_file, cfg = NULL)
 \item{in_file}{Path to a subject-level BOLD NIfTI file output by fMRIPrep.}
 
 \item{cfg}{A list containing configuration options, including TR (\code{cfg$tr}), enabled processing steps (\verb{cfg$<step>$enable}),
-logging (\code{cfg$log_file}), and paths to resources such as singularity images (\code{cfg$fsl_img}). A whole-brain mask is
-automatically generated using \code{automask()} and used for relevant processing steps.}
+logging (\code{cfg$log_file}), and paths to resources such as singularity images (\code{cfg$fsl_img}). Processing and intensity-
+reference masks are generated internally with \code{automask()} for their distinct roles.}
 }
 \value{
 The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
@@ -20,7 +20,9 @@ and logging to a subject-level log file.
 \description{
 Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by
 the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
-temporal filtering, confound regression, and intensity normalization. The function also optionally computes and saves
+temporal filtering, confound regression, and intensity normalization. Intensity
+normalization is applied after masking/smoothing and before temporal denoising.
+The function also optionally computes and saves
 a filtered confounds file for downstream analyses.
 }
 \details{

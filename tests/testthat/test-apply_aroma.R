@@ -64,6 +64,8 @@ test_that("apply_aroma differentiates aggressive and non-aggressive denoising fo
   resid_nonagg <- as.vector(RNifti::readNifti(nonagg_path))
   resid_agg <- as.vector(RNifti::readNifti(agg_path))
 
+  expect_equal(mean(resid_nonagg), mean(signal), tolerance = 1e-5)
+  expect_equal(mean(resid_agg), mean(signal), tolerance = 1e-5)
   expect_lt(var(resid_agg), var(resid_nonagg))
 
   corr_nonagg_c2 <- abs(cor(resid_nonagg, mixing[, 2]))
@@ -76,6 +78,37 @@ test_that("apply_aroma differentiates aggressive and non-aggressive denoising fo
   expect_lt(abs(corr_agg_c4), 1e-6)
   expect_lt(corr_agg_c2, corr_nonagg_c2)
   expect_lt(corr_agg_c4, corr_nonagg_c4)
+})
+
+test_that("apply_aroma preserves a constant positive baseline", {
+  skip_if_not_installed("RNifti")
+
+  n_time <- 40L
+  mixing <- cbind(
+    sin(seq_len(n_time) / 3),
+    cos(seq_len(n_time) / 5)
+  )
+  mix_path <- tempfile(fileext = ".tsv")
+  in_path <- tempfile(fileext = ".nii.gz")
+  out_path <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(mix_path, in_path, out_path)), add = TRUE)
+
+  data.table::fwrite(as.data.frame(mixing), mix_path, sep = "\t", col.names = FALSE)
+  baseline <- 1234
+  RNifti::writeNifti(
+    RNifti::asNifti(array(baseline, dim = c(1, 1, 1, n_time))),
+    in_path
+  )
+
+  apply_aroma(
+    in_file = in_path,
+    out_file = out_path,
+    mixing_file = mix_path,
+    noise_ics = 1L,
+    overwrite = TRUE
+  )
+
+  expect_equal(as.vector(RNifti::readNifti(out_path)), rep(baseline, n_time))
 })
 
 test_that("apply_aroma removes AROMA components from confounds using lmfit_residuals_mat", {

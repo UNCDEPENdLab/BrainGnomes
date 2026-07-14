@@ -2,24 +2,59 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_intensity_normalize}
 \alias{validate_intensity_normalize}
-\title{Validate intensity normalization (global median in mask)}
+\title{Validate run-wise intensity normalization}
 \usage{
-validate_intensity_normalize(data_file, mask_file, target, tolerance = 0)
+validate_intensity_normalize(
+  pre_file,
+  post_file,
+  reference_location,
+  target,
+  scale_factor,
+  core_file = NULL,
+  include_frames = NULL,
+  tolerance = 1e-05
+)
 }
 \arguments{
-\item{data_file}{4D NIfTI after \code{intensity_normalize}.}
+\item{pre_file}{Path to the 4D NIfTI image immediately before scaling.}
 
-\item{mask_file}{3D mask.}
+\item{post_file}{Path to the 4D NIfTI image immediately after scaling.}
 
-\item{target}{Target median (\code{cfg$intensity_normalize$global_median}).}
+\item{reference_location}{Positive run reference intensity measured after
+masking and smoothing and before temporal denoising.}
 
-\item{tolerance}{Absolute tolerance on \code{abs(median - target)}.}
+\item{target}{Desired value of the run reference intensity after scaling.}
+
+\item{scale_factor}{Positive constant applied to every voxel and volume.}
+
+\item{core_file}{Optional path to the fixed 3D reference-region mask. The
+BrainGnomes pipeline supplies this to verify the achieved target directly.}
+
+\item{include_frames}{Optional logical vector with one value per volume.
+\code{TRUE} identifies a volume used to estimate the temporal baselines. The
+pipeline supplies the same vector used for \code{reference_location}.}
+
+\item{tolerance}{Maximum allowed relative numerical error for each check.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
-Attributes: \code{message}, \code{details} (\code{global_median}, \code{target}, \code{abs_diff}).
+The \code{message} attribute gives a readable summary. The \code{details} attribute
+reports the target, multiplier, expected and remeasured reference
+intensities, and relative multiplication errors.
 }
 \description{
-Global median of in-mask values vs \code{target} within \code{tolerance}.
+Checks that the requested target and stored multiplier agree, that every
+finite image value was multiplied by that same constant, and that image
+dimensions and missing-value locations did not change. When the reference
+mask is supplied, the function also remeasures the normalized image to
+confirm that the requested target was reached at the point of scaling.
+}
+\details{
+\code{reference_location} is the run reference intensity before scaling:
+the spatial median across reference voxels of their 10\%-trimmed temporal
+means. Therefore, \code{reference_location * scale_factor} should equal
+\code{target}. If \code{core_file} is supplied, the function independently repeats
+this two-stage calculation on \code{post_file}, using \code{include_frames} to select
+the same baseline-estimation volumes.
 }
 \keyword{internal}

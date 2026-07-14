@@ -38,6 +38,8 @@ Performs ICA-AROMA denoising by regressing out identified noise components from 
 time series using the internal \code{lmfit_residuals_4d()} helper. When \code{nonaggressive = TRUE}
 (the default) only the unique variance attributable to the specified components is removed,
 matching FSL's non-aggressive \code{fsl_regfilt} behavior. Set \code{nonaggressive = FALSE} for
-aggressive regression that fully removes the listed components.
+aggressive regression that fully removes the listed components. An intercept
+is included and each voxel's pre-AROMA temporal mean is added back so that
+denoising preserves the positive baseline intensity.
 }
 \keyword{internal}

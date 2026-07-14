@@ -10,8 +10,9 @@ file path to a NIfTI object whose mask should be calculated}
 \item{outfile}{Optional file path where the resulting mask should be saved as
 a NIfTI file. If \code{""} (default), no file is written.}
 
-\item{clfrac}{Fraction of the robust intensity range used to set the clip
-level for initial thresholding. Default is 0.5.}
+\item{clfrac}{Fraction of the median intensity above the current clip used
+by the iterative clip estimator. Smaller values produce larger masks.
+Default is 0.5.}
 
 \item{NN}{Neighborhood connectivity used for the largest connected component
 search and optional morphology. Options are \code{1} (faces only, 6-neighbor),
@@ -28,9 +29,10 @@ construction. Default is 0 (none).}
 to retain. Voxels inferior to this cutoff are set to zero. Default is 0
 (no cutoff).}
 
-\item{peels}{Number of "peel/unpeel" operations (erode then dilate with NN2
-neighborhood) applied to remove thin protuberances. Default is 1, matching
-AFNI \verb{3dAutomask}.}
+\item{peels}{Number of layer-aware peel/restore operations using the NN2
+neighborhood and AFNI's 17-of-18 survival rule. These remove thin
+protuberances while restoring boundary voxels connected to the surviving
+core. Default is 1, matching AFNI \verb{3dAutomask}.}
 
 \item{fill_holes}{Logical; if \code{TRUE}, interior holes in the mask are
 filled using NN=1 connectivity. Default is TRUE.}
@@ -52,9 +54,13 @@ erosion/dilation, optional superior–inferior cutoff).
 The processing pipeline is as follows:
 \enumerate{
 \item Collapse 4D inputs to a 3D mean volume.
-\item Compute robust clip threshold and apply initial thresholding.
+\item Compute an iterative global clip threshold, estimate local clip
+levels in eight overlapping regions, and apply the smoothly interpolated
+spatial threshold.
 \item Retain only the largest connected component (NN as specified).
-\item Apply AFNI-style peel/unpeel (\code{peels} times, NN2).
+\item Apply AFNI-style 17-of-18 layer-aware peeling and restoration
+(\code{peels} times, NN2), then retain the largest face-connected
+surviving component.
 \item Optionally fill interior holes.
 \item Apply user-specified erosion/dilation steps (NN as specified).
 \item Apply optional superior–inferior cutoff (\code{SIhh}).

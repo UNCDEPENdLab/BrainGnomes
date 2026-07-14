@@ -150,6 +150,46 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// measure_reference_location
+Rcpp::List measure_reference_location(SEXP img, SEXP core_mask, const Rcpp::Nullable<Rcpp::LogicalVector>& include_frames, std::string baseline_method, double baseline_trim, int min_valid_frames, double affine_tolerance);
+RcppExport SEXP _BrainGnomes_measure_reference_location(SEXP imgSEXP, SEXP core_maskSEXP, SEXP include_framesSEXP, SEXP baseline_methodSEXP, SEXP baseline_trimSEXP, SEXP min_valid_framesSEXP, SEXP affine_toleranceSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type img(imgSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type core_mask(core_maskSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::Nullable<Rcpp::LogicalVector>& >::type include_frames(include_framesSEXP);
+    Rcpp::traits::input_parameter< std::string >::type baseline_method(baseline_methodSEXP);
+    Rcpp::traits::input_parameter< double >::type baseline_trim(baseline_trimSEXP);
+    Rcpp::traits::input_parameter< int >::type min_valid_frames(min_valid_framesSEXP);
+    Rcpp::traits::input_parameter< double >::type affine_tolerance(affine_toleranceSEXP);
+    rcpp_result_gen = Rcpp::wrap(measure_reference_location(img, core_mask, include_frames, baseline_method, baseline_trim, min_valid_frames, affine_tolerance));
+    return rcpp_result_gen;
+END_RCPP
+}
+// derive_reference_core
+Rcpp::List derive_reference_core(SEXP img, SEXP candidate_mask, SEXP constraint_mask, const Rcpp::Nullable<Rcpp::LogicalVector>& include_frames, std::string baseline_method, double baseline_trim, double baseline_floor_fraction, double relative_noise_mad_cutoff, double spike_mad_cutoff, double max_spike_fraction, int min_valid_frames, double affine_tolerance, std::string outfile);
+RcppExport SEXP _BrainGnomes_derive_reference_core(SEXP imgSEXP, SEXP candidate_maskSEXP, SEXP constraint_maskSEXP, SEXP include_framesSEXP, SEXP baseline_methodSEXP, SEXP baseline_trimSEXP, SEXP baseline_floor_fractionSEXP, SEXP relative_noise_mad_cutoffSEXP, SEXP spike_mad_cutoffSEXP, SEXP max_spike_fractionSEXP, SEXP min_valid_framesSEXP, SEXP affine_toleranceSEXP, SEXP outfileSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type img(imgSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type candidate_mask(candidate_maskSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type constraint_mask(constraint_maskSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::Nullable<Rcpp::LogicalVector>& >::type include_frames(include_framesSEXP);
+    Rcpp::traits::input_parameter< std::string >::type baseline_method(baseline_methodSEXP);
+    Rcpp::traits::input_parameter< double >::type baseline_trim(baseline_trimSEXP);
+    Rcpp::traits::input_parameter< double >::type baseline_floor_fraction(baseline_floor_fractionSEXP);
+    Rcpp::traits::input_parameter< double >::type relative_noise_mad_cutoff(relative_noise_mad_cutoffSEXP);
+    Rcpp::traits::input_parameter< double >::type spike_mad_cutoff(spike_mad_cutoffSEXP);
+    Rcpp::traits::input_parameter< double >::type max_spike_fraction(max_spike_fractionSEXP);
+    Rcpp::traits::input_parameter< int >::type min_valid_frames(min_valid_framesSEXP);
+    Rcpp::traits::input_parameter< double >::type affine_tolerance(affine_toleranceSEXP);
+    Rcpp::traits::input_parameter< std::string >::type outfile(outfileSEXP);
+    rcpp_result_gen = Rcpp::wrap(derive_reference_core(img, candidate_mask, constraint_mask, include_frames, baseline_method, baseline_trim, baseline_floor_fraction, relative_noise_mad_cutoff, spike_mad_cutoff, max_spike_fraction, min_valid_frames, affine_tolerance, outfile));
+    return rcpp_result_gen;
+END_RCPP
+}
 // remove_nifti_volumes
 void remove_nifti_volumes(std::string infile, const std::vector<int>& remove_tpts, std::string outfile);
 RcppExport SEXP _BrainGnomes_remove_nifti_volumes(SEXP infileSEXP, SEXP remove_tptsSEXP, SEXP outfileSEXP) {
@@ -186,6 +226,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BrainGnomes_menu_safe", (DL_FUNC) &_BrainGnomes_menu_safe, 2},
     {"_BrainGnomes_natural_spline_4d", (DL_FUNC) &_BrainGnomes_natural_spline_4d, 5},
     {"_BrainGnomes_natural_spline_interp", (DL_FUNC) &_BrainGnomes_natural_spline_interp, 3},
+    {"_BrainGnomes_measure_reference_location", (DL_FUNC) &_BrainGnomes_measure_reference_location, 7},
+    {"_BrainGnomes_derive_reference_core", (DL_FUNC) &_BrainGnomes_derive_reference_core, 13},
     {"_BrainGnomes_remove_nifti_volumes", (DL_FUNC) &_BrainGnomes_remove_nifti_volumes, 3},
     {"_BrainGnomes_select_list_safe", (DL_FUNC) &_BrainGnomes_select_list_safe, 3},
     {NULL, NULL, 0}

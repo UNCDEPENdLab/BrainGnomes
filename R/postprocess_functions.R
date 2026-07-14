@@ -616,7 +616,9 @@ temporal_filter <- function(in_file, out_file, low_pass_hz=NULL, high_pass_hz=NU
 #' time series using the internal \code{lmfit_residuals_4d()} helper. When \code{nonaggressive = TRUE}
 #' (the default) only the unique variance attributable to the specified components is removed,
 #' matching FSL's non-aggressive \code{fsl_regfilt} behavior. Set \code{nonaggressive = FALSE} for
-#' aggressive regression that fully removes the listed components.
+#' aggressive regression that fully removes the listed components. An intercept
+#' is included and each voxel's pre-AROMA temporal mean is added back so that
+#' denoising preserves the positive baseline intensity.
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_file The full path for the file output by this step
 #' @param mixing_file Path to the MELODIC mixing matrix (e.g., \code{*_desc-MELODIC_mixing.tsv}).
@@ -699,7 +701,9 @@ apply_aroma <- function(in_file, out_file, mixing_file, noise_ics, overwrite = F
     infile = in_file,
     X = mixing_mat,
     include_rows = include_rows,
+    add_intercept = TRUE,
     outfile = out_file,
+    preserve_mean = TRUE,
     regress_cols = comp_idx,
     exclusive = exclusive_flag,
     logger = lg
@@ -772,31 +776,302 @@ spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, ov
 }
 
 
-#' Normalize global intensity of a 4D fMRI image
+#' Resolve the configured intensity-normalization target
 #'
-#' Rescales the intensity of a 4D NIfTI image so that the median voxel intensity within a brain mask
-#' matches a specified global target. This operation is commonly used to standardize signal across runs or subjects.
+#' The target is the desired spatial median across reference-region voxels of
+#' their 10%-trimmed temporal means at the point when scaling is applied.
+#' `target` is the canonical configuration field. `global_median` remains
+#' accepted for backward compatibility, although that older name is misleading:
+#' the method does not target the median of all values in the 4D image.
+#'
+#' @param intensity_cfg Intensity-normalization configuration list.
+#' @return A finite positive numeric scalar.
+#' @keywords internal
+resolve_intensity_normalization_target <- function(intensity_cfg) {
+  target <- intensity_cfg$target
+  if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+    target <- intensity_cfg$global_median
+  }
+  if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+    stop("intensity_normalize requires a finite positive target (legacy field: global_median).")
+  }
+  as.numeric(target)
+}
+
+#' Identify volumes used to estimate the run reference intensity
+#'
+#' All volumes are included when no matching metadata are available. When an
+#' fMRIPrep confounds table is present, volumes marked as non-steady-state are
+#' excluded. A matching pipeline censor vector is also honored. These
+#' exclusions affect estimation of the voxelwise temporal baselines and run
+#' reference intensity; the eventual multiplier is still applied to every
+#' volume in the run.
+#'
+#' @param in_file Path to the input 4D BOLD NIfTI image.
+#' @param confounds_file Optional path to an fMRIPrep confounds TSV file.
+#' @param censor_file Optional path to a censor file containing one value per
+#'   volume, where a positive value means that the volume is included.
+#' @param lg Optional logger for warnings about incompatible metadata.
+#' @return Logical vector with one value per BOLD volume. `TRUE` means that the
+#'   volume is used to estimate the intensity reference.
+#' @keywords internal
+intensity_reference_frames <- function(in_file, confounds_file = NULL,
+                                       censor_file = NULL, lg = NULL) {
+  header <- RNifti::niftiHeader(in_file)
+  dims <- header$dim
+  if (length(dims) < 5L || dims[[1L]] < 4L || dims[[5L]] < 1L) {
+    stop("Intensity-reference estimation requires a 4D BOLD image.")
+  }
+  n_volumes <- as.integer(dims[[5L]])
+  include <- rep(TRUE, n_volumes)
+
+  if (checkmate::test_file_exists(confounds_file)) {
+    confounds <- data.table::fread(
+      confounds_file, na.strings = c("n/a", "NA", "."),
+      data.table = FALSE, showProgress = FALSE
+    )
+    if (nrow(confounds) == n_volumes) {
+      nonsteady_cols <- grep("^non_steady_state_outlier", names(confounds), value = TRUE)
+      if (length(nonsteady_cols) > 0L) {
+        nonsteady <- rowSums(as.matrix(confounds[, nonsteady_cols, drop = FALSE]), na.rm = TRUE) > 0
+        include[nonsteady] <- FALSE
+      }
+    } else if (!is.null(lg)) {
+      to_log(lg, "warn", "Ignoring non-steady-state columns for intensity normalization: confounds have {nrow(confounds)} rows but BOLD has {n_volumes} volumes.")
+    }
+  }
+
+  if (checkmate::test_file_exists(censor_file)) {
+    censor <- suppressWarnings(as.numeric(readLines(censor_file, warn = FALSE)))
+    if (length(censor) == n_volumes && all(is.finite(censor))) {
+      include <- include & censor > 0
+    } else if (!is.null(lg)) {
+      to_log(lg, "warn", "Ignoring intensity-normalization censor file because it does not contain one finite value per BOLD volume: {censor_file}")
+    }
+  }
+
+  include
+}
+
+#' Select reference voxels and calculate the run intensity multiplier
+#'
+#' Selects a fixed region of stable, positive-signal functional voxels from the
+#' input BOLD image. It then measures the reference intensity after enabled
+#' masking and smoothing: a 10% trimmed temporal mean is calculated for each
+#' reference voxel, followed by the spatial median across voxels. The function
+#' returns `target / reference_location`, which is applied to the complete run
+#' before temporal denoising.
+#'
+#' @details This is the single internal reference-selection policy used by the
+#'   postprocessing pipeline. Its conservative quality thresholds are fixed to
+#'   support consistent scaling across projects rather than exposed as tuning
+#'   options. The input image must retain a finite, positive temporal baseline;
+#'   an image that has already been demeaned or residualized is unsuitable.
+#'
+#' @param in_file Path to the input 4D BOLD NIfTI image used to choose the
+#'   reference voxels and baseline-estimation volumes.
+#' @param target Desired run reference intensity after scaling. Specifically,
+#'   this is the desired spatial median across reference voxels of their
+#'   10%-trimmed temporal means.
+#' @param calibration_file Path to the 4D BOLD image after enabled masking and
+#'   smoothing but before temporal denoising. The run reference intensity is
+#'   measured on this image and the multiplier is applied to it. Defaults to
+#'   `in_file` for direct use and backward compatibility.
+#' @param calibration_steps Character vector naming processing steps completed
+#'   before `calibration_file`.
+#' @param confounds_file Optional path to an fMRIPrep confounds TSV file used to
+#'   identify non-steady-state volumes.
+#' @param censor_file Optional path to the pipeline censor vector used to omit
+#'   censored volumes from reference estimation.
+#' @param automask_file Optional path for the temporary conservative automask.
+#'   If `NULL`, a temporary file is created and removed automatically.
+#' @param core_file Output path for the fixed reference-region mask, named the
+#'   reference-core mask in saved files and metadata.
+#' @param sidecar_file Optional JSON provenance sidecar path.
+#' @param lg Optional logger.
+#' @return List containing paths to the reference-region outputs, the run
+#'   reference intensity (`reference_location`), requested `target`, calculated
+#'   `scale_factor`, logical baseline-estimation volume vector
+#'   (`include_frames`), and QA summaries.
+#' @keywords internal
+prepare_intensity_reference <- function(in_file, target = 10000,
+                                        calibration_file = in_file,
+                                        calibration_steps = character(),
+                                        confounds_file = NULL,
+                                        censor_file = NULL,
+                                        automask_file = NULL,
+                                        core_file = "", sidecar_file = NULL,
+                                        lg = NULL) {
+  checkmate::assert_file_exists(in_file)
+  checkmate::assert_file_exists(calibration_file)
+  checkmate::assert_number(target, finite = TRUE, lower = 0.1)
+  checkmate::assert_character(calibration_steps, any.missing = FALSE)
+  cleanup_automask <- is.null(automask_file)
+  if (cleanup_automask) automask_file <- tempfile(fileext = ".nii.gz")
+  checkmate::assert_string(automask_file)
+  checkmate::assert_string(core_file)
+  if (cleanup_automask) on.exit(unlink(automask_file), add = TRUE)
+
+  dir.create(dirname(automask_file), recursive = TRUE, showWarnings = FALSE)
+  if (nzchar(core_file)) dir.create(dirname(core_file), recursive = TRUE, showWarnings = FALSE)
+
+  automask(
+    in_file, outfile = automask_file, clfrac = 0.5, NN = 1L,
+    SIhh = 0, peels = 1L, fill_holes = FALSE, dilate_steps = 0L
+  )
+
+  include_frames <- intensity_reference_frames(
+    in_file, confounds_file = confounds_file,
+    censor_file = censor_file, lg = lg
+  )
+
+  # These are implementation constants, not user-facing tuning parameters.
+  core_result <- derive_reference_core(
+    img = in_file,
+    candidate_mask = automask_file,
+    include_frames = include_frames,
+    baseline_method = "trimmed_mean",
+    baseline_trim = 0.10,
+    baseline_floor_fraction = 0.20,
+    relative_noise_mad_cutoff = 5.0,
+    spike_mad_cutoff = 6.0,
+    max_spike_fraction = 0.05,
+    min_valid_frames = 20L,
+    outfile = core_file
+  )
+
+  core <- as.vector(as.array(core_result$core)) > 0
+  candidate_count <- unname(core_result$counts[["agreement"]])
+  core_count <- sum(core)
+  core_fraction <- core_count / candidate_count
+
+  if (candidate_count < 100L) {
+    stop("The normalization automask contains fewer than 100 candidate voxels.")
+  }
+  if (core_count == 0L || !is.finite(core_fraction) || core_fraction < 0.50) {
+    stop(sprintf(
+      paste0(
+        "The stable intensity-reference region retained only %d of %d ",
+        "candidate voxels; intensity normalization cannot be estimated safely."
+      ),
+      core_count, candidate_count
+    ))
+  }
+
+  calibration <- measure_reference_location(
+    img = calibration_file,
+    core_mask = core_result$core,
+    include_frames = include_frames,
+    baseline_method = "trimmed_mean",
+    baseline_trim = 0.10,
+    min_valid_frames = 20L
+  )
+  if (!is.finite(calibration$usable_core_fraction) ||
+      calibration$usable_core_fraction < 0.50) {
+    stop(sprintf(
+      paste0(
+        "Only %d of %d fixed reference voxels have a finite positive baseline ",
+        "at the normalization point after spatial processing."
+      ),
+      calibration$usable_core_voxels, calibration$core_voxels
+    ))
+  }
+  reference_location <- unname(calibration$reference_location)
+  scale_factor <- target / reference_location
+  if (!is.finite(reference_location) || reference_location <= 0 ||
+      !is.finite(scale_factor) || scale_factor <= 0) {
+    stop(paste(
+      "Could not estimate a finite positive run reference intensity and",
+      "intensity multiplier."
+    ))
+  }
+
+  summary <- list(
+    method = "automask_reference_core_v1",
+    source_file = normalizePath(in_file, winslash = "/", mustWork = FALSE),
+    calibration_file = normalizePath(calibration_file, winslash = "/", mustWork = FALSE),
+    calibration_stage = "post_spatial_pre_temporal",
+    calibration_steps = calibration_steps,
+    target = as.numeric(target),
+    reference_location = reference_location,
+    scale_factor = scale_factor,
+    eligible_frames = sum(include_frames),
+    total_frames = length(include_frames),
+    candidate_voxels = candidate_count,
+    core_voxels = core_count,
+    core_fraction = core_fraction,
+    calibration_usable_core_voxels = unname(calibration$usable_core_voxels),
+    calibration_usable_core_fraction = unname(calibration$usable_core_fraction),
+    internal_settings = list(
+      automask_clfrac = 0.5,
+      automask_connectivity = 1L,
+      automask_peels = 1L,
+      automask_fill_holes = FALSE,
+      automask_dilate_steps = 0L,
+      temporal_location = "trimmed_mean",
+      temporal_trim = 0.10,
+      baseline_floor_fraction = 0.20,
+      relative_noise_mad_cutoff = 5.0,
+      spike_mad_cutoff = 6.0,
+      max_spike_fraction = 0.05
+    ),
+    thresholds = core_result$thresholds,
+    counts = as.list(core_result$counts)
+  )
+
+  if (checkmate::test_string(sidecar_file) && nzchar(sidecar_file)) {
+    dir.create(dirname(sidecar_file), recursive = TRUE, showWarnings = FALSE)
+    writeLines(
+      jsonlite::toJSON(summary, auto_unbox = TRUE, pretty = TRUE, digits = NA),
+      con = sidecar_file, useBytes = TRUE
+    )
+  }
+
+  if (!is.null(lg)) {
+    to_log(lg, "info", paste0(
+      "Selected {core_count}/{candidate_count} candidate voxels for the intensity-reference region; ",
+      "run reference intensity at the normalization point={format(reference_location, digits=8)}, ",
+      "target={target}, multiplier={format(scale_factor, digits=8)}"
+    ))
+  }
+
+  summary$include_frames <- include_frames
+  summary$core_file <- core_file
+  summary$automask_file <- automask_file
+  summary$sidecar_file <- sidecar_file
+  summary
+}
+
+#' Apply a run-wise intensity multiplier to a 4D fMRI image
+#'
+#' Multiplies every voxel and volume by one previously estimated positive
+#' constant. BrainGnomes estimates this multiplier after masking and smoothing
+#' and applies it before temporal denoising.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
-#' @param out_file The full path for the file output by this step
-#' @param brain_mask Optional path to a brain mask NIfTI file. If \code{NULL}, the entire image is used.
-#' @param global_median Target median intensity value to normalize to (default is 10000).
+#' @param out_file Full path for the intensity-normalized output file.
+#' @param scale_factor Finite positive multiplier calculated as `target / L`,
+#'   where `L` is the spatial median across reference voxels of their
+#'   10%-trimmed temporal means.
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
-#' @param lg Optional lgr object used for logging messages
-#' @param fsl_img Optional Singularity image to execute FSL commands in a containerized environment.
+#' @param lg Optional lgr logger used for messages.
+#' @param fsl_img Optional Singularity image used to execute FSL commands.
 #'
 #' @return Path to the intensity-normalized output NIfTI file.
 #'
-#' @details The 50th percentile intensity is estimated using \code{fslstats}, and the input image is
-#' rescaled using \code{fslmaths -mul}. If the output file exists and \code{overwrite = FALSE}, the step is skipped.
+#' @details The input is rescaled using \code{fslmaths -mul}. This function only
+#' applies the supplied multiplier; reference selection and estimation occur
+#' upstream. The multiplier is not clipped, replaced, or re-estimated from
+#' filtered or residualized data.
 #'
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string assert_number
-intensity_normalize <- function(in_file, out_file, brain_mask=NULL, global_median=10000, overwrite=FALSE, lg=NULL, fsl_img = NULL) {
+intensity_normalize <- function(in_file, out_file, scale_factor,
+                                overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(out_file)
-  checkmate::assert_number(global_median)
+  checkmate::assert_number(scale_factor, finite = TRUE, lower = .Machine$double.eps)
 
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
@@ -805,17 +1080,9 @@ intensity_normalize <- function(in_file, out_file, brain_mask=NULL, global_media
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  to_log(lg, "info", "Intensity normalizing fMRI data to global median: {global_median}")
+  to_log(lg, "info", "Applying fixed run-wise intensity multiplier: {format(scale_factor, digits=8)}")
 
-  median_intensity <- image_quantile(in_file, brain_mask, .5)
-
-  # a heuristic for now, but we must have a small positive median to avoid wild scaling values (divide by ~0) and accidental sign flips (if median is negative)
-  # long-term, we need to decide whether to additive scaling x + (10000 - median) or to add a number to all voxels to bring the min > 0.01, then do multiplicative median scaling
-  if (median_intensity < 1) median_intensity <- 1.0
-
-  rescaling_factor <- global_median / median_intensity
-
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {rescaling_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))
+  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {scale_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))
   return(out_file)
 }
 

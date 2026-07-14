@@ -694,10 +694,16 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate intensity normalization
   if (is.null(ppcfg$intensity_normalize$enable)) gaps <- c(gaps, "postprocess/intensity_normalize/enable")
   if ("intensity_normalize" %in% names(ppcfg) && isTRUE(ppcfg$intensity_normalize$enable)) {
-    if (!checkmate::test_number(ppcfg$intensity_normalize$global_median, lower = 0.1)) {
-      if (!quiet) message(glue("Invalid global_median in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
-      gaps <- c(gaps, "postprocess/intensity_normalize/global_median")
-      ppcfg$intensity_normalize$global_median <- NULL
+    target <- ppcfg$intensity_normalize$target
+    if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+      target <- ppcfg$intensity_normalize$global_median
+    }
+    if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+      if (!quiet) message(glue("Invalid target in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/intensity_normalize/target")
+      ppcfg$intensity_normalize$target <- NULL
+    } else {
+      ppcfg$intensity_normalize$target <- as.numeric(target)
     }
     if (!checkmate::test_string(ppcfg$intensity_normalize$prefix)) {
       if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$intensity_normalize. Defaulting to 'n'"))

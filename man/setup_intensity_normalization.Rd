@@ -7,16 +7,33 @@
 setup_intensity_normalization(ppcfg = list(), fields = NULL)
 }
 \arguments{
-\item{ppcfg}{a postprocessing configuration list (nested within scfg$postprocess)}
+\item{ppcfg}{Postprocessing configuration list, normally the \code{postprocess}
+section of a study configuration.}
 
-\item{fields}{A character vector of field names to prompt for. If \code{NULL}, all intensity normalization fields will be prompted.}
+\item{fields}{Character vector naming fields to prompt for. If \code{NULL}, the
+function prompts for any missing intensity-normalization settings.}
 }
 \value{
-A modified version of \code{ppcfg} with the \verb{$intensity_normalize} entry updated.
+The \code{ppcfg} list with its \code{intensity_normalize} settings updated.
 }
 \description{
-This function configures the intensity normalization step in the postprocessing pipeline.
-Intensity normalization rescales the fMRI time series so that the median signal across the entire 4D image
-reaches a specified global value (e.g., 10,000). This step can help ensure comparability across runs and subjects.
+Configures run-wise intensity normalization. BrainGnomes multiplies every
+voxel and volume in a run by one positive constant so that runs share a
+common intensity convention before temporal denoising.
+}
+\details{
+BrainGnomes first selects a fixed set of stable, positive-signal
+functional voxels from the input BOLD image. After masking and spatial
+smoothing, it calculates a 10\% trimmed temporal mean for each of these
+reference voxels and takes the spatial median of those voxelwise baselines.
+If that run reference intensity is \code{L}, the complete run is multiplied by
+\code{target / L}. Thus, \code{target} is not the whole-brain mean or the median of
+all values in the final 4D image.
+
+Volumes identified as non-steady-state or marked for censoring are omitted
+when estimating the run reference intensity, when matching metadata are
+available. The resulting multiplier is nevertheless applied to every
+volume. Scaling occurs after masking and smoothing but before AROMA,
+interpolation, temporal filtering, confound regression, or volume removal.
 }
 \keyword{internal}

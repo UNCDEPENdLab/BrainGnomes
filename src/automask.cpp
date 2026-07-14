@@ -6,6 +6,7 @@
 #include <queue>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <RNifti.h>
 // #include "RNiftiAPI.h"
 
@@ -229,6 +230,78 @@ static void morph(LogicalVector &mask, int nx, int ny, int nz,
   }
 }
 
+// Count AFNI NN2 neighbors, using edge replication at image boundaries. The
+// 18 offsets comprise face- and edge-sharing voxels; clamping an out-of-bounds
+// coordinate reproduces AFNI's boundary treatment.
+static int count_peel_neighbors(const LogicalVector &mask,
+                                int x, int y, int z,
+                                int nx, int ny, int nz,
+                                const std::vector<std::array<int,3>> &neighbors)
+{
+  int count = 0;
+  const int nxy = nx * ny;
+  for (const auto &off : neighbors) {
+    const int xx = std::min(nx - 1, std::max(0, x + off[0]));
+    const int yy = std::min(ny - 1, std::max(0, y + off[1]));
+    const int zz = std::min(nz - 1, std::max(0, z + off[2]));
+    if (mask[xx + yy * nx + zz * nxy]) ++count;
+  }
+  return count;
+}
+
+// AFNI-style peel/unpeel. A voxel is removed when fewer than 17 of its 18 NN2
+// neighbors survive. The layer in which it was removed is retained, and only
+// previously removed voxels connected to the surviving core are restored. For
+// multiple peels, outer layers require at least two restored/surviving
+// neighbors, matching AFNI's layer-aware restoration rule.
+static void peel_and_restore(LogicalVector &mask,
+                             int nx, int ny, int nz,
+                             int npeel)
+{
+  const int nvox = nx * ny * nz;
+  if (npeel < 1 || nvox < 27) return;
+
+  const auto neighbors = get_neighbors(2);
+  std::vector<int> removed_layer(nvox, 0);
+
+  for (int layer = 1; layer <= npeel; ++layer) {
+    for (int z = 0; z < nz; ++z) {
+      for (int y = 0; y < ny; ++y) {
+        for (int x = 0; x < nx; ++x) {
+          const int idx = x + y * nx + z * nx * ny;
+          if (mask[idx] && count_peel_neighbors(
+                mask, x, y, z, nx, ny, nz, neighbors) < 17) {
+            removed_layer[idx] = layer;
+          }
+        }
+      }
+    }
+    for (int i = 0; i < nvox; ++i)
+      if (removed_layer[i] > 0) mask[i] = false;
+  }
+
+  std::vector<int> restore_neighbors(nvox, 0);
+  for (int layer = npeel; layer >= 1; --layer) {
+    std::fill(restore_neighbors.begin(), restore_neighbors.end(), 0);
+    for (int z = 0; z < nz; ++z) {
+      for (int y = 0; y < ny; ++y) {
+        for (int x = 0; x < nx; ++x) {
+          const int idx = x + y * nx + z * nx * ny;
+          if (removed_layer[idx] >= layer && !mask[idx]) {
+            restore_neighbors[idx] = count_peel_neighbors(
+              mask, x, y, z, nx, ny, nz, neighbors
+            );
+          }
+        }
+      }
+    }
+
+    const int minimum_to_restore = layer == npeel ? 1 : 2;
+    for (int i = 0; i < nvox; ++i)
+      if (restore_neighbors[i] >= minimum_to_restore) mask[i] = true;
+  }
+}
+
 // Compute q-th quantile in-place via nth_element (q in [0,1])
 static inline float quantile_nth(std::vector<float> &v, double q) {
   if (v.empty()) return 0.0f;
@@ -247,48 +320,200 @@ static inline float quantile_nth(std::vector<float> &v, double q) {
   return a + frac * (b - a);
 }
 
-// Robust clip level using [qlow, qhigh] of positive finite voxels
+// AFNI-style clip estimator. The clip is iteratively updated to clfrac times
+// the median of positive finite values at or above the current clip. Starting
+// from the larger of the positive 35th percentile and half the positive RMS
+// avoids convergence to a near-zero background mode when most positive voxels
+// are outside the brain.
 static float clip_level_from_positive(const std::vector<float> &vals,
-                                      float clfrac,
-                                      double qlow = 0.02,
-                                      double qhigh = 0.98)
+                                      float clfrac)
 {
   std::vector<float> pos;
   pos.reserve(vals.size());
-  for (float v : vals) if (v > 0.0f && std::isfinite(v)) pos.push_back(v);
+  double sumsq = 0.0;
+  for (float v : vals) {
+    if (v > 0.0f && std::isfinite(v)) {
+      pos.push_back(v);
+      sumsq += static_cast<double>(v) * static_cast<double>(v);
+    }
+  }
   if (pos.empty()) return 0.0f;
-  
-  // Guard against pathological volumes with very few positives
-  if (pos.size() < 1000) {
-    // Fall back to median as last resort
-    size_t mid = pos.size()/2;
-    std::nth_element(pos.begin(), pos.begin()+mid, pos.end());
-    float med = pos[mid];
-    if ((pos.size() % 2) == 0) {
-      std::nth_element(pos.begin(), pos.begin()+mid-1, pos.end());
-      med = 0.5f * (med + pos[mid-1]);
+
+  if (!std::isfinite(clfrac) || clfrac <= 0.0f || clfrac >= 0.99f)
+    clfrac = 0.5f;
+
+  const float lower_upper_mass = quantile_nth(pos, 0.35);
+  const float half_rms = 0.5f * static_cast<float>(
+    std::sqrt(sumsq / static_cast<double>(pos.size()))
+  );
+  float clip = std::max(lower_upper_mass, half_rms);
+  if (!std::isfinite(clip) || clip < 0.0f) clip = 0.0f;
+
+  std::vector<float> upper;
+  upper.reserve(pos.size());
+  float previous = -1.0f;
+  for (int iteration = 0; iteration < 66; ++iteration) {
+    upper.clear();
+    for (float v : pos) if (v >= clip) upper.push_back(v);
+    if (upper.empty()) break;
+
+    const float upper_median = quantile_nth(upper, 0.5);
+    const float next = clfrac * upper_median;
+    if (!std::isfinite(next) || next < 0.0f) break;
+
+    const float tolerance = 1.0e-6f * std::max(1.0f, std::fabs(next));
+    if (std::fabs(next - clip) <= tolerance) {
+      clip = next;
+      break;
     }
-    return std::max(0.0f, med * std::max(clfrac, 0.1f));
-  }
-  
-  // Compute robust low/high percentiles
-  float lo = quantile_nth(pos, qlow);
-  float hi = quantile_nth(pos, qhigh);
-  if (!std::isfinite(lo) || !std::isfinite(hi) || hi <= lo) {
-    // Fallback to median if range is degenerate
-    size_t mid = pos.size()/2;
-    std::nth_element(pos.begin(), pos.begin()+mid, pos.end());
-    float med = pos[mid];
-    if ((pos.size() % 2) == 0) {
-      std::nth_element(pos.begin(), pos.begin()+mid-1, pos.end());
-      med = 0.5f * (med + pos[mid-1]);
+
+    // Protect against a discrete two-cycle in small or quantized images.
+    if (previous >= 0.0f && std::fabs(next - previous) <= tolerance) {
+      clip = 0.5f * (clip + next);
+      break;
     }
-    return std::max(0.0f, med * std::max(clfrac, 0.1f));
+    previous = clip;
+    clip = next;
   }
-  
-  // Interpolate within robust range
-  clfrac = std::min(std::max(clfrac, 0.0f), 1.0f);
-  return lo + clfrac * (hi - lo);
+
+  return clip;
+}
+
+struct GradualClipResult {
+  std::vector<float> threshold;
+  float fixed;
+  float minimum;
+  float maximum;
+};
+
+// Estimate a clip level within a rectangular region of a 3D image.
+static float regional_clip_level(const std::vector<float> &vals,
+                                 int nx, int ny,
+                                 int xa, int xb,
+                                 int ya, int yb,
+                                 int za, int zb,
+                                 float clfrac)
+{
+  std::vector<float> region;
+  region.reserve(static_cast<size_t>(xb - xa + 1) *
+                 static_cast<size_t>(yb - ya + 1) *
+                 static_cast<size_t>(zb - za + 1));
+  const int nxy = nx * ny;
+  for (int z = za; z <= zb; ++z)
+    for (int y = ya; y <= yb; ++y)
+      for (int x = xa; x <= xb; ++x)
+        region.push_back(vals[x + y * nx + z * nxy]);
+  return clip_level_from_positive(region, clfrac);
+}
+
+// Construct a smooth spatial threshold by estimating the clip separately in
+// eight overlapping regions around the intensity-weighted center and
+// trilinearly interpolating between their centers. Local estimates are bounded
+// below by one third of the global clip to prevent near-zero background-only
+// regions from opening the mask.
+static GradualClipResult gradual_clip_levels(const std::vector<float> &vals,
+                                             int nx, int ny, int nz,
+                                             float clfrac)
+{
+  const int nvox = nx * ny * nz;
+  GradualClipResult result;
+  result.fixed = clip_level_from_positive(vals, clfrac);
+  result.threshold.assign(nvox, result.fixed);
+  result.minimum = result.fixed;
+  result.maximum = result.fixed;
+  if (nvox == 0 || result.fixed <= 0.0f) return result;
+
+  double weight_sum = 0.0;
+  double x_sum = 0.0, y_sum = 0.0, z_sum = 0.0;
+  const int nxy = nx * ny;
+  for (int z = 0; z < nz; ++z) {
+    for (int y = 0; y < ny; ++y) {
+      for (int x = 0; x < nx; ++x) {
+        const float value = vals[x + y * nx + z * nxy];
+        if (value > 0.0f && std::isfinite(value)) {
+          const double weight = static_cast<double>(value);
+          weight_sum += weight;
+          x_sum += weight * x;
+          y_sum += weight * y;
+          z_sum += weight * z;
+        }
+      }
+    }
+  }
+
+  const int ic = weight_sum > 0.0 ?
+    static_cast<int>(std::round(x_sum / weight_sum)) : (nx - 1) / 2;
+  const int jc = weight_sum > 0.0 ?
+    static_cast<int>(std::round(y_sum / weight_sum)) : (ny - 1) / 2;
+  const int kc = weight_sum > 0.0 ?
+    static_cast<int>(std::round(z_sum / weight_sum)) : (nz - 1) / 2;
+
+  const int ox = std::max(1, static_cast<int>(std::round(0.01 * nx)));
+  const int oy = std::max(1, static_cast<int>(std::round(0.01 * ny)));
+  const int oz = std::max(1, static_cast<int>(std::round(0.01 * nz)));
+  const int xlo_end = std::min(nx - 1, ic + ox);
+  const int xhi_start = std::max(0, ic - ox);
+  const int ylo_end = std::min(ny - 1, jc + oy);
+  const int yhi_start = std::max(0, jc - oy);
+  const int zlo_end = std::min(nz - 1, kc + oz);
+  const int zhi_start = std::max(0, kc - oz);
+
+  float clips[2][2][2];
+  const float local_floor = result.fixed / 3.0f;
+  for (int hz = 0; hz < 2; ++hz) {
+    const int za = hz ? zhi_start : 0;
+    const int zb = hz ? nz - 1 : zlo_end;
+    for (int hy = 0; hy < 2; ++hy) {
+      const int ya = hy ? yhi_start : 0;
+      const int yb = hy ? ny - 1 : ylo_end;
+      for (int hx = 0; hx < 2; ++hx) {
+        const int xa = hx ? xhi_start : 0;
+        const int xb = hx ? nx - 1 : xlo_end;
+        clips[hx][hy][hz] = std::max(
+          local_floor,
+          regional_clip_level(vals, nx, ny, xa, xb, ya, yb, za, zb, clfrac)
+        );
+      }
+    }
+  }
+
+  const double x0 = 0.5 * ic;
+  const double x1 = 0.5 * (ic + nx - 1);
+  const double y0 = 0.5 * jc;
+  const double y1 = 0.5 * (jc + ny - 1);
+  const double z0 = 0.5 * kc;
+  const double z1 = 0.5 * (kc + nz - 1);
+  const double dxi = x1 > x0 ? 1.0 / (x1 - x0) : 0.0;
+  const double dyi = y1 > y0 ? 1.0 / (y1 - y0) : 0.0;
+  const double dzi = z1 > z0 ? 1.0 / (z1 - z0) : 0.0;
+
+  result.minimum = std::numeric_limits<float>::infinity();
+  result.maximum = -std::numeric_limits<float>::infinity();
+  for (int z = 0; z < nz; ++z) {
+    const double wz = std::min(1.0, std::max(0.0, (z - z0) * dzi));
+    for (int y = 0; y < ny; ++y) {
+      const double wy = std::min(1.0, std::max(0.0, (y - y0) * dyi));
+      for (int x = 0; x < nx; ++x) {
+        const double wx = std::min(1.0, std::max(0.0, (x - x0) * dxi));
+        float value = 0.0f;
+        for (int hz = 0; hz < 2; ++hz) {
+          const double az = hz ? wz : 1.0 - wz;
+          for (int hy = 0; hy < 2; ++hy) {
+            const double ay = hy ? wy : 1.0 - wy;
+            for (int hx = 0; hx < 2; ++hx) {
+              const double ax = hx ? wx : 1.0 - wx;
+              value += static_cast<float>(ax * ay * az * clips[hx][hy][hz]);
+            }
+          }
+        }
+        result.threshold[x + y * nx + z * nxy] = value;
+        result.minimum = std::min(result.minimum, value);
+        result.maximum = std::max(result.maximum, value);
+      }
+    }
+  }
+
+  return result;
 }
 
 // Fill internal holes: set any 0-voxels not connected to the volume boundary to 1.
@@ -364,8 +589,9 @@ static void _fill_holes(LogicalVector &mask, int nx, int ny, int nz, int NN /*us
 //'   file path to a NIfTI object whose mask should be calculated
 //' @param outfile Optional file path where the resulting mask should be saved as
 //'   a NIfTI file. If `""` (default), no file is written.
-//' @param clfrac Fraction of the robust intensity range used to set the clip
-//'   level for initial thresholding. Default is 0.5.
+//' @param clfrac Fraction of the median intensity above the current clip used
+//'   by the iterative clip estimator. Smaller values produce larger masks.
+//'   Default is 0.5.
 //' @param NN Neighborhood connectivity used for the largest connected component
 //'   search and optional morphology. Options are `1` (faces only, 6-neighbor),
 //'   `2` (faces+edges, 18-neighbor), or `3` (faces+edges+corners,
@@ -377,9 +603,10 @@ static void _fill_holes(LogicalVector &mask, int nx, int ny, int nz, int NN /*us
 //' @param SIhh Distance in millimeters below the most superior voxel of the mask
 //'   to retain. Voxels inferior to this cutoff are set to zero. Default is 0
 //'   (no cutoff).
-//' @param peels Number of "peel/unpeel" operations (erode then dilate with NN2
-//'   neighborhood) applied to remove thin protuberances. Default is 1, matching
-//'   AFNI `3dAutomask`.
+//' @param peels Number of layer-aware peel/restore operations using the NN2
+//'   neighborhood and AFNI's 17-of-18 survival rule. These remove thin
+//'   protuberances while restoring boundary voxels connected to the surviving
+//'   core. Default is 1, matching AFNI `3dAutomask`.
 //' @param fill_holes Logical; if `TRUE`, interior holes in the mask are
 //'   filled using NN=1 connectivity. Default is TRUE.
 //'
@@ -398,9 +625,13 @@ static void _fill_holes(LogicalVector &mask, int nx, int ny, int nz, int NN /*us
 //' The processing pipeline is as follows:
 //' \enumerate{
 //'   \item Collapse 4D inputs to a 3D mean volume.
-//'   \item Compute robust clip threshold and apply initial thresholding.
+//'   \item Compute an iterative global clip threshold, estimate local clip
+//'     levels in eight overlapping regions, and apply the smoothly interpolated
+//'     spatial threshold.
 //'   \item Retain only the largest connected component (NN as specified).
-//'   \item Apply AFNI-style peel/unpeel (\code{peels} times, NN2).
+//'   \item Apply AFNI-style 17-of-18 layer-aware peeling and restoration
+//'     (\code{peels} times, NN2), then retain the largest face-connected
+//'     surviving component.
 //'   \item Optionally fill interior holes.
 //'   \item Apply user-specified erosion/dilation steps (NN as specified).
 //'   \item Apply optional superior–inferior cutoff (\code{SIhh}).
@@ -456,26 +687,32 @@ Rcpp::RObject automask(SEXP img,
     for (int i = 0; i < nvox; ++i) mean3d[i] *= invT;
   }
   
-  // Threshold via robust clip level
+  // Threshold using an iterative fixed clip and a smooth spatial clip field
   if (NN < 1 || NN > 3) NN = 2;
   if (clfrac <= 0.0f) clfrac = 0.5f;
-  
-  const float clip = clip_level_from_positive(mean3d, clfrac, .05, .95);
-  Rcout << "clip level: " << clip << std::endl;
+
+  const GradualClipResult clip = gradual_clip_levels(mean3d, nx, ny, nz, clfrac);
+  Rcout << "fixed clip level: " << clip.fixed
+        << "; gradual range: " << clip.minimum << " to " << clip.maximum
+        << std::endl;
   
   LogicalVector mask(nvox);
-  for (int i = 0; i < nvox; ++i) mask[i] = (mean3d[i] >= clip);
+  const bool valid_clip = std::isfinite(clip.fixed) && clip.fixed > 0.0f;
+  for (int i = 0; i < nvox; ++i) {
+    mask[i] = valid_clip && std::isfinite(mean3d[i]) && mean3d[i] > 0.0f &&
+      mean3d[i] >= clip.threshold[i];
+  }
   
   // Keep the largest connected component
   mask = largest_component(mask, nx, ny, nz, NN);
   
-  // Peel (erode) the mask 'pp' times, then unpeel (dilate). Using NN2 neighborhoods,
-  // clips off protuberances less than 2*pp voxels thick
+  // Peel thin attachments with AFNI's 17-of-18 NN2 survival rule, restore only
+  // removed voxels connected to the surviving core, then recluster.
   if (peels > 0) {
     int pre_peel = sum(mask);
-    // Use NN=2 regardless of the main NN setting (matches 3dAutomask docs)
-    morph(mask, nx, ny, nz, 2, peels, false); // erode
-    morph(mask, nx, ny, nz, 2, peels, true);  // dilate
+    peel_and_restore(mask, nx, ny, nz, peels);
+    // AFNI reclusters with face connectivity after restoration.
+    mask = largest_component(mask, nx, ny, nz, 1);
     Rcout << "Peeled mask " << peels << " times. Mask voxels before: " << pre_peel << ", after: " << sum(mask) << std::endl;
   }
   

@@ -2,13 +2,12 @@
 % Please edit documentation in R/postprocess_functions.R
 \name{intensity_normalize}
 \alias{intensity_normalize}
-\title{Normalize global intensity of a 4D fMRI image}
+\title{Apply a run-wise intensity multiplier to a 4D fMRI image}
 \usage{
 intensity_normalize(
   in_file,
   out_file,
-  brain_mask = NULL,
-  global_median = 10000,
+  scale_factor,
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL
@@ -17,27 +16,30 @@ intensity_normalize(
 \arguments{
 \item{in_file}{Path to the input 4D NIfTI file.}
 
-\item{out_file}{The full path for the file output by this step}
+\item{out_file}{Full path for the intensity-normalized output file.}
 
-\item{brain_mask}{Optional path to a brain mask NIfTI file. If \code{NULL}, the entire image is used.}
-
-\item{global_median}{Target median intensity value to normalize to (default is 10000).}
+\item{scale_factor}{Finite positive multiplier calculated as \code{target / L},
+where \code{L} is the spatial median across reference voxels of their
+10\%-trimmed temporal means.}
 
 \item{overwrite}{Logical; whether to overwrite the output file if it exists.}
 
-\item{lg}{Optional lgr object used for logging messages}
+\item{lg}{Optional lgr logger used for messages.}
 
-\item{fsl_img}{Optional Singularity image to execute FSL commands in a containerized environment.}
+\item{fsl_img}{Optional Singularity image used to execute FSL commands.}
 }
 \value{
 Path to the intensity-normalized output NIfTI file.
 }
 \description{
-Rescales the intensity of a 4D NIfTI image so that the median voxel intensity within a brain mask
-matches a specified global target. This operation is commonly used to standardize signal across runs or subjects.
+Multiplies every voxel and volume by one previously estimated positive
+constant. BrainGnomes estimates this multiplier after masking and smoothing
+and applies it before temporal denoising.
 }
 \details{
-The 50th percentile intensity is estimated using \code{fslstats}, and the input image is
-rescaled using \code{fslmaths -mul}. If the output file exists and \code{overwrite = FALSE}, the step is skipped.
+The input is rescaled using \code{fslmaths -mul}. This function only
+applies the supplied multiplier; reference selection and estimation occur
+upstream. The multiplier is not clipped, replaced, or re-estimated from
+filtered or residualized data.
 }
 \keyword{internal}

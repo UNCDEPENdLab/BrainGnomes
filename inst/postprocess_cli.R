@@ -51,7 +51,7 @@ if (nzchar(log_level_env)) {
 #   "--keep_intermediates='FALSE' --overwrite='TRUE' --tr='0.6' --apply_mask/enable='FALSE'",
 #   "--processing_steps='spatial_smooth' 'apply_aroma' 'temporal_filter' 'intensity_normalize' --spatial_smooth/enable='TRUE' --spatial_smooth/fwhm_mm='5'",
 #   "--spatial_smooth/prefix='s' --apply_aroma/enable='TRUE' --apply_aroma/nonaggressive='TRUE' --apply_aroma/prefix='a' --temporal_filter/low_pass_hz='0'",
-#   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --temporal_filter/enable='TRUE' --intensity_normalize/global_median='10000' --intensity_normalize/prefix='n'",
+#   "--temporal_filter/high_pass_hz='0.00833' --temporal_filter/prefix='f' --temporal_filter/enable='TRUE' --intensity_normalize/target='10000' --intensity_normalize/prefix='n'",
 #   "--intensity_normalize/enable='TRUE", "--confound_calculate/enable='TRUE'",
 #   "--confound_calculate/columns='csf.*' --confound_calculate/noproc_columns='NULL' --confound_calculate/demean='TRUE'",
 #   "--force_processing_order='FALSE'",

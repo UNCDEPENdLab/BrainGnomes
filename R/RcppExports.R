@@ -15,8 +15,9 @@
 #'   file path to a NIfTI object whose mask should be calculated
 #' @param outfile Optional file path where the resulting mask should be saved as
 #'   a NIfTI file. If `""` (default), no file is written.
-#' @param clfrac Fraction of the robust intensity range used to set the clip
-#'   level for initial thresholding. Default is 0.5.
+#' @param clfrac Fraction of the median intensity above the current clip used
+#'   by the iterative clip estimator. Smaller values produce larger masks.
+#'   Default is 0.5.
 #' @param NN Neighborhood connectivity used for the largest connected component
 #'   search and optional morphology. Options are `1` (faces only, 6-neighbor),
 #'   `2` (faces+edges, 18-neighbor), or `3` (faces+edges+corners,
@@ -28,9 +29,10 @@
 #' @param SIhh Distance in millimeters below the most superior voxel of the mask
 #'   to retain. Voxels inferior to this cutoff are set to zero. Default is 0
 #'   (no cutoff).
-#' @param peels Number of "peel/unpeel" operations (erode then dilate with NN2
-#'   neighborhood) applied to remove thin protuberances. Default is 1, matching
-#'   AFNI `3dAutomask`.
+#' @param peels Number of layer-aware peel/restore operations using the NN2
+#'   neighborhood and AFNI's 17-of-18 survival rule. These remove thin
+#'   protuberances while restoring boundary voxels connected to the surviving
+#'   core. Default is 1, matching AFNI `3dAutomask`.
 #' @param fill_holes Logical; if `TRUE`, interior holes in the mask are
 #'   filled using NN=1 connectivity. Default is TRUE.
 #'
@@ -49,9 +51,13 @@
 #' The processing pipeline is as follows:
 #' \enumerate{
 #'   \item Collapse 4D inputs to a 3D mean volume.
-#'   \item Compute robust clip threshold and apply initial thresholding.
+#'   \item Compute an iterative global clip threshold, estimate local clip
+#'     levels in eight overlapping regions, and apply the smoothly interpolated
+#'     spatial threshold.
 #'   \item Retain only the largest connected component (NN as specified).
-#'   \item Apply AFNI-style peel/unpeel (\code{peels} times, NN2).
+#'   \item Apply AFNI-style 17-of-18 layer-aware peeling and restoration
+#'     (\code{peels} times, NN2), then retain the largest face-connected
+#'     surviving component.
 #'   \item Optionally fill interior holes.
 #'   \item Apply user-specified erosion/dilation steps (NN as specified).
 #'   \item Apply optional superior–inferior cutoff (\code{SIhh}).
@@ -370,6 +376,102 @@ NULL
 
 natural_spline_interp <- function(x, y, xout) {
     .Call(`_BrainGnomes_natural_spline_interp`, x, y, xout)
+}
+
+#' Measure a robust intensity location within a frozen reference core
+#'
+#' Computes the same voxelwise temporal location and spatial median used for
+#' intensity normalization, but does not redefine or refine the supplied core.
+#' This supports measuring the denominator after spatial preprocessing while
+#' keeping voxel and frame selection fixed from the original positive-scale
+#' BOLD image.
+#'
+#' @param img A 4D `RNifti::NiftiImage` object or path to a 4D BOLD NIfTI.
+#' @param core_mask A 3D frozen reference-core mask on the same grid as `img`.
+#' @param include_frames Optional logical vector with one value per volume.
+#' @param baseline_method Either `"trimmed_mean"` (default) or `"median"`.
+#' @param baseline_trim Fraction removed from each temporal tail for a trimmed
+#'   mean. The default is 0.10.
+#' @param min_valid_frames Minimum finite eligible observations per core voxel.
+#' @param affine_tolerance Absolute tolerance for comparing NIfTI transforms.
+#'
+#' @return A list with `reference_location`, core and usable voxel counts,
+#'   usable fraction, and eligible-frame count.
+#'
+#' @keywords internal
+measure_reference_location <- function(img, core_mask, include_frames = NULL, baseline_method = "trimmed_mean", baseline_trim = 0.10, min_valid_frames = 20L, affine_tolerance = 1e-5) {
+    .Call(`_BrainGnomes_measure_reference_location`, img, core_mask, include_frames, baseline_method, baseline_trim, min_valid_frames, affine_tolerance)
+}
+
+#' Derive a conservative functional reference core from 4D BOLD data
+#'
+#' Refines a functional candidate mask by removing voxels with an invalid or
+#' very low robust baseline, extreme robust relative temporal noise, or an
+#' excessive fraction of abrupt signal changes. An optional second mask can be
+#' supplied as a subtractive constraint. This function never dilates a mask or
+#' fills holes.
+#'
+#' @param img A 4D `RNifti::NiftiImage` object or path to a 4D BOLD NIfTI.
+#'   Intensities must retain a positive baseline; do not pass demeaned or
+#'   residualized data whose voxelwise means have been removed.
+#' @param candidate_mask Required 3D functional candidate mask, normally from
+#'   `automask()` applied to the original positive-scale BOLD data with
+#'   `fill_holes = FALSE` and `dilate_steps = 0`.
+#' @param constraint_mask Optional 3D mask used only as a subtractive
+#'   constraint. If `NULL` (the default), the candidate mask alone defines the
+#'   population subject to temporal quality refinement.
+#' @param include_frames Optional logical vector with one value per volume.
+#'   `TRUE` marks steady-state, uncensored volumes eligible for estimation.
+#'   Missing values are not allowed. If `NULL`, all volumes are eligible.
+#' @param baseline_method Either `"trimmed_mean"` (default) or `"median"`.
+#' @param baseline_trim Fraction removed from each tail when
+#'   `baseline_method = "trimmed_mean"`. The default is 0.10.
+#' @param baseline_floor_fraction Minimum baseline as a fraction of the spatial
+#'   median baseline in the mask intersection. The default 0.20 is provisional
+#'   and should be calibrated on representative data.
+#' @param relative_noise_mad_cutoff Upper cutoff for log robust relative noise,
+#'   expressed as spatial median plus this many scaled MADs. The default is 5.
+#' @param spike_mad_cutoff A consecutive-volume change is called extreme when
+#'   its absolute deviation from the median first difference exceeds this many
+#'   scaled MADs. Both volumes bordering an extreme change are marked. Default
+#'   is 6.
+#' @param max_spike_fraction Maximum fraction of eligible volumes marked by an
+#'   extreme consecutive-volume change. Default is 0.05.
+#' @param min_valid_frames Minimum number of finite eligible volumes required
+#'   for a voxel. At least two consecutive finite differences are also required.
+#' @param affine_tolerance Absolute tolerance used when comparing the active
+#'   4-by-4 NIfTI transforms of the image and masks.
+#' @param outfile Optional path for the final uint8 reference-core mask. If
+#'   `""`, no file is written.
+#'
+#' @return A list containing 3D RNifti images `core`, `agreement_mask`,
+#'   `mask_membership`, `baseline`, `relative_noise_cv`, `spike_fraction`,
+#'   `finite_fraction`, and `rejection_code`, plus scalar `thresholds`, voxel
+#'   `counts`, and `mask_metrics`. `mask_membership` is coded 0 = neither mask,
+#'   1 = mask A only, 2 = mask B only, and 3 = agreement. Temporal QA maps are
+#'   computed over the candidate-mask union when a constraint is supplied so
+#'   disagreement regions can be audited, but thresholds and the final core are
+#'   derived strictly from the effective candidate population. With no
+#'   constraint, `agreement_mask` is simply the candidate mask. Rejection codes
+#'   are additive bit flags: 1 = outside the effective candidate population,
+#'   2 = insufficient finite/consecutive observations, 4 =
+#'   nonfinite or nonpositive baseline, 8 = baseline below the relative floor,
+#'   16 = extreme relative noise, and 32 = excessive spike fraction.
+#'
+#' @details Robust relative noise is
+#'   `1.4826 * median(abs(diff(y))) / (sqrt(2) * baseline)`, calculated only
+#'   across consecutive eligible volumes. This median absolute first-difference
+#'   estimator remains sensitive to sustained alternating noise, for which MAD
+#'   around the median difference can collapse to zero. Its spatial upper
+#'   threshold is estimated on the log scale after the baseline criteria have
+#'   been applied. Spike fraction is the fraction of eligible volumes adjoining
+#'   an extreme first difference, with the spike threshold based on MAD around
+#'   the median difference. Threshold defaults are intentionally conservative
+#'   draft values and require empirical calibration before pipeline use.
+#'
+#' @export
+derive_reference_core <- function(img, candidate_mask, constraint_mask = NULL, include_frames = NULL, baseline_method = "trimmed_mean", baseline_trim = 0.10, baseline_floor_fraction = 0.20, relative_noise_mad_cutoff = 5.0, spike_mad_cutoff = 6.0, max_spike_fraction = 0.05, min_valid_frames = 20L, affine_tolerance = 1e-5, outfile = "") {
+    .Call(`_BrainGnomes_derive_reference_core`, img, candidate_mask, constraint_mask, include_frames, baseline_method, baseline_trim, baseline_floor_fraction, relative_noise_mad_cutoff, spike_mad_cutoff, max_spike_fraction, min_valid_frames, affine_tolerance, outfile)
 }
 
 #' Remove Specified Timepoints from a 4D NIfTI Image

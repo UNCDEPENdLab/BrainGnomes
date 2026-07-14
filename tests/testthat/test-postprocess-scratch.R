@@ -145,8 +145,20 @@ test_that("postprocess_subject moves intermediates when requested", {
   }, apply_mask = function(cur_file, mask_file, out_file, ...) {
     recorded_paths$apply_mask <- out_file
     fake_copy_step(cur_file, out_file)
-  }, intensity_normalize = function(cur_file, out_file, ...) {
+  }, prepare_intensity_reference = function(in_file, target, calibration_file,
+                                             calibration_steps, core_file,
+                                             sidecar_file, ...) {
+    recorded_paths$calibration_file <- calibration_file
+    recorded_paths$calibration_steps <- calibration_steps
+    file.copy(in_file, core_file, overwrite = TRUE)
+    writeLines("{}", sidecar_file)
+    list(
+      reference_location = target / 2, target = target, scale_factor = 2,
+      core_file = core_file, include_frames = NULL
+    )
+  }, intensity_normalize = function(cur_file, out_file, scale_factor, ...) {
     recorded_paths$intensity_normalize <- out_file
+    recorded_paths$scale_factor <- scale_factor
     fake_copy_step(cur_file, out_file)
   }, postprocess_confounds = function(...) NULL)
 
@@ -155,10 +167,24 @@ test_that("postprocess_subject moves intermediates when requested", {
   expect_true(file.exists(expected_final))
   expect_identical(final_file, expected_final)
   expect_identical(norm_path(recorded_paths$intensity_normalize, mustWork = TRUE), expected_final)
+  expect_equal(recorded_paths$scale_factor, 2)
   expected_workspace_mask <- norm_path(file.path(workspace_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz"))
   expect_identical(norm_path(recorded_paths$apply_mask), expected_workspace_mask)
+  expect_identical(
+    norm_path(recorded_paths$calibration_file),
+    norm_path(recorded_paths$apply_mask)
+  )
+  expect_identical(recorded_paths$calibration_steps, "apply_mask")
   intermediate_file <- file.path(output_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz")
   expect_true(file.exists(intermediate_file))
+  expect_true(file.exists(file.path(
+    output_dir,
+    "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-intensityReferenceCore_mask.nii.gz"
+  )))
+  expect_true(file.exists(file.path(
+    output_dir,
+    "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-intensityReferenceCore_mask.json"
+  )))
   staged_exists <- dir.exists(workspace_dir)
   expect_false(staged_exists)
 })
@@ -223,6 +249,14 @@ test_that("postprocess_subject cleans scratch workspace and temp mask after erro
     recorded_paths$brain_mask <- outfile
     file.copy(in_file, outfile, overwrite = TRUE)
     outfile
+  }, prepare_intensity_reference = function(in_file, target, calibration_file,
+                                             core_file, sidecar_file, ...) {
+    file.copy(in_file, core_file, overwrite = TRUE)
+    writeLines("{}", sidecar_file)
+    list(
+      reference_location = target / 2, target = target, scale_factor = 2,
+      core_file = core_file, include_frames = NULL
+    )
   }, apply_mask = function(cur_file, mask_file, out_file, ...) {
     recorded_paths$apply_mask <- out_file
     dir.create(dirname(out_file), recursive = TRUE, showWarnings = FALSE)

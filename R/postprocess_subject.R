@@ -1,8 +1,50 @@
+#' @noRd
+.validate_intensity_normalization_order <- function(processing_sequence) {
+  normalization_index <- which(processing_sequence == "intensity_normalize")
+  if (length(normalization_index) == 0L) return(invisible(TRUE))
+  if (length(normalization_index) != 1L) {
+    stop("processing_steps must contain intensity_normalize at most once.")
+  }
+
+  spatial_steps <- c("apply_mask", "spatial_smooth")
+  temporal_steps <- c(
+    "apply_aroma", "scrub_interpolate", "temporal_filter",
+    "confound_regression", "scrub_timepoints"
+  )
+  spatial_after <- if (normalization_index < length(processing_sequence)) {
+    intersect(
+      processing_sequence[seq.int(normalization_index + 1L, length(processing_sequence))],
+      spatial_steps
+    )
+  } else {
+    character()
+  }
+  temporal_before <- if (normalization_index > 1L) {
+    intersect(processing_sequence[seq_len(normalization_index - 1L)], temporal_steps)
+  } else {
+    character()
+  }
+
+  if (length(spatial_after) > 0L || length(temporal_before) > 0L) {
+    stop(
+      paste0(
+        "intensity_normalize must occur after apply_mask/spatial_smooth and before ",
+        "AROMA, interpolation, temporal filtering, confound regression, and ",
+        "timepoint removal. Invalid processing order: ",
+        paste(processing_sequence, collapse = ", ")
+      )
+    )
+  }
+  invisible(TRUE)
+}
+
 #' Postprocess a single fMRI BOLD image using a configured pipeline
 #'
 #' Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by
 #' the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
-#' temporal filtering, confound regression, and intensity normalization. The function also optionally computes and saves
+#' temporal filtering, confound regression, and intensity normalization. Intensity
+#' normalization is applied after masking/smoothing and before temporal denoising.
+#' The function also optionally computes and saves
 #' a filtered confounds file for downstream analyses.
 #'
 #' The processing sequence can be enforced by the user (`force_processing_order = TRUE`) or determined dynamically based
@@ -12,8 +54,8 @@
 #'
 #' @param in_file Path to a subject-level BOLD NIfTI file output by fMRIPrep.
 #' @param cfg A list containing configuration options, including TR (`cfg$tr`), enabled processing steps (`cfg$<step>$enable`),
-#'   logging (`cfg$log_file`), and paths to resources such as singularity images (`cfg$fsl_img`). A whole-brain mask is
-#'   automatically generated using `automask()` and used for relevant processing steps.
+#'   logging (`cfg$log_file`), and paths to resources such as singularity images (`cfg$fsl_img`). Processing and intensity-
+#'   reference masks are generated internally with `automask()` for their distinct roles.
 #'
 #' @return The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
 #'   and logging to a subject-level log file.
@@ -193,7 +235,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   start_time <- Sys.time()
   to_log(lg, "info", "Start preprocessing: {as.character(start_time)}")
   
-  # compute a data-driven whole-brain mask using automask
+  # Compute a generous processing mask for smoothing and related validation.
+  # Intensity normalization constructs a separate conservative reference mask.
   brain_mask <- tempfile(fileext = ".nii.gz")
   temp_files_to_cleanup <- c(temp_files_to_cleanup, brain_mask)
   automask(proc_files$bold, outfile = brain_mask, clfrac = 0.5, NN = 1L,
@@ -235,13 +278,18 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     processing_sequence <- c()
     if (isTRUE(cfg$apply_mask$enable)) processing_sequence <- c(processing_sequence, "apply_mask")
     if (isTRUE(cfg$spatial_smooth$enable)) processing_sequence <- c(processing_sequence, "spatial_smooth")
+    if (isTRUE(cfg$intensity_normalize$enable)) processing_sequence <- c(processing_sequence, "intensity_normalize")
     if (isTRUE(cfg$apply_aroma$enable)) processing_sequence <- c(processing_sequence, "apply_aroma")
     if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$interpolate)) processing_sequence <- c(processing_sequence, "scrub_interpolate")
     if (isTRUE(cfg$temporal_filter$enable)) processing_sequence <- c(processing_sequence, "temporal_filter")
     if (isTRUE(cfg$confound_regression$enable)) processing_sequence <- c(processing_sequence, "confound_regression")
     if (isTRUE(cfg$scrubbing$enable) && isTRUE(cfg$scrubbing$apply)) processing_sequence <- c(processing_sequence, "scrub_timepoints")
-    if (isTRUE(cfg$intensity_normalize$enable)) processing_sequence <- c(processing_sequence, "intensity_normalize")
   }
+
+  if (is.null(apply_mask_file)) {
+    processing_sequence <- processing_sequence[processing_sequence != "apply_mask"]
+  }
+  .validate_intensity_normalization_order(processing_sequence)
 
   to_log(lg, "info", "Processing will proceed in the following order: {paste(processing_sequence, collapse=', ')}")
 
@@ -262,6 +310,27 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   final_regressors_file <- construct_bids_filename(
     modifyList(final_bids_info, list(suffix = "regressors", ext = ".tsv")), full.names = TRUE
   )
+  workspace_reference_core_file <- construct_bids_filename(
+    modifyList(workspace_bids_info, list(
+      description = "intensityReferenceCore", suffix = "mask", ext = ".nii.gz"
+    )), full.names = TRUE
+  )
+  final_reference_core_file <- construct_bids_filename(
+    modifyList(final_bids_info, list(
+      description = "intensityReferenceCore", suffix = "mask", ext = ".nii.gz"
+    )), full.names = TRUE
+  )
+  workspace_reference_json <- construct_bids_filename(
+    modifyList(workspace_bids_info, list(
+      description = "intensityReferenceCore", suffix = "mask", ext = ".json"
+    )), full.names = TRUE
+  )
+  final_reference_json <- construct_bids_filename(
+    modifyList(final_bids_info, list(
+      description = "intensityReferenceCore", suffix = "mask", ext = ".json"
+    )), full.names = TRUE
+  )
+  workspace_reference_automask <- file.path(workspace_dir, "intensity_reference_automask.nii.gz")
 
   #### handle confounds, filtering to match MRI data. This will also calculate scrubbing information, if requested
   to_regress <- postprocess_confounds(
@@ -278,6 +347,14 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     processing_sequence <- processing_sequence[processing_sequence != "confound_regression"]
   }
 
+  # The target is resolved now, but the denominator and factor are deliberately
+  # measured at the post-spatial, pre-temporal normalization checkpoint.
+  normalization_reference <- NULL
+  normalization_target <- NULL
+  if ("intensity_normalize" %in% processing_sequence) {
+    normalization_target <- resolve_intensity_normalization_target(cfg$intensity_normalize)
+  }
+
   # expected censor file for scrubbing
   censor_file <- workspace_censor_file
 
@@ -286,10 +363,6 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   base_desc <- paste0(toupper(substr(cfg$bids_desc, 1, 1)), substr(cfg$bids_desc, 2, nchar(cfg$bids_desc)))
   intermediate_outputs <- list()
 
-  if (is.null(apply_mask_file)) { # skip apply_mask if we lack a valid mask file
-    processing_sequence <- processing_sequence[processing_sequence != "apply_mask"]
-  }
-  
   n_steps <- length(processing_sequence)
 
   postproc_validate_or_stop <- function(step_name, v_ok) {
@@ -340,6 +413,26 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       to_log(lg, "debug", "Step {step}: input {cur_file}, output {out_file}, prefix chain {prefix_chain}")
     } else {
       to_log(lg, "debug", "Step {step}: input {cur_file}, workspace output {out_file}, destination {dest_out_file}, prefix chain {prefix_chain}")
+    }
+
+    # Reference membership comes from the original positive-scale BOLD, while
+    # the denominator is measured on the image entering the normalization step.
+    # Prepare this even when an existing normalized intermediate will be reused
+    # so the core and provenance sidecar remain available.
+    if (step == "intensity_normalize" && is.null(normalization_reference)) {
+      completed_steps <- if (ii > 1L) processing_sequence[seq_len(ii - 1L)] else character()
+      normalization_reference <- prepare_intensity_reference(
+        in_file = proc_files$bold,
+        calibration_file = cur_file,
+        calibration_steps = completed_steps,
+        target = normalization_target,
+        confounds_file = proc_files$confounds,
+        censor_file = workspace_censor_file,
+        automask_file = workspace_reference_automask,
+        core_file = workspace_reference_core_file,
+        sidecar_file = workspace_reference_json,
+        lg = lg
+      )
     }
 
     existing_workspace <- !is_last_step && file.exists(out_file)
@@ -495,21 +588,21 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       pre_intensity_normalize_file <- cur_file
       cur_file <- intensity_normalize(cur_file,
         out_file = out_file,
-        brain_mask = brain_mask,
-        global_median = cfg$intensity_normalize$global_median,
+        scale_factor = normalization_reference$scale_factor,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
       if (isTRUE(cfg$validate_postproc_steps)) {
-        gm <- cfg$intensity_normalize$global_median
-        if (checkmate::test_number(gm, finite = TRUE)) {
-          v_ok <- validate_intensity_normalize(
-            data_file = cur_file,
-            mask_file = brain_mask,
-            target = gm,
-            tolerance = 0.01
-          )
-          postproc_validate_or_stop("intensity_normalize", v_ok)
-        }
+        v_ok <- validate_intensity_normalize(
+          pre_file = pre_intensity_normalize_file,
+          post_file = cur_file,
+          reference_location = normalization_reference$reference_location,
+          target = normalization_reference$target,
+          scale_factor = normalization_reference$scale_factor,
+          core_file = normalization_reference$core_file,
+          include_frames = normalization_reference$include_frames,
+          tolerance = 1e-5
+        )
+        postproc_validate_or_stop("intensity_normalize", v_ok)
       }
     } else {
       stop("Unknown step: ", step)
@@ -558,7 +651,9 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     list(src = workspace_censor_file, dest = final_censor_file, label = "censor file"),
     list(src = workspace_scrub_file, dest = final_scrub_file, label = "scrubbing regressors"),
     list(src = workspace_confounds_file, dest = final_confounds_file, label = "postprocessed confounds"),
-    list(src = to_regress, dest = final_regressors_file, label = "regressor file")
+    list(src = to_regress, dest = final_regressors_file, label = "regressor file"),
+    list(src = workspace_reference_core_file, dest = final_reference_core_file, label = "intensity reference-core mask"),
+    list(src = workspace_reference_json, dest = final_reference_json, label = "intensity reference provenance")
   )
 
   for (cand in ancillary_candidates) {

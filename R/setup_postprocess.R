@@ -19,7 +19,7 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "apply_aroma/nonaggressive", "apply_aroma/prefix",
       "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
       "temporal_filter/method", "temporal_filter/prefix",
-      "intensity_normalize/global_median", "intensity_normalize/prefix",
+      "intensity_normalize/target", "intensity_normalize/prefix",
       "confound_calculate/columns", "confound_calculate/noproc_columns",
       "confound_calculate/demean", "confound_calculate/include_header",
       "scrubbing/expression", "scrubbing/add_to_confounds",
@@ -1293,24 +1293,54 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
 
 #' Configure intensity normalization settings for postprocessing
 #'
-#' This function configures the intensity normalization step in the postprocessing pipeline.
-#' Intensity normalization rescales the fMRI time series so that the median signal across the entire 4D image
-#' reaches a specified global value (e.g., 10,000). This step can help ensure comparability across runs and subjects.
+#' Configures run-wise intensity normalization. BrainGnomes multiplies every
+#' voxel and volume in a run by one positive constant so that runs share a
+#' common intensity convention before temporal denoising.
 #'
-#' @param ppcfg a postprocessing configuration list (nested within scfg$postprocess)
-#' @param fields A character vector of field names to prompt for. If `NULL`, all intensity normalization fields will be prompted.
+#' @details BrainGnomes first selects a fixed set of stable, positive-signal
+#'   functional voxels from the input BOLD image. After masking and spatial
+#'   smoothing, it calculates a 10% trimmed temporal mean for each of these
+#'   reference voxels and takes the spatial median of those voxelwise baselines.
+#'   If that run reference intensity is `L`, the complete run is multiplied by
+#'   `target / L`. Thus, `target` is not the whole-brain mean or the median of
+#'   all values in the final 4D image.
 #'
-#' @return A modified version of `ppcfg` with the `$intensity_normalize` entry updated.
+#'   Volumes identified as non-steady-state or marked for censoring are omitted
+#'   when estimating the run reference intensity, when matching metadata are
+#'   available. The resulting multiplier is nevertheless applied to every
+#'   volume. Scaling occurs after masking and smoothing but before AROMA,
+#'   interpolation, temporal filtering, confound regression, or volume removal.
+#'
+#' @param ppcfg Postprocessing configuration list, normally the `postprocess`
+#'   section of a study configuration.
+#' @param fields Character vector naming fields to prompt for. If `NULL`, the
+#'   function prompts for any missing intensity-normalization settings.
+#'
+#' @return The `ppcfg` list with its `intensity_normalize` settings updated.
 #' @keywords internal
 setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
+  if (is.null(ppcfg$intensity_normalize$target) &&
+      checkmate::test_number(ppcfg$intensity_normalize$global_median,
+                             finite = TRUE, lower = 0.1)) {
+    ppcfg$intensity_normalize$target <- ppcfg$intensity_normalize$global_median
+  }
   if (is.null(ppcfg$intensity_normalize$enable) ||
     (isFALSE(ppcfg$intensity_normalize$enable) && any(grepl("postprocess/intensity_normalize/", fields)))) {
     ppcfg$intensity_normalize$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
-      Intensity normalization rescales the BOLD signal so that the global median intensity of the 4D image
-      is equal across subjects and runs. This step can reduce variance due to scanner-related intensity differences
-      and can help ensure consistent scaling of BOLD signal before statistical modeling.
+      Intensity normalization places fMRI runs on comparable intensity units by
+      multiplying every voxel and volume in a run by one run-specific constant.
+
+      BrainGnomes selects a fixed set of stable functional voxels from the input
+      BOLD image. After masking and smoothing, it calculates each reference voxel's
+      10%-trimmed temporal mean and takes the spatial median across those voxelwise
+      baselines. The run is scaled so that this spatial median equals your chosen
+      target. This does not set the whole-brain mean or the median of all values in
+      the final image to the target. No external brain mask is required.
+
+      Scaling is applied before AROMA, interpolation, temporal filtering, confound
+      regression, or removal of censored volumes.
 
       Do you want to apply intensity normalization to each fMRI run?\n
       "),
@@ -1327,14 +1357,21 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
   # if fields passed in, only bother use about the requested fields
   if (is.null(fields)) {
     fields <- c()
-    if (is.null(ppcfg$intensity_normalize$global_median)) fields <- c(fields, "postprocess/intensity_normalize/global_median")
+    if (is.null(ppcfg$intensity_normalize$target)) fields <- c(fields, "postprocess/intensity_normalize/target")
     if (is.null(ppcfg$intensity_normalize$prefix)) ppcfg$intensity_normalize$prefix <- "n"
   }
 
-  if ("postprocess/intensity_normalize/global_median" %in% fields) {
-    ppcfg$intensity_normalize$global_median <- prompt_input(
-      prompt="Global (4D) median intensity",
-      type = "numeric", lower = -1e8, upper = 1e8, default = 10000
+  if ("postprocess/intensity_normalize/target" %in% fields ||
+      "postprocess/intensity_normalize/global_median" %in% fields) {
+    ppcfg$intensity_normalize$target <- prompt_input(
+      instruct = paste(
+        "This value is the desired spatial median across reference voxels of",
+        "their 10%-trimmed temporal means. Use the same target for every run",
+        "and participant that will be compared. It is not a whole-brain or",
+        "final-output median; 10,000 is the recommended default."
+      ),
+      prompt="Run-wise intensity target",
+      type = "numeric", lower = 0.1, upper = 1e8, default = 10000
     )
   }
 

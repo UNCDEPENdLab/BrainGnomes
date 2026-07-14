@@ -93,7 +93,7 @@ postprocess:
     method: fslmaths
   intensity_normalize:
     enable: yes
-    global_median: 10000.0
+    target: 10000.0
     prefix: 'n'
   confound_calculate:
     enable: yes

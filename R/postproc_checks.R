@@ -847,85 +847,145 @@ mad_over_time <- function(arr4d) {
   return(max(abs(as.numeric(a) - as.numeric(b)), na.rm = TRUE))
 }
 
-#' Validate intensity normalization (global median in mask)
+#' Validate run-wise intensity normalization
 #'
-#' Global median of in-mask values vs `target` within `tolerance`.
+#' Checks that the requested target and stored multiplier agree, that every
+#' finite image value was multiplied by that same constant, and that image
+#' dimensions and missing-value locations did not change. When the reference
+#' mask is supplied, the function also remeasures the normalized image to
+#' confirm that the requested target was reached at the point of scaling.
 #'
-#' @param data_file 4D NIfTI after `intensity_normalize`.
-#' @param mask_file 3D mask.
-#' @param target Target median (`cfg$intensity_normalize$global_median`).
-#' @param tolerance Absolute tolerance on `abs(median - target)`.
+#' @details `reference_location` is the run reference intensity before scaling:
+#'   the spatial median across reference voxels of their 10%-trimmed temporal
+#'   means. Therefore, `reference_location * scale_factor` should equal
+#'   `target`. If `core_file` is supplied, the function independently repeats
+#'   this two-stage calculation on `post_file`, using `include_frames` to select
+#'   the same baseline-estimation volumes.
+#'
+#' @param pre_file Path to the 4D NIfTI image immediately before scaling.
+#' @param post_file Path to the 4D NIfTI image immediately after scaling.
+#' @param reference_location Positive run reference intensity measured after
+#'   masking and smoothing and before temporal denoising.
+#' @param target Desired value of the run reference intensity after scaling.
+#' @param scale_factor Positive constant applied to every voxel and volume.
+#' @param core_file Optional path to the fixed 3D reference-region mask. The
+#'   BrainGnomes pipeline supplies this to verify the achieved target directly.
+#' @param include_frames Optional logical vector with one value per volume.
+#'   `TRUE` identifies a volume used to estimate the temporal baselines. The
+#'   pipeline supplies the same vector used for `reference_location`.
+#' @param tolerance Maximum allowed relative numerical error for each check.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
-#'   Attributes: `message`, `details` (`global_median`, `target`, `abs_diff`).
+#'   The `message` attribute gives a readable summary. The `details` attribute
+#'   reports the target, multiplier, expected and remeasured reference
+#'   intensities, and relative multiplication errors.
 #'
 #' @keywords internal
 #' @importFrom RNifti readNifti
-validate_intensity_normalize <- function(data_file, mask_file, target, tolerance = 0) {
-  checkmate::assert_file_exists(data_file)
-  checkmate::assert_file_exists(mask_file)
+validate_intensity_normalize <- function(pre_file, post_file,
+                                         reference_location, target,
+                                         scale_factor, core_file = NULL,
+                                         include_frames = NULL,
+                                         tolerance = 1e-5) {
+  checkmate::assert_file_exists(pre_file)
+  checkmate::assert_file_exists(post_file)
+  checkmate::assert_number(reference_location, finite = TRUE)
   checkmate::assert_number(target, finite = TRUE)
+  checkmate::assert_number(scale_factor, finite = TRUE)
   checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
 
-  img <- RNifti::readNifti(data_file)
-  msk <- RNifti::readNifti(mask_file)
+  if (reference_location <= 0 || target <= 0 || scale_factor <= 0) {
+    out <- FALSE
+    attr(out, "message") <- paste(
+      "Run reference intensity, target, and intensity multiplier must all be",
+      "positive."
+    )
+    attr(out, "details") <- list(
+      reference_location = reference_location,
+      target = target,
+      scale_factor = scale_factor
+    )
+    return(out)
+  }
 
-  if (length(dim(img)) < 3L) {
-    out <- FALSE
-    attr(out, "message") <- "Input image must be at least 3D."
-    attr(out, "details") <- list()
-    return(out)
-  }
-  if (length(dim(img)) == 3L) dim(img) <- c(dim(img), 1L)
-  if (length(dim(msk)) != 3L) {
-    out <- FALSE
-    attr(out, "message") <- "Mask must be 3D."
-    attr(out, "details") <- list()
-    return(out)
-  }
-  if (!all(dim(img)[1:3] == dim(msk))) {
+  pre <- RNifti::readNifti(pre_file)
+  post <- RNifti::readNifti(post_file)
+  if (!identical(dim(pre), dim(post))) {
     out <- FALSE
     attr(out, "message") <- sprintf(
-      "Spatial dims mismatch: image [%s] vs mask [%s]",
-      paste(dim(img)[1:3], collapse = "x"),
-      paste(dim(msk), collapse = "x")
+      "Pre/post dimensions mismatch: [%s] vs [%s].",
+      paste(dim(pre), collapse = "x"), paste(dim(post), collapse = "x")
     )
-    attr(out, "details") <- list()
+    attr(out, "details") <- list(pre_dim = dim(pre), post_dim = dim(post))
     return(out)
   }
 
-  mask_logical <- (msk != 0) & is.finite(msk)
-  n_mask_vox <- sum(mask_logical)
-  if (n_mask_vox == 0L) {
+  expected_target <- reference_location * scale_factor
+  target_relative_error <- abs(expected_target - target) / max(1, abs(target))
+
+  pre_values <- as.vector(pre)
+  post_values <- as.vector(post)
+  if (!identical(is.finite(pre_values), is.finite(post_values))) {
     out <- FALSE
-    attr(out, "message") <- "Mask contains zero in-brain voxels."
+    attr(out, "message") <- "Pre/post finite-value patterns differ after intensity normalization."
     attr(out, "details") <- list()
     return(out)
   }
-
-  img_dims <- dim(img)
-  n_vox <- prod(img_dims[1:3])
-  n_t <- img_dims[4]
-  img_matrix <- array(img, dim = c(n_vox, n_t))
-  vals <- as.vector(img_matrix[mask_logical, , drop = FALSE])
-  vals <- vals[is.finite(vals)]
-  if (length(vals) == 0L) {
+  finite <- is.finite(pre_values) & is.finite(post_values)
+  if (!any(finite)) {
     out <- FALSE
-    attr(out, "message") <- "No finite values found within mask."
+    attr(out, "message") <- "No jointly finite pre/post values are available for validation."
     attr(out, "details") <- list()
     return(out)
   }
 
-  gmed <- stats::median(vals)
-  diff <- abs(gmed - target)
-  passed <- diff <= tolerance
+  expected_values <- pre_values[finite] * scale_factor
+  value_relative_error <- max(
+    abs(post_values[finite] - expected_values) / pmax(1, abs(expected_values))
+  )
+  observed_target <- NA_real_
+  observed_target_relative_error <- NA_real_
+  if (!is.null(core_file)) {
+    checkmate::assert_file_exists(core_file)
+    observed <- measure_reference_location(
+      img = post_file,
+      core_mask = core_file,
+      include_frames = include_frames,
+      baseline_method = "trimmed_mean",
+      baseline_trim = 0.10,
+      min_valid_frames = 20L
+    )
+    observed_target <- unname(observed$reference_location)
+    observed_target_relative_error <- abs(observed_target - target) /
+      max(1, abs(target))
+  }
+  observed_ok <- is.na(observed_target_relative_error) ||
+    observed_target_relative_error <= tolerance
+  passed <- target_relative_error <= tolerance &&
+    value_relative_error <= tolerance && observed_ok
   msg <- sprintf(
-    "Global median within mask over %d voxels x %d timepoints = %.6f; target = %.6f; abs diff = %.6g (tol %.6g).",
-    n_mask_vox, n_t, gmed, target, diff, tolerance
+    paste0(
+      "Fixed multiplier %.8g maps run reference intensity %.8g to %.8g ",
+      "(target %.8g); remeasured normalized reference intensity %s; ",
+      "maximum relative multiplication error ",
+      "%.6g (tol %.6g)."
+    ),
+    scale_factor, reference_location, expected_target, target,
+    if (is.na(observed_target)) "not requested" else format(observed_target, digits = 8),
+    value_relative_error, tolerance
   )
   out <- passed
   attr(out, "message") <- msg
-  attr(out, "details") <- list(global_median = gmed, target = target, abs_diff = diff)
+  attr(out, "details") <- list(
+    reference_location = reference_location,
+    target = target,
+    scale_factor = scale_factor,
+    expected_target = expected_target,
+    target_relative_error = target_relative_error,
+    observed_target = observed_target,
+    observed_target_relative_error = observed_target_relative_error,
+    value_relative_error = value_relative_error
+  )
   return(out)
 }
 

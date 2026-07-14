@@ -93,66 +93,68 @@ test_that("validate_apply_mask handles 3D input gracefully", {
 
 # --- validate_intensity_normalize ---------------------------------------------
 
-test_that("validate_intensity_normalize passes when median matches target", {
+test_that("validate_intensity_normalize passes for a frozen factor", {
   skip_if_not_installed("RNifti")
 
-  set.seed(201)
   nx <- 6; ny <- 6; nz <- 4; nt <- 30
   target <- 10000
+  reference_location <- 5000
+  factor <- target / reference_location
+  raw <- array(reference_location, dim = c(nx, ny, nz, nt))
 
-  mask <- array(1L, dim = c(nx, ny, nz))
-  # create data whose in-mask global median == target
-  raw <- array(rnorm(nx * ny * nz * nt, mean = 500, sd = 50), dim = c(nx, ny, nz, nt))
-  mask_logical <- (mask == 1L)
-  n_vox <- prod(nx, ny, nz)
-  raw_mat <- array(raw, dim = c(n_vox, nt))
-  vals <- as.vector(raw_mat[as.vector(mask_logical), ])
-  gmed <- median(vals)
-  scaled <- raw * (target / gmed) # rescale so global median == target
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  core_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, core_file)), add = TRUE)
+  write_synth_4d(raw, pre_file)
+  write_synth_4d(raw * factor, post_file)
+  write_synth_mask(array(1L, dim = c(nx, ny, nz)), core_file)
 
-  mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
-  write_synth_mask(mask, mask_file)
-  write_synth_4d(scaled, data_file)
-
-  result <- validate_intensity_normalize(data_file, mask_file, target = target, tolerance = 1)
+  result <- validate_intensity_normalize(
+    pre_file, post_file,
+    reference_location = reference_location,
+    target = target, scale_factor = factor,
+    core_file = core_file, include_frames = rep(TRUE, nt), tolerance = 1e-5
+  )
   expect_true(result)
-  expect_true(abs(attr(result, "details")$global_median - target) <= 1)
+  expect_equal(attr(result, "details")$expected_target, target)
+  expect_equal(attr(result, "details")$observed_target, target)
 })
 
-test_that("validate_intensity_normalize fails when median is far from target", {
+test_that("validate_intensity_normalize detects an incorrectly applied factor", {
   skip_if_not_installed("RNifti")
 
   set.seed(202)
   nx <- 6; ny <- 6; nz <- 4; nt <- 30
+  raw <- array(rnorm(nx * ny * nz * nt), dim = c(nx, ny, nz, nt))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file)), add = TRUE)
+  write_synth_4d(raw, pre_file)
+  write_synth_4d(raw * 3, post_file)
 
-  mask <- array(1L, dim = c(nx, ny, nz))
-  data4d <- array(rnorm(nx * ny * nz * nt, mean = 500, sd = 50), dim = c(nx, ny, nz, nt))
-
-  mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
-  write_synth_mask(mask, mask_file)
-  write_synth_4d(data4d, data_file)
-
-  result <- validate_intensity_normalize(data_file, mask_file, target = 10000, tolerance = 0)
+  result <- validate_intensity_normalize(
+    pre_file, post_file,
+    reference_location = 5000, target = 10000,
+    scale_factor = 2, tolerance = 1e-5
+  )
   expect_false(result)
 })
 
-test_that("validate_intensity_normalize rejects dimension mismatch", {
+test_that("validate_intensity_normalize rejects pre/post dimension mismatch", {
   skip_if_not_installed("RNifti")
 
-  mask <- array(1L, dim = c(4, 4, 4))
-  data4d <- array(runif(5 * 5 * 5 * 10, 100, 200), dim = c(5, 5, 5, 10))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file)), add = TRUE)
+  write_synth_4d(array(1, dim = c(4, 4, 4, 10)), pre_file)
+  write_synth_4d(array(2, dim = c(5, 5, 5, 10)), post_file)
 
-  mask_file <- tempfile(fileext = ".nii.gz")
-  data_file <- tempfile(fileext = ".nii.gz")
-  on.exit(unlink(c(mask_file, data_file)), add = TRUE)
-  write_synth_mask(mask, mask_file)
-  write_synth_4d(data4d, data_file)
-
-  result <- validate_intensity_normalize(data_file, mask_file, target = 100, tolerance = 0)
+  result <- validate_intensity_normalize(
+    pre_file, post_file,
+    reference_location = 50, target = 100,
+    scale_factor = 2, tolerance = 1e-5
+  )
   expect_false(result)
   expect_match(attr(result, "message"), "mismatch", ignore.case = TRUE)
 })
