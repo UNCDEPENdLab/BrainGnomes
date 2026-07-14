@@ -694,16 +694,28 @@ validate_postprocess_config_single <- function(ppcfg, cfg_name = NULL, quiet = F
   # validate intensity normalization
   if (is.null(ppcfg$intensity_normalize$enable)) gaps <- c(gaps, "postprocess/intensity_normalize/enable")
   if ("intensity_normalize" %in% names(ppcfg) && isTRUE(ppcfg$intensity_normalize$enable)) {
-    target <- ppcfg$intensity_normalize$target
-    if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
-      target <- ppcfg$intensity_normalize$global_median
-    }
-    if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
-      if (!quiet) message(glue("Invalid target in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
-      gaps <- c(gaps, "postprocess/intensity_normalize/target")
-      ppcfg$intensity_normalize$target <- NULL
+    mode <- ppcfg$intensity_normalize$mode
+    if (is.null(mode)) mode <- "run_scalar"
+    if (!checkmate::test_choice(mode, c("run_scalar", "voxel_psc"))) {
+      if (!quiet) message(glue("Invalid mode in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
+      gaps <- c(gaps, "postprocess/intensity_normalize/mode")
+      ppcfg$intensity_normalize$mode <- NULL
     } else {
-      ppcfg$intensity_normalize$target <- as.numeric(target)
+      ppcfg$intensity_normalize$mode <- mode
+    }
+
+    if (identical(mode, "run_scalar")) {
+      target <- ppcfg$intensity_normalize$target
+      if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+        target <- ppcfg$intensity_normalize$global_median
+      }
+      if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
+        if (!quiet) message(glue("Invalid target in $postprocess${cfg_name}$intensity_normalize. You will be asked for this."))
+        gaps <- c(gaps, "postprocess/intensity_normalize/target")
+        ppcfg$intensity_normalize$target <- NULL
+      } else {
+        ppcfg$intensity_normalize$target <- as.numeric(target)
+      }
     }
     if (!checkmate::test_string(ppcfg$intensity_normalize$prefix)) {
       if (!quiet) message(glue("No valid prefix found for $postprocess${cfg_name}$intensity_normalize. Defaulting to 'n'"))

@@ -230,6 +230,230 @@ Rcpp::List measure_reference_location(
   );
 }
 
+//' Derive a denominator-guarded voxelwise percent-signal-change scale map
+//'
+//' "Guarded PSC" means that BrainGnomes protects the denominator used for
+//' baseline-to-100 scaling. It calculates a 10%-trimmed temporal baseline for
+//' every voxel from finite, steady-state, uncensored observations and returns a
+//' positive 3D multiplier map. A reliable baseline receives
+//' `target / baseline`. A positive baseline below
+//' `baseline_floor_fraction * reference_location` is replaced by that floor,
+//' which caps the multiplier. A baseline that cannot be identified because it
+//' has too few observations or is nonfinite/nonpositive receives the
+//' conservative run multiplier `target / reference_location`.
+//'
+//' The guard acts only on the denominator. It does not clip individual BOLD
+//' observations, impute a local baseline, create a validity mask, or remove or
+//' zero any voxel. Spatial inclusion remains the responsibility of the
+//' pipeline's separate `apply_mask` step. Voxels receiving the floor or
+//' fallback are retained but do not have an exact local PSC interpretation.
+//'
+//' @param img A 4D `RNifti::NiftiImage` object or path to the BOLD image at the
+//'   post-spatial, pre-temporal normalization point.
+//' @param reference_location Finite positive spatial median of the robust
+//'   baselines in the frozen intensity-reference core.
+//' @param qa_mask A 3D conservative functional mask used only to stratify QA
+//'   counts. It never changes the multiplier map.
+//' @param include_frames Optional logical vector with one value per volume.
+//'   `TRUE` marks a steady-state, uncensored volume eligible for baseline
+//'   estimation. The multiplier is nevertheless applied to every volume.
+//' @param target Voxelwise robust-baseline target. Use 100 for PSC units.
+//' @param baseline_trim Fraction removed from each temporal tail. The default
+//'   0.10 removes 10% from each tail and averages the central 80%.
+//' @param baseline_floor_fraction Positive denominator floor relative to
+//'   `reference_location`. This bounds amplification in very low-signal voxels.
+//' @param min_valid_frames Minimum finite eligible observations required for a
+//'   voxel-specific denominator.
+//' @param affine_tolerance Absolute tolerance for comparing NIfTI transforms.
+//' @param outfile Optional path for the float32 3D multiplier map. If `""`, no
+//'   file is written.
+//'
+//' @return A list containing 3D RNifti images `scale`, `baseline`,
+//'   `effective_denominator`, and `guard_code`; named counts for the complete
+//'   grid and QA mask; and the target, reference multiplier, and denominator
+//'   floor. Guard codes are 0 = ordinary PSC (`target / local baseline`), 1 =
+//'   positive local baseline replaced by the denominator floor, 2 = too few
+//'   finite eligible frames and run-reference fallback, and 3 =
+//'   nonfinite/nonpositive baseline and run-reference fallback.
+//'
+//' @keywords internal
+// [[Rcpp::export]]
+Rcpp::List derive_voxel_psc_scale(
+    SEXP img,
+    double reference_location,
+    SEXP qa_mask,
+    const Rcpp::Nullable<Rcpp::LogicalVector> &include_frames = R_NilValue,
+    double target = 100.0,
+    double baseline_trim = 0.10,
+    double baseline_floor_fraction = 0.20,
+    int min_valid_frames = 20,
+    double affine_tolerance = 1e-5,
+    std::string outfile = "") {
+
+  if (!std::isfinite(reference_location) || reference_location <= 0.0) {
+    stop("reference_location must be finite and positive.");
+  }
+  if (!std::isfinite(target) || target <= 0.0) {
+    stop("target must be finite and positive.");
+  }
+  if (!std::isfinite(baseline_trim) || baseline_trim < 0.0 ||
+      baseline_trim >= 0.5) {
+    stop("baseline_trim must be finite and in [0, 0.5).");
+  }
+  if (!std::isfinite(baseline_floor_fraction) ||
+      baseline_floor_fraction <= 0.0 || baseline_floor_fraction >= 1.0) {
+    stop("baseline_floor_fraction must be finite and in (0, 1).");
+  }
+  if (min_valid_frames < 1) stop("min_valid_frames must be positive.");
+  if (!std::isfinite(affine_tolerance) || affine_tolerance < 0.0) {
+    stop("affine_tolerance must be finite and nonnegative.");
+  }
+
+  NiftiImage image(img);
+  const std::vector<dim_t> dimensions = image.dim();
+  if (dimensions.size() != 4) stop("img must be a 4D NIfTI image.");
+
+  const size_t nx = static_cast<size_t>(dimensions[0]);
+  const size_t ny = static_cast<size_t>(dimensions[1]);
+  const size_t nz = static_cast<size_t>(dimensions[2]);
+  const size_t nt = static_cast<size_t>(dimensions[3]);
+  const size_t nvox = nx * ny * nz;
+
+  NiftiImage qa(qa_mask);
+  if (!same_spatial_grid(image, qa, affine_tolerance)) {
+    stop("qa_mask must be 3D and match the image dimensions and affine.");
+  }
+
+  LogicalVector eligible(nt, true);
+  if (include_frames.isNotNull()) {
+    LogicalVector supplied(include_frames);
+    if (static_cast<size_t>(supplied.size()) != nt) {
+      stop("include_frames must have one value per image volume.");
+    }
+    for (size_t t = 0; t < nt; ++t) {
+      if (LogicalVector::is_na(supplied[t])) {
+        stop("include_frames cannot contain missing values.");
+      }
+      eligible[t] = supplied[t];
+    }
+  }
+  const int n_eligible = sum(eligible);
+  if (n_eligible < min_valid_frames) {
+    stop("Fewer than min_valid_frames volumes are eligible.");
+  }
+
+  const double denominator_floor =
+    baseline_floor_fraction * reference_location;
+  const double reference_scale = target / reference_location;
+  const double maximum_scale = target / denominator_floor;
+
+  NiftiImageData data(image);
+  NiftiImageData qa_data(qa);
+  NumericVector baseline(nvox, NA_REAL);
+  NumericVector effective_denominator(nvox, reference_location);
+  NumericVector scale(nvox, reference_scale);
+  IntegerVector guard_code(nvox, 2);
+  baseline.attr("dim") = IntegerVector::create(nx, ny, nz);
+  effective_denominator.attr("dim") = IntegerVector::create(nx, ny, nz);
+  scale.attr("dim") = IntegerVector::create(nx, ny, nz);
+  guard_code.attr("dim") = IntegerVector::create(nx, ny, nz);
+
+  int grid_regular = 0;
+  int grid_floor = 0;
+  int grid_insufficient = 0;
+  int grid_invalid = 0;
+  int qa_regular = 0;
+  int qa_floor = 0;
+  int qa_insufficient = 0;
+  int qa_invalid = 0;
+  int qa_voxels = 0;
+
+  std::vector<double> values;
+  values.reserve(n_eligible);
+  for (size_t voxel = 0; voxel < nvox; ++voxel) {
+    const double qa_value = static_cast<double>(qa_data[voxel]);
+    const bool in_qa = std::isfinite(qa_value) && qa_value > 0.0;
+    if (in_qa) ++qa_voxels;
+
+    values.clear();
+    for (size_t t = 0; t < nt; ++t) {
+      if (!eligible[t]) continue;
+      const double value = static_cast<double>(data[t * nvox + voxel]);
+      if (std::isfinite(value)) values.push_back(value);
+    }
+
+    if (values.size() < static_cast<size_t>(min_valid_frames)) {
+      // The local denominator is unidentified: retain the initialized
+      // target/reference_location fallback rather than masking the voxel.
+      ++grid_insufficient;
+      if (in_qa) ++qa_insufficient;
+      continue;
+    }
+
+    const double voxel_baseline = robust_location(
+      values, "trimmed_mean", baseline_trim
+    );
+    baseline[voxel] = voxel_baseline;
+    if (!std::isfinite(voxel_baseline) || voxel_baseline <= 0.0) {
+      // Invalid local denominator: retain the conservative run fallback.
+      guard_code[voxel] = 3;
+      ++grid_invalid;
+      if (in_qa) ++qa_invalid;
+      continue;
+    }
+
+    if (voxel_baseline < denominator_floor) {
+      // Bound division by a small positive denominator. This caps the
+      // time-constant multiplier, not the scaled BOLD observations.
+      effective_denominator[voxel] = denominator_floor;
+      scale[voxel] = maximum_scale;
+      guard_code[voxel] = 1;
+      ++grid_floor;
+      if (in_qa) ++qa_floor;
+      continue;
+    }
+
+    effective_denominator[voxel] = voxel_baseline;
+    scale[voxel] = target / voxel_baseline;
+    guard_code[voxel] = 0;
+    ++grid_regular;
+    if (in_qa) ++qa_regular;
+  }
+
+  const nifti_image *image_pointer = image;
+  NiftiImage scale_image(nifti2_copy_nim_info(image_pointer), false);
+  scale_image.update(scale);
+  if (!outfile.empty()) scale_image.toFile(outfile, DT_FLOAT32);
+
+  return List::create(
+    _["scale"] = scale_image.toArrayOrPointer(true, "NIfTI image"),
+    _["baseline"] = nifti_from_numeric(scale_image, baseline),
+    _["effective_denominator"] = nifti_from_numeric(
+      scale_image, effective_denominator
+    ),
+    _["guard_code"] = nifti_from_integer(scale_image, guard_code),
+    _["target"] = target,
+    _["reference_location"] = reference_location,
+    _["reference_scale"] = reference_scale,
+    _["denominator_floor"] = denominator_floor,
+    _["maximum_scale"] = maximum_scale,
+    _["eligible_frames"] = n_eligible,
+    _["grid_counts"] = IntegerVector::create(
+      _["ordinary_psc"] = grid_regular,
+      _["denominator_floor"] = grid_floor,
+      _["insufficient_frames_fallback"] = grid_insufficient,
+      _["invalid_baseline_fallback"] = grid_invalid
+    ),
+    _["qa_mask_counts"] = IntegerVector::create(
+      _["qa_mask_voxels"] = qa_voxels,
+      _["ordinary_psc"] = qa_regular,
+      _["denominator_floor"] = qa_floor,
+      _["insufficient_frames_fallback"] = qa_insufficient,
+      _["invalid_baseline_fallback"] = qa_invalid
+    )
+  );
+}
+
 //' Derive a conservative functional reference core from 4D BOLD data
 //'
 //' Refines a functional candidate mask by removing voxels with an invalid or

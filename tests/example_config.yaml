@@ -93,6 +93,7 @@ postprocess:
     method: fslmaths
   intensity_normalize:
     enable: yes
+    mode: run_scalar
     target: 10000.0
     prefix: 'n'
   confound_calculate:

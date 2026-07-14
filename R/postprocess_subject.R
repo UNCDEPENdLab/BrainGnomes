@@ -44,6 +44,15 @@
 #' the user-defined configuration object. Operations may include brain masking, spatial smoothing, ICA-AROMA denoising,
 #' temporal filtering, confound regression, and intensity normalization. Intensity
 #' normalization is applied after masking/smoothing and before temporal denoising.
+#' It can use one robust run multiplier (`run_scalar`) or a denominator-guarded
+#' positive voxelwise multiplier map targeting percent signal change
+#' (`voxel_psc`). Guarding bounds very low positive denominators and replaces
+#' denominators that are invalid or based on too few eligible frames with a
+#' run-level fallback; it does not clip BOLD observations or mask voxels. Both
+#' modes share the configured prefix and never apply the reference core as an
+#' output mask. PSC is defined relative to the smoothed signal when smoothing
+#' is enabled; users requiring unsmoothed voxelwise PSC should disable
+#' smoothing in that postprocessing stream.
 #' The function also optionally computes and saves
 #' a filtered confounds file for downstream analyses.
 #'
@@ -58,7 +67,8 @@
 #'   reference masks are generated internally with `automask()` for their distinct roles.
 #'
 #' @return The path to the final postprocessed BOLD NIfTI file. Side effects include writing a confounds TSV file (if enabled),
-#'   and logging to a subject-level log file.
+#'   intensity-reference provenance, the reference-core mask, a PSC multiplier
+#'   map when requested, and logging to a subject-level log file.
 #'
 #' @details
 #' Required `cfg` entries:
@@ -330,6 +340,16 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       description = "intensityReferenceCore", suffix = "mask", ext = ".json"
     )), full.names = TRUE
   )
+  workspace_psc_scale_file <- construct_bids_filename(
+    modifyList(workspace_bids_info, list(
+      description = "intensityNormalizationScale", suffix = "map", ext = ".nii.gz"
+    )), full.names = TRUE
+  )
+  final_psc_scale_file <- construct_bids_filename(
+    modifyList(final_bids_info, list(
+      description = "intensityNormalizationScale", suffix = "map", ext = ".nii.gz"
+    )), full.names = TRUE
+  )
   workspace_reference_automask <- file.path(workspace_dir, "intensity_reference_automask.nii.gz")
 
   #### handle confounds, filtering to match MRI data. This will also calculate scrubbing information, if requested
@@ -351,8 +371,14 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # measured at the post-spatial, pre-temporal normalization checkpoint.
   normalization_reference <- NULL
   normalization_target <- NULL
+  normalization_mode <- NULL
   if ("intensity_normalize" %in% processing_sequence) {
-    normalization_target <- resolve_intensity_normalization_target(cfg$intensity_normalize)
+    normalization_mode <- resolve_intensity_normalization_mode(
+      cfg$intensity_normalize
+    )
+    normalization_target <- resolve_intensity_normalization_target(
+      cfg$intensity_normalize, mode = normalization_mode
+    )
   }
 
   # expected censor file for scrubbing
@@ -426,11 +452,17 @@ postprocess_subject <- function(in_file, cfg=NULL) {
         calibration_file = cur_file,
         calibration_steps = completed_steps,
         target = normalization_target,
+        mode = normalization_mode,
         confounds_file = proc_files$confounds,
         censor_file = workspace_censor_file,
         automask_file = workspace_reference_automask,
         core_file = workspace_reference_core_file,
         sidecar_file = workspace_reference_json,
+        scale_file = if (identical(normalization_mode, "voxel_psc")) {
+          workspace_psc_scale_file
+        } else {
+          ""
+        },
         lg = lg
       )
     }
@@ -588,16 +620,20 @@ postprocess_subject <- function(in_file, cfg=NULL) {
       pre_intensity_normalize_file <- cur_file
       cur_file <- intensity_normalize(cur_file,
         out_file = out_file,
+        mode = normalization_mode,
         scale_factor = normalization_reference$scale_factor,
+        scale_file = normalization_reference$scale_file,
         overwrite=cfg$overwrite, lg=lg, fsl_img = fsl_img
       )
       if (isTRUE(cfg$validate_postproc_steps)) {
         v_ok <- validate_intensity_normalize(
           pre_file = pre_intensity_normalize_file,
           post_file = cur_file,
+          mode = normalization_mode,
           reference_location = normalization_reference$reference_location,
           target = normalization_reference$target,
           scale_factor = normalization_reference$scale_factor,
+          scale_file = normalization_reference$scale_file,
           core_file = normalization_reference$core_file,
           include_frames = normalization_reference$include_frames,
           tolerance = 1e-5
@@ -653,7 +689,8 @@ postprocess_subject <- function(in_file, cfg=NULL) {
     list(src = workspace_confounds_file, dest = final_confounds_file, label = "postprocessed confounds"),
     list(src = to_regress, dest = final_regressors_file, label = "regressor file"),
     list(src = workspace_reference_core_file, dest = final_reference_core_file, label = "intensity reference-core mask"),
-    list(src = workspace_reference_json, dest = final_reference_json, label = "intensity reference provenance")
+    list(src = workspace_reference_json, dest = final_reference_json, label = "intensity reference provenance"),
+    list(src = workspace_psc_scale_file, dest = final_psc_scale_file, label = "voxelwise PSC multiplier map")
   )
 
   for (cand in ancillary_candidates) {

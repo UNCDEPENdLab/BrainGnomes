@@ -2,11 +2,12 @@
 % Please edit documentation in R/postprocess_functions.R
 \name{prepare_intensity_reference}
 \alias{prepare_intensity_reference}
-\title{Select reference voxels and calculate the run intensity multiplier}
+\title{Prepare robust run-scalar or denominator-guarded voxelwise PSC normalization}
 \usage{
 prepare_intensity_reference(
   in_file,
   target = 10000,
+  mode = "run_scalar",
   calibration_file = in_file,
   calibration_steps = character(),
   confounds_file = NULL,
@@ -14,6 +15,7 @@ prepare_intensity_reference(
   automask_file = NULL,
   core_file = "",
   sidecar_file = NULL,
+  scale_file = "",
   lg = NULL
 )
 }
@@ -23,7 +25,12 @@ reference voxels and baseline-estimation volumes.}
 
 \item{target}{Desired run reference intensity after scaling. Specifically,
 this is the desired spatial median across reference voxels of their
-10\%-trimmed temporal means.}
+10\%-trimmed temporal means for \code{run_scalar}. It is fixed to 100 for
+\code{voxel_psc}.}
+
+\item{mode}{Either \code{"run_scalar"} (default) or \code{"voxel_psc"}. The latter
+uses ordinary local PSC where possible and denominator floor/fallback
+factors elsewhere; it does not clip or mask the image.}
 
 \item{calibration_file}{Path to the 4D BOLD image after enabled masking and
 smoothing but before temporal denoising. The run reference intensity is
@@ -47,21 +54,25 @@ reference-core mask in saved files and metadata.}
 
 \item{sidecar_file}{Optional JSON provenance sidecar path.}
 
+\item{scale_file}{Optional output path for the 3D voxelwise multiplier map.
+Used only for \code{voxel_psc}; an empty string keeps the map in memory only.}
+
 \item{lg}{Optional logger.}
 }
 \value{
 List containing paths to the reference-region outputs, the run
 reference intensity (\code{reference_location}), requested \code{target}, calculated
-\code{scale_factor}, logical baseline-estimation volume vector
-(\code{include_frames}), and QA summaries.
+scalar factor or PSC multiplier map, logical baseline-estimation volume
+vector (\code{include_frames}), and QA summaries.
 }
 \description{
 Selects a fixed region of stable, positive-signal functional voxels from the
 input BOLD image. It then measures the reference intensity after enabled
 masking and smoothing: a 10\% trimmed temporal mean is calculated for each
-reference voxel, followed by the spatial median across voxels. The function
-returns \code{target / reference_location}, which is applied to the complete run
-before temporal denoising.
+reference voxel, followed by the spatial median across voxels. In
+\code{run_scalar} mode, the function returns \code{target / reference_location}. In
+\code{voxel_psc} mode, it calculates a robust temporal baseline at every voxel and
+writes a denominator-guarded multiplier map targeting 100.
 }
 \details{
 This is the single internal reference-selection policy used by the
@@ -69,5 +80,22 @@ postprocessing pipeline. Its conservative quality thresholds are fixed to
 support consistent scaling across projects rather than exposed as tuning
 options. The input image must retain a finite, positive temporal baseline;
 an image that has already been demeaned or residualized is unsuitable.
+
+"Guarded PSC" refers specifically to protection against unstable division
+by a local baseline. A reliable voxel uses \code{100 / local_baseline}; a finite
+positive baseline below 20\% of the core reference location uses that lower
+denominator bound; and a baseline that is nonfinite, nonpositive, or based
+on too few eligible frames uses the conservative run multiplier
+\code{100 / reference_location}. The floor and fallback voxels remain in the
+output but are not exact local PSC. The guards do not clip observations,
+impute data, or create a binary validity mask. Only \code{apply_mask} controls
+spatial inclusion in the output.
+
+When a logger is supplied, the function reports PSC category counts and
+percentages within the conservative functional automask at info level.
+Counts across the complete image grid are reported at debug level because
+they commonly include many background voxels and are less useful for
+routine QA. Both summaries distinguish ordinary PSC, denominator-floor,
+insufficient-frame fallback, and invalid-baseline fallback voxels.
 }
 \keyword{internal}

@@ -147,18 +147,21 @@ test_that("postprocess_subject moves intermediates when requested", {
     fake_copy_step(cur_file, out_file)
   }, prepare_intensity_reference = function(in_file, target, calibration_file,
                                              calibration_steps, core_file,
-                                             sidecar_file, ...) {
+                                             sidecar_file, mode, scale_file, ...) {
     recorded_paths$calibration_file <- calibration_file
     recorded_paths$calibration_steps <- calibration_steps
+    recorded_paths$normalization_mode <- mode
     file.copy(in_file, core_file, overwrite = TRUE)
     writeLines("{}", sidecar_file)
     list(
       reference_location = target / 2, target = target, scale_factor = 2,
-      core_file = core_file, include_frames = NULL
+      scale_file = scale_file, core_file = core_file, include_frames = NULL
     )
-  }, intensity_normalize = function(cur_file, out_file, scale_factor, ...) {
+  }, intensity_normalize = function(cur_file, out_file, scale_factor, mode,
+                                    scale_file, ...) {
     recorded_paths$intensity_normalize <- out_file
     recorded_paths$scale_factor <- scale_factor
+    recorded_paths$applied_mode <- mode
     fake_copy_step(cur_file, out_file)
   }, postprocess_confounds = function(...) NULL)
 
@@ -168,6 +171,8 @@ test_that("postprocess_subject moves intermediates when requested", {
   expect_identical(final_file, expected_final)
   expect_identical(norm_path(recorded_paths$intensity_normalize, mustWork = TRUE), expected_final)
   expect_equal(recorded_paths$scale_factor, 2)
+  expect_identical(recorded_paths$normalization_mode, "run_scalar")
+  expect_identical(recorded_paths$applied_mode, "run_scalar")
   expected_workspace_mask <- norm_path(file.path(workspace_dir, "sub-TEST_task-rest_space-MNI152NLin6Asym_desc-mPostproc_bold.nii.gz"))
   expect_identical(norm_path(recorded_paths$apply_mask), expected_workspace_mask)
   expect_identical(

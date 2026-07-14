@@ -1,5 +1,6 @@
 # BrainGnomes 0.8-2
 
+* Add a `voxel_psc` intensity-normalization mode that uses the existing robust reference-core and eligible-frame policy and applies denominator-guarded baseline-to-100 scaling after spatial processing. Reliable local baselines use ordinary PSC scaling, very low positive baselines use a lower denominator bound, and invalid baselines or those with too few eligible frames use a conservative run-level fallback. The guards do not clip observations or mask voxels; the user's `apply_mask` decision is preserved, and the multiplier map and guard counts are saved for provenance. Guard counts and percentages within the conservative automask are logged at info level, with complete-grid counts at debug level.
 * Add a user-oriented intensity-normalization vignette documenting the `target` convention, robust reference-core policy, provenance outputs, QA, and limitations.
 * Replace `automask()`'s background-sensitive positive-voxel quantile interpolation with an iterative AFNI-style clip estimator and a smoothly varying local threshold field.
 * Match AFNI's `automask()` peeling more closely with a 17-of-18 NN2 survival rule, layer-aware restoration, and post-peel face-connected reclustering.

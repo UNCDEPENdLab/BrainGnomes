@@ -2,14 +2,16 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_intensity_normalize}
 \alias{validate_intensity_normalize}
-\title{Validate run-wise intensity normalization}
+\title{Validate run-scalar or denominator-guarded voxelwise PSC normalization}
 \usage{
 validate_intensity_normalize(
   pre_file,
   post_file,
   reference_location,
   target,
-  scale_factor,
+  scale_factor = NULL,
+  mode = "run_scalar",
+  scale_file = NULL,
   core_file = NULL,
   include_frames = NULL,
   tolerance = 1e-05
@@ -25,7 +27,12 @@ masking and smoothing and before temporal denoising.}
 
 \item{target}{Desired value of the run reference intensity after scaling.}
 
-\item{scale_factor}{Positive constant applied to every voxel and volume.}
+\item{scale_factor}{Positive constant applied to every voxel and volume in
+\code{run_scalar} mode.}
+
+\item{mode}{Either \code{"run_scalar"} or denominator-guarded \code{"voxel_psc"}.}
+
+\item{scale_file}{Path to the 3D multiplier map used in \code{voxel_psc} mode.}
 
 \item{core_file}{Optional path to the fixed 3D reference-region mask. The
 BrainGnomes pipeline supplies this to verify the achieved target directly.}
@@ -43,18 +50,21 @@ reports the target, multiplier, expected and remeasured reference
 intensities, and relative multiplication errors.
 }
 \description{
-Checks that the requested target and stored multiplier agree, that every
-finite image value was multiplied by that same constant, and that image
-dimensions and missing-value locations did not change. When the reference
-mask is supplied, the function also remeasures the normalized image to
-confirm that the requested target was reached at the point of scaling.
+Checks dimensions, finite-value locations, and exact application of either a
+single positive multiplier or a positive 3D PSC multiplier map. A guarded
+PSC map encodes ordinary \code{100 / local_baseline} factors plus denominator-floor
+and run-reference fallback factors; guarding does not imply observation
+clipping or voxel masking. For scalar normalization, an optional reference
+mask also verifies the achieved target.
 }
 \details{
 \code{reference_location} is the run reference intensity before scaling:
 the spatial median across reference voxels of their 10\%-trimmed temporal
 means. Therefore, \code{reference_location * scale_factor} should equal
-\code{target}. If \code{core_file} is supplied, the function independently repeats
+\code{target}. If \code{core_file} is supplied in \code{run_scalar} mode, the function independently repeats
 this two-stage calculation on \code{post_file}, using \code{include_frames} to select
-the same baseline-estimation volumes.
+the same baseline-estimation volumes. In \code{voxel_psc} mode, \code{target} must be
+100 and \code{scale_file} must be a finite positive 3D map matching the spatial
+BOLD grid. No binary PSC validity mask is expected or applied.
 }
 \keyword{internal}

@@ -141,6 +141,32 @@ test_that("validate_intensity_normalize detects an incorrectly applied factor", 
   expect_false(result)
 })
 
+test_that("validate_intensity_normalize verifies denominator-guarded PSC maps", {
+  skip_if_not_installed("RNifti")
+
+  nx <- 3; ny <- 2; nz <- 2; nt <- 25
+  raw <- array(seq_len(nx * ny * nz * nt), dim = c(nx, ny, nz, nt))
+  scale <- array(seq(0.05, 0.16, length.out = nx * ny * nz),
+                 dim = c(nx, ny, nz))
+  scaled <- raw * array(rep(as.vector(scale), nt), dim = dim(raw))
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  scale_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, scale_file)), add = TRUE)
+  write_synth_4d(raw, pre_file)
+  write_synth_4d(scaled, post_file)
+  RNifti::writeNifti(RNifti::asNifti(scale), scale_file)
+
+  result <- validate_intensity_normalize(
+    pre_file, post_file, mode = "voxel_psc",
+    reference_location = 1000, target = 100,
+    scale_file = scale_file, tolerance = 1e-5
+  )
+
+  expect_true(result)
+  expect_equal(attr(result, "details")$mode, "voxel_psc")
+})
+
 test_that("validate_intensity_normalize rejects pre/post dimension mismatch", {
   skip_if_not_installed("RNifti")
 

@@ -776,18 +776,47 @@ spatial_smooth <- function(in_file, out_file, fwhm_mm = 6, brain_mask = NULL, ov
 }
 
 
+#' Resolve the configured intensity-normalization mode
+#'
+#' Missing modes retain the historical run-wise scalar behavior. In the
+#' denominator-guarded voxelwise PSC pathway, a reliable local baseline is
+#' scaled to 100, very low positive baselines use a lower denominator bound,
+#' and unidentified baselines use a conservative run-level fallback. These
+#' guards do not clip observations or mask voxels. Both modes use the same
+#' filename prefix and processing checkpoint; the mode is recorded in
+#' normalization provenance rather than encoded in the prefix.
+#'
+#' @param intensity_cfg Intensity-normalization configuration list.
+#' @return One of `"run_scalar"` or `"voxel_psc"`.
+#' @keywords internal
+resolve_intensity_normalization_mode <- function(intensity_cfg) {
+  mode <- intensity_cfg$mode
+  if (is.null(mode)) mode <- "run_scalar"
+  checkmate::assert_choice(mode, c("run_scalar", "voxel_psc"))
+  mode
+}
+
 #' Resolve the configured intensity-normalization target
 #'
 #' The target is the desired spatial median across reference-region voxels of
-#' their 10%-trimmed temporal means at the point when scaling is applied.
-#' `target` is the canonical configuration field. `global_median` remains
-#' accepted for backward compatibility, although that older name is misleading:
-#' the method does not target the median of all values in the 4D image.
+#' their 10%-trimmed temporal means for `run_scalar`. `target` is the canonical
+#' configuration field and `global_median` remains accepted for backward
+#' compatibility. Denominator-guarded `voxel_psc` always uses 100: reliable
+#' local baselines are scaled to 100, while floor or fallback denominators
+#' prevent unstable division without clipping or masking data. The fixed target
+#' is required for regression coefficients to be expressed in approximate
+#' percent-signal-change units; any configured scalar target is ignored in that
+#' mode.
 #'
 #' @param intensity_cfg Intensity-normalization configuration list.
+#' @param mode Optional resolved normalization mode.
 #' @return A finite positive numeric scalar.
 #' @keywords internal
-resolve_intensity_normalization_target <- function(intensity_cfg) {
+resolve_intensity_normalization_target <- function(
+    intensity_cfg,
+    mode = resolve_intensity_normalization_mode(intensity_cfg)) {
+  if (identical(mode, "voxel_psc")) return(100)
+
   target <- intensity_cfg$target
   if (!checkmate::test_number(target, finite = TRUE, lower = 0.1)) {
     target <- intensity_cfg$global_median
@@ -853,14 +882,15 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
   include
 }
 
-#' Select reference voxels and calculate the run intensity multiplier
+#' Prepare robust run-scalar or denominator-guarded voxelwise PSC normalization
 #'
 #' Selects a fixed region of stable, positive-signal functional voxels from the
 #' input BOLD image. It then measures the reference intensity after enabled
 #' masking and smoothing: a 10% trimmed temporal mean is calculated for each
-#' reference voxel, followed by the spatial median across voxels. The function
-#' returns `target / reference_location`, which is applied to the complete run
-#' before temporal denoising.
+#' reference voxel, followed by the spatial median across voxels. In
+#' `run_scalar` mode, the function returns `target / reference_location`. In
+#' `voxel_psc` mode, it calculates a robust temporal baseline at every voxel and
+#' writes a denominator-guarded multiplier map targeting 100.
 #'
 #' @details This is the single internal reference-selection policy used by the
 #'   postprocessing pipeline. Its conservative quality thresholds are fixed to
@@ -868,11 +898,32 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
 #'   options. The input image must retain a finite, positive temporal baseline;
 #'   an image that has already been demeaned or residualized is unsuitable.
 #'
+#'   "Guarded PSC" refers specifically to protection against unstable division
+#'   by a local baseline. A reliable voxel uses `100 / local_baseline`; a finite
+#'   positive baseline below 20% of the core reference location uses that lower
+#'   denominator bound; and a baseline that is nonfinite, nonpositive, or based
+#'   on too few eligible frames uses the conservative run multiplier
+#'   `100 / reference_location`. The floor and fallback voxels remain in the
+#'   output but are not exact local PSC. The guards do not clip observations,
+#'   impute data, or create a binary validity mask. Only `apply_mask` controls
+#'   spatial inclusion in the output.
+#'
+#'   When a logger is supplied, the function reports PSC category counts and
+#'   percentages within the conservative functional automask at info level.
+#'   Counts across the complete image grid are reported at debug level because
+#'   they commonly include many background voxels and are less useful for
+#'   routine QA. Both summaries distinguish ordinary PSC, denominator-floor,
+#'   insufficient-frame fallback, and invalid-baseline fallback voxels.
+#'
 #' @param in_file Path to the input 4D BOLD NIfTI image used to choose the
 #'   reference voxels and baseline-estimation volumes.
 #' @param target Desired run reference intensity after scaling. Specifically,
 #'   this is the desired spatial median across reference voxels of their
-#'   10%-trimmed temporal means.
+#'   10%-trimmed temporal means for `run_scalar`. It is fixed to 100 for
+#'   `voxel_psc`.
+#' @param mode Either `"run_scalar"` (default) or `"voxel_psc"`. The latter
+#'   uses ordinary local PSC where possible and denominator floor/fallback
+#'   factors elsewhere; it does not clip or mask the image.
 #' @param calibration_file Path to the 4D BOLD image after enabled masking and
 #'   smoothing but before temporal denoising. The run reference intensity is
 #'   measured on this image and the multiplier is applied to it. Defaults to
@@ -888,28 +939,35 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
 #' @param core_file Output path for the fixed reference-region mask, named the
 #'   reference-core mask in saved files and metadata.
 #' @param sidecar_file Optional JSON provenance sidecar path.
+#' @param scale_file Optional output path for the 3D voxelwise multiplier map.
+#'   Used only for `voxel_psc`; an empty string keeps the map in memory only.
 #' @param lg Optional logger.
 #' @return List containing paths to the reference-region outputs, the run
 #'   reference intensity (`reference_location`), requested `target`, calculated
-#'   `scale_factor`, logical baseline-estimation volume vector
-#'   (`include_frames`), and QA summaries.
+#'   scalar factor or PSC multiplier map, logical baseline-estimation volume
+#'   vector (`include_frames`), and QA summaries.
 #' @keywords internal
 prepare_intensity_reference <- function(in_file, target = 10000,
+                                        mode = "run_scalar",
                                         calibration_file = in_file,
                                         calibration_steps = character(),
                                         confounds_file = NULL,
                                         censor_file = NULL,
                                         automask_file = NULL,
                                         core_file = "", sidecar_file = NULL,
+                                        scale_file = "",
                                         lg = NULL) {
   checkmate::assert_file_exists(in_file)
   checkmate::assert_file_exists(calibration_file)
+  checkmate::assert_choice(mode, c("run_scalar", "voxel_psc"))
+  if (identical(mode, "voxel_psc")) target <- 100
   checkmate::assert_number(target, finite = TRUE, lower = 0.1)
   checkmate::assert_character(calibration_steps, any.missing = FALSE)
   cleanup_automask <- is.null(automask_file)
   if (cleanup_automask) automask_file <- tempfile(fileext = ".nii.gz")
   checkmate::assert_string(automask_file)
   checkmate::assert_string(core_file)
+  checkmate::assert_string(scale_file)
   if (cleanup_automask) on.exit(unlink(automask_file), add = TRUE)
 
   dir.create(dirname(automask_file), recursive = TRUE, showWarnings = FALSE)
@@ -977,17 +1035,45 @@ prepare_intensity_reference <- function(in_file, target = 10000,
     ))
   }
   reference_location <- unname(calibration$reference_location)
-  scale_factor <- target / reference_location
-  if (!is.finite(reference_location) || reference_location <= 0 ||
-      !is.finite(scale_factor) || scale_factor <= 0) {
+  if (!is.finite(reference_location) || reference_location <= 0) {
     stop(paste(
-      "Could not estimate a finite positive run reference intensity and",
-      "intensity multiplier."
+      "Could not estimate a finite positive run reference intensity for",
+      "intensity normalization."
     ))
+  }
+
+  scale_factor <- NULL
+  psc_result <- NULL
+  if (identical(mode, "run_scalar")) {
+    scale_factor <- target / reference_location
+    if (!is.finite(scale_factor) || scale_factor <= 0) {
+      stop("Could not estimate a finite positive run intensity multiplier.")
+    }
+  } else {
+    if (nzchar(scale_file)) {
+      dir.create(dirname(scale_file), recursive = TRUE, showWarnings = FALSE)
+    }
+    psc_result <- derive_voxel_psc_scale(
+      img = calibration_file,
+      reference_location = reference_location,
+      qa_mask = automask_file,
+      include_frames = include_frames,
+      target = 100,
+      baseline_trim = 0.10,
+      baseline_floor_fraction = 0.20,
+      min_valid_frames = 20L,
+      outfile = scale_file
+    )
   }
 
   summary <- list(
     method = "automask_reference_core_v1",
+    normalization_method = if (identical(mode, "run_scalar")) {
+      "run_scalar_reference_v1"
+    } else {
+      "guarded_voxel_psc_v1"
+    },
+    normalization_mode = mode,
     source_file = normalizePath(in_file, winslash = "/", mustWork = FALSE),
     calibration_file = normalizePath(calibration_file, winslash = "/", mustWork = FALSE),
     calibration_stage = "post_spatial_pre_temporal",
@@ -995,6 +1081,11 @@ prepare_intensity_reference <- function(in_file, target = 10000,
     target = as.numeric(target),
     reference_location = reference_location,
     scale_factor = scale_factor,
+    scale_file = if (identical(mode, "voxel_psc") && nzchar(scale_file)) {
+      basename(scale_file)
+    } else {
+      NULL
+    },
     eligible_frames = sum(include_frames),
     total_frames = length(include_frames),
     candidate_voxels = candidate_count,
@@ -1019,6 +1110,48 @@ prepare_intensity_reference <- function(in_file, target = 10000,
     counts = as.list(core_result$counts)
   )
 
+  if (identical(mode, "voxel_psc")) {
+    summary$psc_guard <- list(
+      definition = paste(
+        "Denominator-guarded baseline-to-100 scaling: reliable local",
+        "baselines use 100/baseline, low positive baselines use a fixed",
+        "lower denominator bound, and unidentified baselines use the",
+        "run-reference fallback. No observation clipping or voxel masking."
+      ),
+      target = 100,
+      denominator_floor_fraction = 0.20,
+      denominator_floor = unname(psc_result$denominator_floor),
+      reference_scale = unname(psc_result$reference_scale),
+      maximum_scale = unname(psc_result$maximum_scale),
+      grid_counts = as.list(psc_result$grid_counts),
+      automask_qa_counts = as.list(psc_result$qa_mask_counts),
+      categories = list(
+        ordinary_psc = paste(
+          "Finite positive trimmed baseline at or above the floor;",
+          "multiplier = 100 / local baseline; exact robust local PSC."
+        ),
+        denominator_floor = paste(
+          "Finite positive trimmed baseline below the floor; multiplier =",
+          "100 / floor; bounded amplification but not exact local PSC."
+        ),
+        insufficient_frames_fallback = paste(
+          "Fewer than 20 finite eligible frames; multiplier = 100 /",
+          "reference location; retained but not exact local PSC."
+        ),
+        invalid_baseline_fallback = paste(
+          "Nonfinite or nonpositive trimmed baseline; multiplier = 100 /",
+          "reference location; retained but not exact local PSC."
+        )
+      ),
+      policy = paste(
+        "Reliable voxels use 100 / trimmed baseline; positive low baselines",
+        "use the denominator floor; unidentified baselines use 100 /",
+        "reference_location. Guards alter denominators only: observations are",
+        "not clipped and no PSC validity mask is applied."
+      )
+    )
+  }
+
   if (checkmate::test_string(sidecar_file) && nzchar(sidecar_file)) {
     dir.create(dirname(sidecar_file), recursive = TRUE, showWarnings = FALSE)
     writeLines(
@@ -1028,50 +1161,103 @@ prepare_intensity_reference <- function(in_file, target = 10000,
   }
 
   if (!is.null(lg)) {
-    to_log(lg, "info", paste0(
-      "Selected {core_count}/{candidate_count} candidate voxels for the intensity-reference region; ",
-      "run reference intensity at the normalization point={format(reference_location, digits=8)}, ",
-      "target={target}, multiplier={format(scale_factor, digits=8)}"
-    ))
+    if (identical(mode, "run_scalar")) {
+      to_log(lg, "info", paste0(
+        "Selected {core_count}/{candidate_count} candidate voxels for the intensity-reference region; ",
+        "run reference intensity at the normalization point={format(reference_location, digits=8)}, ",
+        "target={target}, multiplier={format(scale_factor, digits=8)}"
+      ))
+    } else {
+      qa_counts <- psc_result$qa_mask_counts
+      grid_counts <- psc_result$grid_counts
+      qa_total <- as.numeric(qa_counts[["qa_mask_voxels"]])
+      grid_total <- sum(as.numeric(grid_counts))
+      count_pct <- function(count, total) {
+        count <- as.numeric(count)
+        pct <- if (is.finite(total) && total > 0) 100 * count / total else NA_real_
+        sprintf("%d (%.3f%%)", count, pct)
+      }
+
+      to_log(lg, "info", paste0(
+        "Prepared denominator-guarded voxelwise PSC scaling from {core_count}/{candidate_count} reference-core voxels; ",
+        "reference intensity={format(reference_location, digits=8)}, ",
+        "denominator floor={format(psc_result$denominator_floor, digits=8)}, ",
+        "PSC target=100. Guards bound denominators; they do not clip observations or apply an output mask."
+      ))
+      to_log(lg, "info", paste0(
+        "PSC denominator categories within conservative automask (n=", qa_total,
+        "): ordinary PSC=", count_pct(qa_counts[["ordinary_psc"]], qa_total),
+        "; denominator floor=", count_pct(qa_counts[["denominator_floor"]], qa_total),
+        "; insufficient-frame fallback=",
+        count_pct(qa_counts[["insufficient_frames_fallback"]], qa_total),
+        "; invalid-baseline fallback=",
+        count_pct(qa_counts[["invalid_baseline_fallback"]], qa_total), "."
+      ))
+      to_log(lg, "debug", paste0(
+        "PSC denominator categories across full image grid (n=", grid_total,
+        "): ordinary PSC=", count_pct(grid_counts[["ordinary_psc"]], grid_total),
+        "; denominator floor=", count_pct(grid_counts[["denominator_floor"]], grid_total),
+        "; insufficient-frame fallback=",
+        count_pct(grid_counts[["insufficient_frames_fallback"]], grid_total),
+        "; invalid-baseline fallback=",
+        count_pct(grid_counts[["invalid_baseline_fallback"]], grid_total), "."
+      ))
+    }
   }
 
   summary$include_frames <- include_frames
   summary$core_file <- core_file
   summary$automask_file <- automask_file
   summary$sidecar_file <- sidecar_file
+  summary$scale_file <- scale_file
+  summary$scale_map <- if (identical(mode, "voxel_psc")) psc_result$scale else NULL
   summary
 }
 
-#' Apply a run-wise intensity multiplier to a 4D fMRI image
+#' Apply run-scalar or denominator-guarded voxelwise PSC normalization
 #'
-#' Multiplies every voxel and volume by one previously estimated positive
-#' constant. BrainGnomes estimates this multiplier after masking and smoothing
-#' and applies it before temporal denoising.
+#' Applies either one previously estimated positive run multiplier or a positive
+#' 3D voxelwise multiplier map. BrainGnomes estimates both after masking and
+#' smoothing and applies them before temporal denoising.
 #'
 #' @param in_file Path to the input 4D NIfTI file.
 #' @param out_file Full path for the intensity-normalized output file.
 #' @param scale_factor Finite positive multiplier calculated as `target / L`,
 #'   where `L` is the spatial median across reference voxels of their
-#'   10%-trimmed temporal means.
+#'   10%-trimmed temporal means. Required for `run_scalar`.
+#' @param mode Either `"run_scalar"` (default) or `"voxel_psc"`.
+#' @param scale_file Path to the 3D denominator-guarded PSC multiplier map.
+#'   Reliable voxels use `100 / local_baseline`; floor and fallback multipliers
+#'   are already encoded in this map. Required for `voxel_psc`.
 #' @param overwrite Logical; whether to overwrite the output file if it exists.
 #' @param lg Optional lgr logger used for messages.
 #' @param fsl_img Optional Singularity image used to execute FSL commands.
 #'
 #' @return Path to the intensity-normalized output NIfTI file.
 #'
-#' @details The input is rescaled using \code{fslmaths -mul}. This function only
-#' applies the supplied multiplier; reference selection and estimation occur
-#' upstream. The multiplier is not clipped, replaced, or re-estimated from
-#' filtered or residualized data.
+#' @details The input is rescaled using \code{fslmaths -mul}; FSL broadcasts a
+#' 3D PSC map across the 4D series. This function only applies the supplied
+#' multiplier. "Guarded" describes how the map's denominators were bounded or
+#' replaced during calibration; this application step does not clip
+#' observations, apply the reference core as a mask, or re-estimate a baseline
+#' from filtered or residualized data.
 #'
 #' @keywords internal
 #' @importFrom glue glue
 #' @importFrom checkmate assert_string assert_number
-intensity_normalize <- function(in_file, out_file, scale_factor,
+intensity_normalize <- function(in_file, out_file, scale_factor = NULL,
+                                mode = "run_scalar", scale_file = NULL,
                                 overwrite=FALSE, lg=NULL, fsl_img = NULL) {
   #checkmate::assert_file_exists(in_file)
   checkmate::assert_string(out_file)
-  checkmate::assert_number(scale_factor, finite = TRUE, lower = .Machine$double.eps)
+  checkmate::assert_choice(mode, c("run_scalar", "voxel_psc"))
+  if (identical(mode, "run_scalar")) {
+    checkmate::assert_number(
+      scale_factor, finite = TRUE, lower = .Machine$double.eps
+    )
+  } else {
+    checkmate::assert_file_exists(scale_file)
+  }
 
   if (!checkmate::test_class(lg, "Logger")) {
     lg <- lgr::get_logger_glue("BrainGnomes") # use root logger
@@ -1080,9 +1266,20 @@ intensity_normalize <- function(in_file, out_file, scale_factor,
     log_file <- lg$appenders$postprocess_log$destination
   }
 
-  to_log(lg, "info", "Applying fixed run-wise intensity multiplier: {format(scale_factor, digits=8)}")
+  if (identical(mode, "run_scalar")) {
+    to_log(lg, "info", "Applying fixed run-wise intensity multiplier: {format(scale_factor, digits=8)}")
+    multiplier <- scale_factor
+    bind_paths <- dirname(c(in_file, out_file))
+  } else {
+    to_log(lg, "info", "Applying fixed denominator-guarded voxelwise PSC multiplier map (no clipping or masking): {scale_file}")
+    multiplier <- file_sans_ext(scale_file)
+    bind_paths <- dirname(c(in_file, out_file, scale_file))
+  }
 
-  run_fsl_command(glue("fslmaths {file_sans_ext(in_file)} -mul {scale_factor} {file_sans_ext(out_file)} -odt float"), log_file=log_file, fsl_img = fsl_img, bind_paths=dirname(c(in_file, out_file)))
+  run_fsl_command(
+    glue("fslmaths {file_sans_ext(in_file)} -mul {multiplier} {file_sans_ext(out_file)} -odt float"),
+    log_file = log_file, fsl_img = fsl_img, bind_paths = bind_paths
+  )
   return(out_file)
 }
 

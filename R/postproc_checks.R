@@ -847,27 +847,33 @@ mad_over_time <- function(arr4d) {
   return(max(abs(as.numeric(a) - as.numeric(b)), na.rm = TRUE))
 }
 
-#' Validate run-wise intensity normalization
+#' Validate run-scalar or denominator-guarded voxelwise PSC normalization
 #'
-#' Checks that the requested target and stored multiplier agree, that every
-#' finite image value was multiplied by that same constant, and that image
-#' dimensions and missing-value locations did not change. When the reference
-#' mask is supplied, the function also remeasures the normalized image to
-#' confirm that the requested target was reached at the point of scaling.
+#' Checks dimensions, finite-value locations, and exact application of either a
+#' single positive multiplier or a positive 3D PSC multiplier map. A guarded
+#' PSC map encodes ordinary `100 / local_baseline` factors plus denominator-floor
+#' and run-reference fallback factors; guarding does not imply observation
+#' clipping or voxel masking. For scalar normalization, an optional reference
+#' mask also verifies the achieved target.
 #'
 #' @details `reference_location` is the run reference intensity before scaling:
 #'   the spatial median across reference voxels of their 10%-trimmed temporal
 #'   means. Therefore, `reference_location * scale_factor` should equal
-#'   `target`. If `core_file` is supplied, the function independently repeats
+#'   `target`. If `core_file` is supplied in `run_scalar` mode, the function independently repeats
 #'   this two-stage calculation on `post_file`, using `include_frames` to select
-#'   the same baseline-estimation volumes.
+#'   the same baseline-estimation volumes. In `voxel_psc` mode, `target` must be
+#'   100 and `scale_file` must be a finite positive 3D map matching the spatial
+#'   BOLD grid. No binary PSC validity mask is expected or applied.
 #'
 #' @param pre_file Path to the 4D NIfTI image immediately before scaling.
 #' @param post_file Path to the 4D NIfTI image immediately after scaling.
 #' @param reference_location Positive run reference intensity measured after
 #'   masking and smoothing and before temporal denoising.
 #' @param target Desired value of the run reference intensity after scaling.
-#' @param scale_factor Positive constant applied to every voxel and volume.
+#' @param mode Either `"run_scalar"` or denominator-guarded `"voxel_psc"`.
+#' @param scale_factor Positive constant applied to every voxel and volume in
+#'   `run_scalar` mode.
+#' @param scale_file Path to the 3D multiplier map used in `voxel_psc` mode.
 #' @param core_file Optional path to the fixed 3D reference-region mask. The
 #'   BrainGnomes pipeline supplies this to verify the achieved target directly.
 #' @param include_frames Optional logical vector with one value per volume.
@@ -884,28 +890,45 @@ mad_over_time <- function(arr4d) {
 #' @importFrom RNifti readNifti
 validate_intensity_normalize <- function(pre_file, post_file,
                                          reference_location, target,
-                                         scale_factor, core_file = NULL,
+                                         scale_factor = NULL,
+                                         mode = "run_scalar",
+                                         scale_file = NULL,
+                                         core_file = NULL,
                                          include_frames = NULL,
                                          tolerance = 1e-5) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
+  checkmate::assert_choice(mode, c("run_scalar", "voxel_psc"))
   checkmate::assert_number(reference_location, finite = TRUE)
   checkmate::assert_number(target, finite = TRUE)
-  checkmate::assert_number(scale_factor, finite = TRUE)
   checkmate::assert_number(tolerance, lower = 0, finite = TRUE)
 
-  if (reference_location <= 0 || target <= 0 || scale_factor <= 0) {
+  if (reference_location <= 0 || target <= 0) {
     out <- FALSE
-    attr(out, "message") <- paste(
-      "Run reference intensity, target, and intensity multiplier must all be",
-      "positive."
-    )
+    attr(out, "message") <- "Run reference intensity and target must be positive."
     attr(out, "details") <- list(
       reference_location = reference_location,
-      target = target,
-      scale_factor = scale_factor
+      target = target
     )
     return(out)
+  }
+
+  if (identical(mode, "run_scalar")) {
+    checkmate::assert_number(scale_factor, finite = TRUE)
+    if (scale_factor <= 0) {
+      out <- FALSE
+      attr(out, "message") <- "The run-wise intensity multiplier must be positive."
+      attr(out, "details") <- list(scale_factor = scale_factor)
+      return(out)
+    }
+  } else {
+    checkmate::assert_file_exists(scale_file)
+    if (abs(target - 100) > tolerance) {
+      out <- FALSE
+      attr(out, "message") <- "voxel_psc requires a fixed target of 100."
+      attr(out, "details") <- list(target = target)
+      return(out)
+    }
   }
 
   pre <- RNifti::readNifti(pre_file)
@@ -919,9 +942,6 @@ validate_intensity_normalize <- function(pre_file, post_file,
     attr(out, "details") <- list(pre_dim = dim(pre), post_dim = dim(post))
     return(out)
   }
-
-  expected_target <- reference_location * scale_factor
-  target_relative_error <- abs(expected_target - target) / max(1, abs(target))
 
   pre_values <- as.vector(pre)
   post_values <- as.vector(post)
@@ -939,13 +959,44 @@ validate_intensity_normalize <- function(pre_file, post_file,
     return(out)
   }
 
-  expected_values <- pre_values[finite] * scale_factor
+  expected_target <- NA_real_
+  target_relative_error <- NA_real_
+  if (identical(mode, "run_scalar")) {
+    expected_target <- reference_location * scale_factor
+    target_relative_error <- abs(expected_target - target) /
+      max(1, abs(target))
+    multipliers <- rep(scale_factor, length(pre_values))
+  } else {
+    scale_map <- RNifti::readNifti(scale_file)
+    if (!identical(dim(scale_map), dim(pre)[1:3])) {
+      out <- FALSE
+      attr(out, "message") <- sprintf(
+        "PSC scale-map dimensions [%s] do not match BOLD spatial dimensions [%s].",
+        paste(dim(scale_map), collapse = "x"),
+        paste(dim(pre)[1:3], collapse = "x")
+      )
+      attr(out, "details") <- list(
+        scale_dim = dim(scale_map), bold_spatial_dim = dim(pre)[1:3]
+      )
+      return(out)
+    }
+    scale_values <- as.vector(scale_map)
+    if (any(!is.finite(scale_values)) || any(scale_values <= 0)) {
+      out <- FALSE
+      attr(out, "message") <- "PSC multiplier map contains nonfinite or nonpositive values."
+      attr(out, "details") <- list()
+      return(out)
+    }
+    multipliers <- rep(scale_values, times = dim(pre)[4])
+  }
+
+  expected_values <- pre_values[finite] * multipliers[finite]
   value_relative_error <- max(
     abs(post_values[finite] - expected_values) / pmax(1, abs(expected_values))
   )
   observed_target <- NA_real_
   observed_target_relative_error <- NA_real_
-  if (!is.null(core_file)) {
+  if (identical(mode, "run_scalar") && !is.null(core_file)) {
     checkmate::assert_file_exists(core_file)
     observed <- measure_reference_location(
       img = post_file,
@@ -961,25 +1012,37 @@ validate_intensity_normalize <- function(pre_file, post_file,
   }
   observed_ok <- is.na(observed_target_relative_error) ||
     observed_target_relative_error <= tolerance
-  passed <- target_relative_error <= tolerance &&
-    value_relative_error <= tolerance && observed_ok
-  msg <- sprintf(
-    paste0(
-      "Fixed multiplier %.8g maps run reference intensity %.8g to %.8g ",
-      "(target %.8g); remeasured normalized reference intensity %s; ",
-      "maximum relative multiplication error ",
-      "%.6g (tol %.6g)."
-    ),
-    scale_factor, reference_location, expected_target, target,
-    if (is.na(observed_target)) "not requested" else format(observed_target, digits = 8),
-    value_relative_error, tolerance
-  )
+  target_ok <- is.na(target_relative_error) || target_relative_error <= tolerance
+  passed <- target_ok && value_relative_error <= tolerance && observed_ok
+  if (identical(mode, "run_scalar")) {
+    msg <- sprintf(
+      paste0(
+        "Fixed multiplier %.8g maps run reference intensity %.8g to %.8g ",
+        "(target %.8g); remeasured normalized reference intensity %s; ",
+        "maximum relative multiplication error %.6g (tol %.6g)."
+      ),
+      scale_factor, reference_location, expected_target, target,
+      if (is.na(observed_target)) "not requested" else format(observed_target, digits = 8),
+      value_relative_error, tolerance
+    )
+  } else {
+    msg <- sprintf(
+      paste0(
+        "Denominator-guarded voxelwise PSC map is finite, positive, and ",
+        "matches the BOLD spatial grid; no clipping or masking was applied; ",
+        "maximum relative multiplication error %.6g (tol %.6g)."
+      ),
+      value_relative_error, tolerance
+    )
+  }
   out <- passed
   attr(out, "message") <- msg
   attr(out, "details") <- list(
     reference_location = reference_location,
     target = target,
+    mode = mode,
     scale_factor = scale_factor,
+    scale_file = scale_file,
     expected_target = expected_target,
     target_relative_error = target_relative_error,
     observed_target = observed_target,

@@ -2,12 +2,14 @@
 % Please edit documentation in R/postprocess_functions.R
 \name{intensity_normalize}
 \alias{intensity_normalize}
-\title{Apply a run-wise intensity multiplier to a 4D fMRI image}
+\title{Apply run-scalar or denominator-guarded voxelwise PSC normalization}
 \usage{
 intensity_normalize(
   in_file,
   out_file,
-  scale_factor,
+  scale_factor = NULL,
+  mode = "run_scalar",
+  scale_file = NULL,
   overwrite = FALSE,
   lg = NULL,
   fsl_img = NULL
@@ -20,7 +22,13 @@ intensity_normalize(
 
 \item{scale_factor}{Finite positive multiplier calculated as \code{target / L},
 where \code{L} is the spatial median across reference voxels of their
-10\%-trimmed temporal means.}
+10\%-trimmed temporal means. Required for \code{run_scalar}.}
+
+\item{mode}{Either \code{"run_scalar"} (default) or \code{"voxel_psc"}.}
+
+\item{scale_file}{Path to the 3D denominator-guarded PSC multiplier map.
+Reliable voxels use \code{100 / local_baseline}; floor and fallback multipliers
+are already encoded in this map. Required for \code{voxel_psc}.}
 
 \item{overwrite}{Logical; whether to overwrite the output file if it exists.}
 
@@ -32,14 +40,16 @@ where \code{L} is the spatial median across reference voxels of their
 Path to the intensity-normalized output NIfTI file.
 }
 \description{
-Multiplies every voxel and volume by one previously estimated positive
-constant. BrainGnomes estimates this multiplier after masking and smoothing
-and applies it before temporal denoising.
+Applies either one previously estimated positive run multiplier or a positive
+3D voxelwise multiplier map. BrainGnomes estimates both after masking and
+smoothing and applies them before temporal denoising.
 }
 \details{
-The input is rescaled using \code{fslmaths -mul}. This function only
-applies the supplied multiplier; reference selection and estimation occur
-upstream. The multiplier is not clipped, replaced, or re-estimated from
-filtered or residualized data.
+The input is rescaled using \code{fslmaths -mul}; FSL broadcasts a
+3D PSC map across the 4D series. This function only applies the supplied
+multiplier. "Guarded" describes how the map's denominators were bounded or
+replaced during calibration; this application step does not clip
+observations, apply the reference core as a mask, or re-estimate a baseline
+from filtered or residualized data.
 }
 \keyword{internal}

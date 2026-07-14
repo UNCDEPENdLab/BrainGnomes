@@ -19,7 +19,8 @@ manage_postprocess_streams <- function(scfg, allow_empty = FALSE) {
       "apply_aroma/nonaggressive", "apply_aroma/prefix",
       "temporal_filter/low_pass_hz", "temporal_filter/high_pass_hz",
       "temporal_filter/method", "temporal_filter/prefix",
-      "intensity_normalize/target", "intensity_normalize/prefix",
+      "intensity_normalize/mode", "intensity_normalize/target",
+      "intensity_normalize/prefix",
       "confound_calculate/columns", "confound_calculate/noproc_columns",
       "confound_calculate/demean", "confound_calculate/include_header",
       "scrubbing/expression", "scrubbing/add_to_confounds",
@@ -541,12 +542,12 @@ setup_postprocess_steps <- function(ppcfg = list(), fields = NULL) {
   step_order <- c(
     "apply_mask",
     "spatial_smooth",
+    "intensity_normalize",
     "apply_aroma",
     "scrub_interpolate",
     "temporal_filter",
     "confound_regression",
-    "scrub_timepoints",
-    "intensity_normalize"
+    "scrub_timepoints"
   )
 
   processing_sequence <- character(0)
@@ -1293,23 +1294,39 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
 
 #' Configure intensity normalization settings for postprocessing
 #'
-#' Configures run-wise intensity normalization. BrainGnomes multiplies every
-#' voxel and volume in a run by one positive constant so that runs share a
-#' common intensity convention before temporal denoising.
+#' Configures robust run-wise scalar or denominator-guarded voxelwise
+#' percent-signal-change intensity normalization so runs share interpretable
+#' units before temporal denoising.
 #'
 #' @details BrainGnomes first selects a fixed set of stable, positive-signal
 #'   functional voxels from the input BOLD image. After masking and spatial
 #'   smoothing, it calculates a 10% trimmed temporal mean for each of these
 #'   reference voxels and takes the spatial median of those voxelwise baselines.
-#'   If that run reference intensity is `L`, the complete run is multiplied by
-#'   `target / L`. Thus, `target` is not the whole-brain mean or the median of
-#'   all values in the final 4D image.
+#'   If that run reference intensity is `L`, `run_scalar` multiplies the complete
+#'   run by `target / L`. `voxel_psc` instead calculates the same robust baseline
+#'   at every voxel and applies a denominator-guarded multiplier targeting 100.
+#'   Here, "guarded" means a reliable voxel uses `100 / local_baseline`, a very
+#'   low positive baseline uses a fixed lower denominator bound, and a baseline
+#'   that is nonfinite, nonpositive, or insufficiently observed uses the
+#'   conservative run multiplier `100 / L`. The guards prevent unstable
+#'   division; they do not clip BOLD observations, impute a baseline, apply the
+#'   reference core as a validity mask, or remove voxels. Floor and fallback
+#'   voxels remain in the output but are not exact local PSC.
 #'
 #'   Volumes identified as non-steady-state or marked for censoring are omitted
-#'   when estimating the run reference intensity, when matching metadata are
+#'   from both scalar and PSC baseline estimates, when matching metadata are
 #'   available. The resulting multiplier is nevertheless applied to every
-#'   volume. Scaling occurs after masking and smoothing but before AROMA,
-#'   interpolation, temporal filtering, confound regression, or volume removal.
+#'   volume. Both modes use the same user-specified prefix and occur after
+#'   masking/smoothing but before AROMA, interpolation, temporal filtering,
+#'   confound regression, or volume removal.
+#'
+#'   For `voxel_psc`, this placement defines percent change relative to each
+#'   voxel's smoothed baseline, rather than an average of pre-smoothing PSC
+#'   series. The distinction can matter near tissue boundaries or dropout,
+#'   where baselines differ across neighbors. Post-smoothing calibration uses
+#'   the same signal that enters modeling and avoids spatially spreading large
+#'   multipliers from low-baseline voxels. Users who need unsmoothed voxelwise
+#'   PSC should use a postprocessing stream with spatial smoothing disabled.
 #'
 #' @param ppcfg Postprocessing configuration list, normally the `postprocess`
 #'   section of a study configuration.
@@ -1319,6 +1336,7 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
 #' @return The `ppcfg` list with its `intensity_normalize` settings updated.
 #' @keywords internal
 setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
+  mode_was_missing <- is.null(ppcfg$intensity_normalize$mode)
   if (is.null(ppcfg$intensity_normalize$target) &&
       checkmate::test_number(ppcfg$intensity_normalize$global_median,
                              finite = TRUE, lower = 0.1)) {
@@ -1329,18 +1347,23 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
     ppcfg$intensity_normalize$enable <- prompt_input(
       instruct = glue("\n\n
       ------------------------------------------------------------------------------------------------------------------------
-      Intensity normalization places fMRI runs on comparable intensity units by
-      multiplying every voxel and volume in a run by one run-specific constant.
+      fMRI image intensities are in arbitrary scanner units. Intensity
+      normalization puts runs on a more consistent scale, making regression
+      coefficients easier to compare across runs and participants. It changes
+      coefficient units, but does not improve data quality or statistical power.
 
-      BrainGnomes selects a fixed set of stable functional voxels from the input
-      BOLD image. After masking and smoothing, it calculates each reference voxel's
-      10%-trimmed temporal mean and takes the spatial median across those voxelwise
-      baselines. The run is scaled so that this spatial median equals your chosen
-      target. This does not set the whole-brain mean or the median of all values in
-      the final image to the target. No external brain mask is required.
+      If you enable this step, you will next choose between:
 
-      Scaling is applied before AROMA, interpolation, temporal filtering, confound
-      regression, or removal of censored volumes.
+        run_scalar: apply one scale factor to the whole run. This follows the
+        conventional FSL-like approach and keeps coefficients in target-based
+        intensity units.
+
+        voxel_psc: scale each voxel relative to its own baseline. This makes
+        coefficients approximately interpretable as local percent signal change.
+
+      BrainGnomes handles reference estimation and low-signal safeguards
+      automatically; they are not additional setup choices. Use the same mode
+      for all runs and participants that will be combined in one analysis.
 
       Do you want to apply intensity normalization to each fMRI run?\n
       "),
@@ -1357,18 +1380,50 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
   # if fields passed in, only bother use about the requested fields
   if (is.null(fields)) {
     fields <- c()
+    if (mode_was_missing) fields <- c(fields, "postprocess/intensity_normalize/mode")
     if (is.null(ppcfg$intensity_normalize$target)) fields <- c(fields, "postprocess/intensity_normalize/target")
     if (is.null(ppcfg$intensity_normalize$prefix)) ppcfg$intensity_normalize$prefix <- "n"
   }
 
-  if ("postprocess/intensity_normalize/target" %in% fields ||
-      "postprocess/intensity_normalize/global_median" %in% fields) {
+  if ("postprocess/intensity_normalize/mode" %in% fields) {
+    ppcfg$intensity_normalize$mode <- prompt_input(
+      instruct = glue("
+        Choose the units that best match your analysis:
+
+          run_scalar (default)
+            Applies one multiplier to the entire run, with a conventional target
+            of 10,000. Choose this for compatibility with traditional FSL-style
+            scaling or when you want comparable coefficient magnitudes without
+            converting each voxel to percent signal change.
+
+          voxel_psc
+            Scales each voxel relative to its own baseline, with a fixed target
+            of 100. Choose this when local fractional response size is the goal
+            and you want coefficients to approximate percent signal change.
+
+        Use one mode consistently across the runs and participants in an
+        analysis. BrainGnomes applies the necessary robustness safeguards
+        automatically. Both choices use the same filename prefix.
+      ", .trim = TRUE),
+      prompt = "Intensity-normalization mode",
+      type = "character", among = c("run_scalar", "voxel_psc"),
+      default = "run_scalar"
+    )
+  }
+  if (is.null(ppcfg$intensity_normalize$mode)) {
+    ppcfg$intensity_normalize$mode <- "run_scalar"
+  }
+
+  if (identical(ppcfg$intensity_normalize$mode, "run_scalar") &&
+      ("postprocess/intensity_normalize/target" %in% fields ||
+       "postprocess/intensity_normalize/global_median" %in% fields)) {
     ppcfg$intensity_normalize$target <- prompt_input(
       instruct = paste(
-        "This value is the desired spatial median across reference voxels of",
-        "their 10%-trimmed temporal means. Use the same target for every run",
-        "and participant that will be compared. It is not a whole-brain or",
-        "final-output median; 10,000 is the recommended default."
+        "The target sets the numerical units for run_scalar. A target of",
+        "10,000 is conventional and recommended unless another analysis tool",
+        "expects a different value. Changing it only changes the size of the",
+        "reported values and coefficients; use the same target for all runs",
+        "and participants in an analysis."
       ),
       prompt="Run-wise intensity target",
       type = "numeric", lower = 0.1, upper = 1e8, default = 10000

@@ -304,16 +304,28 @@ This will delete the bad volumes as well as corresponding rows in your postproce
 
 ## Intensity Normalisation
 
-`setup_intensity_normalization()` places different runs on a common intensity
-scale by multiplying every value in a run by one run-specific constant. The
-user selects a `target` (default 10,000), which should be kept the same across
-all runs and participants that will be compared in an analysis. BrainGnomes
+`setup_intensity_normalization()` offers two modes. `run_scalar` multiplies
+every value in a run by one robust run-specific constant; its user-selected
+`target` defaults to 10,000. `voxel_psc` applies denominator-guarded voxelwise
+scaling with a fixed target of 100, producing approximate local
+percent-signal-change units. "Guarded" means reliable baselines use ordinary
+`100 / local_baseline` scaling, very low positive denominators use a fixed lower
+bound, and unidentified denominators use a conservative run-level fallback.
+The guard protects division; it does not clip observations or mask voxels.
+Both modes use the same user-specified filename prefix. BrainGnomes
 estimates the multiplier from a conservative region of stable, positive-signal
 functional voxels; an external fMRIPrep or template mask is not required.
 This reference region is an intensity-calibration mask, not an anatomical ROI
 or the mask that determines which voxels may be analyzed. It is restricted to
 voxels with adequate signal and without extreme temporal noise or frequent
 intensity spikes.
+
+In practical terms, choose `run_scalar` for conventional FSL-style scaling and
+comparable target-based coefficient magnitudes. Choose `voxel_psc` when the
+scientific quantity of interest is local fractional response and coefficients
+should approximate percent signal change. Use the same mode across every run
+and participant entering an analysis. BrainGnomes handles the reference and
+low-signal safeguards automatically.
 
 More precisely, the target refers to a two-stage summary:
 
@@ -322,11 +334,23 @@ More precisely, the target refers to a two-stage summary:
    highest 10% of that voxel's included observations and averages the rest.
 2. It takes the spatial median of these voxelwise temporal baselines.
 
-If this spatial median is $L$, BrainGnomes multiplies the entire run by
+For `run_scalar`, if this spatial median is $L$, BrainGnomes multiplies the entire run by
 `target / L`. Thus, a target of 10,000 means that, immediately after scaling,
 the spatial median across reference-region voxels of their 10%-trimmed temporal
 means is 10,000. It does **not** mean that the temporal median, whole-brain
 mean, or median of every value in the final 4D image is 10,000.
+
+For `voxel_psc`, BrainGnomes calculates the same 10%-trimmed baseline at every
+voxel and normally applies `100 / voxel_baseline`. A positive denominator below
+20% of $L$ is floored at that value, while an unidentified denominator receives
+the conservative fallback `100 / L`. This bounds unstable amplification
+without removing the voxel. Floor and fallback voxels are retained but are not
+exact local PSC. The reference region is never applied as a PSC validity mask:
+`apply_mask` remains the only postprocessing step that determines which voxels
+are removed. No time-series values are clipped. The exact PSC multiplier map
+and category counts are saved for QA. Counts and percentages within the
+conservative automask appear in the info log; complete-grid counts appear only
+at debug level because they are commonly dominated by background voxels.
 
 Only suitable volumes contribute to the baseline calculation. By default this
 means all volumes. When the necessary metadata are available, BrainGnomes
@@ -350,7 +374,8 @@ measuring their intensity:
    `spatial_smooth`.
 3. In the image produced by those spatial steps, it calculates each reference
    voxel's 10%-trimmed temporal mean and then the spatial median $L$ described
-   above. It immediately applies `target / L` to the entire 4D run.
+   above. It immediately applies either `target / L` or the
+   denominator-guarded voxelwise PSC multiplier map.
 4. It then performs AROMA, scrub interpolation, temporal filtering, confound
    regression, and timepoint removal, as enabled.
 
@@ -377,13 +402,31 @@ Because the temporal operations are linear, applying them after scaling does
 not change the intensity units established before denoising, even though they
 may change individual runs by different amounts.
 
+This ordering distinction does not arise for `run_scalar`: one global constant
+commutes with linear spatial smoothing. For `voxel_psc`, however, smoothing and
+scaling order does have a substantive meaning.
+Scaling first and smoothing afterward would average neighboring voxels'
+fractional time series, giving low- and high-baseline voxels similar spatial
+weight after normalization. BrainGnomes instead smooths the acquired signal
+first and then divides by that smoothed signal's robust baseline. This improves
+denominator stability, avoids spreading large low-baseline multipliers into
+neighbors, and makes a PSC coefficient describe the exact smoothed series used
+for modeling. The tradeoff is that the result is percent change relative to a
+local smoothed baseline, not PSC calculated independently at each voxel before
+smoothing. The distinction is usually small in homogeneous tissue but can
+matter at tissue boundaries, near dropout, or with a large smoothing kernel.
+Use a separate stream with spatial smoothing disabled when unsmoothed
+voxelwise PSC is the intended estimand.
+
 This matches the ordering principle in AFNI's `afni_proc.py`. Its default block
 order places `blur` and `mask` before `scale`, and `scale` before `regress`; its
 order checks warn about the opposite arrangements. AFNI's default numerical
-operation is different—voxelwise mean-100 scaling with an upper cap—whereas
-BrainGnomes applies one uncapped robust scalar to the complete run. The shared
-design choice is to scale after spatial preprocessing and before temporal
-modeling.
+operation uses the ordinary temporal mean and an upper cap on individual
+scaled observations. BrainGnomes PSC instead bounds or replaces unstable
+denominators while retaining a time-constant linear multiplier; it does not
+clip observations. `run_scalar` remains the single-factor alternative. The
+shared design choice is to scale after spatial preprocessing and before
+temporal modeling.
 
 AROMA and confound regression explicitly preserve each voxel's temporal mean.
 After the multiplier is applied, BrainGnomes does not estimate another factor
@@ -396,7 +439,7 @@ give runs common input units before temporal denoising, not to force every
 final image summary to a particular value.
 
 See the dedicated
-[`Run-wise Intensity Normalization in BrainGnomes`](intensity_normalization.html)
+[`Intensity Normalization in BrainGnomes`](intensity_normalization.html)
 vignette for configuration, equations, internal safeguards, outputs, QA, and
 limitations.
 
@@ -468,9 +511,9 @@ strategy described in the xcp-d documentation.
 ## Ordering Steps
 
 Finally, `setup_postproc_steps()` determines the order in which enabled
-steps run. By default the order is masking, smoothing, AROMA, optional
-scrubbing/interpolation, temporal filtering, confound regression, and
-intensity normalisation. You may override this order by answering “yes”
+steps run. By default intensity normalisation follows masking and smoothing and
+precedes AROMA, optional scrubbing/interpolation, temporal filtering, and
+confound regression. You may override this order by answering “yes”
 to the prompt shown in the code below.【F:R/setup_postprocess.R†L321-L358】
 
 # Running Postprocessing
