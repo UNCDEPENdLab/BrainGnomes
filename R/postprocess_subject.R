@@ -38,6 +38,21 @@
   invisible(TRUE)
 }
 
+#' Create the standard postprocessing whole-brain mask
+#'
+#' Centralizes the automask configuration shared by `postprocess_subject()` and
+#' the spatial-smoothness calibration workflow.
+#'
+#' @keywords internal
+#' @noRd
+.postprocess_automask <- function(in_file, outfile) {
+  automask(
+    in_file, outfile = outfile, clfrac = 0.5, NN = 1L,
+    SIhh = 0, peels = 1L, fill_holes = TRUE, dilate_steps = 1L
+  )
+  outfile
+}
+
 #' Postprocess a single fMRI BOLD image using a configured pipeline
 #'
 #' Applies a sequence of postprocessing operations to a single subject-level BOLD NIfTI file, as specified by
@@ -249,8 +264,7 @@ postprocess_subject <- function(in_file, cfg=NULL) {
   # Intensity normalization constructs a separate conservative reference mask.
   brain_mask <- tempfile(fileext = ".nii.gz")
   temp_files_to_cleanup <- c(temp_files_to_cleanup, brain_mask)
-  automask(proc_files$bold, outfile = brain_mask, clfrac = 0.5, NN = 1L,
-           SIhh = 0, peels = 1L, fill_holes = TRUE, dilate_steps = 1L)
+  .postprocess_automask(proc_files$bold, brain_mask)
 
   # if apply_mask is enabled, determine which mask file to apply
   apply_mask_file <- NULL

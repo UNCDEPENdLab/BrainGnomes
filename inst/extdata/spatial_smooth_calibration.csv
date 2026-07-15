@@ -1,0 +1,5 @@
+model_version,mode,smoother,used_mask,model_type,coefficient_0,coefficient_1,tolerance_mm,n_calibration,n_validation,kernel_min_mm,kernel_max_mm,voxel_min_mm,voxel_max_mm,datasets,tool,input_source,mask_method,volumes_per_run
+smoothness-calibration-v1,afni_blurinmask,gaussian,TRUE,quadrature_ratio_linear,1.18475396,-0.47521770,0.8,30,15,3,8,2.408688,3.116644,explore;neuromap;prosper,AFNI_26.0.00,raw_bids,BET_f0.30,30
+smoothness-calibration-v1,afni_3dmerge,gaussian,FALSE,quadrature_ratio_linear,1.13001562,-0.11747280,1.0,30,15,3,8,2.408688,3.116644,explore;neuromap;prosper,AFNI_26.0.00,raw_bids,BET_f0.30,30
+smoothness-calibration-v2-fmriprep,fsl_susan_mask,susan,TRUE,quadrature_ratio_linear,1.21629120,-0.49103314,0.5,30,15,3,8,2.40865896,3.11664432,bsocial;neuromap;prosper,FSL_6.0.7.18,fmriprep_desc-preproc,BrainGnomes_automask,80
+smoothness-calibration-v1,fsl_susan_nomask,susan,FALSE,quadrature_ratio_linear,-0.06022293,0.80840240,0.5,30,15,3,8,2.408688,3.116644,explore;neuromap;prosper,FSL_6.0.7.18,raw_bids,BET_f0.30,30

@@ -1052,15 +1052,23 @@ validate_intensity_normalize <- function(pre_file, post_file,
   return(out)
 }
 
-#' Empirical calibration coefficients for classic FWHM delta estimation
+#' Empirical calibration models for classic FWHM after spatial smoothing
 #'
-#' These were derived from simulations applying known smoothing kernels to
-#' fMRI-like data and measuring the resulting change in classic FWHM.
-#' Because fMRI data are not Gaussian, the naive FWHM delta from first
-#' differences systematically deviates from the requested kernel; these
-#' regressions correct for that bias.
+#' The Gaussian and diagnostic no-mask models were derived from three real-BOLD
+#' datasets spanning 2.41--3.12 mm voxels. The production masked-SUSAN model was
+#' subsequently recalibrated on three fMRIPrep cohorts by invoking
+#' `spatial_smooth()` directly with the same `automask()` configuration as
+#' `postprocess_subject()`. The final subject from each dataset was held out, and
+#' leave-one-dataset-out checks were used to assess transfer across resolutions.
 #'
-#' Structure: `smoother -> method -> mask/nomask -> list(type, coeffs)`
+#' The primary model predicts post-smoothing FWHM by Gaussian quadrature while
+#' allowing the program's effective kernel gain to depend on the dimensionless
+#' voxel-to-kernel ratio:
+#' `gain = coeffs[1] + coeffs[2] * voxel_mm / kernel_mm` and
+#' `post = sqrt(pre^2 + (gain * kernel_mm)^2)`.
+#'
+#' Structure: `smoother -> method -> mask/nomask -> model`
+#'   - `type = "quadrature_ratio_linear"`: baseline-conditioned model above
 #'   - `type = "linear"`: `coeffs[1] + coeffs[2] * kernel`
 #'   - `type = "poly"`:   polynomial in kernel (`sum(coeffs * kernel^(0:p))`)
 #'
@@ -1069,14 +1077,30 @@ validate_intensity_normalize <- function(pre_file, post_file,
 .pp_calibration_coeffs <- list(
   gaussian = list(
     classic = list(
-      mask   = list(type = "linear", coeffs = c(-2.942579, 1.198781)),
-      nomask = list(type = "linear", coeffs = c(-2.141319, 1.143082))
+      mask = list(
+        type = "quadrature_ratio_linear", coeffs = c(1.18475396, -0.47521770),
+        tolerance_mm = 0.8, mode = "afni_blurinmask",
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+      ),
+      nomask = list(
+        type = "quadrature_ratio_linear", coeffs = c(1.13001562, -0.11747280),
+        tolerance_mm = 1.0, mode = "afni_3dmerge",
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+      )
     )
   ),
   susan = list(
     classic = list(
-      mask   = list(type = "poly", coeffs = c(-3.6270403, 1.4369376, -0.03108286)),
-      nomask = list(type = "poly", coeffs = c(-3.6270403, 1.4369376, -0.03108286))
+      mask = list(
+        type = "quadrature_ratio_linear", coeffs = c(1.21629120, -0.49103314),
+        tolerance_mm = 0.5, mode = "fsl_susan_mask",
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.40865896, 3.11664432)
+      ),
+      nomask = list(
+        type = "quadrature_ratio_linear", coeffs = c(-0.06022293, 0.80840240),
+        tolerance_mm = 0.5, mode = "fsl_susan_nomask",
+        kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644)
+      )
     )
   )
 )
@@ -1084,9 +1108,28 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' Predict the expected FWHM delta from a calibration model
 #' @keywords internal
 #' @noRd
-.pp_predict_calibration <- function(model, kernel_fwhm) {
+.pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm) {
+  checkmate::assert_number(kernel_fwhm, lower = 1e-6, finite = TRUE)
+  checkmate::assert_numeric(voxel_mm, lower = 1e-6, finite = TRUE, min.len = 1L)
+  voxel_geom_mm <- exp(mean(log(voxel_mm)))
+  gain <- model$coeffs[1] + model$coeffs[2] * voxel_geom_mm / kernel_fwhm
+  if (!is.finite(gain) || gain <= 0) {
+    stop("Calibration predicts a non-positive effective kernel gain.", call. = FALSE)
+  }
+  gain
+}
+
+#' @keywords internal
+#' @noRd
+.pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
+                                    voxel_mm = NULL) {
   coeffs <- model$coeffs
-  if (model$type == "linear") {
+  if (model$type == "quadrature_ratio_linear") {
+    checkmate::assert_number(pre_fwhm, lower = 0, finite = TRUE)
+    gain <- .pp_calibration_gain(model, kernel_fwhm, voxel_mm)
+    expected_post <- sqrt(pre_fwhm^2 + (gain * kernel_fwhm)^2)
+    return(expected_post - pre_fwhm)
+  } else if (model$type == "linear") {
     return(coeffs[1] + coeffs[2] * kernel_fwhm)
   } else if (model$type == "poly") {
     powers <- seq(0, length(coeffs) - 1)
@@ -1133,14 +1176,22 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' series are polynomial-detrended and MAD-normalized to match the preprocessing
 #' used by the calibration script.
 #'
+#' Classic first-difference FWHM is used intentionally as a local
+#' gradient-variance statistic. A mixed Gaussian-plus-exponential ACF can
+#' describe fMRI's longer spatial tail, but its scalar half-height FWHM does not
+#' obey Gaussian quadrature when a Gaussian kernel is added: the fitted core and
+#' tail change differently. The real-BOLD calibration therefore absorbs the
+#' non-Gaussian core behavior without treating the full ACF as Gaussian.
+#'
 #' The preprocessing is important because the classic first-difference FWHM
 #' estimator is sensitive to non-smooth sources of spatial variance that are not
 #' the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
 #' large between-voxel variance differences can inflate or deflate the ratio of
 #' spatial-difference variance to total variance, making the measured FWHM change
 #' disagree with the calibration even when smoothing was applied correctly. The
-#' validation therefore mirrors `local/3dSmoothnessChange.R`: it removes a
-#' low-order polynomial trend from each in-mask voxel time series, removes the
+#' validation therefore mirrors `local/smoothness_checks/3dSmoothnessChange.R`:
+#' it removes a low-order polynomial trend from each in-mask voxel time series,
+#' removes the
 #' mean when `demean = TRUE`, and scales each voxel by its temporal MAD when
 #' `unif = TRUE`. This puts pre/post data on the same residualized, variance-
 #' normalized scale used to derive the empirical calibration coefficients.
@@ -1150,8 +1201,13 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' @param mask_file 3D mask (same space as BOLD).
 #' @param fwhm_mm Requested smoothing kernel FWHM in mm (`cfg$spatial_smooth$fwhm_mm`).
 #' @param smoother Character; `"susan"` (default, matches `spatial_smooth()`) or `"gaussian"`.
-#' @param used_mask Logical; whether smoothing was performed inside a mask (default `TRUE`).
-#' @param tolerance_mm Tolerance in mm for `|observed_delta - expected_delta|` (default 0.5).
+#' @param used_mask Logical; whether a mask was used to calculate SUSAN's
+#'   brightness threshold (default `TRUE`). SUSAN itself is not spatially
+#'   restricted to this mask. For Gaussian calibration modes this instead
+#'   distinguishes masked `3dBlurInMask` from unmasked `3dmerge`.
+#' @param tolerance_mm Tolerance in mm for `|observed_post - expected_post|`.
+#'   `NULL` (the default) uses the program/mask-specific cross-validation
+#'   tolerance stored with the calibration model.
 #' @param preprocess Logical; if `TRUE`, apply calibration-matched preprocessing.
 #' @param polydeg Polynomial detrending degree used when `preprocess = TRUE`.
 #' @param demean Logical; include mean removal in preprocessing.
@@ -1165,7 +1221,7 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' @keywords internal
 validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_,
                                     smoother = "susan", used_mask = TRUE,
-                                    tolerance_mm = 0.5, preprocess = TRUE,
+                                    tolerance_mm = NULL, preprocess = TRUE,
                                     polydeg = 3L, demean = TRUE, unif = TRUE,
                                     max_volumes = 300L) {
   checkmate::assert_file_exists(pre_file)
@@ -1224,20 +1280,33 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
   if (has_kernel) {
     cal_model <- .pp_select_calibration(smoother, used_mask)
-    delta_expected <- .pp_predict_calibration(cal_model, fwhm_mm)
+    delta_expected <- .pp_predict_calibration(
+      cal_model, fwhm_mm, pre_fwhm = pre_f, voxel_mm = vox_mm
+    )
+    expected_post <- pre_f + delta_expected
+    calibration_gain <- .pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
+    voxel_geom_mm <- exp(mean(log(vox_mm)))
+    calibration_extrapolated <-
+      fwhm_mm < cal_model$kernel_range_mm[1] ||
+      fwhm_mm > cal_model$kernel_range_mm[2] ||
+      voxel_geom_mm < cal_model$voxel_range_mm[1] ||
+      voxel_geom_mm > cal_model$voxel_range_mm[2]
+    if (is.null(tolerance_mm)) tolerance_mm <- cal_model$tolerance_mm
+    checkmate::assert_number(tolerance_mm, lower = 0, finite = TRUE)
     diff_cal <- delta_observed - delta_expected
     within_tol <- abs(diff_cal) <= tolerance_mm
     passed <- within_tol
     msg <- sprintf(
       paste0(
         "Classic geom FWHM: pre=%.4f mm, post=%.4f mm, delta_observed=%.4f mm. ",
-        "Calibrated expected delta=%.4f mm (smoother=%s, mask=%s). ",
-        "Volumes used=%d/%d. ",
+        "Expected post=%.4f mm, delta=%.4f mm (smoother=%s, mask=%s, model=%s). ",
+        "Volumes used=%d/%d. Calibration support=%s. ",
         "|obs-exp|=%.4f mm (tol=%.4f mm). %s"
       ),
       pre_f, post_f, delta_observed,
-      delta_expected, smoother, used_mask,
+      expected_post, delta_expected, smoother, used_mask, cal_model$type,
       volumes_used, total_volumes,
+      if (calibration_extrapolated) "EXTRAPOLATED" else "interpolated",
       abs(diff_cal), tolerance_mm,
       if (passed) "PASS" else "FAIL"
     )
@@ -1245,11 +1314,21 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       pre_fwhm_mm = pre_f,
       post_fwhm_mm = post_f,
       delta_observed_mm = delta_observed,
+      post_expected_mm = expected_post,
       delta_expected_mm = delta_expected,
       delta_diff_mm = diff_cal,
       tolerance_mm = tolerance_mm,
       smoother = smoother,
       used_mask = used_mask,
+      calibration_mode = cal_model$mode,
+      calibration_type = cal_model$type,
+      calibration_coeffs = cal_model$coeffs,
+      calibration_gain = calibration_gain,
+      expected_effective_kernel_mm = calibration_gain * fwhm_mm,
+      observed_effective_kernel_mm = sqrt(max(0, post_f^2 - pre_f^2)),
+      calibration_kernel_range_mm = cal_model$kernel_range_mm,
+      calibration_voxel_range_mm = cal_model$voxel_range_mm,
+      calibration_extrapolated = calibration_extrapolated,
       volumes_used = volumes_used,
       total_volumes = total_volumes,
       max_volumes = max_volumes,

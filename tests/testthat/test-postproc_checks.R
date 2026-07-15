@@ -503,13 +503,18 @@ test_that("validate_spatial_smooth calibration returns expected structure", {
   write_synth_mask(mask, mask_file, vox_mm = vox_mm)
 
   result <- validate_spatial_smooth(pre_file, post_file, mask_file, fwhm_mm = 6,
-    smoother = "susan", used_mask = TRUE, tolerance_mm = 0.5)
+    smoother = "susan", used_mask = TRUE)
   # no smoothing applied, calibration expects ~5 mm delta, so this should fail
   expect_false(result)
   details <- attr(result, "details")
   expect_equal(details$smoother, "susan")
   expect_true(details$used_mask)
   expect_true(is.finite(details$delta_expected_mm))
+  expect_true(is.finite(details$post_expected_mm))
+  expect_equal(details$tolerance_mm, .pp_select_calibration("susan", TRUE)$tolerance_mm)
+  expect_equal(details$calibration_type, "quadrature_ratio_linear")
+  expect_true(is.finite(details$calibration_gain))
+  expect_true(details$calibration_extrapolated)
 })
 
 test_that("validate_spatial_smooth falls back to directional check without fwhm_mm", {
@@ -573,6 +578,17 @@ test_that(".pp_predict_calibration poly model works", {
   expect_equal(.pp_predict_calibration(model, 6), expected, tolerance = 1e-6)
 })
 
+test_that(".pp_predict_calibration conditions quadrature delta on baseline and resolution", {
+  model <- list(type = "quadrature_ratio_linear", coeffs = c(1.2, -0.5))
+  low_pre <- .pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(2, 2, 2))
+  high_pre <- .pp_predict_calibration(model, 6, pre_fwhm = 6, voxel_mm = c(2, 2, 2))
+  coarser <- .pp_predict_calibration(model, 6, pre_fwhm = 2, voxel_mm = c(3, 3, 3))
+
+  expect_gt(low_pre, high_pre)
+  expect_lt(coarser, low_pre)
+  expect_equal(.pp_calibration_gain(model, 6, c(2, 2, 2)), 1.2 - 0.5 * 2 / 6)
+})
+
 test_that(".pp_smoothness_volume_indices limits or preserves volumes", {
   expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 3L), 1:3)
   expect_equal(.pp_smoothness_volume_indices(5L, max_volumes = 10L), 1:5)
@@ -588,12 +604,14 @@ test_that(".pp_mad_scale_matrix matches row-wise MAD scaling", {
 
 test_that(".pp_select_calibration selects correct model", {
   m <- .pp_select_calibration("susan", used_mask = TRUE)
-  expect_equal(m$type, "poly")
-  expect_length(m$coeffs, 3)
+  expect_equal(m$type, "quadrature_ratio_linear")
+  expect_length(m$coeffs, 2)
+  expect_equal(m$mode, "fsl_susan_mask")
 
   m2 <- .pp_select_calibration("gaussian", used_mask = FALSE)
-  expect_equal(m2$type, "linear")
+  expect_equal(m2$type, "quadrature_ratio_linear")
   expect_length(m2$coeffs, 2)
+  expect_equal(m2$mode, "afni_3dmerge")
 })
 
 test_that(".pp_select_calibration warns on unknown smoother", {
@@ -602,7 +620,25 @@ test_that(".pp_select_calibration warns on unknown smoother", {
     "No calibration table"
   )
   # should fall back to gaussian
-  expect_equal(m$type, "linear")
+  expect_equal(m$type, "quadrature_ratio_linear")
+})
+
+test_that("embedded smoothness models match the reviewed extdata table", {
+  table_path <- testthat::test_path(
+    "..", "..", "inst", "extdata", "spatial_smooth_calibration.csv"
+  )
+  calibration <- utils::read.csv(table_path, stringsAsFactors = FALSE)
+
+  for (i in seq_len(nrow(calibration))) {
+    row <- calibration[i, ]
+    model <- .pp_select_calibration(row$smoother, row$used_mask)
+    expect_equal(model$mode, row$mode)
+    expect_equal(model$type, row$model_type)
+    expect_equal(model$coeffs, c(row$coefficient_0, row$coefficient_1), tolerance = 1e-8)
+    expect_equal(model$tolerance_mm, row$tolerance_mm)
+    expect_equal(model$kernel_range_mm, c(row$kernel_min_mm, row$kernel_max_mm))
+    expect_equal(model$voxel_range_mm, c(row$voxel_min_mm, row$voxel_max_mm))
+  }
 })
 
 # --- validate_temporal_filter -------------------------------------------------

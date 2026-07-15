@@ -1,0 +1,5 @@
+model_version,mode,calibration_rmse_mm,heldout_subject_rmse_mm,kernel_10_stress_rmse_mm,max_lodo_rmse_mm,max_lodo_q95_abs_error_mm
+smoothness-calibration-v1,afni_blurinmask,0.3062058,0.1232960,1.0867550,0.4002679,0.7232551
+smoothness-calibration-v1,afni_3dmerge,0.3927270,0.1570629,1.4358280,0.5353268,0.9495872
+smoothness-calibration-v2-fmriprep,fsl_susan_mask,0.2269005,0.2006082,0.6423331,0.2685045,0.4357831
+smoothness-calibration-v1,fsl_susan_nomask,0.1108436,0.0721094,0.2222085,0.1485985,0.2680685
