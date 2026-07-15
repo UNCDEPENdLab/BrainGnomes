@@ -52,6 +52,10 @@
 - Prefetch resolution-1 T1w and brain-mask assets used by fMRIPrep
   anatomical reports, including when an output space explicitly requests
   another resolution.
+- Recalibrate spatial-smoothing validation on held-out BOLD runs from
+  three datasets and resolutions; expected post-smoothing FWHM now
+  conditions on baseline smoothness, program/mask mode, and the
+  voxel-to-kernel ratio.
 
 ## BrainGnomes 0.8-1
 

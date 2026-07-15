@@ -38,7 +38,7 @@
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/0.8-2/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/UNCDEPENdLab/BrainGnomes/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
@@ -57,6 +57,7 @@
 <li>Use exit-time cleanup for temporary FSL postprocessing files generated during temporal filtering, smoothing, confound regression, and brain-mask computation.</li>
 <li>Add regression tests for editable SQLite database configuration and postprocessing temp-file cleanup after failures.</li>
 <li>Prefetch resolution-1 T1w and brain-mask assets used by fMRIPrep anatomical reports, including when an output space explicitly requests another resolution.</li>
+<li>Recalibrate spatial-smoothing validation on held-out BOLD runs from three datasets and resolutions; expected post-smoothing FWHM now conditions on baseline smoothness, program/mask mode, and the voxel-to-kernel ratio.</li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8-1" id="braingnomes-08-1">BrainGnomes 0.8-1<a class="anchor" aria-label="anchor" href="#braingnomes-08-1"></a></h2>
