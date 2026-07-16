@@ -21,9 +21,9 @@ NULL
 
   current_version <- as.character(utils::packageVersion(pkgname))
   state_dir <- tools::R_user_dir(pkgname, which = "cache")
-  state_file <- file.path(state_dir, "cli_path_message_version.txt")
+  state_file <- file.path(state_dir, "cli_path_message_version.rds")
   shown_version <- suppressWarnings(
-    tryCatch(readLines(state_file, n = 1L, warn = FALSE), error = function(e) "")
+    tryCatch(readRDS(state_file), error = function(e) "")
   )
 
   if (!identical(shown_version, current_version)) {
@@ -31,10 +31,10 @@ NULL
       "If you want to call BrainGnomes on the command line, ensure this directory is in your system PATH: ",
       cli_dir
     )
-    try({
+    try(suppressWarnings({
       dir.create(state_dir, recursive = TRUE, showWarnings = FALSE)
-      writeLines(current_version, con = state_file, useBytes = TRUE)
-    }, silent = TRUE)
+      saveRDS(current_version, file = state_file)
+    }), silent = TRUE)
   }
 
   invisible(NULL)

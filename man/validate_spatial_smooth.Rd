@@ -11,7 +11,7 @@ validate_spatial_smooth(
   fwhm_mm = NA_real_,
   smoother = "susan",
   used_mask = TRUE,
-  tolerance_mm = 0.5,
+  tolerance_mm = NULL,
   preprocess = TRUE,
   polydeg = 3L,
   demean = TRUE,
@@ -30,9 +30,14 @@ validate_spatial_smooth(
 
 \item{smoother}{Character; \code{"susan"} (default, matches \code{spatial_smooth()}) or \code{"gaussian"}.}
 
-\item{used_mask}{Logical; whether smoothing was performed inside a mask (default \code{TRUE}).}
+\item{used_mask}{Logical; whether a mask was used to calculate SUSAN's
+brightness threshold (default \code{TRUE}). SUSAN itself is not spatially
+restricted to this mask. For Gaussian calibration modes this instead
+distinguishes masked \verb{3dBlurInMask} from unmasked \verb{3dmerge}.}
 
-\item{tolerance_mm}{Tolerance in mm for \verb{|observed_delta - expected_delta|} (default 0.5).}
+\item{tolerance_mm}{Tolerance in mm for \verb{|observed_post - expected_post|}.
+\code{NULL} (the default) uses the program/mask-specific cross-validation
+tolerance stored with the calibration model.}
 
 \item{preprocess}{Logical; if \code{TRUE}, apply calibration-matched preprocessing.}
 
@@ -59,14 +64,22 @@ series are polynomial-detrended and MAD-normalized to match the preprocessing
 used by the calibration script.
 }
 \details{
+Classic first-difference FWHM is used intentionally as a local
+gradient-variance statistic. A mixed Gaussian-plus-exponential ACF can
+describe fMRI's longer spatial tail, but its scalar half-height FWHM does not
+obey Gaussian quadrature when a Gaussian kernel is added: the fitted core and
+tail change differently. The real-BOLD calibration therefore absorbs the
+non-Gaussian core behavior without treating the full ACF as Gaussian.
+
 The preprocessing is important because the classic first-difference FWHM
 estimator is sensitive to non-smooth sources of spatial variance that are not
 the target of the smoothing check. Slow voxelwise drifts, mean offsets, and
 large between-voxel variance differences can inflate or deflate the ratio of
 spatial-difference variance to total variance, making the measured FWHM change
 disagree with the calibration even when smoothing was applied correctly. The
-validation therefore mirrors \verb{local/3dSmoothnessChange.R}: it removes a
-low-order polynomial trend from each in-mask voxel time series, removes the
+validation therefore mirrors \verb{local/smoothness_checks/3dSmoothnessChange.R}:
+it removes a low-order polynomial trend from each in-mask voxel time series,
+removes the
 mean when \code{demean = TRUE}, and scales each voxel by its temporal MAD when
 \code{unif = TRUE}. This puts pre/post data on the same residualized, variance-
 normalized scale used to derive the empirical calibration coefficients.
