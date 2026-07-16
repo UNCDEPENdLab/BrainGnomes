@@ -624,8 +624,9 @@ test_that(".pp_select_calibration warns on unknown smoother", {
 })
 
 test_that("embedded smoothness models match the reviewed extdata table", {
-  table_path <- testthat::test_path(
-    "..", "..", "inst", "extdata", "spatial_smooth_calibration.csv"
+  table_path <- system.file(
+    "extdata", "spatial_smooth_calibration.csv",
+    package = "BrainGnomes", mustWork = TRUE
   )
   calibration <- utils::read.csv(table_path, stringsAsFactors = FALSE)
 
