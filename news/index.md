@@ -2,6 +2,22 @@
 
 ## BrainGnomes (development version)
 
+- Keep explicit
+  [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
+  arguments when choosing stages interactively, including
+  `dry_run = TRUE`. The CLI preserves the same argument precedence.
+
+- Retry exact failed subject/session/stage/stream combinations instead
+  of recombining independent selections. Saved retry plans retain that
+  scope and their source-run provenance; missing or ambiguous work fails
+  safely.
+
+- Isolate new projects created from templates: rebase project
+  directories and give outputs, logs, scratch space, and tracking a
+  fresh destination. Preserve external inputs and resource files, and
+  inherit stage settings. Intentional sharing requires
+  `reuse_template_paths = TRUE` (CLI: `--reuse-template-paths`).
+
 - Restrict scheduler-contract checksums to recognized immutable
   execution inputs and explicitly selected environment artifacts.
   Mutable operational files, including SQLite tracking databases, logs,

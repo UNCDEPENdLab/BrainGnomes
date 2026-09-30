@@ -17,3 +17,9 @@ read_project_plan(file)
 ## Value
 
 A `bg_project_plan` object.
+
+## Details
+
+Ordinary plans use schema v1; exact retry plans use v2 so older
+BrainGnomes versions cannot silently ignore their work-unit
+restrictions.

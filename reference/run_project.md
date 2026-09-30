@@ -7,7 +7,9 @@ setting exposed by
 [`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
 before submission; calling
 [`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
-first is optional.
+first is optional. When stages are selected interactively, only omitted
+arguments are prompted for. Explicit choices, including
+`dry_run = TRUE`, are always retained.
 
 ## Usage
 
@@ -47,11 +49,12 @@ run_project(
 - subject_filter:
 
   Optional character vector or data.frame specifying which subjects (and
-  optionally sessions) to process. When `NULL` and run interactively,
+  optionally sessions) to process. When omitted and run interactively,
   the user will be prompted to enter space-separated subject IDs (press
-  ENTER to process all subjects). When a data.frame is provided, it must
-  contain a `sub_id` column and may include a `ses_id` column to filter
-  on specific subject/session combinations.
+  ENTER to process all subjects). Explicit `NULL` selects all subjects
+  without prompting. When a data.frame is provided, it must contain a
+  `sub_id` column and may include a `ses_id` column to filter on
+  specific subject/session combinations.
 
 - postprocess_streams:
 

@@ -3,8 +3,9 @@
 By default, this function opens the guided project-configuration
 workflow. Set `interactive = FALSE` to create a portable project from
 deterministic defaults without prompting. Non-interactive setup creates
-the project and standard data directories, disables all processing
-stages, and writes `project_config.yaml`.
+the project and standard data directories and writes
+`project_config.yaml`. Processing stages are disabled unless inherited
+from a template.
 
 ## Usage
 
@@ -16,7 +17,8 @@ setup_project(
   project_directory = NULL,
   template = NULL,
   interactive = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  reuse_template_paths = FALSE
 )
 ```
 
@@ -60,6 +62,17 @@ setup_project(
 - overwrite:
 
   Replace an existing `project_config.yaml` in non-interactive mode.
+
+- reuse_template_paths:
+
+  In non-interactive mode, retain the template's original paths,
+  including outputs and its tracking database. Defaults to `FALSE`:
+  project-owned directories are rebased into the new root, mutable
+  external destinations are replaced, and a new database path is used.
+  External input directories, shared TemplateFlow caches, and resource
+  files such as containers, atlases, and licenses are retained. Enabled
+  stages and processing settings are inherited. Set `TRUE` only to
+  intentionally share the original project state.
 
 ## Value
 

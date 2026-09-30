@@ -112,6 +112,16 @@ scfg <- setup_project(
 The equivalent command-line entry point is
 `BrainGnomes init my_study /project/my_study`.
 
+To reuse settings, add `template = existing_project` (a configuration
+object, YAML file, or project directory), or CLI
+`--template=/project/old/project_config.yaml`. Enabled stages and
+processing settings are inherited. Project-owned directories move to the
+new root; outputs, logs, scratch space, and tracking are isolated.
+External input directories and resource files (containers, atlases,
+licenses, and shared TemplateFlow caches) remain shared. To
+intentionally reuse the original destinations and database, set
+`reuse_template_paths = TRUE` or `--reuse-template-paths`.
+
 For later sessions, pass the project directory or configuration YAML
 directly:
 
@@ -119,6 +129,11 @@ directly:
 
 run <- run_project("/project/my_study")
 ```
+
+Explicit arguments always take precedence over interactive prompts. For
+example, `run_project(scfg, dry_run = TRUE)` lets you choose stages
+interactively without submitting jobs; only unspecified decisions are
+prompted for.
 
 All project lifecycle helpers accept a configuration object,
 configuration YAML, or project directory. When the current working
@@ -267,7 +282,13 @@ diagnose_project(scfg, job_id = "66273010")
 By default, retry includes jobs that failed or were cancelled. Set
 `include_blocked = TRUE` only when the new run should also include
 downstream jobs that could not start because an earlier job failed. The
-new run records the source run ID in provenance.
+new run records the source run ID in provenance. Retries retain exact
+subject/session/stage/stream combinations, including after saving and
+reloading a plan. Required setup jobs are shown separately; array or
+sentinel failures retry their owning work unit. If only setup jobs
+failed, include blocked work to recover its scope or start a direct run
+with an explicit selection. Ambiguous legacy records or missing inputs
+stop the retry instead of expanding it.
 
 The CLI requires an explicit choice between a preview and action:
 
