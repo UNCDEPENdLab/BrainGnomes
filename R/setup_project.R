@@ -82,6 +82,9 @@ get_scfg_from_input <- function(input = NULL) {
 #' defaults without prompting. Non-interactive setup creates the project and
 #' standard data directories and writes `project_config.yaml`. Processing stages
 #' are disabled unless inherited from a template.
+#' New guided configurations start by asking what data you already have. Steps
+#' completed outside BrainGnomes are skipped, and downstream choices remain
+#' explicit. Existing configured projects retain their stage selections.
 #'
 #' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
 #'   directory containing \code{project_config.yaml}. If a directory is supplied
@@ -110,21 +113,33 @@ get_scfg_from_input <- function(input = NULL) {
 #'   such as containers, atlases, and licenses are retained. Enabled stages and
 #'   processing settings are inherited. Set `TRUE` only to intentionally share
 #'   the original project state.
+#' @param starting_point Optional starting point for guided setup: `"flywheel"`
+#'   (download DICOMs first), `"dicom"` (local DICOMs), `"bids"` (existing BIDS),
+#'   `"fmriprep"` (existing derivatives plus the corresponding BIDS dataset),
+#'   `"existing"` (inspect a project without changing it), or `"custom"` (choose
+#'   stages individually). When omitted, new or headless-only configurations
+#'   offer a menu; configured projects keep their settings. Only available with
+#'   `interactive = TRUE` and `fields = NULL`.
 #' @return A `bg_project_cfg` list containing the project configuration. New
 #'   fields are added based on user input or portable defaults. The configuration
 #'   is written to `project_config.yaml` in the project directory. Interactive
 #'   setup asks before replacing a changed file; non-interactive setup requires
-#'   `overwrite = TRUE`.
+#'   `overwrite = TRUE`. Selecting `"existing"` instead returns the loaded
+#'   configuration invisibly after showing project status, without saving it.
 #' @importFrom yaml read_yaml
 #' @importFrom checkmate test_file_exists
 #' @export
 setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
                           project_directory = NULL, template = NULL,
                           interactive = TRUE, overwrite = FALSE,
-                          reuse_template_paths = FALSE) {
+                          reuse_template_paths = FALSE, starting_point = NULL) {
   checkmate::assert_flag(interactive)
   checkmate::assert_flag(overwrite)
   checkmate::assert_flag(reuse_template_paths)
+  checkmate::assert_choice(starting_point, names(project_starting_points()), null.ok = TRUE)
+  if (!is.null(starting_point) && (!interactive || !is.null(fields))) {
+    stop("starting_point is only available for full guided setup (interactive = TRUE, fields = NULL).", call. = FALSE)
+  }
   if (interactive && reuse_template_paths) {
     stop("reuse_template_paths is only available when interactive = FALSE.", call. = FALSE)
   }
@@ -148,6 +163,23 @@ setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
 
   scfg <- get_scfg_from_input(starting_config)
 
+  if (is.null(fields)) {
+    cli::cli_h1("BrainGnomes project setup")
+    if (!is.null(starting_point) || project_needs_starting_point(scfg)) {
+      starting_point <- choose_project_starting_point(scfg, starting_point)
+      if (starting_point == "existing") {
+        return(inspect_setup_project(starting_config))
+      }
+      scfg <- apply_project_starting_point(scfg, starting_point)
+    } else {
+      cli::cli_alert_info("Keeping the existing project stage selections. Use edit_project() to change individual choices.")
+    }
+    cli_instruction(
+      "Answer each prompt to configure the project. Press Enter to accept a displayed default. Setup does not submit jobs.",
+      before = FALSE
+    )
+  }
+
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     class(scfg) <- c(class(scfg), "bg_project_cfg")
   }
@@ -165,16 +197,9 @@ setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
     )
   }
 
-  if (is.null(fields)) {
-    cli::cli_h1("BrainGnomes project setup")
-    cli_instruction(
-      "Answer each prompt to configure the project. Press Enter to accept a displayed default.",
-      before = FALSE
-    )
-  }
-
   # run through configuration of each step
   scfg <- setup_project_metadata(scfg, fields)
+  if (!is.null(starting_point)) scfg <- setup_starting_point_paths(scfg, starting_point)
   scfg <- setup_flywheel_sync(scfg, fields)
   scfg <- setup_bids_conversion(scfg, fields)
   scfg <- setup_fmriprep(scfg, fields)
@@ -185,7 +210,10 @@ setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
   scfg <- setup_bids_validation(scfg, fields)
   scfg <- setup_compute_environment(scfg, fields)
 
-  if (is.null(fields)) cli_setup_section("Save configuration")
+  if (is.null(fields)) {
+    review_setup_workflow(scfg)
+    cli_setup_section("Save configuration")
+  }
   scfg <- save_project_config(scfg)
 
   return(scfg)
@@ -500,7 +528,9 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
   }
 
   # singularity bind paths are unhappy with symbolic links and ~/ notation
-  scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
+  if (test_string(scfg$metadata$templateflow_home)) {
+    scfg$metadata$templateflow_home <- normalizePath(scfg$metadata$templateflow_home, mustWork = FALSE)
+  }
 
   # default log directory if one has not been provided
   if (!test_string(scfg$metadata$log_directory)) {

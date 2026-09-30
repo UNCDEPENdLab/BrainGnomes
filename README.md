@@ -77,6 +77,20 @@ status <- inspect_project(scfg)
 diagnose_project(scfg)
 ```
 
+Guided setup starts with **what you already have**: DICOMs still on Flywheel,
+local DICOMs, a BIDS dataset, or existing fMRIPrep outputs. It previews the route,
+skips completed upstream steps, and asks about optional downstream work. Existing
+inputs must be readable; Flywheel download and conversion destinations may be
+empty or not yet exist. Existing fMRIPrep inputs also need their corresponding
+BIDS dataset for subject/session discovery.
+
+The menu also offers read-only inspection of an existing project and custom
+stage-by-stage setup. To preselect an entry point, use
+`setup_project(starting_point = "bids")`. Configured projects retain their
+selections unless you explicitly choose a different starting point; use
+`edit_project()` for individual changes. Empty projects created with headless
+setup receive the starting-point menu when you open guided setup later.
+
 For automation or a headless starting configuration, provide the project name
 and directory explicitly. This creates the standard directories, writes
 `project_config.yaml`, and leaves processing stages disabled until configured:
