@@ -12,7 +12,8 @@ setup_project(
   template = NULL,
   interactive = TRUE,
   overwrite = FALSE,
-  reuse_template_paths = FALSE
+  reuse_template_paths = FALSE,
+  starting_point = NULL
 )
 }
 \arguments{
@@ -50,13 +51,22 @@ External input directories, shared TemplateFlow caches, and resource files
 such as containers, atlases, and licenses are retained. Enabled stages and
 processing settings are inherited. Set \code{TRUE} only to intentionally share
 the original project state.}
+
+\item{starting_point}{Optional starting point for guided setup: \code{"flywheel"}
+(download DICOMs first), \code{"dicom"} (local DICOMs), \code{"bids"} (existing BIDS),
+\code{"fmriprep"} (existing derivatives plus the corresponding BIDS dataset),
+\code{"existing"} (inspect a project without changing it), or \code{"custom"} (choose
+stages individually). When omitted, new or headless-only configurations
+offer a menu; configured projects keep their settings. Only available with
+\code{interactive = TRUE} and \code{fields = NULL}.}
 }
 \value{
 A \code{bg_project_cfg} list containing the project configuration. New
 fields are added based on user input or portable defaults. The configuration
 is written to \code{project_config.yaml} in the project directory. Interactive
 setup asks before replacing a changed file; non-interactive setup requires
-\code{overwrite = TRUE}.
+\code{overwrite = TRUE}. Selecting \code{"existing"} instead returns the loaded
+configuration invisibly after showing project status, without saving it.
 }
 \description{
 By default, this function opens the guided project-configuration workflow.
@@ -64,4 +74,7 @@ Set \code{interactive = FALSE} to create a portable project from deterministic
 defaults without prompting. Non-interactive setup creates the project and
 standard data directories and writes \code{project_config.yaml}. Processing stages
 are disabled unless inherited from a template.
+New guided configurations start by asking what data you already have. Steps
+completed outside BrainGnomes are skipped, and downstream choices remain
+explicit. Existing configured projects retain their stage selections.
 }
