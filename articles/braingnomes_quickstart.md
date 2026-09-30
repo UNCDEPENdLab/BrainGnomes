@@ -215,9 +215,58 @@ to initialize a new project config:
 scfg <- setup_project()
 ```
 
-This function asks a series of questions in the R console to gather
-information about your project. Below we outline the typical prompts and
-how to respond:
+### Choose your starting point
+
+The first question is what data you already have, before any storage,
+container, or scheduler questions. Choose the earliest step this project
+still needs:
+
+| Starting point | What setup does next |
+|----|----|
+| DICOMs are on Flywheel | Enable sync and DICOM-to-BIDS conversion. Ask where downloads will land and which directory will contain subject folders after sync. |
+| DICOMs are already local | Skip sync; configure DICOM-to-BIDS conversion from the existing subject root. |
+| A BIDS dataset already exists | Skip sync and conversion; ask about fMRIPrep, quality checks, and downstream analysis. |
+| fMRIPrep outputs already exist | Skip sync, conversion, and fMRIPrep. Ask for the derivative root and corresponding BIDS dataset, then offer downstream steps. For new configurations, raw-data QC is left off. |
+
+Setup previews the route and asks you to confirm it; declining returns
+to the menu. Enter `0` at the menu to cancel before any configuration is
+created or saved. Starting points do not select a denoising recipe:
+ICA-AROMA, postprocessing, and ROI extraction remain explicit decisions.
+Only enabled stages ask for their containers and job resources. MRIQC or
+BIDS validation can be enabled later through
+[`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
+when starting from existing derivatives.
+
+Existing inputs must already be readable directories. A Flywheel
+download destination or BIDS conversion output directory can be empty or
+not exist yet. If Flywheel creates enclosing project folders, use the
+expected subject root inside the download destination for DICOM
+discovery. The Flywheel job runs before discovery of downstream
+subjects; setup itself never downloads data or submits jobs.
+
+The menu also offers **Inspect an existing BrainGnomes project**, which
+opens status without changing its configuration, and **Custom setup**,
+which lets you choose stages individually. For a known entry point:
+
+``` r
+
+scfg <- setup_project(starting_point = "flywheel")
+# Other routes: "dicom", "bids", "fmriprep", "existing", "custom"
+```
+
+Already configured projects retain their choices when passed to
+[`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md).
+An untouched headless configuration receives the menu when opened in
+guided setup. To deliberately change an existing project’s entry point,
+supply `starting_point`; setup asks for confirmation before changing
+upstream selections and retains other settings. `starting_point` is for
+full interactive setup, not `interactive = FALSE` or targeted `fields`
+edits.
+
+### Project locations and stage settings
+
+After the starting-point choice, setup asks relevant questions in the R
+console:
 
 - Project Name – A short name for your project (used for labeling and
   logging). Example: “MyStudy2025”.
@@ -226,10 +275,10 @@ how to respond:
   directory does not exist, BrainGnomes will offer to create it for you.
   For example: “/proj/Longleaf/MyStudy2025” (this will contain
   subfolders for BIDS data, fMRIPrep outputs, logs, etc.).
-- DICOM Directory – The location of your raw DICOM files. This could be
-  a folder containing subfolders per subject (and session). If it
-  doesn’t exist, you’ll be prompted to create it as well. For example:
-  “/proj/Longleaf/MyStudy2025/data_DICOMs”.
+- DICOM Directory – For local DICOMs, choose the existing folder
+  containing subject (and optional session) subfolders. When starting
+  from Flywheel, choose the expected subject root after sync; it need
+  not exist yet. BIDS and fMRIPrep starting points skip this question.
 - TemplateFlow Directory – Path to your TemplateFlow data (standard
   templates for fMRIPrep). If you have a central TemplateFlow directory
   (e.g., ~/templateflow or a shared path), provide it.
@@ -241,12 +290,11 @@ how to respond:
   on the size of this folder and clean it up periodically if this isn’t
   done automatically by your HPC system.
 
-You will then be asked whether you want to include major steps in the
-pipeline. Each of these can be toggled depending on your intended use.
-For example, if you already have fmriprep-processed data and only wish
-to apply postprocessing, you wouldn’t need BIDS conversion. For each
-major step in the pipeline, you will be asked to specify the following
-HPC scheduler settings:
+Steps implied by the starting point are already selected, so their
+enable questions are not repeated. You then choose optional downstream
+work. Before saving, setup summarizes enabled stages and explains how to
+preview without submitting jobs. For each enabled stage, you will be
+asked to specify these HPC scheduler settings:
 
 - The amount of memory needed for the job in GB.
 - The number of hours needed to complete the job. (Always start a bit
@@ -265,9 +313,8 @@ downstream processing. This uses the Flywheel CLI (`fw sync`) to
 download DICOMs to your project so that BIDS conversion (and later
 steps) operate on a complete, current dataset.
 
-- Enable in setup: Answer “Run Flywheel sync?” with yes in
-  [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
-  (or use
+- Enable in setup: Choose the Flywheel starting point (or answer “Run
+  Flywheel sync?” with yes in custom setup; existing projects can use
   [`edit_project()`](https://hallquistlab.github.io/BrainGnomes/reference/edit_project.md)
   → “Flywheel Sync”). You will be prompted for:
   - Flywheel project URL (`source_url`), for example:

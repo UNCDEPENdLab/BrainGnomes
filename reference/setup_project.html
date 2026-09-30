@@ -3,11 +3,17 @@
 Set interactive = FALSE to create a portable project from deterministic
 defaults without prompting. Non-interactive setup creates the project and
 standard data directories and writes project_config.yaml. Processing stages
-are disabled unless inherited from a template."><meta property="og:description" content="By default, this function opens the guided project-configuration workflow.
+are disabled unless inherited from a template.
+New guided configurations start by asking what data you already have. Steps
+completed outside BrainGnomes are skipped, and downstream choices remain
+explicit. Existing configured projects retain their stage selections."><meta property="og:description" content="By default, this function opens the guided project-configuration workflow.
 Set interactive = FALSE to create a portable project from deterministic
 defaults without prompting. Non-interactive setup creates the project and
 standard data directories and writes project_config.yaml. Processing stages
-are disabled unless inherited from a template."></head><body>
+are disabled unless inherited from a template.
+New guided configurations start by asking what data you already have. Steps
+completed outside BrainGnomes are skipped, and downstream choices remain
+explicit. Existing configured projects retain their stage selections."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -59,7 +65,10 @@ are disabled unless inherited from a template."></head><body>
 Set <code>interactive = FALSE</code> to create a portable project from deterministic
 defaults without prompting. Non-interactive setup creates the project and
 standard data directories and writes <code>project_config.yaml</code>. Processing stages
-are disabled unless inherited from a template.</p>
+are disabled unless inherited from a template.
+New guided configurations start by asking what data you already have. Steps
+completed outside BrainGnomes are skipped, and downstream choices remain
+explicit. Existing configured projects retain their stage selections.</p>
     </div>
 
     <div class="section level2">
@@ -72,7 +81,8 @@ are disabled unless inherited from a template.</p>
 <span>  template <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  interactive <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  overwrite <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  reuse_template_paths <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  reuse_template_paths <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  starting_point <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -130,6 +140,16 @@ such as containers, atlases, and licenses are retained. Enabled stages and
 processing settings are inherited. Set <code>TRUE</code> only to intentionally share
 the original project state.</p></dd>
 
+
+<dt id="arg-starting-point">starting_point<a class="anchor" aria-label="anchor" href="#arg-starting-point"></a></dt>
+<dd><p>Optional starting point for guided setup: <code>"flywheel"</code>
+(download DICOMs first), <code>"dicom"</code> (local DICOMs), <code>"bids"</code> (existing BIDS),
+<code>"fmriprep"</code> (existing derivatives plus the corresponding BIDS dataset),
+<code>"existing"</code> (inspect a project without changing it), or <code>"custom"</code> (choose
+stages individually). When omitted, new or headless-only configurations
+offer a menu; configured projects keep their settings. Only available with
+<code>interactive = TRUE</code> and <code>fields = NULL</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -137,7 +157,8 @@ the original project state.</p></dd>
 fields are added based on user input or portable defaults. The configuration
 is written to <code>project_config.yaml</code> in the project directory. Interactive
 setup asks before replacing a changed file; non-interactive setup requires
-<code>overwrite = TRUE</code>.</p>
+<code>overwrite = TRUE</code>. Selecting <code>"existing"</code> instead returns the loaded
+configuration invisibly after showing project status, without saving it.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

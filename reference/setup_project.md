@@ -5,7 +5,10 @@ workflow. Set `interactive = FALSE` to create a portable project from
 deterministic defaults without prompting. Non-interactive setup creates
 the project and standard data directories and writes
 `project_config.yaml`. Processing stages are disabled unless inherited
-from a template.
+from a template. New guided configurations start by asking what data you
+already have. Steps completed outside BrainGnomes are skipped, and
+downstream choices remain explicit. Existing configured projects retain
+their stage selections.
 
 ## Usage
 
@@ -18,7 +21,8 @@ setup_project(
   template = NULL,
   interactive = TRUE,
   overwrite = FALSE,
-  reuse_template_paths = FALSE
+  reuse_template_paths = FALSE,
+  starting_point = NULL
 )
 ```
 
@@ -74,10 +78,23 @@ setup_project(
   stages and processing settings are inherited. Set `TRUE` only to
   intentionally share the original project state.
 
+- starting_point:
+
+  Optional starting point for guided setup: `"flywheel"` (download
+  DICOMs first), `"dicom"` (local DICOMs), `"bids"` (existing BIDS),
+  `"fmriprep"` (existing derivatives plus the corresponding BIDS
+  dataset), `"existing"` (inspect a project without changing it), or
+  `"custom"` (choose stages individually). When omitted, new or
+  headless-only configurations offer a menu; configured projects keep
+  their settings. Only available with `interactive = TRUE` and
+  `fields = NULL`.
+
 ## Value
 
 A `bg_project_cfg` list containing the project configuration. New fields
 are added based on user input or portable defaults. The configuration is
 written to `project_config.yaml` in the project directory. Interactive
 setup asks before replacing a changed file; non-interactive setup
-requires `overwrite = TRUE`.
+requires `overwrite = TRUE`. Selecting `"existing"` instead returns the
+loaded configuration invisibly after showing project status, without
+saving it.

@@ -169,6 +169,8 @@
 <span></span>
 <span><span class="co"># Only when a run needs investigation:</span></span>
 <span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span></code></pre></div>
+<p>Guided setup starts with <strong>what you already have</strong>: DICOMs still on Flywheel, local DICOMs, a BIDS dataset, or existing fMRIPrep outputs. It previews the route, skips completed upstream steps, and asks about optional downstream work. Existing inputs must be readable; Flywheel download and conversion destinations may be empty or not yet exist. Existing fMRIPrep inputs also need their corresponding BIDS dataset for subject/session discovery.</p>
+<p>The menu also offers read-only inspection of an existing project and custom stage-by-stage setup. To preselect an entry point, use <code>setup_project(starting_point = "bids")</code>. Configured projects retain their selections unless you explicitly choose a different starting point; use <code><a href="reference/edit_project.html">edit_project()</a></code> for individual changes. Empty projects created with headless setup receive the starting-point menu when you open guided setup later.</p>
 <p>For automation or a headless starting configuration, provide the project name and directory explicitly. This creates the standard directories, writes <code>project_config.yaml</code>, and leaves processing stages disabled until configured:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_project.html">setup_project</a></span><span class="op">(</span></span>

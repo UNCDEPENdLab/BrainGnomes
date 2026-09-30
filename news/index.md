@@ -2,6 +2,15 @@
 
 ## BrainGnomes (development version)
 
+- Begin new guided setup with the user’s starting point: DICOMs on
+  Flywheel, local DICOMs, existing BIDS, or existing fMRIPrep
+  derivatives. Preview the route, skip completed upstream stages,
+  distinguish existing inputs from future download/output destinations,
+  and retain explicit downstream choices. The menu also offers read-only
+  project inspection and custom setup. Existing configured projects and
+  targeted edits retain their selections; headless creation remains
+  prompt-free. Use `starting_point` to preselect a guided route.
+
 - Keep explicit
   [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
   arguments when choosing stages interactively, including
