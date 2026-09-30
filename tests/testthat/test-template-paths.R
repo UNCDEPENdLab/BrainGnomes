@@ -25,7 +25,14 @@ test_that("template clones rebase missing descendants through directory aliases"
   real <- file.path(root, "real")
   alias <- file.path(root, "alias")
   dir.create(real)
-  skip_if_not(suppressWarnings(file.symlink(real, alias)), "Directory symlinks unavailable")
+  # Use a native directory junction on Windows: R can resolve and remove it
+  # without the reparse-point cleanup warnings of a directory symbolic link.
+  linked <- if (.Platform$OS.type == "windows") {
+    suppressWarnings(Sys.junction(real, alias))
+  } else {
+    suppressWarnings(file.symlink(real, alias))
+  }
+  skip_if_not(linked, "Directory aliases unavailable")
 
   cfg <- setup_project(project_name = "source", project_directory = file.path(real, "source"),
     interactive = FALSE)
@@ -46,4 +53,7 @@ test_that("template clones rebase missing descendants through directory aliases"
   expect_identical(list.files(real, recursive = TRUE, all.files = TRUE, include.dirs = TRUE), before)
   expect_false(dir.exists(cfg$metadata$dicom_directory))
   expect_false(dir.exists(cfg$metadata$postproc_directory))
+  expect_identical(unlink(alias, recursive = TRUE), 0L)
+  expect_false(dir.exists(alias))
+  expect_true(dir.exists(real))
 })
