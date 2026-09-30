@@ -2,6 +2,12 @@
 
 ## BrainGnomes (development version)
 
+- Resolve existing parent-directory aliases before rebasing missing
+  template paths. Cloned projects now keep future Flywheel DICOM inputs
+  and nested outputs under the new project on macOS, Windows, and
+  symlinked filesystems, without creating those directories in the
+  source project or shared inputs.
+
 - Begin new guided setup with the user’s starting point: DICOMs on
   Flywheel, local DICOMs, existing BIDS, or existing fMRIPrep
   derivatives. Preview the route, skip completed upstream stages,
