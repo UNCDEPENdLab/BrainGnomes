@@ -239,7 +239,7 @@ test_that("templates distinguish external inputs from producing-stage destinatio
   cfg$aroma$enable <- TRUE
   cfg$flywheel_sync$enable <- TRUE
   cfg$metadata$flywheel_sync_directory <- external
-  cfg$metadata$dicom_directory <- file.path(external, "dicoms")
+  cfg$metadata$dicom_directory <- file.path(external, "incoming", "dicoms")
   root2 <- tempfile("output-template-")
   withr::defer(unlink(root2, recursive = TRUE))
   clone <- setup_project(project_name = "outputs", project_directory = root2,
@@ -247,6 +247,7 @@ test_that("templates distinguish external inputs from producing-stage destinatio
   root2 <- clone$metadata$project_directory
   expect_path_identical(clone$metadata$fmriprep_directory, file.path(root2, "data_fmriprep"))
   expect_path_identical(clone$metadata$bids_directory, file.path(root2, "data_bids"))
+  expect_false(dir.exists(cfg$metadata$dicom_directory))
   expect_path_identical(clone$metadata$dicom_directory,
-    file.path(clone$metadata$flywheel_sync_directory, "dicoms"))
+    file.path(clone$metadata$flywheel_sync_directory, "incoming", "dicoms"))
 })
