@@ -11,7 +11,8 @@ setup_project(
   project_directory = NULL,
   template = NULL,
   interactive = TRUE,
-  overwrite = FALSE
+  overwrite = FALSE,
+  reuse_template_paths = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,15 @@ to \code{TRUE} to preserve the standard interactive R workflow.}
 
 \item{overwrite}{Replace an existing \code{project_config.yaml} in non-interactive
 mode.}
+
+\item{reuse_template_paths}{In non-interactive mode, retain the template's
+original paths, including outputs and its tracking database. Defaults to
+\code{FALSE}: project-owned directories are rebased into the new root, mutable
+external destinations are replaced, and a new database path is used.
+External input directories, shared TemplateFlow caches, and resource files
+such as containers, atlases, and licenses are retained. Enabled stages and
+processing settings are inherited. Set \code{TRUE} only to intentionally share
+the original project state.}
 }
 \value{
 A \code{bg_project_cfg} list containing the project configuration. New
@@ -52,6 +62,6 @@ setup asks before replacing a changed file; non-interactive setup requires
 By default, this function opens the guided project-configuration workflow.
 Set \code{interactive = FALSE} to create a portable project from deterministic
 defaults without prompting. Non-interactive setup creates the project and
-standard data directories, disables all processing stages, and writes
-\code{project_config.yaml}.
+standard data directories and writes \code{project_config.yaml}. Processing stages
+are disabled unless inherited from a template.
 }

@@ -19,6 +19,7 @@ A \code{bg_project_run} object returned by \code{\link[=run_project]{run_project
 \description{
 The saved configuration, requested stages and streams, and resolved subject
 scope are reused. Deferred scope is discovered after Flywheel synchronization.
+Retry plans also retain the exact work units and source-run provenance.
 The plan itself is not the final scheduler contract: BrainGnomes writes an
 immutable manifest immediately before each job is submitted and a runtime
 receipt when that job starts.

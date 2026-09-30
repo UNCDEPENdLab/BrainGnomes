@@ -177,6 +177,7 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
   preflight_state$failed <- FALSE
   
   bids_conversion_ids <- mriqc_id <- fmriprep_id <- aroma_id <- postprocess_ids <- extract_ids <- NULL
+  retry_units <- normalize_retry_work_units(attr(scfg, "retry_work_units", exact = TRUE))
   
   # BIDS conversion, postprocessing, and ROI extraction are session-specific.
   # fmriprep, MRIQC, and AROMA are subject-level processes (sessions nested within subjects)
@@ -190,6 +191,11 @@ process_subject <- function(scfg, sub_cfg = NULL, steps = NULL, postprocess_stre
     sub_id <- null_empty(sub_cfg$sub_id[row_idx]) # make NULL on empty to avoid env export in submit
     ses_id <- null_empty(sub_cfg$ses_id[row_idx])
     has_ses <- !is.null(ses_id)
+    # Gate before touching completion markers: streams and sessions cannot be
+    # recombined just because they occur elsewhere in the retry request.
+    stream <- if (!is.null(pp_stream)) pp_stream else if (!is.null(ex_stream)) ex_stream else NA_character_
+    if (!retry_includes_unit(retry_units, name, sub_id,
+        if (has_ses) ses_id else NA_character_, stream)) return(NULL)
     sub_str <- glue("_sub-{sub_id}") # qualifier for .complete file
     if (has_ses && session_level) sub_str <- glue("{sub_str}_ses-{ses_id}")
     sub_dir <- file.path(scfg$metadata$log_directory, glue("sub-{sub_id}"))

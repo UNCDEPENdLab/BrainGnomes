@@ -31,11 +31,19 @@ A \code{bg_project_plan} for a dry run or \code{bg_project_run} after submission
 \description{
 A retry does not resume scheduler jobs in place and does not change the
 original run. It creates a new \code{\link[=run_project]{run_project()}} submission containing the
-failed or cancelled stages and subjects found in the source run. The selected
-work is rerun even if old completion markers would normally skip it, and the
-new provenance record identifies the source run.
+exact failed or cancelled subject/session/stage/stream combinations found in
+the source run. Array tasks and sentinels resolve to their owning work unit;
+the whole unit is retried, not individual files within it. Selected work is
+rerun even if old completion markers would normally skip it. Successful
+combinations are not added, and the new provenance record identifies the
+source run even when a retry plan is saved and submitted later.
 }
 \details{
+Required project setup jobs are listed separately in the plan. A setup-only
+failure cannot determine the intended subject scope: include blocked jobs or
+use \code{\link[=run_project]{run_project()}} with an explicit selection. Ambiguous legacy records or
+missing inputs cause an error instead of broadening the retry scope.
+
 Preview with \code{dry_run = TRUE} before submitting. The preview returns a plan
 and contacts no scheduler. With \code{dry_run = FALSE}, submission begins
 immediately and the function returns the new run handle.

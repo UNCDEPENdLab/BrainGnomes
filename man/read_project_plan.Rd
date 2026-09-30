@@ -15,3 +15,7 @@ A \code{bg_project_plan} object.
 \description{
 Read a saved execution plan
 }
+\details{
+Ordinary plans use schema v1; exact retry plans use v2 so older
+BrainGnomes versions cannot silently ignore their work-unit restrictions.
+}

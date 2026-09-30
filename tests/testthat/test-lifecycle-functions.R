@@ -299,6 +299,8 @@ test_that("retry dry runs derive a force plan from failed jobs", {
 
 test_that("retry previews preserve stream names containing underscores", {
   jobs <- data.frame(
+    id = 1:3,
+    parent_id = c(NA_integer_, 1L, NA_integer_),
     job_name = c(
       "postprocess_rest_clean_sub-01_ses-A",
       "postprocess_rest_clean_sentinel",
