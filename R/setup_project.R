@@ -312,6 +312,36 @@ create_project_from_defaults <- function(project_name, project_directory,
   write_project_config(scfg, overwrite = overwrite)
 }
 
+#' Resolve template directory aliases even when the destination does not exist
+#'
+#' @param path A single directory path, possibly containing missing descendants.
+#' @return Absolute directory path with existing ancestor aliases resolved and
+#'   missing descendants appended, without creating or modifying directories.
+#' @noRd
+normalize_template_directory <- function(path) {
+  path <- path.expand(path)
+  if (.Platform$OS.type == "windows") path <- gsub("\\\\", "/", path)
+  ancestor <- path
+  suffix <- character()
+  # normalizePath() may leave a missing path unchanged on macOS and Windows.
+  # Resolve only an existing ancestor so parent/child comparisons use the same
+  # symlink targets and Windows long names before any output is created.
+  while (!dir.exists(ancestor)) {
+    parent <- dirname(ancestor)
+    if (identical(parent, ancestor)) {
+      return(normalizePath(path, winslash = "/", mustWork = FALSE))
+    }
+    suffix <- c(basename(ancestor), suffix)
+    ancestor <- parent
+  }
+  resolved <- normalizePath(ancestor, winslash = "/", mustWork = TRUE)
+  for (component in suffix) {
+    if (component == ".") next
+    resolved <- if (component == "..") dirname(resolved) else file.path(resolved, component)
+  }
+  resolved
+}
+
 #' Isolate the writable paths of a project created from a template
 #'
 #' @param scfg Template configuration before changing its root.
@@ -322,7 +352,7 @@ create_project_from_defaults <- function(project_name, project_directory,
 rebase_project_template <- function(scfg, project_directory, default_dirs) {
   old_root <- scfg$metadata$project_directory
   if (checkmate::test_string(old_root)) {
-    old_root <- sub("/+$", "", normalizePath(path.expand(old_root), winslash = "/", mustWork = FALSE))
+    old_root <- sub("/+$", "", normalize_template_directory(old_root))
   }
   defaults <- c(default_dirs, flywheel_temp_directory = "flywheel_tmp",
     flywheel_sync_directory = "flywheel_sync")
@@ -343,7 +373,7 @@ rebase_project_template <- function(scfg, project_directory, default_dirs) {
     # Relative directory values in a template are interpreted against its root.
     absolute <- grepl("^(/|[A-Za-z]:[/\\\\]|\\\\\\\\)", path)
     if (!absolute && checkmate::test_string(old_root)) path <- file.path(old_root, path)
-    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    path <- normalize_template_directory(path)
     original_paths[[field]] <- path
     key <- if (.Platform$OS.type == "windows") tolower(path) else path
     root_key <- if (.Platform$OS.type == "windows") tolower(old_root) else old_root
