@@ -29,9 +29,10 @@ BIDS validation is configured with the project but submitted separately
 through \code{\link[=run_bids_validation]{run_bids_validation()}}; it is not a \code{run_project()} stage.}
 
 \item{subject_filter}{Optional character vector or data.frame specifying which
-subjects (and optionally sessions) to process. When \code{NULL} and run
+subjects (and optionally sessions) to process. When omitted and run
 interactively, the user will be prompted to enter space-separated subject
-IDs (press ENTER to process all subjects). When a data.frame is provided, it
+IDs (press ENTER to process all subjects). Explicit \code{NULL} selects all
+subjects without prompting. When a data.frame is provided, it
 must contain a \code{sub_id} column and may include a \code{ses_id} column to filter
 on specific subject/session combinations.}
 
@@ -64,6 +65,8 @@ printing the resolved plan.
 This remains the standard execution path after \code{\link[=setup_project]{setup_project()}}. It resolves
 the same stages, streams, subject/session scope, and force setting exposed by
 \code{\link[=plan_project]{plan_project()}} before submission; calling \code{plan_project()} first is optional.
+When stages are selected interactively, only omitted arguments are prompted
+for. Explicit choices, including \code{dry_run = TRUE}, are always retained.
 }
 \details{
 Before submission, BrainGnomes reports when it is checking project

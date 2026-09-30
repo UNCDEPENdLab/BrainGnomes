@@ -518,6 +518,13 @@ resolve_project_execution <- function(scfg, steps, subject_filter = NULL,
   selection <- resolve_project_selection(
     scfg, steps, postprocess_streams, extract_streams, force
   )
+  work_units <- normalize_retry_work_units(attr(scfg, "retry_work_units", exact = TRUE))
+  if (!is.null(work_units) &&
+      (!setequal(selection$steps, work_units$stage) ||
+       !setequal(selection$postprocess_streams, work_units$stream[work_units$stage == "postprocess"]) ||
+       !setequal(selection$extract_streams, work_units$stream[work_units$stage == "extract_rois"]))) {
+    stop("Run selection does not match the exact retry scope.", call. = FALSE)
+  }
   subject_steps <- setdiff(selection$steps, "flywheel_sync")
   scope_deferred <-
     "flywheel_sync" %in% selection$steps && length(subject_steps) > 0L
@@ -535,7 +542,9 @@ resolve_project_execution <- function(scfg, steps, subject_filter = NULL,
     )
   }
 
+  subjects <- retry_subject_scope(subjects, work_units, allow_missing = scope_deferred)
   structure(c(unclass(selection), list(
+    work_units = work_units,
     subject_filter = subject_filter,
     subjects = subjects,
     scope_deferred = scope_deferred,
@@ -570,7 +579,13 @@ build_project_jobs <- function(scfg, execution) {
   subjects <- execution$subjects
   n_subjects <- length(unique(subjects$sub_id))
   n_sessions <- nrow(subjects)
-  scope_count <- function(stage) {
+  scope_count <- function(stage, stream = NA_character_) {
+    if (!is.null(execution$work_units)) {
+      units <- execution$work_units
+      rows <- units$stage == stage
+      if (!is.na(stream)) rows <- rows & !is.na(units$stream) & units$stream == stream
+      return(sum(rows))
+    }
     if (execution$scope_deferred && stage != "flywheel_sync") {
       return(NA_integer_)
     }
@@ -642,7 +657,7 @@ build_project_jobs <- function(scfg, execution) {
     for (stream in postprocess_streams) {
       deps <- intersect(c("fmriprep", "aroma"), resolved_steps)
       add_job(
-        "postprocess", stream, "session", scope_count("postprocess"),
+        "postprocess", stream, "session", scope_count("postprocess", stream),
         paste(deps, collapse = ",")
       )
     }
@@ -651,7 +666,7 @@ build_project_jobs <- function(scfg, execution) {
     for (stream in extract_streams) {
       deps <- intersect("postprocess", resolved_steps)
       add_job(
-        "extract_rois", stream, "session", scope_count("extract_rois"),
+        "extract_rois", stream, "session", scope_count("extract_rois", stream),
         paste(deps, collapse = ",")
       )
     }
@@ -704,16 +719,18 @@ plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
   jobs <- build_project_jobs(scfg, execution)
 
   result <- structure(list(
-    schema_version = "brain-gnomes-plan-v1",
+    # Older packages must reject exact retry plans rather than ignore their scope.
+    schema_version = if (is.null(execution$work_units)) "brain-gnomes-plan-v1" else "brain-gnomes-plan-v2",
     plan_id = uuid::UUIDgenerate(),
     created_at = as.character(Sys.time()),
     config_file = attr(scfg, "yaml_file"),
     config = scfg,
+    provenance_context = attr(scfg, "provenance_context", exact = TRUE),
     validation = validation[c("valid", "issues", "messages")],
     request = list(
       steps = resolved_steps, subject_filter = execution$subject_filter,
       postprocess_streams = postprocess_streams, extract_streams = extract_streams,
-      force = force
+      force = force, work_units = execution$work_units
     ),
     subjects = subjects,
     scope_deferred = execution$scope_deferred,
@@ -737,6 +754,10 @@ print.bg_project_plan <- function(x, ...) {
     cli::cli_text("Scope: {length(unique(x$subjects$sub_id))} subject{?s}, {nrow(x$subjects)} subject/session row{?s}.")
   }
   print(x$jobs, row.names = FALSE)
+  if (!is.null(x$request$work_units)) {
+    cli::cli_text("Exact retry scope (setup dependencies are listed above):")
+    print(x$request$work_units, row.names = FALSE)
+  }
   invisible(x)
 }
 
@@ -762,6 +783,8 @@ write_project_plan <- function(plan, file, overwrite = FALSE) {
 }
 
 #' Read a saved execution plan
+#' @details Ordinary plans use schema v1; exact retry plans use v2 so older
+#'   BrainGnomes versions cannot silently ignore their work-unit restrictions.
 #' @param file YAML plan path.
 #' @return A `bg_project_plan` object.
 #' @export
@@ -769,12 +792,16 @@ read_project_plan <- function(file) {
   checkmate::assert_file_exists(file)
   source_file <- normalizePath(file, winslash = "/", mustWork = TRUE)
   plan <- yaml::read_yaml(file)
-  if (!identical(plan$schema_version, "brain-gnomes-plan-v1")) {
+  if (!checkmate::test_choice(plan$schema_version, c("brain-gnomes-plan-v1", "brain-gnomes-plan-v2"))) {
     stop("Unsupported project plan schema: ", value_or_default(plan$schema_version, "<missing>"), call. = FALSE)
   }
   class(plan$config) <- unique(c("bg_project_cfg", class(plan$config)))
   plan$subjects <- as.data.frame(plan$subjects, stringsAsFactors = FALSE)
   plan$jobs <- as.data.frame(plan$jobs, stringsAsFactors = FALSE)
+  plan$request$work_units <- normalize_retry_work_units(plan$request$work_units)
+  if (identical(plan$schema_version, "brain-gnomes-plan-v2") && is.null(plan$request$work_units)) {
+    stop("An exact retry plan must include work_units.", call. = FALSE)
+  }
   if (is.null(plan$scope_status)) {
     plan$scope_status <- if (isTRUE(plan$scope_deferred)) "deferred" else "resolved"
   }
@@ -794,6 +821,7 @@ read_project_plan <- function(file) {
 #'
 #' The saved configuration, requested stages and streams, and resolved subject
 #' scope are reused. Deferred scope is discovered after Flywheel synchronization.
+#' Retry plans also retain the exact work units and source-run provenance.
 #' The plan itself is not the final scheduler contract: BrainGnomes writes an
 #' immutable manifest immediately before each job is submitted and a runtime
 #' receipt when that job starts.
@@ -806,6 +834,9 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
   if (checkmate::test_string(plan)) plan <- read_project_plan(plan)
   checkmate::assert_class(plan, "bg_project_plan")
   request <- plan$request
+  if (identical(plan$schema_version, "brain-gnomes-plan-v2") && is.null(request$work_units)) {
+    stop("An exact retry plan must include work_units.", call. = FALSE)
+  }
   planned_subjects <- request$subject_filter
   if (is.list(planned_subjects) && !is.data.frame(planned_subjects)) {
     planned_subjects <- if ("sub_id" %in% names(planned_subjects)) {
@@ -819,7 +850,10 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
     planned_subjects <- plan$subjects[, subject_columns, drop = FALSE]
   }
   scfg <- plan$config
-  attr(scfg, "provenance_context") <- list(
+  attr(scfg, "retry_work_units") <- normalize_retry_work_units(request$work_units)
+  context <- plan$provenance_context
+  if (is.null(context)) context <- list()
+  attr(scfg, "provenance_context") <- utils::modifyList(context, list(
     interface = if (checkmate::test_string(attr(plan, "source_file"))) {
       "saved_plan"
     } else {
@@ -828,7 +862,7 @@ submit_project_plan <- function(plan, debug = FALSE, log_level = "INFO") {
     plan_id = plan$plan_id,
     plan_created_at = plan$created_at,
     plan_file = attr(plan, "source_file", exact = TRUE)
-  )
+  ))
   run_project(
     scfg,
     steps = unlist(request$steps, use.names = FALSE),
@@ -1213,48 +1247,26 @@ cancel_project_run <- function(input = getwd(), run_id = "latest", dry_run = TRU
   do.call(rbind, rows)
 }
 
+#' Recover exact retry identities from structured and legacy tracking records
+#' @param jobs Source run's tracked jobs, including parent records.
+#' @param include_blocked Include jobs blocked by failed dependencies.
+#' @return Run selection and deduplicated work units, excluding setup helpers.
+#' @noRd
 retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
   statuses <- c("FAILED", "CANCELLED", if (include_blocked) "FAILED_BY_EXT")
+  # Structured identity is authoritative. Legacy names and ancestor records
+  # fill missing identity only; arrays and sentinels collapse to their work unit.
+  jobs <- .annotate_tracked_jobs(jobs)
   failed <- jobs[jobs$status %in% statuses, , drop = FALSE]
-  names_ <- failed$job_name
-  stage <- vapply(names_, function(name) {
-    if (grepl("^flywheel_sync", name)) "flywheel_sync"
-    else if (grepl("^bids_conversion", name)) "bids_conversion"
-    else if (grepl("^mriqc", name)) "mriqc"
-    else if (grepl("^fmriprep", name)) "fmriprep"
-    else if (grepl("^aroma", name)) "aroma"
-    else if (grepl("^postprocess_", name)) "postprocess"
-    else if (grepl("^extract_rois_", name)) "extract_rois"
-    else NA_character_
-  }, character(1))
-  keep <- !is.na(stage)
-  failed <- failed[keep, , drop = FALSE]
-  stage <- stage[keep]
-  subjects <- regmatches(failed$job_name, regexpr("(?<=sub-)[^_]+", failed$job_name, perl = TRUE))
-  subjects[subjects == ""] <- NA_character_
-  stream_from_job_name <- function(job_name, prefix) {
-    marker <- paste0(prefix, "_")
-    if (!startsWith(job_name, marker)) return("")
-    value <- substring(job_name, nchar(marker) + 1L)
-    value <- sub("_sub-.*$", "", value)
-    if (identical(prefix, "postprocess")) {
-      value <- sub("_(sentinel|array)$", "", value)
-    }
-    if (!nzchar(value)) "" else value
-  }
-  pp <- vapply(
-    failed$job_name, stream_from_job_name, character(1),
-    prefix = "postprocess"
-  )
-  ex <- vapply(
-    failed$job_name, stream_from_job_name, character(1),
-    prefix = "extract_rois"
-  )
+  failed <- failed[failed$stage %in% supported_project_steps(), , drop = FALSE]
+  units <- if (nrow(failed)) normalize_retry_work_units(failed) else
+    data.frame(stage = character(), stream = character(), sub_id = character(), ses_id = character())
   list(
-    steps = unique(stage),
-    subject_filter = unique(subjects[!is.na(subjects)]),
-    postprocess_streams = unique(pp[nzchar(pp)]),
-    extract_streams = unique(ex[nzchar(ex)]),
+    steps = unique(units$stage),
+    subject_filter = unique(units$sub_id[!is.na(units$sub_id)]),
+    postprocess_streams = unique(units$stream[units$stage == "postprocess"]),
+    extract_streams = unique(units$stream[units$stage == "extract_rois"]),
+    work_units = units,
     jobs = failed
   )
 }
@@ -1263,9 +1275,17 @@ retry_request_from_jobs <- function(jobs, include_blocked = FALSE) {
 #'
 #' A retry does not resume scheduler jobs in place and does not change the
 #' original run. It creates a new [run_project()] submission containing the
-#' failed or cancelled stages and subjects found in the source run. The selected
-#' work is rerun even if old completion markers would normally skip it, and the
-#' new provenance record identifies the source run.
+#' exact failed or cancelled subject/session/stage/stream combinations found in
+#' the source run. Array tasks and sentinels resolve to their owning work unit;
+#' the whole unit is retried, not individual files within it. Selected work is
+#' rerun even if old completion markers would normally skip it. Successful
+#' combinations are not added, and the new provenance record identifies the
+#' source run even when a retry plan is saved and submitted later.
+#'
+#' Required project setup jobs are listed separately in the plan. A setup-only
+#' failure cannot determine the intended subject scope: include blocked jobs or
+#' use [run_project()] with an explicit selection. Ambiguous legacy records or
+#' missing inputs cause an error instead of broadening the retry scope.
 #'
 #' Preview with `dry_run = TRUE` before submitting. The preview returns a plan
 #' and contacts no scheduler. With `dry_run = FALSE`, submission begins
@@ -1305,7 +1325,15 @@ retry_project_run <- function(input = getwd(), run_id = "latest", include_blocke
   source_run_id <- resolve_run_id(scfg, run_id)
   jobs <- .get_run_jobs_data(scfg, source_run_id)
   request <- retry_request_from_jobs(jobs, include_blocked)
-  if (length(request$steps) == 0L) stop("No retryable failed jobs were found in this run.", call. = FALSE)
+  if (length(request$steps) == 0L) {
+    stop("No retryable failed jobs were found in this run. If only setup/controller jobs failed, use include_blocked = TRUE to recover their blocked work, or run_project() with an explicit selection.", call. = FALSE)
+  }
+  attr(scfg, "retry_work_units") <- request$work_units
+  attr(scfg, "provenance_context") <- list(
+    interface = "retry",
+    parent_run_id = source_run_id,
+    include_blocked = include_blocked
+  )
   if (dry_run) {
     return(plan_project(
       scfg, steps = request$steps,
@@ -1315,11 +1343,6 @@ retry_project_run <- function(input = getwd(), run_id = "latest", include_blocke
       force = TRUE
     ))
   }
-  attr(scfg, "provenance_context") <- list(
-    interface = "retry",
-    parent_run_id = source_run_id,
-    include_blocked = include_blocked
-  )
   run_project(
     scfg, steps = request$steps,
     subject_filter = if (length(request$subject_filter)) request$subject_filter else NULL,

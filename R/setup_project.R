@@ -80,8 +80,8 @@ get_scfg_from_input <- function(input = NULL) {
 #' By default, this function opens the guided project-configuration workflow.
 #' Set `interactive = FALSE` to create a portable project from deterministic
 #' defaults without prompting. Non-interactive setup creates the project and
-#' standard data directories, disables all processing stages, and writes
-#' `project_config.yaml`.
+#' standard data directories and writes `project_config.yaml`. Processing stages
+#' are disabled unless inherited from a template.
 #'
 #' @param input A `bg_project_cfg` object, a path to a YAML file, or a project
 #'   directory containing \code{project_config.yaml}. If a directory is supplied
@@ -102,6 +102,14 @@ get_scfg_from_input <- function(input = NULL) {
 #'   to `TRUE` to preserve the standard interactive R workflow.
 #' @param overwrite Replace an existing `project_config.yaml` in non-interactive
 #'   mode.
+#' @param reuse_template_paths In non-interactive mode, retain the template's
+#'   original paths, including outputs and its tracking database. Defaults to
+#'   `FALSE`: project-owned directories are rebased into the new root, mutable
+#'   external destinations are replaced, and a new database path is used.
+#'   External input directories, shared TemplateFlow caches, and resource files
+#'   such as containers, atlases, and licenses are retained. Enabled stages and
+#'   processing settings are inherited. Set `TRUE` only to intentionally share
+#'   the original project state.
 #' @return A `bg_project_cfg` list containing the project configuration. New
 #'   fields are added based on user input or portable defaults. The configuration
 #'   is written to `project_config.yaml` in the project directory. Interactive
@@ -112,9 +120,14 @@ get_scfg_from_input <- function(input = NULL) {
 #' @export
 setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
                           project_directory = NULL, template = NULL,
-                          interactive = TRUE, overwrite = FALSE) {
+                          interactive = TRUE, overwrite = FALSE,
+                          reuse_template_paths = FALSE) {
   checkmate::assert_flag(interactive)
   checkmate::assert_flag(overwrite)
+  checkmate::assert_flag(reuse_template_paths)
+  if (interactive && reuse_template_paths) {
+    stop("reuse_template_paths is only available when interactive = FALSE.", call. = FALSE)
+  }
   if (!is.null(input) && !is.null(template)) {
     stop("Supply either input or template, not both.", call. = FALSE)
   }
@@ -128,7 +141,8 @@ setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
       project_name = project_name,
       project_directory = project_directory,
       template = starting_config,
-      overwrite = overwrite
+      overwrite = overwrite,
+      reuse_template_paths = reuse_template_paths
     ))
   }
 
@@ -184,10 +198,12 @@ setup_project <- function(input = NULL, fields = NULL, project_name = NULL,
 #' @param template Optional project configuration object, YAML file, or project
 #'   directory to use as a base.
 #' @param overwrite Replace an existing `project_config.yaml`.
+#' @param reuse_template_paths Retain template paths and tracking state.
 #' @return A `bg_project_cfg` object with its YAML path attached.
 #' @noRd
 create_project_from_defaults <- function(project_name, project_directory,
-                                         template = NULL, overwrite = FALSE) {
+                                         template = NULL, overwrite = FALSE,
+                                         reuse_template_paths = FALSE) {
   checkmate::assert_string(project_name)
   checkmate::assert_string(project_directory)
   checkmate::assert_flag(overwrite)
@@ -210,8 +226,6 @@ create_project_from_defaults <- function(project_name, project_directory,
   }
   scfg$schema_version <- value_or_default(scfg$schema_version, 1L)
   if (is.null(scfg$metadata)) scfg$metadata <- list()
-  scfg$metadata$project_name <- project_name
-  scfg$metadata$project_directory <- project_directory
 
   default_dirs <- c(
     dicom_directory = "data_dicoms",
@@ -224,6 +238,16 @@ create_project_from_defaults <- function(project_name, project_directory,
     scratch_directory = "scratch",
     templateflow_home = "templateflow"
   )
+  if (!is.null(template) && !reuse_template_paths) {
+    scfg <- rebase_project_template(scfg, project_directory, default_dirs)
+    scfg$metadata$sqlite_db <- NULL
+  }
+  scfg$metadata$project_name <- project_name
+  scfg$metadata$project_directory <- project_directory
+  # Execution context belongs to an invocation, never to a new project.
+  for (attribute in c("yaml_file", "validation", "provenance_context", "retry_work_units")) {
+    attr(scfg, attribute) <- NULL
+  }
   for (field in names(default_dirs)) {
     if (!checkmate::test_string(scfg$metadata[[field]])) {
       scfg$metadata[[field]] <- file.path(
@@ -258,6 +282,74 @@ create_project_from_defaults <- function(project_name, project_directory,
 
   class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
   write_project_config(scfg, overwrite = overwrite)
+}
+
+#' Isolate the writable paths of a project created from a template
+#'
+#' @param scfg Template configuration before changing its root.
+#' @param project_directory New absolute project root.
+#' @param default_dirs Named default directory basenames.
+#' @return Configuration with rebased project directories and report destination.
+#' @noRd
+rebase_project_template <- function(scfg, project_directory, default_dirs) {
+  old_root <- scfg$metadata$project_directory
+  if (checkmate::test_string(old_root)) {
+    old_root <- sub("/+$", "", normalizePath(path.expand(old_root), winslash = "/", mustWork = FALSE))
+  }
+  defaults <- c(default_dirs, flywheel_temp_directory = "flywheel_tmp",
+    flywheel_sync_directory = "flywheel_sync")
+  # These directories may be external inputs when their producing stages are off.
+  shared_inputs <- c("dicom_directory", "templateflow_home")
+  if (!isTRUE(scfg$bids_conversion$enable) && !isTRUE(scfg$flywheel_sync$enable)) {
+    shared_inputs <- c(shared_inputs, "bids_directory")
+  }
+  if (!isTRUE(scfg$fmriprep$enable) && !isTRUE(scfg$aroma$enable)) {
+    shared_inputs <- c(shared_inputs, "fmriprep_directory")
+  }
+  if (!isTRUE(scfg$postprocess$enable)) shared_inputs <- c(shared_inputs, "postproc_directory")
+  original_paths <- list()
+  for (field in names(defaults)) {
+    path <- scfg$metadata[[field]]
+    if (!checkmate::test_string(path)) next
+    path <- path.expand(path)
+    # Relative directory values in a template are interpreted against its root.
+    absolute <- grepl("^(/|[A-Za-z]:[/\\\\]|\\\\\\\\)", path)
+    if (!absolute && checkmate::test_string(old_root)) path <- file.path(old_root, path)
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    original_paths[[field]] <- path
+    key <- if (.Platform$OS.type == "windows") tolower(path) else path
+    root_key <- if (.Platform$OS.type == "windows") tolower(old_root) else old_root
+    inside <- checkmate::test_string(root_key) &&
+      (identical(key, root_key) || startsWith(key, paste0(root_key, "/")))
+    if (inside) {
+      suffix <- substring(path, nchar(old_root) + 1L)
+      scfg$metadata[[field]] <- paste0(project_directory, suffix)
+    } else if (!field %in% shared_inputs) {
+      scfg$metadata[[field]] <- file.path(project_directory, defaults[[field]])
+    } else {
+      scfg$metadata[[field]] <- path
+    }
+  }
+  # Flywheel commonly writes directly into the DICOM input tree. Preserve that
+  # relationship while moving the writable sync destination into the new root.
+  sync <- original_paths$flywheel_sync_directory
+  dicom <- original_paths$dicom_directory
+  if (isTRUE(scfg$flywheel_sync$enable) &&
+      checkmate::test_string(sync) && checkmate::test_string(dicom)) {
+    sync <- sub("/+$", "", sync)
+    sync_key <- if (.Platform$OS.type == "windows") tolower(sync) else sync
+    dicom_key <- if (.Platform$OS.type == "windows") tolower(dicom) else dicom
+    if (identical(dicom_key, sync_key) || startsWith(dicom_key, paste0(sync_key, "/"))) {
+      scfg$metadata$dicom_directory <- paste0(
+        scfg$metadata$flywheel_sync_directory, substring(dicom, nchar(sync) + 1L)
+      )
+    }
+  }
+  # Relative validator reports resolve under the new log directory at execution.
+  if (checkmate::test_string(scfg$bids_validation$outfile)) {
+    scfg$bids_validation$outfile <- basename(scfg$bids_validation$outfile)
+  }
+  scfg
 }
 
 #' Set up project metadata for an fMRI preprocessing study

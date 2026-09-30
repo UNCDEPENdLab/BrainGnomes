@@ -117,7 +117,9 @@ print_command_help <- function(command, status = 0L) {
       "Alias: BrainGnomes init <project_name> <project_directory> [options]\n\n",
       "Options:\n",
       "  --template=<config.yaml>       Start from an existing configuration.\n",
-      "  --overwrite                    Replace an existing project_config.yaml.\n"
+      "  --reuse-template-paths         Intentionally share its outputs and database.\n",
+      "  --overwrite                    Replace an existing project_config.yaml.\n\n",
+      "Templates inherit settings but isolate project outputs, logs, scratch, and tracking by default.\n"
     ),
     config = paste0(
       "Usage: BrainGnomes config <validate|edit|show> <project_directory|config.yaml> [options]\n\n",
@@ -166,7 +168,7 @@ print_command_help <- function(command, status = 0L) {
       "  --dry-run                          Validate and show planned work without submission.\n",
       "  --log-level=<level>                TRACE, DEBUG, INFO, WARN, ERROR, or FATAL.\n",
       "  --format=table|json                Output format for the returned run handle.\n\n",
-      "A YAML file with schema_version brain-gnomes-plan-v1 is submitted as a saved plan.\n"
+      "A YAML file with schema_version brain-gnomes-plan-v1 or brain-gnomes-plan-v2 is submitted as a saved plan.\n"
     ),
     `validate-bids` = paste0(
       "Usage: BrainGnomes validate-bids <project_directory|config.yaml> [options]\n\n",
@@ -257,13 +259,14 @@ command_init <- function(values) {
   positional <- values[!startsWith(values, "-")]
   option_values <- values[startsWith(values, "-")]
   if (length(positional) < 2L) usage_error("init requires <project_name> and <project_directory>.")
-  opts <- normalize_options(option_values, c("template", "overwrite"))
+  opts <- normalize_options(option_values, c("template", "overwrite", "reuse_template_paths"))
   cfg <- BrainGnomes::setup_project(
     project_name = positional[[1L]],
     project_directory = positional[[2L]],
     template = opts$template,
     interactive = FALSE,
-    overwrite = is_flag(opts$overwrite)
+    overwrite = is_flag(opts$overwrite),
+    reuse_template_paths = is_flag(opts$reuse_template_paths)
   )
   cat("Saved project configuration to:", or_else(attr(cfg, "yaml_file"), file.path(cfg$metadata$project_directory, "project_config.yaml")), "\n")
   0L

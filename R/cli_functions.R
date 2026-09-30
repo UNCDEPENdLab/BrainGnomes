@@ -218,17 +218,18 @@ run_project_cli <- function(input, cli_args = list()) {
     interface = "cli",
     input = normalizePath(input, winslash = "/", mustWork = FALSE)
   )
-  run_project(
-    scfg,
-    steps = cli_args$steps,
-    subject_filter = cli_args$subject_filter,
-    postprocess_streams = cli_args$postprocess_streams,
-    extract_streams = cli_args$extract_streams,
-    debug = cli_flag(cli_args$debug),
-    force = cli_flag(cli_args$force),
-    dry_run = cli_flag(dry_run_opt),
-    log_level = if (is.null(cli_args$log_level)) "INFO" else cli_args$log_level
-  )
+  # Preserve omission so guided runs can still ask about unspecified options.
+  args <- list(scfg = scfg, steps = cli_args$steps)
+  for (name in intersect(names(cli_args), c(
+    "subject_filter", "postprocess_streams", "extract_streams", "log_level"
+  ))) args[name] <- cli_args[name]
+  for (name in intersect(names(cli_args), c("debug", "force"))) {
+    args[[name]] <- cli_flag(cli_args[[name]])
+  }
+  if (any(c("dry-run", "dry_run") %in% names(cli_args))) {
+    args$dry_run <- cli_flag(dry_run_opt)
+  }
+  do.call(run_project, args)
 }
 
 

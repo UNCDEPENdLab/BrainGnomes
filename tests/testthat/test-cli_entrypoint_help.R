@@ -214,6 +214,38 @@ test_that("BrainGnomes cli_project is an unknown command", {
   expect_true(any(grepl("^Usage: BrainGnomes <command> \\[options\\]$", res$output)))
 })
 
+test_that("installed CLI templates isolate paths unless sharing is explicit", {
+  installed_interface <- suppressWarnings(system2(
+    file.path(R.home("bin"), "Rscript"),
+    c("-e", shQuote("cat('reuse_template_paths' %in% names(formals(BrainGnomes::setup_project)))")),
+    stdout = TRUE, stderr = FALSE
+  ))
+  skip_if_not(identical(installed_interface, "TRUE"),
+    "installed package predates template path isolation")
+  root <- tempfile("cli-template-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  original <- file.path(root, "original")
+  expect_equal(run_brain_gnomes_cli(c("init", "original", shQuote(original)))$status, 0L)
+  template <- file.path(original, "project_config.yaml")
+  source <- yaml::read_yaml(template)
+  for (reuse in c(FALSE, TRUE)) {
+    destination <- file.path(root, if (reuse) "shared" else "isolated")
+    result <- run_brain_gnomes_cli(c("init", "copy", shQuote(destination),
+      shQuote(paste0("--template=", template)), if (reuse) "--reuse-template-paths"))
+    expect_equal(result$status, 0L, info = paste(result$output, collapse = "\n"))
+    clone <- yaml::read_yaml(file.path(destination, "project_config.yaml"))
+    for (field in c("bids_directory", "fmriprep_directory", "postproc_directory",
+        "rois_directory", "log_directory", "scratch_directory", "sqlite_db")) {
+      expected <- if (reuse) source$metadata[[field]] else file.path(
+        normalizePath(destination, winslash = "/"),
+        if (field == "sqlite_db") "copy.sqlite" else basename(source$metadata[[field]])
+      )
+      expect_path_identical(clone$metadata[[field]], expected, mustWork = field != "sqlite_db")
+    }
+  }
+})
+
 test_that("BrainGnomes without args prints help and exits nonzero", {
   res <- run_brain_gnomes_cli()
   expect_equal(res$status, 1L)

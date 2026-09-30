@@ -85,6 +85,8 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #' This remains the standard execution path after [setup_project()]. It resolves
 #' the same stages, streams, subject/session scope, and force setting exposed by
 #' [plan_project()] before submission; calling `plan_project()` first is optional.
+#' When stages are selected interactively, only omitted arguments are prompted
+#' for. Explicit choices, including `dry_run = TRUE`, are always retained.
 #'
 #' @param scfg A `bg_project_cfg` object, YAML configuration file, or project
 #'   directory containing `project_config.yaml`. Defaults to the current working
@@ -101,9 +103,10 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   runs validate settings and report subject/session scope plus resolved
 #'   postprocessing and extraction stream settings without submitting any jobs.
 #' @param subject_filter Optional character vector or data.frame specifying which
-#'   subjects (and optionally sessions) to process. When `NULL` and run
+#'   subjects (and optionally sessions) to process. When omitted and run
 #'   interactively, the user will be prompted to enter space-separated subject
-#'   IDs (press ENTER to process all subjects). When a data.frame is provided, it
+#'   IDs (press ENTER to process all subjects). Explicit `NULL` selects all
+#'   subjects without prompting. When a data.frame is provided, it
 #'   must contain a `sub_id` column and may include a `ses_id` column to filter
 #'   on specific subject/session combinations.
 #' @param postprocess_streams Optional character vector specifying which
@@ -143,6 +146,16 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, postprocess_streams = NULL,
   extract_streams = NULL, debug = FALSE, force = FALSE, dry_run = FALSE,
   log_level = c("INFO", "DEBUG", "WARN", "ERROR", "TRACE", "FATAL")) {
+
+  # Capture omission before normalizing arguments: explicit values, including
+  # FALSE and NULL, must never be replaced by answers in the guided workflow.
+  prompt_subjects <- missing(subject_filter)
+  prompt_postprocess <- missing(postprocess_streams)
+  prompt_extract <- missing(extract_streams)
+  prompt_debug <- missing(debug)
+  prompt_force <- missing(force)
+  prompt_dry_run <- missing(dry_run)
+  prompt_log_level <- missing(log_level)
 
   scfg <- project_config_from_input(scfg)
   checkmate::assert_class(scfg, "bg_project_cfg")
@@ -230,11 +243,13 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     scfg$dry_run <- dry_run
     scfg$log_level <- log_level
   } else {
-    ids <- prompt_input(
-      instruct = "Enter subject IDs to process, separated by spaces. Press enter to process all subjects.",
-      type = "character", split = " ", required = FALSE
-    )
-    if (!is.na(ids[1])) subject_filter <- ids
+    if (prompt_subjects) {
+      ids <- prompt_input(
+        instruct = "Enter subject IDs to process, separated by spaces. Press enter to process all subjects.",
+        type = "character", split = " ", required = FALSE
+      )
+      if (!is.na(ids[1])) subject_filter <- ids
+    }
 
     steps <- c()
     cat("\nPlease select which steps to run:\n")
@@ -248,7 +263,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
       prompt_input(instruct = "Run postprocessing?", type = "flag"), FALSE
     )
 
-    if (isTRUE(steps["postprocess"])) {
+    if (isTRUE(steps["postprocess"]) && prompt_postprocess) {
       if (length(all_pp_streams) == 1L) {
         postprocess_streams <- all_pp_streams # if we have only one stream, run it
       } else {
@@ -263,7 +278,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
       prompt_input(instruct = "Run ROI extraction?", type = "flag"), FALSE
     )
 
-    if (isTRUE(steps["extract_rois"])) {
+    if (isTRUE(steps["extract_rois"]) && prompt_extract) {
       if (length(all_ex_streams) == 1L) {
         extract_streams <- all_ex_streams # if we have only one stream, run it
       } else {
@@ -275,13 +290,13 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     }
 
     # check whether to run in debug mode
-    scfg$debug <- prompt_input(instruct = "Run the project workflow in debug mode? This will echo commands to logs, but not run them.", type = "flag")
-    scfg$force <- prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
-    scfg$dry_run <- prompt_input(
+    scfg$debug <- if (!prompt_debug) debug else prompt_input(instruct = "Run the project workflow in debug mode? This will echo commands to logs, but not run them.", type = "flag")
+    scfg$force <- if (!prompt_force) force else prompt_input(instruct = "Force (re-run) each processing step, even if it appears to be complete?", type = "flag")
+    scfg$dry_run <- if (!prompt_dry_run) dry_run else prompt_input(
       instruct = "Run as dry run? This validates configuration and reports planned jobs without submitting them.",
       type = "flag", default = FALSE
     )
-    scfg$log_level <- prompt_input(
+    scfg$log_level <- if (!prompt_log_level) log_level else prompt_input(
       instruct = "Select log level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)",
       type = "character", among = valid_log_levels, default = log_level
     )
@@ -544,6 +559,8 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
   } else {
     resolved_subjects
   }
+  work_units <- normalize_retry_work_units(attr(scfg, "retry_work_units", exact = TRUE))
+  subject_dirs <- retry_subject_scope(subject_dirs, work_units)
   if (nrow(subject_dirs) == 0L) {
     stop("No subject/session inputs match the requested run.", call. = FALSE)
   }
@@ -563,6 +580,10 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
   }
 
   if (isTRUE(dry_run)) {
+    if (!is.null(work_units)) {
+      cat("Exact retry work units:\n")
+      print(work_units, row.names = FALSE)
+    }
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id"), drop = FALSE])
     msg_lines <- apply(msg_df, 1, function(rr) {
       if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}")
@@ -591,9 +612,19 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
         "Preparing jobs for subject {ss} of {n_subjects}: sub-{subject_dirs[[ss]]$sub_id[[1L]]}."
       )
     }
+    subject_steps <- steps
+    subject_postprocess <- postprocess_streams
+    subject_extract <- extract_streams
+    if (!is.null(work_units)) {
+      units <- work_units[!is.na(work_units$sub_id) &
+        work_units$sub_id == subject_dirs[[ss]]$sub_id[[1L]], , drop = FALSE]
+      subject_steps[] <- names(subject_steps) %in% units$stage
+      subject_postprocess <- unique(units$stream[units$stage == "postprocess"])
+      subject_extract <- unique(units$stream[units$stage == "extract_rois"])
+    }
     process_subject(
-      scfg, subject_dirs[[ss]], steps,
-      postprocess_streams = postprocess_streams, extract_streams = extract_streams,
+      scfg, subject_dirs[[ss]], subject_steps,
+      postprocess_streams = subject_postprocess, extract_streams = subject_extract,
       parent_ids = parent_ids, sequence_id = sequence_id,
       permission_check_cache = permission_check_cache
     )

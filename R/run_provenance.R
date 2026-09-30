@@ -469,6 +469,7 @@ record_run_provenance <- function(scfg, run_id, execution, debug = FALSE,
       subject_filter = execution$subject_filter,
       postprocess_streams = execution$postprocess_streams,
       extract_streams = execution$extract_streams,
+      work_units = execution$work_units,
       force = execution$force,
       debug = debug,
       log_level = log_level
@@ -626,6 +627,8 @@ realize_deferred_subjects <- function(snapshot) {
     subject_filter = snapshot$subject_filter,
     allow_empty = FALSE
   )
+  subjects <- retry_subject_scope(subjects,
+    normalize_retry_work_units(attr(snapshot$scfg, "retry_work_units", exact = TRUE)))
   record_run_scope_realization(
     snapshot$scfg, snapshot$sequence_id, subjects,
     reason = "flywheel_sync"
