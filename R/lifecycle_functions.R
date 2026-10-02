@@ -695,7 +695,12 @@ build_project_jobs <- function(scfg, execution) {
 #' @param force Include work whose completion markers would otherwise skip it.
 #' @param allow_invalid Build the plan despite configuration validation errors.
 #' @param quiet Suppress the printed plan.
-#' @return A serializable `bg_project_plan` object.
+#' @return A serializable `bg_project_plan` object. Its `preview$work` table
+#'   lists concrete subject/session/stage/stream units, input and output roots,
+#'   log locations, dependencies, resources, and current completion-marker
+#'   decisions. Console output is bounded; the table retains the full selection.
+#'   Deferred scope stays unknown until sync. Counts describe requested work
+#'   units, not runtime or cost estimates or an exact scheduler job count.
 #' @seealso [run_project()] for the standard direct execution path.
 #' @export
 plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
@@ -712,13 +717,20 @@ plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
   execution <- resolve_project_execution(
     scfg, steps, subject_filter, postprocess_streams, extract_streams, force
   )
-  resolved_steps <- execution$steps
-  postprocess_streams <- execution$postprocess_streams
-  extract_streams <- execution$extract_streams
-  subjects <- execution$subjects
-  jobs <- build_project_jobs(scfg, execution)
+  result <- project_plan_from_execution(scfg, execution, validation[c("valid", "issues", "messages")])
+  if (!quiet) print(result)
+  result
+}
 
-  result <- structure(list(
+#' Build a reusable preview from an already resolved request
+#' @param scfg Project configuration used to resolve the request.
+#' @param execution Resolved stage, stream, and subject/session selections.
+#' @param validation Optional configuration validation report; NULL for direct dry runs.
+#' @return A bg_project_plan without performing discovery again or writing files.
+#' @noRd
+project_plan_from_execution <- function(scfg, execution, validation = NULL) {
+  jobs <- build_project_jobs(scfg, execution)
+  structure(list(
     # Older packages must reject exact retry plans rather than ignore their scope.
     schema_version = if (is.null(execution$work_units)) "brain-gnomes-plan-v1" else "brain-gnomes-plan-v2",
     plan_id = uuid::UUIDgenerate(),
@@ -726,20 +738,19 @@ plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
     config_file = attr(scfg, "yaml_file"),
     config = scfg,
     provenance_context = attr(scfg, "provenance_context", exact = TRUE),
-    validation = validation[c("valid", "issues", "messages")],
+    validation = validation,
     request = list(
-      steps = resolved_steps, subject_filter = execution$subject_filter,
-      postprocess_streams = postprocess_streams, extract_streams = extract_streams,
-      force = force, work_units = execution$work_units
+      steps = execution$steps, subject_filter = execution$subject_filter,
+      postprocess_streams = execution$postprocess_streams, extract_streams = execution$extract_streams,
+      force = execution$force, work_units = execution$work_units
     ),
-    subjects = subjects,
+    subjects = execution$subjects,
     scope_deferred = execution$scope_deferred,
     scope_status = execution$scope_status,
     deferred_reasons = execution$deferred_reasons,
-    jobs = jobs
+    jobs = jobs,
+    preview = build_project_preview(scfg, execution, jobs)
   ), class = "bg_project_plan")
-  if (!quiet) print(result)
-  result
 }
 
 #' @export
@@ -756,8 +767,12 @@ print.bg_project_plan <- function(x, ...) {
   print(x$jobs, row.names = FALSE)
   if (!is.null(x$request$work_units)) {
     cli::cli_text("Exact retry scope (setup dependencies are listed above):")
-    print(x$request$work_units, row.names = FALSE)
+    print(utils::head(x$request$work_units, 20L), row.names = FALSE)
+    if (nrow(x$request$work_units) > 20L) {
+      cli::cli_text("Showing 20 rows; inspect plan$request$work_units for the full retry selection.")
+    }
   }
+  if (!is.null(x$preview)) print_project_preview(x$preview)
   invisible(x)
 }
 
@@ -798,6 +813,9 @@ read_project_plan <- function(file) {
   class(plan$config) <- unique(c("bg_project_cfg", class(plan$config)))
   plan$subjects <- as.data.frame(plan$subjects, stringsAsFactors = FALSE)
   plan$jobs <- as.data.frame(plan$jobs, stringsAsFactors = FALSE)
+  if (!is.null(plan$preview$work)) {
+    plan$preview$work <- as.data.frame(plan$preview$work, stringsAsFactors = FALSE)
+  }
   plan$request$work_units <- normalize_retry_work_units(plan$request$work_units)
   if (identical(plan$schema_version, "brain-gnomes-plan-v2") && is.null(plan$request$work_units)) {
     stop("An exact retry plan must include work_units.", call. = FALSE)
@@ -1236,7 +1254,14 @@ cancel_project_run <- function(input = getwd(), run_id = "latest", dry_run = TRU
   ))
   rows <- lapply(seq_len(nrow(jobs)), function(i) {
     job_id <- as.character(jobs$job_id[[i]])
-    exit <- if (dry_run) 0L else system2(command, job_id)
+    exit <- 0L
+    if (!dry_run) {
+      # Native subprocess output bypasses R's output sinks. Capture it before
+      # forwarding diagnostics so cancellation cannot corrupt CLI JSON stdout.
+      output <- suppressWarnings(system2(command, job_id, stdout = TRUE, stderr = TRUE))
+      if (length(output)) writeLines(output, stderr())
+      exit <- value_or_default(attr(output, "status"), 0L)
+    }
     status <- if (dry_run) "would_cancel" else if (identical(as.integer(exit), 0L)) "cancelled" else "failed"
     if (!dry_run && status == "cancelled") {
       update_tracked_job_status(scfg$metadata$sqlite_db, job_id, "CANCELLED")

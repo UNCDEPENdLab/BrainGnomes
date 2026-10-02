@@ -32,10 +32,10 @@ test_that("explicit run choices survive guided R and CLI stage selection", {
     cluster_job_submit = function(...) stop("Unexpected scheduler submission"),
     .package = "BrainGnomes"
   )
-  expect_true(run_project(cfg, subject_filter = "01", debug = FALSE,
-    force = FALSE, dry_run = TRUE, log_level = "INFO"))
-  expect_true(run_project_cli(cfg$metadata$project_directory, list(
-    subject_filter = "01", debug = FALSE, force = FALSE, dry_run = TRUE, log_level = "INFO")))
+  expect_s3_class(run_project(cfg, subject_filter = "01", debug = FALSE,
+    force = FALSE, dry_run = TRUE, log_level = "INFO"), "bg_project_plan")
+  expect_s3_class(run_project_cli(cfg$metadata$project_directory, list(
+    subject_filter = "01", debug = FALSE, force = FALSE, dry_run = TRUE, log_level = "INFO")), "bg_project_plan")
   expect_identical(prompts, rep("Run fmriprep?", 2L))
 })
 

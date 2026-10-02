@@ -281,6 +281,33 @@ test_that("tracked run APIs summarize, diagnose, locate logs, and preview cancel
   expect_equal(cancellation$command, "scancel 81002")
 })
 
+test_that("cancellation captures scheduler diagnostics and preserves exit status", {
+  fixture <- make_lifecycle_project()
+  on.exit(unlink(fixture$root, recursive = TRUE), add = TRUE)
+  insert_tracked_job(fixture$cfg$metadata$sqlite_db, "81003", list(
+    job_name = "fmriprep_sub-01", sequence_id = "cancel-output",
+    n_nodes = 1, n_cpus = 2, status = "QUEUED", scheduler = "slurm"
+  ))
+  scheduler_status <- 1L
+  local_mocked_bindings(
+    system2 = function(command, args, stdout, stderr) {
+      expect_identical(command, "scancel")
+      expect_identical(args, "81003")
+      expect_true(stdout)
+      expect_true(stderr)
+      structure("Scheduler diagnostic", status = scheduler_status)
+    },
+    .package = "base"
+  )
+  expect_output(failed <- cancel_project_run(fixture$cfg, "cancel-output", dry_run = FALSE), NA)
+  expect_identical(failed$status, "failed")
+  expect_identical(inspect_project(fixture$cfg)$jobs$status, "QUEUED")
+  scheduler_status <- 0L
+  expect_output(cancelled <- cancel_project_run(fixture$cfg, "cancel-output", dry_run = FALSE), NA)
+  expect_identical(cancelled$status, "cancelled")
+  expect_identical(inspect_project(fixture$cfg)$jobs$status, "CANCELLED")
+})
+
 test_that("retry dry runs derive a force plan from failed jobs", {
   fixture <- make_lifecycle_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)

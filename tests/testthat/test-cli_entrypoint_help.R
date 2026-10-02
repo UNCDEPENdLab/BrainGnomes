@@ -1,20 +1,3 @@
-run_brain_gnomes_cli <- function(args = character()) {
-  script <- system.file("BrainGnomes", package = "BrainGnomes")
-  if (!nzchar(script)) {
-    script <- normalizePath(file.path("inst", "BrainGnomes"), mustWork = TRUE)
-  }
-
-  out <- suppressWarnings(system2(
-    command = file.path(R.home("bin"), "Rscript"),
-    args = c(script, args),
-    stdout = TRUE,
-    stderr = TRUE
-  ))
-  status <- attr(out, "status")
-  if (is.null(status)) status <- 0L
-  list(status = as.integer(status), output = out)
-}
-
 test_that("BrainGnomes --help prints global help", {
   res <- run_brain_gnomes_cli("--help")
   expect_equal(res$status, 0L)
@@ -226,13 +209,13 @@ test_that("installed CLI templates isolate paths unless sharing is explicit", {
   dir.create(root)
   on.exit(unlink(root, recursive = TRUE), add = TRUE)
   original <- file.path(root, "original")
-  expect_equal(run_brain_gnomes_cli(c("init", "original", shQuote(original)))$status, 0L)
+  expect_equal(run_brain_gnomes_cli(c("init", "original", original))$status, 0L)
   template <- file.path(original, "project_config.yaml")
   source <- yaml::read_yaml(template)
   for (reuse in c(FALSE, TRUE)) {
     destination <- file.path(root, if (reuse) "shared" else "isolated")
-    result <- run_brain_gnomes_cli(c("init", "copy", shQuote(destination),
-      shQuote(paste0("--template=", template)), if (reuse) "--reuse-template-paths"))
+    result <- run_brain_gnomes_cli(c("init", "copy", destination,
+      paste0("--template=", template), if (reuse) "--reuse-template-paths"))
     expect_equal(result$status, 0L, info = paste(result$output, collapse = "\n"))
     clone <- yaml::read_yaml(file.path(destination, "project_config.yaml"))
     for (field in c("bids_directory", "fmriprep_directory", "postproc_directory",
