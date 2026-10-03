@@ -7,8 +7,10 @@ setting exposed by
 [`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
 before submission; calling
 [`plan_project()`](https://hallquistlab.github.io/BrainGnomes/reference/plan_project.md)
-first is optional. When stages are selected interactively, only omitted
-arguments are prompted for. Explicit choices, including
+first is optional. Plans, dry runs, and submission apply the same
+selected-stage configuration checks before creating directories, writing
+provenance, or submitting jobs. When stages are selected interactively,
+only omitted arguments are prompted for. Explicit choices, including
 `dry_run = TRUE`, are always retained.
 
 ## Usage

@@ -56,7 +56,8 @@ plan_project(
 
 - allow_invalid:
 
-  Build the plan despite configuration validation errors.
+  Build an explicitly unvalidated exploratory plan despite configuration
+  errors. Submission always repeats validation and rejects errors.
 
 - quiet:
 

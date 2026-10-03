@@ -240,6 +240,17 @@ or a runtime/cost estimate: setup reuse and postprocessing job expansion
 are decided later, and Flywheel scope can remain unknown until
 synchronization.
 
+Plans, direct dry runs, and submission use the same checks for the
+selected stages and streams. Missing licenses and invalid resource
+settings fail before project files are written or jobs submitted;
+unrelated stages and streams do not block the selection. Inspect these
+checks with `validate_project_config(scfg, steps = "fmriprep")` or
+`BrainGnomes config validate /project/my_study --steps=fmriprep --format=json`.
+Configured future output directories can remain absent during previews.
+Saved plans are revalidated when submitted. `allow_invalid = TRUE` is
+only for exploratory plans, whose validation failures are retained in
+the result.
+
 CLI machine output is one JSON document on **stdout**; progress,
 warnings, errors, and requested log tails go to **stderr**. Do not merge
 the two streams when parsing JSON. For example:

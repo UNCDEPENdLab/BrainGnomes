@@ -2,6 +2,15 @@
 
 ## BrainGnomes (development version)
 
+- Use the same selected-stage and stream configuration checks for plans,
+  dry runs, and submission. Invalid licenses/resources now fail before
+  project writes or scheduling, while unrelated stages/streams do not
+  block selected work. Saved plans are revalidated at submission. Use
+  `steps` (and optional stream selections) with
+  [`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md)
+  or `config validate` to inspect the same checks; exploratory invalid
+  plans are explicitly labeled.
+
 - Make CLI JSON output a single document on stdout, with progress,
   warnings, and log tails on stderr. Validate formats before acting,
   reject machine-format watch/interactive combinations, and require

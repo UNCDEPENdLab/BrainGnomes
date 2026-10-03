@@ -52,7 +52,12 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_project</span><span class="op">(</span>scfg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>, quiet <span class="op">=</span> <span class="cn">FALSE</span>, correct_problems <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">validate_project</span><span class="op">(</span></span>
+<span>  scfg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  correct_problems <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  selection <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -71,6 +76,10 @@
 <dd><p>if TRUE, prompt user to correct validation failures. In this case,
 an amended scfg object will be returned. If FALSE, <code>validate_project</code> will simply return
 <code>TRUE/FALSE</code> to indicate whether the project is valid.</p></dd>
+
+
+<dt id="arg-selection">selection<a class="anchor" aria-label="anchor" href="#arg-selection"></a></dt>
+<dd><p>Optional resolved stage/stream selection for execution checks.</p></dd>
 
 </dl></div>
     <div class="section level2">

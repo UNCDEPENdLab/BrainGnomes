@@ -5,7 +5,12 @@ Validate the structure of a project configuration object
 ## Usage
 
 ``` r
-validate_project(scfg = list(), quiet = FALSE, correct_problems = FALSE)
+validate_project(
+  scfg = list(),
+  quiet = FALSE,
+  correct_problems = FALSE,
+  selection = NULL
+)
 ```
 
 ## Arguments
@@ -25,6 +30,10 @@ validate_project(scfg = list(), quiet = FALSE, correct_problems = FALSE)
   amended scfg object will be returned. If FALSE, `validate_project`
   will simply return `TRUE/FALSE` to indicate whether the project is
   valid.
+
+- selection:
+
+  Optional resolved stage/stream selection for execution checks.
 
 ## Details
 
