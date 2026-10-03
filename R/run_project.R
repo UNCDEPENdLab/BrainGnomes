@@ -85,6 +85,8 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #' This remains the standard execution path after [setup_project()]. It resolves
 #' the same stages, streams, subject/session scope, and force setting exposed by
 #' [plan_project()] before submission; calling `plan_project()` first is optional.
+#' Plans, dry runs, and submission apply the same selected-stage configuration
+#' checks before creating directories, writing provenance, or submitting jobs.
 #' When stages are selected interactively, only omitted arguments are prompted
 #' for. Explicit choices, including `dry_run = TRUE`, are always retained.
 #'
@@ -203,36 +205,8 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     selection <- resolve_project_selection(
       scfg, steps, postprocess_streams, extract_streams, force
     )
-    user_steps <- selection$steps
     postprocess_streams <- selection$postprocess_streams
     extract_streams <- selection$extract_streams
-
-    if ("flywheel_sync" %in% user_steps) {
-      if (!isTRUE(scfg$flywheel_sync$enable)) stop("flywheel_sync was requested, but it is disabled in the configuration.")
-      if (is.null(scfg$flywheel_sync$source_url)) stop("Cannot run flywheel_sync without a source_url.")
-      if (is.null(scfg$metadata$flywheel_sync_directory)) stop("Cannot run flywheel_sync without a flywheel_sync_directory.")
-      if (!checkmate::test_file_exists(scfg$compute_environment$flywheel)) stop("Cannot run flywheel_sync without a valid location of the fw command.")
-    }
-
-    if ("bids_conversion" %in% user_steps) {
-      if (!isTRUE(scfg$bids_conversion$enable)) stop("bids_conversion was requested, but it is disabled in the configuration.")
-      if (is.null(scfg$bids_conversion$sub_regex)) stop("Cannot run BIDS conversion without a subject regex.")
-      if (is.null(scfg$bids_conversion$ses_regex)) stop("Cannot run BIDS conversion without a session regex.")
-    }
-
-    if ("mriqc" %in% user_steps && !isTRUE(scfg$mriqc$enable)) stop("mriqc was requested, but it is disabled in the configuration.")
-
-    if ("fmriprep" %in% user_steps && !isTRUE(scfg$fmriprep$enable)) stop("fmriprep was requested, but it is disabled in the configuration.")
-
-    if ("aroma" %in% user_steps && !isTRUE(scfg$aroma$enable)) stop("aroma was requested in steps, but it is disabled in your configuration. Use edit_project to fix this.")
-    
-    if ("postprocess" %in% user_steps) {
-      if (!isTRUE(scfg$postprocess$enable)) stop("postprocess was requested, but it is disabled in the configuration.")
-    }
-
-    if ("extract_rois" %in% user_steps) {
-      if (!isTRUE(scfg$extract_rois$enable)) stop("extract_rois was requested, but it is disabled in the configuration.")
-    }
 
     # Downstream scheduling uses the same resolved stage flags exposed by plans.
     steps <- selection$step_flags
@@ -301,16 +275,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     )
   }
 
-  if (isTRUE(scfg$force)) {
-    if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
-  }
   if (is.null(scfg$dry_run)) scfg$dry_run <- dry_run
-  # Guided setup chooses dry_run above. Wait for that choice before creating
-  # folders or attempting permission repairs; previews are read-only.
-  if (!isTRUE(scfg$dry_run)) {
-    cli::cli_alert_info("Checking the project folders needed for this run...")
-    scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
-  }
   if (is.null(scfg$log_level)) scfg$log_level <- log_level
   scfg$log_level <- toupper(scfg$log_level)
   options(BrainGnomes.log_level = scfg$log_level)
@@ -318,25 +283,19 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
   
   if (!any(steps)) stop("No processing steps were requested in run_project.")
 
-  # check that required containers are present for any requested step
-  if (steps["bids_conversion"] && !validate_exists(scfg$compute_environment$heudiconv_container)) {
-    stop("Cannot run BIDS conversion without a heudiconv container.")
+  validation <- validate_project_config(scfg, quiet = TRUE, steps = names(steps)[steps],
+    postprocess_streams = postprocess_streams, extract_streams = extract_streams)
+  require_valid_project_selection(validation)
+
+  if (isTRUE(scfg$force)) {
+    if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
 
-  if (steps["mriqc"] && !validate_exists(scfg$compute_environment$mriqc_container)) {
-    stop("Cannot run MRIQC without a valid MRIQC container.")
-  }
-
-  if (steps["fmriprep"] && !validate_exists(scfg$compute_environment$fmriprep_container)) {
-    stop("Cannot run fmriprep without a valid fmriprep container.")
-  }
-
-  if (steps["aroma"] && !validate_exists(scfg$compute_environment$aroma_container)) {
-    stop("Cannot run AROMA without a valid AROMA container.")
-  }
-
-  if (steps["postprocess"] && !validate_exists(scfg$compute_environment$fsl_container)) {
-    stop("Cannot run postprocessing without a valid FSL container.")
+  # Validation is read-only and precedes all submission-side writes, including
+  # folder creation/permission repair. Guided runs use their final selections.
+  if (!isTRUE(scfg$dry_run)) {
+    cli::cli_alert_info("Checking the project folders needed for this run...")
+    scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
   }
 
   cli::cli_alert_info("Finding the subjects and sessions that match this run...")
@@ -369,7 +328,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
   }
 
   if (isTRUE(scfg$dry_run)) {
-    plan <- project_plan_from_execution(scfg, execution)
+    plan <- project_plan_from_execution(scfg, execution, validation[c("valid", "issues", "messages")])
     dry_requested <- names(steps)[steps]
     cat("\nDry run enabled. No jobs will be submitted.\n")
     cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")

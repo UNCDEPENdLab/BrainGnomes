@@ -96,9 +96,11 @@ validate_job_settings <- function(scfg, job_name = NULL) {
 
 #' Validate the structure of a project configuration object
 #' @param scfg a project configuration object as produced by `load_project` or `setup_project`
+#' @param quiet Suppress validation messages where supported.
+#' @param selection Optional resolved work, allowing selected upstream outputs to be absent.
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
-validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
+validate_bids_conversion <- function(scfg = list(), quiet = FALSE, selection = NULL) {
   scfg <- normalize_project_flags(scfg, c(
     "bids_conversion/enable",
     "bids_conversion/overwrite",
@@ -121,7 +123,7 @@ validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
   gaps <- c(gaps, attr(scfg, "gaps"))
 
   for (rr in c("metadata/dicom_directory", "metadata/bids_directory")) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
+    if (!project_validation_directory(scfg, rr, selection)) {
       message("Config file is missing valid directory for ", rr, ".")
       gaps <- c(gaps, rr)
     }
@@ -182,6 +184,7 @@ validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
 #' @param correct_problems if TRUE, prompt user to correct validation failures. In this case,
 #'   an amended scfg object will be returned. If FALSE, `validate_project` will simply return
 #'   `TRUE/FALSE` to indicate whether the project is valid.
+#' @param selection Optional resolved stage/stream selection for execution checks.
 #' @details
 #'   If `correct_problems = FALSE`, the return will be TRUE/FALSE to indicate whether the project
 #'   passed validation. If it did not, an attribute called `'gaps'` will be added to the return
@@ -189,7 +192,7 @@ validate_bids_conversion <- function(scfg = list(), quiet = FALSE) {
 #'  
 #' @importFrom checkmate assert_flag test_class test_directory_exists test_file_exists
 #' @keywords internal
-validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FALSE) {
+validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FALSE, selection = NULL) {
   if (!checkmate::test_class(scfg, "bg_project_cfg")) {
     if (inherits(scfg, "list")) {
       class(scfg) <- c(class(scfg), "bg_project_cfg")
@@ -200,6 +203,10 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
 
   checkmate::assert_flag(quiet)
   checkmate::assert_flag(correct_problems)
+  if (!is.null(selection)) {
+    if (correct_problems) stop("Selected-work validation cannot repair configuration.", call. = FALSE)
+    scfg <- project_validation_scope(scfg, selection)
+  }
 
   scfg <- normalize_project_flags(scfg, c(
     "flywheel_sync/enable",
@@ -229,8 +236,11 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
     "metadata/project_directory", "metadata/log_directory",
     "metadata/scratch_directory", "metadata/templateflow_home"
   )
+  if (!is.null(selection) && !any(selection$steps %in% c("mriqc", "fmriprep", "aroma"))) {
+    core_dirs <- setdiff(core_dirs, "metadata/templateflow_home")
+  }
   for (rr in core_dirs) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, rr))) {
+    if (!project_validation_directory(scfg, rr, selection)) {
       message("Config file is missing valid directory for ", rr, ".")
       gaps <- c(gaps, rr)
     }
@@ -244,29 +254,28 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
 
   # step-specific directories
   if (any(scfg$fmriprep$enable, scfg$aroma$enable, scfg$postprocess$enable, na.rm = TRUE)) {
-    fmriprep_dir <- get_nested_values(scfg, "metadata/fmriprep_directory")
-    if (is.null(fmriprep_dir) || !nzchar(fmriprep_dir) || !checkmate::test_directory_exists(fmriprep_dir)) {
+    if (!project_validation_directory(scfg, "metadata/fmriprep_directory", selection)) {
       message("Config file is missing valid directory for metadata/fmriprep_directory.")
       gaps <- c(gaps, "metadata/fmriprep_directory")
     }
   }
 
   if (any(scfg$postprocess$enable, scfg$extract_rois$enable, na.rm = TRUE)) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/postproc_directory"))) {
+    if (!project_validation_directory(scfg, "metadata/postproc_directory", selection)) {
       message("Config file is missing valid directory for metadata/postproc_directory.")
       gaps <- c(gaps, "metadata/postproc_directory")
     }
   }
 
   if (isTRUE(scfg$extract_rois$enable)) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/rois_directory"))) {
+    if (!project_validation_directory(scfg, "metadata/rois_directory", selection)) {
       message("Config file is missing valid directory for metadata/rois_directory.")
       gaps <- c(gaps, "metadata/rois_directory")
     }
   }
 
   if (isTRUE(scfg$mriqc$enable)) {
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/mriqc_directory"))) {
+    if (!project_validation_directory(scfg, "metadata/mriqc_directory", selection)) {
       message("Config file is missing valid directory for metadata/mriqc_directory.")
       gaps <- c(gaps, "metadata/mriqc_directory")
     }
@@ -288,12 +297,12 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
       gaps <- c(gaps, "flywheel_sync/save_audit_logs")
     }
 
-    if (!checkmate::test_directory_exists(scfg$metadata$flywheel_sync_directory)) {
+    if (!project_validation_directory(scfg, "metadata/flywheel_sync_directory", selection)) {
       message("Config file is missing valid directory for metadata/flywheel_sync_directory.")
       gaps <- c(gaps, "metadata/flywheel_sync_directory")
     }
 
-    if (!checkmate::test_directory_exists(scfg$metadata$flywheel_temp_directory)) {
+    if (!project_validation_directory(scfg, "metadata/flywheel_temp_directory", selection)) {
       message("Config file is missing valid directory for metadata/flywheel_temp_directory.")
       gaps <- c(gaps, "metadata/flywheel_temp_directory")
     }
@@ -314,7 +323,7 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
     }
 
     # BIDS directory required for fmriprep
-    if (!checkmate::test_directory_exists(get_nested_values(scfg, "metadata/bids_directory"))) {
+    if (!project_validation_directory(scfg, "metadata/bids_directory", selection)) {
       message("Config file is missing valid directory for metadata/bids_directory.")
       gaps <- c(gaps, "metadata/bids_directory")
     }
@@ -375,7 +384,7 @@ validate_project <- function(scfg = list(), quiet = FALSE, correct_problems = FA
   }
 
   # validate bids conversion
-  scfg <- validate_bids_conversion(scfg, quiet = quiet)
+  scfg <- validate_bids_conversion(scfg, quiet = quiet, selection = selection)
   gaps <- c(gaps, attr(scfg, "gaps"))
 
   # Postprocessing settings validation (function in setup_postproc.R)
@@ -895,7 +904,9 @@ validate_extract_configs <- function(ecfg, quiet = FALSE) {
     ecfg[[nm]] <- res$extract_rois
 
     # rename gaps by config, like extract_rois/ecfg1/correlation
-    gaps <- c(gaps, paste0("extract_rois/", nm, "/", sub("^extract_rois/", "", res$gaps)))
+    if (length(res$gaps)) {
+      gaps <- c(gaps, paste0("extract_rois/", nm, "/", sub("^extract_rois/", "", res$gaps)))
+    }
   }
   return(list(extract_rois = ecfg, gaps = gaps))
 }

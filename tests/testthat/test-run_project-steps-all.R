@@ -47,7 +47,9 @@ test_that("run_project expands steps = 'all' to enabled step flags", {
   submitted <- FALSE
   local_mocked_bindings(
     setup_project_directories = function(scfg, check_cache = NULL) scfg,
-    validate_exists = function(...) TRUE,
+    # Isolate stage expansion and submission wiring from configuration checks.
+    validate_project_config = function(input, ...) list(valid = TRUE,
+      issues = empty_issue_df(), messages = character(), config = input),
     submit_flywheel_sync = function(...) "flywheel123",
     submit_fsaverage_setup = function(...) "fsaverage123",
     submit_prefetch_templates = function(...) "prefetch123",

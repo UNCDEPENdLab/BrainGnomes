@@ -44,7 +44,8 @@ test_that("run_project CLI forwards selected extraction streams", {
   cfg <- structure(list(metadata = list(project_name = "cli-test")), class = "bg_project_cfg")
 
   local_mocked_bindings(
-    load_project = function(input) {
+    load_project = function(input, validate) {
+      expect_false(validate)
       expect_identical(input, "/proj/example")
       cfg
     },

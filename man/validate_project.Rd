@@ -4,7 +4,12 @@
 \alias{validate_project}
 \title{Validate the structure of a project configuration object}
 \usage{
-validate_project(scfg = list(), quiet = FALSE, correct_problems = FALSE)
+validate_project(
+  scfg = list(),
+  quiet = FALSE,
+  correct_problems = FALSE,
+  selection = NULL
+)
 }
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
@@ -14,6 +19,8 @@ validate_project(scfg = list(), quiet = FALSE, correct_problems = FALSE)
 \item{correct_problems}{if TRUE, prompt user to correct validation failures. In this case,
 an amended scfg object will be returned. If FALSE, \code{validate_project} will simply return
 \code{TRUE/FALSE} to indicate whether the project is valid.}
+
+\item{selection}{Optional resolved stage/stream selection for execution checks.}
 }
 \description{
 Validate the structure of a project configuration object

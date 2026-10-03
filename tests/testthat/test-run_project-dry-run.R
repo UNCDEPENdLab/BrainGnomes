@@ -3,10 +3,11 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
 
-  dirs <- c("dicom", "bids", "fmriprep", "postproc", "mriqc", "logs", "scratch")
+  dirs <- c("dicom", "bids", "fmriprep", "postproc", "mriqc", "logs", "scratch", "templateflow")
   dirs <- file.path(root, dirs)
   vapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE, FUN.VALUE = logical(1))
   dir.create(file.path(root, "bids", "sub-01"))
+  file.create(file.path(root, c("fmriprep.sif", "license.txt")))
 
   scfg <- list(
     metadata = list(
@@ -18,12 +19,14 @@ test_that("run_project dry_run avoids scheduling and passes dry_run to submit_su
       postproc_directory = file.path(root, "postproc"),
       mriqc_directory = file.path(root, "mriqc"),
       log_directory = file.path(root, "logs"),
-      scratch_directory = file.path(root, "scratch")
+      scratch_directory = file.path(root, "scratch"),
+      templateflow_home = file.path(root, "templateflow")
     ),
     flywheel_sync = list(enable = FALSE),
     bids_conversion = list(enable = FALSE),
     mriqc = list(enable = FALSE),
-    fmriprep = list(enable = TRUE),
+    fmriprep = list(enable = TRUE, memgb = 8, nhours = 1, ncores = 2,
+      fs_license_file = file.path(root, "license.txt")),
     aroma = list(enable = FALSE),
     postprocess = list(enable = FALSE),
     extract_rois = list(enable = FALSE),
@@ -75,6 +78,7 @@ test_that("run_project interactive mode prompts for dry run and honors selection
   dirs <- file.path(root, dirs)
   vapply(dirs, dir.create, recursive = TRUE, showWarnings = FALSE, FUN.VALUE = logical(1))
   dir.create(file.path(root, "dicom", "sub-01"))
+  file.create(file.path(root, c("heudiconv.sif", "heuristic.py")))
 
   scfg <- list(
     metadata = list(
@@ -94,7 +98,9 @@ test_that("run_project interactive mode prompts for dry run and honors selection
       sub_regex = "^sub-.+",
       sub_id_match = "sub-(.*)",
       ses_regex = NA_character_,
-      ses_id_match = NA_character_
+      ses_id_match = NA_character_,
+      heuristic_file = file.path(root, "heuristic.py"), memgb = 4, nhours = 1,
+      ncores = 1, overwrite = FALSE, clear_cache = FALSE
     ),
     mriqc = list(enable = FALSE),
     fmriprep = list(enable = FALSE),
@@ -203,7 +209,10 @@ test_that("run_project dry_run prints resolved stream settings", {
 
   local_mocked_bindings(
     setup_project_directories = function(scfg, check_cache = NULL) scfg,
-    validate_exists = function(...) TRUE,
+    # This test isolates display of stream settings; selected-stage validation
+    # is exercised with real fixtures in test-selected-stage-validation.R.
+    validate_project_config = function(input, ...) list(valid = TRUE,
+      issues = empty_issue_df(), messages = character(), config = input),
     submit_subjects = function(...) invisible(TRUE),
     .package = "BrainGnomes"
   )

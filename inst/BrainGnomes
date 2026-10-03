@@ -54,7 +54,8 @@ format_output <- function(x, format = "table") {
       created_at = x$created_at, config_file = x$config_file,
       request = x$request, subjects = x$subjects,
       scope_deferred = x$scope_deferred, scope_status = x$scope_status,
-      deferred_reasons = x$deferred_reasons, jobs = x$jobs, preview = x$preview
+      deferred_reasons = x$deferred_reasons, jobs = x$jobs, preview = x$preview,
+      validation = x$validation
     ),
     bg_project_run = unclass(x),
     bg_run_provenance = unclass(x),
@@ -142,7 +143,10 @@ print_command_help <- function(command, status = 0L) {
       "Usage: BrainGnomes config <validate|edit|show> <project_directory|config.yaml> [options]\n\n",
       "Optional inspection tooling for scripts, CI, and YAML review. It is not required before run_project.\n\n",
       "Options:\n",
-      "  --format=table|json            Output format for validate/show.\n"
+      "  --format=table|json            Output format for validate/show.\n",
+      "  --steps=<steps>                Validate selected stages (validate only).\n",
+      "  --postprocess-streams=<names>  Validate selected postprocessing streams.\n",
+      "  --extract-streams=<names>      Validate selected extraction streams.\n"
     ),
     doctor = paste0(
       "Usage: BrainGnomes doctor <project_directory|config.yaml> [options]\n\n",
@@ -295,10 +299,12 @@ command_config <- function(values) {
   if (length(values) < 1L) usage_error("config requires validate, edit, or show.")
   action <- values[[1L]]
   input <- require_input(values[-1L], paste("config", action))
-  opts <- normalize_options(values[-c(1L, 2L)], c("format"))
+  allowed <- c("format", if (action == "validate") c("steps", "postprocess_streams", "extract_streams"))
+  opts <- normalize_options(values[-c(1L, 2L)], allowed)
   format <- or_else(opts$format, "table")
   if (action == "validate") {
-    result <- BrainGnomes::validate_project_config(input, quiet = TRUE)
+    result <- BrainGnomes::validate_project_config(input, quiet = TRUE, steps = opts$steps,
+      postprocess_streams = opts$postprocess_streams, extract_streams = opts$extract_streams)
     format_output(result, format)
     return(if (result$valid) 0L else 1L)
   }

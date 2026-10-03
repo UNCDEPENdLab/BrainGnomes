@@ -213,7 +213,8 @@ run_project_cli <- function(input, cli_args = list()) {
   dry_run_opt <- cli_args[["dry-run"]]
   if (is.null(dry_run_opt)) dry_run_opt <- cli_args$dry_run
 
-  scfg <- load_project(input)
+  # run_project() validates the selected stages/streams after resolving options.
+  scfg <- load_project(input, validate = FALSE)
   attr(scfg, "provenance_context") <- list(
     interface = "cli",
     input = normalizePath(input, winslash = "/", mustWork = FALSE)
