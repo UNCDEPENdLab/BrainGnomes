@@ -125,7 +125,12 @@ optionally <code>ses_id</code>.</p></dd>
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A serializable <code>bg_project_plan</code> object.</p>
+    <p>A serializable <code>bg_project_plan</code> object. Its <code>preview$work</code> table
+lists concrete subject/session/stage/stream units, input and output roots,
+log locations, dependencies, resources, and current completion-marker
+decisions. Console output is bounded; the table retains the full selection.
+Deferred scope stays unknown until sync. Counts describe requested work
+units, not runtime or cost estimates or an exact scheduler job count.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

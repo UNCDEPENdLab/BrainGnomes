@@ -64,7 +64,13 @@ plan_project(
 
 ## Value
 
-A serializable `bg_project_plan` object.
+A serializable `bg_project_plan` object. Its `preview$work` table lists
+concrete subject/session/stage/stream units, input and output roots, log
+locations, dependencies, resources, and current completion-marker
+decisions. Console output is bounded; the table retains the full
+selection. Deferred scope stays unknown until sync. Counts describe
+requested work units, not runtime or cost estimates or an exact
+scheduler job count.
 
 ## See also
 

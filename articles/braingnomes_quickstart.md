@@ -662,6 +662,44 @@ The available submitted stages are `"flywheel_sync"`,
 with the project but scheduled independently through
 [`run_bids_validation()`](https://hallquistlab.github.io/BrainGnomes/reference/run_bids_validation.md).
 
+Before submitting, preview the selected work without creating
+directories, changing permissions, or contacting the scheduler:
+
+``` r
+
+preview <- run_project(scfg, steps = "all", dry_run = TRUE)
+preview$preview$work
+```
+
+Dry runs return a `bg_project_plan` rather than `TRUE`. The preview
+lists subjects/sessions, stages and streams, input/output and log
+locations, requested resources, and dependencies. Completion markers
+distinguish `would_skip` from `would_submit`; `force = TRUE` includes
+already-completed work. Project setup checks and deferred Flywheel scope
+are labeled separately. These counts are work units, not exact scheduler
+job counts: postprocessing controllers can expand into image arrays and
+sentinel jobs, and runtime preflight still applies. Console output shows
+at most 20 detailed rows; the returned table retains all rows. Optional
+saved plans and retry previews expose the same information.
+
+For scripts, keep JSON stdout separate from diagnostic stderr:
+
+``` r
+
+# Shell equivalent:
+# BrainGnomes run_project /project/my_study --steps=all --dry-run --format=json > preview.json
+```
+
+Each `--format=json` invocation emits one complete result document.
+Progress, warnings, errors, and requested log tails go to stderr. Do not
+combine stdout and stderr before parsing. JSON runs require explicit
+`--steps` (or a saved plan); `status --watch` and
+`diagnose --interactive` require table output. Poll
+`status --format=json` for individual snapshots. Invalid formats fail
+before work starts with exit status 2. Execution errors use status 1 and
+empty stdout; validation and doctor failures instead retain their
+structured report and use status 1.
+
 The returned run handle has a stable run ID connecting tracking rows,
 logs, inspection, diagnosis, provenance, retry, and cancellation. Before
 the first scheduler submission, BrainGnomes writes a run-specific
@@ -978,6 +1016,7 @@ stays synchronized with `inst/BrainGnomes`:
 
     Also accepted: init, edit_project, and run.
     Config, doctor, and plan are optional; run_project resolves and submits directly.
+    Machine output: --format=json writes one JSON document to stdout; diagnostics go to stderr.
     Use 'BrainGnomes help <command>' or 'BrainGnomes <command> --help' for details.
 
 Use `BrainGnomes <command> --help` for command-specific options and

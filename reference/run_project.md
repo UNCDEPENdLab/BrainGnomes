@@ -94,8 +94,10 @@ run_project(
 
 For submitted work, an invisible `bg_project_run` object containing the
 run UUID, scheduler job IDs known at submission time, and the path to
-the complete run provenance record. Dry runs invisibly return `TRUE`
-after printing the resolved plan.
+the complete run provenance record. Dry runs invisibly return a
+`bg_project_plan` with concrete work units, paths, resources, and
+current completion-marker decisions after printing the preview. No jobs
+are submitted.
 
 ## Details
 

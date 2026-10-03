@@ -141,8 +141,9 @@ postprocessing and extraction stream settings without submitting any jobs.</p></
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>For submitted work, an invisible <code>bg_project_run</code> object containing
 the run UUID, scheduler job IDs known at submission time, and the path to
-the complete run provenance record. Dry runs invisibly return <code>TRUE</code> after
-printing the resolved plan.</p>
+the complete run provenance record. Dry runs invisibly return a
+<code>bg_project_plan</code> with concrete work units, paths, resources, and current
+completion-marker decisions after printing the preview. No jobs are submitted.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
