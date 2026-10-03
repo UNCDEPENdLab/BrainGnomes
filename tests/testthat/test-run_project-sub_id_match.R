@@ -35,11 +35,12 @@ test_that("run_project uses custom sub_id_match for dicom dirs", {
       sub_id_match = "(.+)",
       ses_regex = NA_character_,
       ses_id_match = NA_character_,
-      heuristic_file = heuristic_file
+      heuristic_file = heuristic_file,
+      memgb = 4, nhours = 1, ncores = 1, overwrite = FALSE, clear_cache = FALSE
     ),
     compute_environment = list(
       heudiconv_container = container_file,
-      scheduler = "sh"
+      scheduler = "slurm"
     )
   )
   class(scfg) <- "bg_project_cfg"

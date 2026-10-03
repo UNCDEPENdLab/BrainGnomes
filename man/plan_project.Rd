@@ -30,7 +30,8 @@ optionally \code{ses_id}.}
 
 \item{force}{Include work whose completion markers would otherwise skip it.}
 
-\item{allow_invalid}{Build the plan despite configuration validation errors.}
+\item{allow_invalid}{Build an explicitly unvalidated exploratory plan despite
+configuration errors. Submission always repeats validation and rejects errors.}
 
 \item{quiet}{Suppress the printed plan.}
 }

@@ -66,6 +66,8 @@ completion-marker decisions after printing the preview. No jobs are submitted.
 This remains the standard execution path after \code{\link[=setup_project]{setup_project()}}. It resolves
 the same stages, streams, subject/session scope, and force setting exposed by
 \code{\link[=plan_project]{plan_project()}} before submission; calling \code{plan_project()} first is optional.
+Plans, dry runs, and submission apply the same selected-stage configuration
+checks before creating directories, writing provenance, or submitting jobs.
 When stages are selected interactively, only omitted arguments are prompted
 for. Explicit choices, including \code{dry_run = TRUE}, are always retained.
 }

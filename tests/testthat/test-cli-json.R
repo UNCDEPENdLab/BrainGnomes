@@ -119,3 +119,28 @@ test_that("validation failures retain a parseable report and a nonzero status", 
   report <- jsonlite::fromJSON(paste(result$stdout, collapse = "\n"))
   expect_false(report$valid)
 })
+
+test_that("CLI selected validation, plans, dry runs and submission reject the same errors", {
+  cfg <- make_json_cli_project()
+  cfg$fmriprep$fs_license_file <- file.path(cfg$metadata$project_directory, "missing-license.txt")
+  cfg$fmriprep$ncores <- -1
+  cfg <- write_project_config(cfg, overwrite = TRUE)
+  root <- cfg$metadata$project_directory
+  before <- list.files(root, recursive = TRUE, all.files = TRUE, include.dirs = TRUE)
+  validation <- run_brain_gnomes_cli(c("config", "validate", root, "--steps=fmriprep", "--format=json"))
+  expect_identical(validation$status, 1L)
+  report <- jsonlite::fromJSON(paste(validation$stdout, collapse = "\n"))
+  expect_false(report$valid)
+  expect_setequal(report$issues$field, c("fmriprep/fs_license_file", "fmriprep/ncores"))
+  for (args in list(c("plan", root), c("run", root, "--dry-run"), c("run", root))) {
+    result <- run_brain_gnomes_cli(c(args, "--steps=fmriprep", "--format=json"))
+    expect_identical(result$status, 1L)
+    expect_length(result$stdout, 0L)
+    expect_match(paste(result$stderr, collapse = "\n"), "fmriprep/fs_license_file", fixed = TRUE)
+    expect_match(paste(result$stderr, collapse = "\n"), "fmriprep/ncores", fixed = TRUE)
+  }
+  exploratory <- run_brain_gnomes_cli(c("plan", root, "--steps=fmriprep", "--allow-invalid", "--format=json"))
+  expect_identical(exploratory$status, 0L)
+  expect_false(jsonlite::fromJSON(paste(exploratory$stdout, collapse = "\n"))$validation$valid)
+  expect_identical(list.files(root, recursive = TRUE, all.files = TRUE, include.dirs = TRUE), before)
+})

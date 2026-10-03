@@ -41,17 +41,25 @@ empty_issue_df <- function() {
 #'
 #' This optional inspection entry point is useful for scripts, continuous
 #' integration, and configuration review. It is not required before
-#' [run_project()], which retains its selected-stage checks. Unlike the historical
+#' [run_project()], which automatically uses the same checks for selected work. Unlike the historical
 #' repair path in `validate_project()`, this function never opens the setup wizard
 #' and never writes the configuration.
 #'
 #' @param input A project configuration object, YAML file, or project directory.
 #'   Defaults to the current working directory.
 #' @param quiet Suppress the printed validation summary.
+#' @param steps Optional stages (or `"all"`) to validate with the same checks as
+#'   plans, dry runs, and submission. NULL inspects the whole configuration.
+#' @param postprocess_streams Optional selected postprocessing streams; requires steps.
+#' @param extract_streams Optional selected ROI-extraction streams; requires steps.
+#' @details Selected-work checks exclude unrelated stages and streams. Configured
+#'   future output directories may be absent; required inputs, resource settings,
+#'   containers, and licenses must be valid. No directories are created.
 #' @return A `bg_project_validation` object containing `valid`, `issues`,
 #'   `messages`, and the parsed `config`.
 #' @export
-validate_project_config <- function(input = getwd(), quiet = FALSE) {
+validate_project_config <- function(input = getwd(), quiet = FALSE, steps = NULL,
+                                    postprocess_streams = NULL, extract_streams = NULL) {
   checkmate::assert_flag(quiet)
 
   config_error <- NULL
@@ -80,7 +88,15 @@ validate_project_config <- function(input = getwd(), quiet = FALSE) {
   validation_error <- NULL
   messages <- utils::capture.output(
     valid <- tryCatch(
-      validate_project(scfg, quiet = TRUE, correct_problems = FALSE),
+      {
+        if (is.null(steps) && (!is.null(postprocess_streams) || !is.null(extract_streams))) {
+          stop("Stream selections require steps.", call. = FALSE)
+        }
+        selection <- if (is.null(steps)) NULL else resolve_project_selection(
+          scfg, steps, postprocess_streams, extract_streams
+        )
+        validate_project(scfg, quiet = TRUE, correct_problems = FALSE, selection = selection)
+      },
       error = function(e) {
         validation_error <<- conditionMessage(e)
         FALSE
@@ -157,7 +173,7 @@ doctor_project <- function(input = getwd(), steps = NULL, deep = FALSE, quiet = 
   checkmate::assert_flag(deep)
   checkmate::assert_flag(quiet)
 
-  validation <- validate_project_config(input, quiet = TRUE)
+  validation <- validate_project_config(input, quiet = TRUE, steps = steps)
   scfg <- validation$config
   checks <- doctor_check_df()
   add_check <- function(category, check, status, detail, remedy = "") {
@@ -693,7 +709,8 @@ build_project_jobs <- function(scfg, execution) {
 #' @param postprocess_streams Optional postprocessing streams.
 #' @param extract_streams Optional ROI-extraction streams.
 #' @param force Include work whose completion markers would otherwise skip it.
-#' @param allow_invalid Build the plan despite configuration validation errors.
+#' @param allow_invalid Build an explicitly unvalidated exploratory plan despite
+#'   configuration errors. Submission always repeats validation and rejects errors.
 #' @param quiet Suppress the printed plan.
 #' @return A serializable `bg_project_plan` object. Its `preview$work` table
 #'   lists concrete subject/session/stage/stream units, input and output roots,
@@ -709,10 +726,9 @@ plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
   checkmate::assert_flag(force)
   checkmate::assert_flag(allow_invalid)
   checkmate::assert_flag(quiet)
-  validation <- validate_project_config(input, quiet = TRUE)
-  if (!validation$valid && !allow_invalid) {
-    stop("Project configuration is invalid. Run validate_project_config() or `BrainGnomes config validate` for details.", call. = FALSE)
-  }
+  validation <- validate_project_config(input, quiet = TRUE, steps = steps,
+    postprocess_streams = postprocess_streams, extract_streams = extract_streams)
+  if (!allow_invalid || is.null(validation$config)) require_valid_project_selection(validation)
   scfg <- validation$config
   execution <- resolve_project_execution(
     scfg, steps, subject_filter, postprocess_streams, extract_streams, force
@@ -725,7 +741,7 @@ plan_project <- function(input = getwd(), steps = "all", subject_filter = NULL,
 #' Build a reusable preview from an already resolved request
 #' @param scfg Project configuration used to resolve the request.
 #' @param execution Resolved stage, stream, and subject/session selections.
-#' @param validation Optional configuration validation report; NULL for direct dry runs.
+#' @param validation Optional selected-work configuration validation report.
 #' @return A bg_project_plan without performing discovery again or writing files.
 #' @noRd
 project_plan_from_execution <- function(scfg, execution, validation = NULL) {
@@ -756,6 +772,10 @@ project_plan_from_execution <- function(scfg, execution, validation = NULL) {
 #' @export
 print.bg_project_plan <- function(x, ...) {
   cli::cli_h2("BrainGnomes execution plan {.val {x$plan_id}}")
+  if (!is.null(x$validation) && !isTRUE(x$validation$valid)) {
+    cli::cli_alert_warning("Exploratory plan: configuration is invalid. Submission will reject this selection until corrected.")
+    print(x$validation$issues, row.names = FALSE)
+  }
   cli::cli_text("Steps: {paste(x$request$steps, collapse = ', ')}")
   if (isTRUE(x$scope_deferred)) {
     cli::cli_alert_info(

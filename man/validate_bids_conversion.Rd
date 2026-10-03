@@ -4,10 +4,14 @@
 \alias{validate_bids_conversion}
 \title{Validate the structure of a project configuration object}
 \usage{
-validate_bids_conversion(scfg = list(), quiet = FALSE)
+validate_bids_conversion(scfg = list(), quiet = FALSE, selection = NULL)
 }
 \arguments{
 \item{scfg}{a project configuration object as produced by \code{load_project} or \code{setup_project}}
+
+\item{quiet}{Suppress validation messages where supported.}
+
+\item{selection}{Optional resolved work, allowing selected upstream outputs to be absent.}
 }
 \description{
 Validate the structure of a project configuration object
