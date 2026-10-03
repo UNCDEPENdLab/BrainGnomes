@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 
 help_tokens <- c("-h", "--help")
+cli_output <- new.env(parent = emptyenv())
+cli_output$payload <- NULL
 command_aliases <- c(
   setup_project = "init",
   edit_project = "config-edit",
@@ -21,13 +23,23 @@ is_flag <- function(x) {
   !is.null(x) && (isTRUE(x) || (length(x) == 1L && is.na(x)))
 }
 
-normalize_options <- function(args, allowed = character()) {
+normalize_options <- function(args, allowed = character(), formats = c("table", "json")) {
   if (length(args) == 0L) return(list())
   parsed <- BrainGnomes::parse_cli_args(args)
   names(parsed) <- gsub("-", "_", names(parsed), fixed = TRUE)
   unknown <- setdiff(names(parsed), allowed)
   if (length(unknown) > 0L) {
     usage_error(paste0("Unknown option(s): --", paste(gsub("_", "-", unknown), collapse = ", --")))
+  }
+  if (any(grepl("^--?format(=|$)", args))) {
+    format <- tolower(as.character(parsed$format))
+    if (length(format) != 1L || is.na(format) || !format %in% formats) {
+      usage_error(paste0("--format must be one of: ", paste(formats, collapse = ", "), "."))
+    }
+    parsed$format <- format
+    # Keep incidental cat()/print()/logger output out of machine-readable stdout.
+    # main() restores the sink and emits the buffered result only on success.
+    if (format != "table") sink(stderr(), type = "output")
   }
   parsed
 }
@@ -41,7 +53,8 @@ format_output <- function(x, format = "table") {
       schema_version = x$schema_version, plan_id = x$plan_id,
       created_at = x$created_at, config_file = x$config_file,
       request = x$request, subjects = x$subjects,
-      scope_deferred = x$scope_deferred, jobs = x$jobs
+      scope_deferred = x$scope_deferred, scope_status = x$scope_status,
+      deferred_reasons = x$deferred_reasons, jobs = x$jobs, preview = x$preview
     ),
     bg_project_run = unclass(x),
     bg_run_provenance = unclass(x),
@@ -63,10 +76,13 @@ format_output <- function(x, format = "table") {
   )
 
   if (format == "json") {
-    cat(jsonlite::toJSON(payload, pretty = TRUE, auto_unbox = TRUE, na = "null"), "\n")
+    if (!is.null(cli_output$payload)) usage_error("JSON output must contain exactly one result.")
+    cli_output$payload <- jsonlite::toJSON(payload, pretty = TRUE, auto_unbox = TRUE, na = "null")
   } else if (format == "csv") {
     if (!is.data.frame(payload)) usage_error("CSV output is available only for tabular command results.")
-    utils::write.table(payload, stdout(), sep = ",", row.names = FALSE, col.names = TRUE, quote = TRUE, na = "")
+    cli_output$payload <- paste(capture.output(utils::write.table(
+      payload, sep = ",", row.names = FALSE, col.names = TRUE, quote = TRUE, na = ""
+    )), collapse = "\n")
   } else {
     if (inherits(x, c("bg_project_validation", "bg_project_doctor", "bg_project_plan", "bg_project_run", "bg_run_provenance", "bg_project_inspection", "bg_project_diagnosis"))) {
       print(x)
@@ -100,6 +116,7 @@ print_global_help <- function(status = 0L) {
     "  help [command]\n\n",
     "Also accepted: init, edit_project, and run.\n",
     "Config, doctor, and plan are optional; run_project resolves and submits directly.\n",
+    "Machine output: --format=json writes one JSON document to stdout; diagnostics go to stderr.\n",
     "Use 'BrainGnomes help <command>' or 'BrainGnomes <command> --help' for details.\n",
     sep = ""
   )
@@ -142,6 +159,7 @@ print_command_help <- function(command, status = 0L) {
       "Optional inspection/persistence view of the request that run_project resolves internally.\n",
       "It is not an exact scheduler job list; Flywheel subject scope may remain deferred until sync.\n",
       "Create a plan for review or automation; it is not required before a direct run.\n\n",
+      "Preview includes work units, paths, completion-marker decisions, and per-job resources.\n",
       "Options:\n",
       "  --steps=<steps>                Space-separated stages or all.\n",
       "  --subject-filter=<ids>         Space-separated subject IDs.\n",
@@ -167,7 +185,8 @@ print_command_help <- function(command, status = 0L) {
       "  --force                            Rerun completed work.\n",
       "  --dry-run                          Validate and show planned work without submission.\n",
       "  --log-level=<level>                TRACE, DEBUG, INFO, WARN, ERROR, or FATAL.\n",
-      "  --format=table|json                Output format for the returned run handle.\n\n",
+      "  --format=table|json                Output format for the run handle or dry-run plan.\n\n",
+      "JSON runs require --steps (or a saved plan); use --steps=all for all enabled stages.\n",
       "A YAML file with schema_version brain-gnomes-plan-v1 or brain-gnomes-plan-v2 is submitted as a saved plan.\n"
     ),
     `validate-bids` = paste0(
@@ -190,7 +209,7 @@ print_command_help <- function(command, status = 0L) {
       "                                 runs, attempts, jobs, active, reconciliation,\n",
       "                                 or dashboard.\n",
       "  --refresh                      Compare queued/running jobs with the scheduler.\n",
-      "  --watch                        Refresh until no tracked jobs are queued/running.\n",
+      "  --watch                        Refresh until no tracked jobs are queued/running (table only).\n",
       "  --interval=<seconds>           Watch refresh interval (default 30).\n",
       "  --format=table|json|csv        Output format.\n"
     ),
@@ -206,7 +225,7 @@ print_command_help <- function(command, status = 0L) {
       "Options:\n",
       "  --run=<id|latest>              Select a tracked run.\n",
       "  --failed-only                  Include only failed/cancelled jobs.\n",
-      "  --tail=<lines>                 Print the last lines of each matching log.\n",
+      "  --tail=<lines>                 Print log tails; use stderr with JSON/CSV output.\n",
       "  --format=table|json|csv        Output format.\n"
     ),
     diagnose = paste0(
@@ -290,7 +309,7 @@ command_config <- function(values) {
   }
   if (action == "show") {
     cfg <- BrainGnomes::load_project(input, validate = FALSE)
-    if (format == "json") cat(jsonlite::toJSON(as.list(cfg), pretty = TRUE, auto_unbox = TRUE, na = "null"), "\n")
+    if (format == "json") format_output(as.list(cfg), format)
     else if (format == "table") summary(cfg)
     else usage_error("config show supports table or json output.")
     return(0L)
@@ -342,10 +361,16 @@ command_run <- function(values) {
     if (length(disallowed) > 0L) usage_error("Saved plans cannot be combined with run-selection options.")
     result <- BrainGnomes::submit_project_plan(plan, debug = is_flag(opts$debug), log_level = or_else(opts$log_level, "INFO"))
   } else {
+    if (or_else(opts$format, "table") != "table" && is.null(opts$steps)) {
+      usage_error("Machine-readable runs require --steps (use --steps=all for all enabled stages) or a saved plan.")
+    }
     cli_args <- opts
     result <- BrainGnomes:::run_project_cli(input, cli_args)
   }
-  format_output(result, or_else(opts$format, "table"))
+  format <- or_else(opts$format, "table")
+  # Direct dry runs already print their human preview; serialize the returned
+  # plan for machines without printing the same preview twice for people.
+  if (format != "table" || !inherits(result, "bg_project_plan")) format_output(result, format)
   0L
 }
 
@@ -366,8 +391,11 @@ command_status <- function(values) {
   opts <- normalize_options(values[-1L], c(
     "sub_id", "ses_id", "summary", "runs", "run", "view", "refresh",
     "watch", "interval", "format"
-  ))
+  ), formats = c("table", "json", "csv"))
   format <- or_else(opts$format, "table")
+  if (is_flag(opts$watch) && format != "table") {
+    usage_error("--watch requires --format=table. Poll status without --watch for a single JSON/CSV result.")
+  }
   if (!is.null(opts$ses_id) && is.null(opts$sub_id)) usage_error("--ses-id requires --sub-id.")
   if (is_flag(opts$runs) && !is.null(opts$run)) usage_error("Use either --runs or --run, not both.")
   if (is_flag(opts$runs) && !is.null(opts$view)) usage_error("Use either --runs or --view, not both.")
@@ -425,7 +453,8 @@ command_status <- function(values) {
 
 command_logs <- function(values) {
   input <- require_input(values, "logs")
-  opts <- normalize_options(values[-1L], c("run", "failed_only", "tail", "format"))
+  opts <- normalize_options(values[-1L], c("run", "failed_only", "tail", "format"),
+    formats = c("table", "json", "csv"))
   logs <- BrainGnomes::find_run_logs(
     input, run_id = or_else(opts$run, "latest"), failed_only = is_flag(opts$failed_only)
   )
@@ -457,6 +486,9 @@ command_diagnose <- function(values) {
   opts <- normalize_options(
     values[-1L], c("run", "subject_id", "job_id", "interactive", "format")
   )
+  if (is_flag(opts$interactive) && or_else(opts$format, "table") != "table") {
+    usage_error("--interactive requires --format=table.")
+  }
   if (is_flag(opts$interactive)) {
     BrainGnomes::diagnose_project(
       input, run_id = opts$run, subject_id = opts$subject_id,
@@ -487,7 +519,8 @@ command_retry <- function(values) {
 
 command_cancel <- function(values) {
   input <- require_input(values, "cancel")
-  opts <- normalize_options(values[-1L], c("run", "dry_run", "yes", "format"))
+  opts <- normalize_options(values[-1L], c("run", "dry_run", "yes", "format"),
+    formats = c("table", "json", "csv"))
   dry_run <- is_flag(opts$dry_run)
   if (!dry_run && !is_flag(opts$yes)) usage_error("cancel requires --dry-run or --yes.")
   result <- BrainGnomes::cancel_project_run(input, or_else(opts$run, "latest"), dry_run = dry_run)
@@ -496,6 +529,8 @@ command_cancel <- function(values) {
 }
 
 main <- function() {
+  output_depth <- sink.number(type = "output")
+  on.exit(while (sink.number(type = "output") > output_depth) sink(type = "output"), add = TRUE)
   args <- commandArgs(trailingOnly = TRUE)
   if (length(args) == 0L) print_global_help(status = 1L)
   if (args[[1L]] %in% help_tokens) print_global_help(status = 0L)
@@ -507,15 +542,18 @@ main <- function() {
   command <- args[[1L]]
   values <- args[-1L]
   if (any(values %in% help_tokens)) print_command_help(command, status = 0L)
+  # Package startup output is diagnostic, even before --format is parsed.
+  sink(stderr(), type = "output")
   if (!requireNamespace("BrainGnomes", quietly = TRUE)) stop("BrainGnomes package is required to run this command.")
   if (!requireNamespace("jsonlite", quietly = TRUE)) stop("The jsonlite package is required to run this command.")
+  sink(type = "output")
 
   if (command %in% names(command_aliases)) command <- unname(command_aliases[[command]])
   if (command == "config-edit") {
     command <- "config"
     values <- c("edit", values)
   }
-  switch(command,
+  status <- switch(command,
     init = command_init(values),
     config = command_config(values),
     doctor = command_doctor(values),
@@ -530,9 +568,13 @@ main <- function() {
     cancel = command_cancel(values),
     {
       message("Unknown command: ", command)
+      sink(stderr(), type = "output")
       print_global_help(status = 2L)
     }
   )
+  while (sink.number(type = "output") > output_depth) sink(type = "output")
+  if (!is.null(cli_output$payload)) cat(cli_output$payload, "\n", sep = "")
+  status
 }
 
 status <- tryCatch(

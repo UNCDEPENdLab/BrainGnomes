@@ -182,6 +182,38 @@ write_project_plan(plan, "run.yaml")
 run <- submit_project_plan(plan)
 ```
 
+To preview the direct workflow without creating folders, changing permissions,
+or submitting jobs:
+
+```r
+preview <- run_project(scfg, steps = "all", dry_run = TRUE)
+preview$preview$work
+```
+
+Dry runs now return a `bg_project_plan`, not `TRUE`. The preview shows concrete
+subjects/sessions, stages/streams, input and output locations, log directories,
+dependencies, resources, and whether existing completion markers would skip
+work. `force = TRUE` shows that work as included. Console output is bounded;
+the returned table and JSON retain every row. These are work-unit counts, not
+an exact scheduler job list or a runtime/cost estimate: setup reuse and
+postprocessing job expansion are decided later, and Flywheel scope can remain
+unknown until synchronization.
+
+CLI machine output is one JSON document on **stdout**; progress, warnings,
+errors, and requested log tails go to **stderr**. Do not merge the two streams
+when parsing JSON. For example:
+
+```sh
+BrainGnomes run_project /project/my_study --steps=all --dry-run --format=json > preview.json
+```
+
+JSON runs require explicit `--steps` (or a saved plan) to avoid interactive
+prompts. `status --watch` and `diagnose --interactive` are table-only; poll
+`status --format=json` for individual machine-readable snapshots. Invalid
+formats are rejected before work starts. Usage errors exit with status 2;
+execution errors exit with status 1 and empty stdout. Validation/doctor reports
+can return a valid JSON result with status 1 when their checks fail.
+
 ### Optional run operations
 
 Every submitted run records a provenance bundle beneath

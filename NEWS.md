@@ -1,5 +1,15 @@
 # BrainGnomes (development version)
 
+* Make CLI JSON output a single document on stdout, with progress, warnings,
+  and log tails on stderr. Validate formats before acting, reject machine-format
+  watch/interactive combinations, and require explicit stages for JSON runs.
+* Make plans and dry runs concrete: show subject/session/stage/stream work,
+  input/output and log locations, dependencies, per-job resources, and
+  completion-marker skip decisions. Flywheel scope remains explicitly deferred.
+  `run_project(dry_run = TRUE)` now returns a `bg_project_plan` instead of `TRUE`
+  and no longer creates directories or repairs permissions. Full preview rows
+  remain available in `plan$preview$work` and CLI JSON beyond the console limit.
+
 * Resolve existing parent-directory aliases before rebasing missing template
   paths. Cloned projects now keep future Flywheel DICOM inputs and nested
   outputs under the new project on macOS, Windows, and symlinked filesystems,

@@ -120,8 +120,9 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #' 
 #' @return For submitted work, an invisible `bg_project_run` object containing
 #'   the run UUID, scheduler job IDs known at submission time, and the path to
-#'   the complete run provenance record. Dry runs invisibly return `TRUE` after
-#'   printing the resolved plan.
+#'   the complete run provenance record. Dry runs invisibly return a
+#'   `bg_project_plan` with concrete work units, paths, resources, and current
+#'   completion-marker decisions after printing the preview. No jobs are submitted.
 #' @details Before submission, BrainGnomes reports when it is checking project
 #'   folders, finding matching subjects, and saving the run record. The first
 #'   use of a large container in a project may take longer because BrainGnomes
@@ -184,9 +185,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
 
   # Shared permission-check cache: setup_project_directories primes it with
   # verified-writable dirs; downstream preflight checks get instant hits.
-  cli::cli_alert_info("Checking the project folders needed for this run...")
   permission_check_cache <- new.env(parent = emptyenv())
-  scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
 
   cat(glue("
     \nRunning project workflow for: {scfg$metadata$project_name}
@@ -306,6 +305,12 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     if (!is.null(scfg$bids_conversion)) scfg$bids_conversion$overwrite <- TRUE
   }
   if (is.null(scfg$dry_run)) scfg$dry_run <- dry_run
+  # Guided setup chooses dry_run above. Wait for that choice before creating
+  # folders or attempting permission repairs; previews are read-only.
+  if (!isTRUE(scfg$dry_run)) {
+    cli::cli_alert_info("Checking the project folders needed for this run...")
+    scfg <- setup_project_directories(scfg, check_cache = permission_check_cache)
+  }
   if (is.null(scfg$log_level)) scfg$log_level <- log_level
   scfg$log_level <- toupper(scfg$log_level)
   options(BrainGnomes.log_level = scfg$log_level)
@@ -364,6 +369,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
   }
 
   if (isTRUE(scfg$dry_run)) {
+    plan <- project_plan_from_execution(scfg, execution)
     dry_requested <- names(steps)[steps]
     cat("\nDry run enabled. No jobs will be submitted.\n")
     cat("Requested steps:", paste(dry_requested, collapse = ", "), "\n")
@@ -394,7 +400,8 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
         dry_run = TRUE
       )
     }
-    return(invisible(TRUE))
+    print(plan)
+    return(invisible(plan))
   }
 
   # generate sequence ID for job tracking
@@ -565,12 +572,12 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
     stop("No subject/session inputs match the requested run.", call. = FALSE)
   }
 
+  preview_limit <- 20L
   if (!is.null(subject_filter)) {
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id")])
     msg_lines <- apply(msg_df, 1, function(rr) {
       if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}") else glue("  sub-{rr['sub_id']}")
     })
-    preview_limit <- 20L
     preview <- utils::head(msg_lines, preview_limit)
     cat("Processing the following requested subjects:\n",
         paste(preview, collapse = "\n"), "\n")
@@ -582,14 +589,18 @@ submit_subjects <- function(scfg, steps, subject_filter = NULL,
   if (isTRUE(dry_run)) {
     if (!is.null(work_units)) {
       cat("Exact retry work units:\n")
-      print(work_units, row.names = FALSE)
+      print(utils::head(work_units, preview_limit), row.names = FALSE)
+      if (nrow(work_units) > preview_limit) cat("Full retry selection is retained in the returned plan.\n")
     }
     msg_df <- unique(subject_dirs[, c("sub_id", "ses_id"), drop = FALSE])
     msg_lines <- apply(msg_df, 1, function(rr) {
       if (!is.na(rr["ses_id"])) glue("  sub-{rr['sub_id']} ses-{rr['ses_id']}")
       else glue("  sub-{rr['sub_id']}")
     })
-    cat("Dry run subject/session plan:\n", paste(msg_lines, collapse = "\n"), "\n")
+    cat("Dry run subject/session plan:\n", paste(utils::head(msg_lines, preview_limit), collapse = "\n"), "\n")
+    if (length(msg_lines) > preview_limit) {
+      cat("  ... ", length(msg_lines) - preview_limit, " more subject/session rows in the returned plan.\n", sep = "")
+    }
     return(invisible(msg_df))
   }
 
