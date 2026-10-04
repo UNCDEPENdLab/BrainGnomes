@@ -10,7 +10,8 @@ save_project_config(scfg, file = NULL)
 \item{scfg}{A \code{bg_project_cfg} object.}
 
 \item{file}{Optional path for the YAML output. Defaults to
-\code{file.path(scfg$metadata$project_directory, "project_config.yaml")}.}
+\code{file.path(scfg$metadata$project_directory, "project_config.yaml")}. The
+destination must be colocated with the project root.}
 }
 \value{
 Invisibly returns \code{scfg}.
@@ -18,10 +19,9 @@ Invisibly returns \code{scfg}.
 \description{
 Writes the configuration to a file named \code{project_config.yaml} inside
 the project's root directory. The function verifies that the output
-directory exists, offering to create it or allowing the user to select
-an alternate location. If a configuration file already exists, the
-user is shown a summary of differences and asked whether to overwrite
-the file. After confirmation, the final save uses \code{\link[=write_project_config]{write_project_config()}}
-so the destination is replaced atomically.
+directory exists and offers to create it. If a configuration file already
+exists, the user is shown a summary of differences and asked whether to
+overwrite the file. After confirmation, the final save uses
+\code{\link[=write_project_config]{write_project_config()}} so the destination is replaced atomically.
 }
 \keyword{internal}

@@ -2,15 +2,15 @@
 #'
 #' Writes the configuration to a file named `project_config.yaml` inside
 #' the project's root directory. The function verifies that the output
-#' directory exists, offering to create it or allowing the user to select
-#' an alternate location. If a configuration file already exists, the
-#' user is shown a summary of differences and asked whether to overwrite
-#' the file. After confirmation, the final save uses [write_project_config()]
-#' so the destination is replaced atomically.
+#' directory exists and offers to create it. If a configuration file already
+#' exists, the user is shown a summary of differences and asked whether to
+#' overwrite the file. After confirmation, the final save uses
+#' [write_project_config()] so the destination is replaced atomically.
 #'
 #' @param scfg A `bg_project_cfg` object.
 #' @param file Optional path for the YAML output. Defaults to
-#'   `file.path(scfg$metadata$project_directory, "project_config.yaml")`.
+#'   `file.path(scfg$metadata$project_directory, "project_config.yaml")`. The
+#'   destination must be colocated with the project root.
 #' @return Invisibly returns `scfg`.
 #' @keywords internal
 #' @importFrom yaml write_yaml read_yaml
@@ -29,7 +29,9 @@ save_project_config <- function(scfg, file = NULL) {
     file <- file.path(scfg$metadata$project_directory, "project_config.yaml")
   }
 
-  file <- path.expand(file)
+  file <- normalize_project_path(file)
+  scfg <- resolve_project_paths(scfg, yaml_file = file)
+  assert_project_config_colocation(scfg, file)
   dir <- dirname(file)
   if (!dir.exists(dir)) {
     create <- prompt_input(instruct = glue("The directory {dir} does not exist. Create it?"), type = "flag")
@@ -40,32 +42,8 @@ save_project_config <- function(scfg, file = NULL) {
         return(invisible(scfg))
       }
     } else {
-      new_dir <- prompt_input(
-        instruct = glue("Specify an alternative directory for {basename(file)} (or press Enter to cancel):"),
-        type = "character", required = FALSE
-      )
-      if (is.na(new_dir[1L])) {
-        message("Configuration not saved: no valid directory provided.")
-        return(invisible(scfg))
-      }
-      dir <- path.expand(new_dir)
-      if (!dir.exists(dir)) {
-        create <- prompt_input(
-          instruct = sprintf("The directory %s does not exist. Create it?", dir),
-          type = "flag"
-        )
-        if (create) {
-          dir.create(dir, recursive = TRUE, showWarnings = FALSE)
-          if (!dir.exists(dir)) {
-            message("Configuration not saved: failed to create directory.")
-            return(invisible(scfg))
-          }
-        } else {
-          message("Configuration not saved: no valid directory provided.")
-          return(invisible(scfg))
-        }
-      }
-      file <- file.path(dir, basename(file))
+      message("Configuration not saved: the project root was not created.")
+      return(invisible(scfg))
     }
   }
 
@@ -74,7 +52,7 @@ save_project_config <- function(scfg, file = NULL) {
   overwrite <- TRUE
   if (file.exists(file)) {
     old_cfg <- yaml::read_yaml(file)
-    cfg_differences <- compare_lists(old_cfg, scfg)
+    cfg_differences <- compare_lists(old_cfg, project_config_payload(scfg, file))
 
     if (length(cfg_differences) == 0L) {
       return(invisible(scfg)) # no changes

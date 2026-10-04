@@ -18,7 +18,7 @@ test_that("save_project_config uses stored YAML path", {
   project_dir <- file.path(tmp_dir, "project")
   dir.create(project_dir)
 
-  yaml_path <- file.path(tmp_dir, "custom.yaml")
+  yaml_path <- file.path(project_dir, "custom.yaml")
   scfg <- structure(list(metadata = list(project_directory = project_dir)), class = "bg_project_cfg")
   attr(scfg, "yaml_file") <- yaml_path
 
@@ -35,12 +35,33 @@ test_that("save_project_config updates YAML path when file argument supplied", {
   project_dir <- file.path(tmp_dir, "project")
   dir.create(project_dir)
 
-  new_yaml <- file.path(tmp_dir, "other.yaml")
+  new_yaml <- file.path(project_dir, "other.yaml")
   scfg <- structure(list(metadata = list(project_directory = project_dir)), class = "bg_project_cfg")
 
   result <- save_project_config(scfg, file = new_yaml)
   expect_true(file.exists(new_yaml))
   expect_path_identical(attr(result, "yaml_file"), new_yaml)
+})
+
+test_that("project configuration writers reject detached YAML files", {
+  tmp_dir <- tempfile("bg_cfg_detached_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  project_dir <- file.path(tmp_dir, "project")
+  dir.create(project_dir)
+  detached <- file.path(tmp_dir, "detached.yaml")
+  scfg <- structure(
+    list(metadata = list(project_directory = project_dir)),
+    class = "bg_project_cfg"
+  )
+
+  expect_error(
+    write_project_config(scfg, file = detached),
+    "must be stored in the project root",
+    fixed = TRUE
+  )
+  expect_false(file.exists(detached))
 })
 
 test_that("save_project_config delegates confirmed saves to the atomic writer", {

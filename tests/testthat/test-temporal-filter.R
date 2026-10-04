@@ -197,3 +197,22 @@ test_that("validate_postprocess_config_single flags both cutoffs missing", {
   expect_true("postprocess/temporal_filter/low_pass_hz" %in% res$gaps)
   expect_true("postprocess/temporal_filter/high_pass_hz" %in% res$gaps)
 })
+test_that("interactive temporal-filter setup uses a numbered method menu", {
+  menu <- NULL
+  result <- with_mocked_bindings(
+    setup_temporal_filter(
+      list(temporal_filter = list(enable = TRUE)),
+      fields = "postprocess/temporal_filter/method"
+    ),
+    cli_instruction = function(...) invisible(TRUE),
+    menu_safe = function(choices, title) {
+      menu <<- list(choices = choices, title = title)
+      2L
+    }
+  )
+
+  expect_identical(result$temporal_filter$method, "butterworth")
+  expect_identical(menu$title, "Choose a temporal-filtering method:")
+  expect_true(any(grepl("fslmaths -bptf", menu$choices, fixed = TRUE)))
+  expect_true(any(grepl("Butterworth", menu$choices, fixed = TRUE)))
+})

@@ -6,7 +6,9 @@ cli_output$payload <- NULL
 command_aliases <- c(
   setup_project = "init",
   edit_project = "config-edit",
-  run_project = "run"
+  run_project = "run",
+  inspect = "status",
+  inspect_project = "status"
 )
 
 usage_error <- function(message) {
@@ -98,7 +100,7 @@ print_global_help <- function(status = 0L) {
   cat(
     "Usage: BrainGnomes <command> [options]\n\n",
     "Typical workflow:\n",
-    "  setup_project <project_name> [project_directory]\n",
+    "  setup_project [project_name] [project_directory]\n",
     "  run_project [project_directory|config.yaml] [run options]\n",
     "  status [project_directory|config.yaml] [--run=<id|latest>] [--watch]\n",
     "  diagnose [project_directory|config.yaml] [--interactive]\n\n",
@@ -117,7 +119,7 @@ print_global_help <- function(status = 0L) {
     "  help [command]\n\n",
     "Project paths are optional and default to the current working directory.\n",
     "Existing projects require project_config.yaml there; parent directories are not searched.\n",
-    "init/setup_project still requires a project name; saved plans require an explicit path.\n\n",
+    "Run init/setup_project without a project name for guided setup; saved plans require an explicit path.\n\n",
     "Also accepted: init, edit_project, and run.\n",
     "Config, doctor, and plan are optional; run_project resolves and submits directly.\n",
     "Machine output: --format=json writes one JSON document to stdout; diagnostics go to stderr.\n",
@@ -130,12 +132,15 @@ print_global_help <- function(status = 0L) {
 print_command_help <- function(command, status = 0L) {
   command <- switch(command,
     setup_project = "init", edit_project = "config", run_project = "run",
+    inspect = "status", inspect_project = "status",
     command
   )
   text <- switch(command,
     init = paste0(
-      "Usage: BrainGnomes setup_project <project_name> [project_directory] [options]\n",
-      "Alias: BrainGnomes init <project_name> [project_directory] [options]\n\n",
+      "Usage: BrainGnomes setup_project [project_name] [project_directory] [options]\n",
+      "Alias: BrainGnomes init [project_name] [project_directory] [options]\n\n",
+      "With no project name, open guided setup and prompt for the project name, directory, and workflow settings.\n",
+      "With a project name, create a prompt-free project; its directory defaults to the current working directory.\n\n",
       "Options:\n",
       "  --template=<config.yaml>       Start from an existing configuration.\n",
       "  --reuse-template-paths         Intentionally share its outputs and database.\n",
@@ -271,10 +276,11 @@ print_command_help <- function(command, status = 0L) {
     print_global_help(status = 2L)
   }
   cat(text)
-  cat("\nOmit the project path to use the current working directory.\n")
   if (command == "init") {
-    cat("The project name is required; existing configurations require --overwrite.\n")
+    cat("\nOmit the project path after a project name to use the current working directory.\n")
+    cat("Omit the project name to start guided setup; existing prompt-free configurations require --overwrite.\n")
   } else {
+    cat("\nOmit the project path to use the current working directory.\n")
     cat("This directory must contain project_config.yaml; parent directories are not searched.\n")
     if (command == "run") cat("To submit a saved plan, pass its path explicitly.\n")
   }
@@ -294,7 +300,15 @@ project_cli_arguments <- function(values) {
 
 command_init <- function(values) {
   if (length(values) < 1L || startsWith(values[[1L]], "-")) {
-    usage_error("init requires <project_name>; [project_directory] defaults to the current working directory.")
+    opts <- normalize_options(values, c("template", "overwrite", "reuse_template_paths"))
+    if (is_flag(opts$reuse_template_paths)) {
+      usage_error("--reuse-template-paths requires a project name and prompt-free setup.")
+    }
+    BrainGnomes::setup_project(
+      template = opts$template,
+      interactive = TRUE
+    )
+    return(0L)
   }
   args <- project_cli_arguments(values[-1L])
   opts <- normalize_options(args$options, c("template", "overwrite", "reuse_template_paths"))

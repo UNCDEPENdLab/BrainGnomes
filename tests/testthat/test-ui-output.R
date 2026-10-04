@@ -44,6 +44,53 @@ test_that("CLI instruction blocks wrap prose and retain list structure", {
   expect_false(any(grepl("^      This prose", output)))
 })
 
+test_that("prompt instructions do not add a blank line before input", {
+  old_options <- options(cli.num_colors = 1, cli.dynamic = FALSE)
+  on.exit(options(old_options), add = TRUE)
+  observed_prompt <- NULL
+
+  local_mocked_bindings(
+    console_input_available = function() TRUE,
+    getline = function(prompt) {
+      observed_prompt <<- prompt
+      ""
+    },
+    .package = "BrainGnomes"
+  )
+
+  output <- capture.output(result <- prompt_input(
+    prompt = "Optional arguments",
+    instruct = "Press Enter when done.",
+    type = "character", required = FALSE
+  ), type = "message")
+
+  expect_true(is.na(result))
+  expect_identical(output, c("", "Press Enter when done."))
+  expect_identical(observed_prompt, "Optional arguments (Press Enter to skip)\n> ")
+})
+
+test_that("CLI argument builders place the input marker directly after instructions", {
+  old_options <- options(cli.num_colors = 1, cli.dynamic = FALSE)
+  on.exit(options(old_options), add = TRUE)
+  observed_prompt <- NULL
+
+  local_mocked_bindings(
+    getline = function(prompt) {
+      observed_prompt <<- prompt
+      ""
+    },
+    .package = "BrainGnomes"
+  )
+
+  output <- capture.output(result <- build_cli_args(
+    instruct = "Specify optional arguments. Press Enter when done."
+  ), type = "message")
+
+  expect_length(result, 0L)
+  expect_identical(output, c("", "Specify optional arguments. Press Enter when done."))
+  expect_identical(observed_prompt, "> ")
+})
+
 test_that("prompt headings and input remain usable through the TTY-safe reader", {
   old_options <- options(
     cli.width = 60,

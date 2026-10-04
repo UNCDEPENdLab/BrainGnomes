@@ -65,7 +65,7 @@ read_multiline_input <- function(instruct=NULL, prompt="> ", n_blank=1, collapse
 #' @keywords internal
 build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (press Enter to finish): ", collapse=NULL) {
   # Step 1: Multi-line input
-  cli_instruction(instruct)
+  cli_instruction(instruct, after = FALSE)
   lines <- character()
 
   # If existing args are passed in, prompt edits and confirmation of changes. If no args, just accept entry and return
@@ -177,7 +177,7 @@ normalize_cli_block <- function(x) {
   paste(lines, collapse = "\n")
 }
 
-cli_instruction <- function(x, before = TRUE) {
+cli_instruction <- function(x, before = TRUE, after = TRUE) {
   x <- normalize_cli_block(x)
   if (is.null(x)) return(invisible(FALSE))
 
@@ -199,7 +199,8 @@ cli_instruction <- function(x, before = TRUE) {
     nchar(sub("^([[:space:]]*).*", "\\1", line))
   }
 
-  for (block in blocks) {
+  for (block_index in seq_along(blocks)) {
+    block <- blocks[[block_index]]
     lines <- strsplit(block, "\n", fixed = TRUE)[[1L]]
     lines <- sub("[ \t]+$", "", lines)
 
@@ -207,7 +208,7 @@ cli_instruction <- function(x, before = TRUE) {
     is_preformatted <- any(grepl("\\|--|`--", lines))
     if (is_preformatted) {
       cli::cli_verbatim(paste(lines, collapse = "\n"))
-      cli::cli_text("")
+      if (block_index < length(blocks) || isTRUE(after)) cli::cli_text("")
       next
     }
 
@@ -245,7 +246,7 @@ cli_instruction <- function(x, before = TRUE) {
         cursor <- last + 1L
       }
     }
-    cli::cli_text("")
+    if (block_index < length(blocks) || isTRUE(after)) cli::cli_text("")
   }
 
   invisible(TRUE)
@@ -435,7 +436,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, heading =
   # Print a width-aware section rule and instruction block. cli output works in
   # interactive R and in TTY-connected Rscript sessions.
   if (checkmate::test_string(heading)) cli_setup_section(heading)
-  cli_instruction(instruct, before = is.null(heading))
+  cli_instruction(instruct, before = is.null(heading), after = FALSE)
 
   # define typed empty return value
   empty <- switch(type,

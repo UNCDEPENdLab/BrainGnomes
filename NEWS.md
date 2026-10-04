@@ -1,10 +1,24 @@
 # BrainGnomes (development version)
 
-* Default CLI project paths to the current working directory, including when
-  options come first. Explicit project directories, configuration YAMLs, and
-  saved run plans remain supported. `init`/`setup_project` still requires a
-  project name but no longer requires a directory; overwriting a configuration
-  and retrying/cancelling work still require their existing explicit flags.
+* Resolve relative configuration paths from a colocated project YAML: the YAML
+  establishes the project root, all runtime and scheduler paths become
+  absolute, and project-contained paths are saved portably relative to that
+  root. Reject detached or mismatched project configurations before execution,
+  and remove unsafe `project_directory` changes from the ordinary field editor.
+* Ask about motion filtering after optionally adding framewise displacement
+  during postprocessing setup, ensuring the saved stream records an explicit
+  motion-filter decision and can be passed directly to `run_project()`.
+* Present temporal-filtering and intensity-normalization methods as descriptive
+  numbered menus during guided setup instead of requiring users to type internal
+  configuration values. Interactive prompts no longer insert an extra blank line
+  between their final instruction and the input marker.
+* Allow `BrainGnomes setup_project` (or `init`) with no project name to open the
+  guided setup and prompt for the project name, project directory, and workflow
+  settings. Supplying a project name retains prompt-free creation and defaults
+  its project directory to the current working directory. Explicit project
+  directories, configuration YAMLs, and saved run plans remain supported;
+  overwriting a prompt-free configuration and retrying/cancelling work still
+  require their existing explicit flags.
 * Organize the website reference by task: setup, execution, monitoring and
   recovery, QC, provenance, and advanced tools.
 * Remove `diagnose_pipeline()` and its export, without a compatibility wrapper.

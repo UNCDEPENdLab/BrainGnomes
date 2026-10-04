@@ -143,6 +143,10 @@ The command-line interface preserves the same workflow. The shorter `init` and
 `run` command names are also accepted.
 
 ```bash
+# Fully guided setup (prompts for the project name and directory):
+BrainGnomes setup_project
+
+# Prompt-free setup for scripts and automation:
 BrainGnomes setup_project my_study /project/my_study
 BrainGnomes run_project /project/my_study
 BrainGnomes status /project/my_study
