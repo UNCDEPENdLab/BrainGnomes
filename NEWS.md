@@ -1,5 +1,16 @@
 # BrainGnomes (development version)
 
+* Default CLI project paths to the current working directory, including when
+  options come first. Explicit project directories, configuration YAMLs, and
+  saved run plans remain supported. `init`/`setup_project` still requires a
+  project name but no longer requires a directory; overwriting a configuration
+  and retrying/cancelling work still require their existing explicit flags.
+* Organize the website reference by task: setup, execution, monitoring and
+  recovery, QC, provenance, and advanced tools.
+* Remove `diagnose_pipeline()` and its export, without a compatibility wrapper.
+  Use `diagnose_project()`; pass `interactive = TRUE` for the guided browser
+  or `interactive = FALSE` for structured results. The CLI remains `diagnose`.
+
 * Use the same selected-stage and stream configuration checks for plans, dry
   runs, and submission. Invalid licenses/resources now fail before project
   writes or scheduling, while unrelated stages/streams do not block selected

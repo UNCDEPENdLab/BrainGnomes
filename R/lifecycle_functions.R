@@ -1164,8 +1164,8 @@ build_project_diagnosis <- function(input, run_id = NULL,
 #' @param interactive If `TRUE`, open the guided interactive browser. If
 #'   `FALSE`, return a structured diagnosis. The default is
 #'   `base::interactive()`, so console users get the guided browser while
-#'   scripts, tests, and reports get structured output. Interactive mode retains
-#'   the behavior formerly provided by [diagnose_pipeline()].
+#'   scripts, tests, and reports get structured output. Both modes support
+#'   subject, job, and historical run selection.
 #' @return When `interactive = FALSE`, a `bg_project_diagnosis` object containing
 #'   the underlying `inspection`, its `jobs`, unresolved `failures`, and matching
 #'   `logs` for the current project state or selected run. Interactive mode

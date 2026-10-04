@@ -1,7 +1,7 @@
 ---
 title: "Inspecting and Diagnosing Pipeline Runs"
 author: "Michael Hallquist & Dan Shallal"
-date: "04 Sep 2026"
+date: "04 Oct 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -240,8 +240,8 @@ how R was started:
 diagnose_project(scfg, run_id = run_id, interactive = TRUE)
 ```
 
-`diagnose_pipeline()` remains temporarily as a deprecated compatibility wrapper
-for `diagnose_project(..., interactive = TRUE)`.
+`diagnose_project()` is the single diagnosis entry point for both the guided
+browser and structured, non-interactive results.
 
 # Inspect run provenance
 

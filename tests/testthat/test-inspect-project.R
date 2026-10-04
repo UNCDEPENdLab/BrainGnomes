@@ -384,7 +384,6 @@ test_that("diagnose_project defaults to the R session's interactivity", {
 test_that("inspection and diagnosis default to the current project directory", {
   expect_identical(formals(inspect_project)$input, quote(getwd()))
   expect_identical(formals(diagnose_project)$input, quote(getwd()))
-  expect_identical(formals(diagnose_pipeline)$input, quote(getwd()))
 
   fixture <- make_inspection_project()
   on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
@@ -425,10 +424,7 @@ test_that("inspection and diagnosis default to the current project directory", {
     },
     .package = "BrainGnomes"
   )
-  expect_warning(
-    guided <- diagnose_pipeline(),
-    "diagnose_project\\(\\.\\.\\., interactive = TRUE\\)"
-  )
+  guided <- diagnose_project(interactive = TRUE)
   expect_identical(guided, "guided-from-cwd")
 })
 
@@ -644,7 +640,7 @@ test_that("current-directory discovery requires a project configuration", {
     "No project_config.yaml found in project directory"
   )
   expect_error(
-    suppressWarnings(diagnose_pipeline()),
+    diagnose_project(interactive = TRUE),
     "No project_config.yaml found in project directory"
   )
 })
@@ -672,24 +668,8 @@ test_that("empty inspections and deprecated run getters retain stable contracts"
   expect_false(any(grepl("constraint=a-very-long-value", output, fixed = TRUE)))
 })
 
-test_that("diagnose_pipeline delegates to the consolidated interactive diagnosis", {
-  fixture <- make_inspection_project()
-  on.exit(unlink(fixture$root, recursive = TRUE, force = TRUE), add = TRUE)
-  local_mocked_bindings(
-    run_interactive_diagnosis = function(input, run_id = NULL,
-                                         subject_id = NULL, job_id = NULL) {
-      expect_identical(input, fixture$cfg)
-      expect_null(run_id)
-      expect_null(subject_id)
-      expect_null(job_id)
-      "guided-browser"
-    },
-    .package = "BrainGnomes"
-  )
-
-  expect_warning(
-    result <- diagnose_pipeline(fixture$cfg),
-    "deprecated"
-  )
-  expect_identical(result, "guided-browser")
+test_that("diagnose_project is the only public diagnosis entry point", {
+  expect_true("diagnose_project" %in% getNamespaceExports("BrainGnomes"))
+  expect_false("diagnose_pipeline" %in% getNamespaceExports("BrainGnomes"))
+  expect_false(exists("diagnose_pipeline", envir = asNamespace("BrainGnomes"), inherits = FALSE))
 })

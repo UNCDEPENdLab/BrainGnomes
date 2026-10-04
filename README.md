@@ -151,6 +151,23 @@ BrainGnomes status /project/my_study
 BrainGnomes diagnose /project/my_study --interactive
 ```
 
+All project CLI commands also default to the current working directory. For an
+existing project, that directory must contain `project_config.yaml`; BrainGnomes
+does not search parent directories. Options are unchanged when the path is omitted:
+
+```bash
+cd /project/my_study
+BrainGnomes run --steps=fmriprep --dry-run
+BrainGnomes status
+BrainGnomes diagnose --interactive
+BrainGnomes config validate --steps=fmriprep --format=json
+```
+
+To create a project in the current directory, use `BrainGnomes init my_study`.
+The project name is required, and replacing an existing configuration still
+requires `--overwrite`. Pass an explicit directory or configuration YAML to work
+elsewhere. Saved plans always need an explicit path: `BrainGnomes run run.yaml`.
+
 ### Optional inspection and automation tools
 
 None of the following is a prerequisite for `run_project()`:

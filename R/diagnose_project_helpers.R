@@ -1,29 +1,3 @@
-#' Deprecated interactive pipeline diagnosis
-#'
-#' `diagnose_pipeline()` has been superseded by
-#' `diagnose_project(..., interactive = TRUE)`. It remains as a compatibility
-#' wrapper for the established guided dependency and log browser.
-#'
-#' @param input A project configuration object, YAML file, or project directory.
-#'   Defaults to the current working directory.
-#' @param run_id Optional run ID to diagnose.
-#' @param subject_id Optional subject identifier to focus.
-#' @param job_id Optional exact scheduler job identifier to open.
-#' @return The value returned by `diagnose_project(input, interactive = TRUE)`.
-#' @seealso [inspect_project()] for routine progress monitoring and
-#'   [diagnose_project()] for current or historical failure investigation.
-#' @export
-diagnose_pipeline <- function(input = getwd(), run_id = NULL,
-                              subject_id = NULL, job_id = NULL) {
-  .Deprecated(
-    "diagnose_project(..., interactive = TRUE)",
-    package = "BrainGnomes"
-  )
-  diagnose_project(
-    input, run_id = run_id, subject_id = subject_id, job_id = job_id,
-    interactive = TRUE
-  )
-}
 #' Check for discrepancies between DB status, manifest verification, and .complete files
 #'
 #' Examines the job tracking database and compares against actual file system state

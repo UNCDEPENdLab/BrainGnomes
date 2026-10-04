@@ -98,23 +98,26 @@ print_global_help <- function(status = 0L) {
   cat(
     "Usage: BrainGnomes <command> [options]\n\n",
     "Typical workflow:\n",
-    "  setup_project <project_name> <project_directory>\n",
-    "  run_project <project_directory|config.yaml> [run options]\n",
-    "  status <project_directory|config.yaml> [--run=<id|latest>] [--watch]\n",
-    "  diagnose <project_directory|config.yaml> [--interactive]\n\n",
+    "  setup_project <project_name> [project_directory]\n",
+    "  run_project [project_directory|config.yaml] [run options]\n",
+    "  status [project_directory|config.yaml] [--run=<id|latest>] [--watch]\n",
+    "  diagnose [project_directory|config.yaml] [--interactive]\n\n",
     "Optional inspection and automation:\n",
-    "  config validate <project_directory|config.yaml> [--format=table|json]\n",
-    "  config edit <project_directory|config.yaml>\n",
-    "  config show <project_directory|config.yaml> [--format=table|json]\n",
-    "  doctor <project_directory|config.yaml> [--steps=<steps>] [--deep]\n",
-    "  plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]\n\n",
+    "  config validate [project_directory|config.yaml] [--format=table|json]\n",
+    "  config edit [project_directory|config.yaml]\n",
+    "  config show [project_directory|config.yaml] [--format=table|json]\n",
+    "  doctor [project_directory|config.yaml] [--steps=<steps>] [--deep]\n",
+    "  plan [project_directory|config.yaml] [run options] [--output=<plan.yaml>]\n\n",
     "Run operations:\n",
-    "  provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]\n",
-    "  logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]\n",
-    "  retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes\n",
-    "  cancel <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes\n",
-    "  validate-bids <project_directory|config.yaml> [--outfile=<report.html>]\n",
+    "  provenance [project_directory|config.yaml] [--run=<id|latest>] [--format=table|json]\n",
+    "  logs [project_directory|config.yaml] [--run=<id|latest>] [--failed-only]\n",
+    "  retry [project_directory|config.yaml] [--run=<id|latest>] --dry-run|--yes\n",
+    "  cancel [project_directory|config.yaml] [--run=<id|latest>] --dry-run|--yes\n",
+    "  validate-bids [project_directory|config.yaml] [--outfile=<report.html>]\n",
     "  help [command]\n\n",
+    "Project paths are optional and default to the current working directory.\n",
+    "Existing projects require project_config.yaml there; parent directories are not searched.\n",
+    "init/setup_project still requires a project name; saved plans require an explicit path.\n\n",
     "Also accepted: init, edit_project, and run.\n",
     "Config, doctor, and plan are optional; run_project resolves and submits directly.\n",
     "Machine output: --format=json writes one JSON document to stdout; diagnostics go to stderr.\n",
@@ -131,8 +134,8 @@ print_command_help <- function(command, status = 0L) {
   )
   text <- switch(command,
     init = paste0(
-      "Usage: BrainGnomes setup_project <project_name> <project_directory> [options]\n",
-      "Alias: BrainGnomes init <project_name> <project_directory> [options]\n\n",
+      "Usage: BrainGnomes setup_project <project_name> [project_directory] [options]\n",
+      "Alias: BrainGnomes init <project_name> [project_directory] [options]\n\n",
       "Options:\n",
       "  --template=<config.yaml>       Start from an existing configuration.\n",
       "  --reuse-template-paths         Intentionally share its outputs and database.\n",
@@ -140,7 +143,7 @@ print_command_help <- function(command, status = 0L) {
       "Templates inherit settings but isolate project outputs, logs, scratch, and tracking by default.\n"
     ),
     config = paste0(
-      "Usage: BrainGnomes config <validate|edit|show> <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes config <validate|edit|show> [project_directory|config.yaml] [options]\n\n",
       "Optional inspection tooling for scripts, CI, and YAML review. It is not required before run_project.\n\n",
       "Options:\n",
       "  --format=table|json            Output format for validate/show.\n",
@@ -149,7 +152,7 @@ print_command_help <- function(command, status = 0L) {
       "  --extract-streams=<names>      Validate selected extraction streams.\n"
     ),
     doctor = paste0(
-      "Usage: BrainGnomes doctor <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes doctor [project_directory|config.yaml] [options]\n\n",
       "Optional comprehensive preflight for a new or changed submission environment, or before an expensive run.\n",
       "It does not change the project and is not required before run_project.\n\n",
       "Options:\n",
@@ -159,7 +162,7 @@ print_command_help <- function(command, status = 0L) {
       "  --format=table|json            Output format.\n"
     ),
     plan = paste0(
-      "Usage: BrainGnomes plan <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes plan [project_directory|config.yaml] [options]\n\n",
       "Optional inspection/persistence view of the request that run_project resolves internally.\n",
       "It is not an exact scheduler job list; Flywheel subject scope may remain deferred until sync.\n",
       "Create a plan for review or automation; it is not required before a direct run.\n\n",
@@ -176,8 +179,8 @@ print_command_help <- function(command, status = 0L) {
       "  --format=table|json            Output format.\n"
     ),
     run = paste0(
-      "Usage: BrainGnomes run_project <project_directory|config.yaml|plan.yaml> [options]\n",
-      "Alias: BrainGnomes run <project_directory|config.yaml|plan.yaml> [options]\n\n",
+      "Usage: BrainGnomes run_project [project_directory|config.yaml|plan.yaml] [options]\n",
+      "Alias: BrainGnomes run [project_directory|config.yaml|plan.yaml] [options]\n\n",
       "Direct project/config submission is the standard path; config, doctor, and plan are optional.\n",
       "run_project resolves the same stages, streams, scope, and force setting exposed by plan.\n\n",
       "Options:\n",
@@ -194,14 +197,14 @@ print_command_help <- function(command, status = 0L) {
       "A YAML file with schema_version brain-gnomes-plan-v1 or brain-gnomes-plan-v2 is submitted as a saved plan.\n"
     ),
     `validate-bids` = paste0(
-      "Usage: BrainGnomes validate-bids <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes validate-bids [project_directory|config.yaml] [options]\n\n",
       "Options:\n",
       "  --outfile=<report.html>        Validation report path.\n",
       "  --wait-jobs=<ids>              Space-separated scheduler job IDs.\n",
       "  --run=<id>                     Associate validation with an existing run ID.\n"
     ),
     status = paste0(
-      "Usage: BrainGnomes status <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes status [project_directory|config.yaml] [options]\n\n",
       "Inspect current tracked project progress across runs by default.\n\n",
       "Options:\n",
       "  --sub-id=<id>                  Inspect one subject at every resolution.\n",
@@ -218,14 +221,14 @@ print_command_help <- function(command, status = 0L) {
       "  --format=table|json|csv        Output format.\n"
     ),
     provenance = paste0(
-      "Usage: BrainGnomes provenance <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes provenance [project_directory|config.yaml] [options]\n\n",
       "Show one run's request and realized work: settings, subjects, software, scheduler, job manifests, runtime receipts, file checksums, and current jobs.\n\n",
       "Options:\n",
       "  --run=<id|latest>              Select a submitted run (default latest).\n",
       "  --format=table|json            Summary or complete machine-readable record.\n"
     ),
     logs = paste0(
-      "Usage: BrainGnomes logs <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes logs [project_directory|config.yaml] [options]\n\n",
       "Options:\n",
       "  --run=<id|latest>              Select a tracked run.\n",
       "  --failed-only                  Include only failed/cancelled jobs.\n",
@@ -233,7 +236,7 @@ print_command_help <- function(command, status = 0L) {
       "  --format=table|json|csv        Output format.\n"
     ),
     diagnose = paste0(
-      "Usage: BrainGnomes diagnose <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes diagnose [project_directory|config.yaml] [options]\n\n",
       "Summarize current failed, blocked, or cancelled work and locate its logs.\n",
       "Without --run, the diagnosis uses the newest attempt for each work unit across runs.\n\n",
       "Options:\n",
@@ -244,7 +247,7 @@ print_command_help <- function(command, status = 0L) {
       "  --format=table|json            Output format.\n"
     ),
     retry = paste0(
-      "Usage: BrainGnomes retry <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes retry [project_directory|config.yaml] [options]\n\n",
       "Create a separate new run for failed or cancelled work; the original run is unchanged.\n",
       "Preview and correct the underlying problem before submitting the retry.\n\n",
       "Options:\n",
@@ -254,7 +257,7 @@ print_command_help <- function(command, status = 0L) {
       "  --yes                          Confirm scheduler submission.\n"
     ),
     cancel = paste0(
-      "Usage: BrainGnomes cancel <project_directory|config.yaml> [options]\n\n",
+      "Usage: BrainGnomes cancel [project_directory|config.yaml] [options]\n\n",
       "Cancel tracked jobs that are still queued or running; project data and outputs are not deleted.\n\n",
       "Options:\n",
       "  --run=<id|latest>              Run whose queued/running jobs should be cancelled.\n",
@@ -268,24 +271,36 @@ print_command_help <- function(command, status = 0L) {
     print_global_help(status = 2L)
   }
   cat(text)
+  cat("\nOmit the project path to use the current working directory.\n")
+  if (command == "init") {
+    cat("The project name is required; existing configurations require --overwrite.\n")
+  } else {
+    cat("This directory must contain project_config.yaml; parent directories are not searched.\n")
+    if (command == "run") cat("To submit a saved plan, pass its path explicitly.\n")
+  }
   quit(save = "no", status = status)
 }
 
-require_input <- function(values, command) {
-  if (length(values) < 1L || startsWith(values[[1L]], "-")) {
-    usage_error(paste(command, "requires a project directory, configuration, or plan file."))
-  }
-  values[[1L]]
+# Separate an optional leading project path from its options. Missing paths use
+# the current directory; option values must never be mistaken for project paths.
+# Returns input and the untouched remaining option tokens for normalize_options.
+project_cli_arguments <- function(values) {
+  explicit <- length(values) > 0L && !startsWith(values[[1L]], "-")
+  list(
+    input = if (explicit) values[[1L]] else getwd(),
+    options = if (explicit) values[-1L] else values
+  )
 }
 
 command_init <- function(values) {
-  positional <- values[!startsWith(values, "-")]
-  option_values <- values[startsWith(values, "-")]
-  if (length(positional) < 2L) usage_error("init requires <project_name> and <project_directory>.")
-  opts <- normalize_options(option_values, c("template", "overwrite", "reuse_template_paths"))
+  if (length(values) < 1L || startsWith(values[[1L]], "-")) {
+    usage_error("init requires <project_name>; [project_directory] defaults to the current working directory.")
+  }
+  args <- project_cli_arguments(values[-1L])
+  opts <- normalize_options(args$options, c("template", "overwrite", "reuse_template_paths"))
   cfg <- BrainGnomes::setup_project(
-    project_name = positional[[1L]],
-    project_directory = positional[[2L]],
+    project_name = values[[1L]],
+    project_directory = args$input,
     template = opts$template,
     interactive = FALSE,
     overwrite = is_flag(opts$overwrite),
@@ -298,9 +313,10 @@ command_init <- function(values) {
 command_config <- function(values) {
   if (length(values) < 1L) usage_error("config requires validate, edit, or show.")
   action <- values[[1L]]
-  input <- require_input(values[-1L], paste("config", action))
+  args <- project_cli_arguments(values[-1L])
+  input <- args$input
   allowed <- c("format", if (action == "validate") c("steps", "postprocess_streams", "extract_streams"))
-  opts <- normalize_options(values[-c(1L, 2L)], allowed)
+  opts <- normalize_options(args$options, allowed)
   format <- or_else(opts$format, "table")
   if (action == "validate") {
     result <- BrainGnomes::validate_project_config(input, quiet = TRUE, steps = opts$steps,
@@ -324,8 +340,9 @@ command_config <- function(values) {
 }
 
 command_doctor <- function(values) {
-  input <- require_input(values, "doctor")
-  opts <- normalize_options(values[-1L], c("steps", "deep", "strict", "format"))
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("steps", "deep", "strict", "format"))
   result <- BrainGnomes::doctor_project(
     input, steps = opts$steps, deep = is_flag(opts$deep), quiet = TRUE
   )
@@ -340,8 +357,9 @@ plan_options <- c(
 )
 
 command_plan <- function(values) {
-  input <- require_input(values, "plan")
-  opts <- normalize_options(values[-1L], plan_options)
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, plan_options)
   result <- BrainGnomes::plan_project(
     input, steps = or_else(opts$steps, "all"), subject_filter = opts$subject_filter,
     postprocess_streams = opts$postprocess_streams, extract_streams = opts$extract_streams,
@@ -356,8 +374,9 @@ command_plan <- function(values) {
 }
 
 command_run <- function(values) {
-  input <- require_input(values, "run")
-  opts <- normalize_options(values[-1L], c(
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c(
     "steps", "subject_filter", "postprocess_streams", "extract_streams",
     "debug", "force", "dry_run", "log_level", "format"
   ))
@@ -381,8 +400,9 @@ command_run <- function(values) {
 }
 
 command_validate_bids <- function(values) {
-  input <- require_input(values, "validate-bids")
-  opts <- normalize_options(values[-1L], c("outfile", "wait_jobs", "run"))
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("outfile", "wait_jobs", "run"))
   cfg <- BrainGnomes::load_project(input)
   job_id <- BrainGnomes::run_bids_validation(
     cfg, outfile = opts$outfile, wait_jobs = opts$wait_jobs,
@@ -393,8 +413,9 @@ command_validate_bids <- function(values) {
 }
 
 command_status <- function(values) {
-  input <- require_input(values, "status")
-  opts <- normalize_options(values[-1L], c(
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c(
     "sub_id", "ses_id", "summary", "runs", "run", "view", "refresh",
     "watch", "interval", "format"
   ), formats = c("table", "json", "csv"))
@@ -458,8 +479,9 @@ command_status <- function(values) {
 }
 
 command_logs <- function(values) {
-  input <- require_input(values, "logs")
-  opts <- normalize_options(values[-1L], c("run", "failed_only", "tail", "format"),
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("run", "failed_only", "tail", "format"),
     formats = c("table", "json", "csv"))
   logs <- BrainGnomes::find_run_logs(
     input, run_id = or_else(opts$run, "latest"), failed_only = is_flag(opts$failed_only)
@@ -478,8 +500,9 @@ command_logs <- function(values) {
 }
 
 command_provenance <- function(values) {
-  input <- require_input(values, "provenance")
-  opts <- normalize_options(values[-1L], c("run", "format"))
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("run", "format"))
   result <- BrainGnomes::get_run_provenance(
     input, run_id = or_else(opts$run, "latest")
   )
@@ -488,9 +511,10 @@ command_provenance <- function(values) {
 }
 
 command_diagnose <- function(values) {
-  input <- require_input(values, "diagnose")
+  args <- project_cli_arguments(values)
+  input <- args$input
   opts <- normalize_options(
-    values[-1L], c("run", "subject_id", "job_id", "interactive", "format")
+    args$options, c("run", "subject_id", "job_id", "interactive", "format")
   )
   if (is_flag(opts$interactive) && or_else(opts$format, "table") != "table") {
     usage_error("--interactive requires --format=table.")
@@ -511,8 +535,9 @@ command_diagnose <- function(values) {
 }
 
 command_retry <- function(values) {
-  input <- require_input(values, "retry")
-  opts <- normalize_options(values[-1L], c("run", "include_blocked", "dry_run", "yes", "format"))
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("run", "include_blocked", "dry_run", "yes", "format"))
   dry_run <- is_flag(opts$dry_run)
   if (!dry_run && !is_flag(opts$yes)) usage_error("retry requires --dry-run or --yes.")
   result <- BrainGnomes::retry_project_run(
@@ -524,8 +549,9 @@ command_retry <- function(values) {
 }
 
 command_cancel <- function(values) {
-  input <- require_input(values, "cancel")
-  opts <- normalize_options(values[-1L], c("run", "dry_run", "yes", "format"),
+  args <- project_cli_arguments(values)
+  input <- args$input
+  opts <- normalize_options(args$options, c("run", "dry_run", "yes", "format"),
     formats = c("table", "json", "csv"))
   dry_run <- is_flag(opts$dry_run)
   if (!dry_run && !is_flag(opts$yes)) usage_error("cancel requires --dry-run or --yes.")

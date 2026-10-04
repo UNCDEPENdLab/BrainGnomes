@@ -22,6 +22,21 @@ get_vignette_sources <- function() {
   list.files(source_dir, pattern = "[.]Rmd$", full.names = TRUE)
 }
 
+test_that("website reference groups cover the public workflow by task", {
+  path <- testthat::test_path("..", "..", "_pkgdown.yml")
+  skip_if_not(file.exists(path), "website configuration is not installed with the package")
+  groups <- yaml::read_yaml(path)$reference
+  expect_identical(vapply(groups[1:3], `[[`, character(1), "title"),
+    c("Start and configure a project", "Preview and run work", "Monitor, diagnose, and recover"))
+  expect_true("setup_project" %in% groups[[1]]$contents)
+  expect_true("run_project" %in% groups[[2]]$contents)
+  expect_true("diagnose_project" %in% groups[[3]]$contents)
+  topics <- unlist(lapply(groups, `[[`, "contents"), use.names = FALSE)
+  expect_true(all(getNamespaceExports("BrainGnomes") %in% topics))
+  expect_false("diagnose_pipeline" %in% topics)
+  expect_identical(anyDuplicated(topics), 0L)
+})
+
 test_that("exported native-backed help topics contain real usage signatures", {
   expected_formals <- list(
     automask = c(
