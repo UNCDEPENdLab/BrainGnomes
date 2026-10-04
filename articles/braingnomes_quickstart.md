@@ -930,6 +930,25 @@ BrainGnomes preserves the same primary workflow without requiring an
 interactive R session. The established command names are shown here;
 `init` and `run` are available as shorter aliases.
 
+Every project command accepts an explicit project directory or
+configuration YAML, or uses the current working directory when you omit
+that argument. Existing-project commands look for `project_config.yaml`
+in that directory; they do not search parent directories. For example:
+
+``` bash
+cd /project/my_study
+BrainGnomes run --steps=fmriprep --dry-run
+BrainGnomes status --view=subjects
+BrainGnomes config validate --steps=fmriprep --format=json
+```
+
+For headless creation in the current directory, use
+`BrainGnomes init my_study`. The project name is still required.
+Replacing an existing configuration requires `--overwrite`; retry and
+cancellation still require `--dry-run` or `--yes`. Saved plans require
+an explicit path, such as `BrainGnomes run run.yaml`. Explicit project
+paths continue to work from any directory:
+
 ``` bash
 BrainGnomes setup_project my_study /project/my_study
 BrainGnomes run_project /project/my_study
@@ -994,25 +1013,29 @@ stays synchronized with `inst/BrainGnomes`:
     Usage: BrainGnomes <command> [options]
 
     Typical workflow:
-      setup_project <project_name> <project_directory>
-      run_project <project_directory|config.yaml> [run options]
-      status <project_directory|config.yaml> [--run=<id|latest>] [--watch]
-      diagnose <project_directory|config.yaml> [--interactive]
+      setup_project <project_name> [project_directory]
+      run_project [project_directory|config.yaml] [run options]
+      status [project_directory|config.yaml] [--run=<id|latest>] [--watch]
+      diagnose [project_directory|config.yaml] [--interactive]
 
     Optional inspection and automation:
-      config validate <project_directory|config.yaml> [--format=table|json]
-      config edit <project_directory|config.yaml>
-      config show <project_directory|config.yaml> [--format=table|json]
-      doctor <project_directory|config.yaml> [--steps=<steps>] [--deep]
-      plan <project_directory|config.yaml> [run options] [--output=<plan.yaml>]
+      config validate [project_directory|config.yaml] [--format=table|json]
+      config edit [project_directory|config.yaml]
+      config show [project_directory|config.yaml] [--format=table|json]
+      doctor [project_directory|config.yaml] [--steps=<steps>] [--deep]
+      plan [project_directory|config.yaml] [run options] [--output=<plan.yaml>]
 
     Run operations:
-      provenance <project_directory|config.yaml> [--run=<id|latest>] [--format=table|json]
-      logs <project_directory|config.yaml> [--run=<id|latest>] [--failed-only]
-      retry <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes
-      cancel <project_directory|config.yaml> [--run=<id|latest>] --dry-run|--yes
-      validate-bids <project_directory|config.yaml> [--outfile=<report.html>]
+      provenance [project_directory|config.yaml] [--run=<id|latest>] [--format=table|json]
+      logs [project_directory|config.yaml] [--run=<id|latest>] [--failed-only]
+      retry [project_directory|config.yaml] [--run=<id|latest>] --dry-run|--yes
+      cancel [project_directory|config.yaml] [--run=<id|latest>] --dry-run|--yes
+      validate-bids [project_directory|config.yaml] [--outfile=<report.html>]
       help [command]
+
+    Project paths are optional and default to the current working directory.
+    Existing projects require project_config.yaml there; parent directories are not searched.
+    init/setup_project still requires a project name; saved plans require an explicit path.
 
     Also accepted: init, edit_project, and run.
     Config, doctor, and plan are optional; run_project resolves and submits directly.

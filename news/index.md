@@ -2,6 +2,23 @@
 
 ## BrainGnomes (development version)
 
+- Default CLI project paths to the current working directory, including
+  when options come first. Explicit project directories, configuration
+  YAMLs, and saved run plans remain supported. `init`/`setup_project`
+  still requires a project name but no longer requires a directory;
+  overwriting a configuration and retrying/cancelling work still require
+  their existing explicit flags.
+
+- Organize the website reference by task: setup, execution, monitoring
+  and recovery, QC, provenance, and advanced tools.
+
+- Remove `diagnose_pipeline()` and its export, without a compatibility
+  wrapper. Use
+  [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md);
+  pass `interactive = TRUE` for the guided browser or
+  `interactive = FALSE` for structured results. The CLI remains
+  `diagnose`.
+
 - Use the same selected-stage and stream configuration checks for plans,
   dry runs, and submission. Invalid licenses/resources now fail before
   project writes or scheduling, while unrelated stages/streams do not
@@ -162,15 +179,14 @@ Released 2026-09-02
   select either behavior explicitly with `interactive = TRUE/FALSE`.
   [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md),
   [`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md),
-  and the deprecated
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  now accept an explicit project directory or YAML path and default to
-  the project in the current working directory when input is omitted.
-  Guided diagnosis now starts with current unresolved problems, groups
-  repeated stage/stream failures, and preserves every subject, run, and
-  job selection while drilling down. Exact `subject_id` and `job_id`
-  shortcuts are available in R and the CLI, and full run-wide job lists
-  appear only when explicitly requested.
+  and the deprecated `diagnose_pipeline()` now accept an explicit
+  project directory or YAML path and default to the project in the
+  current working directory when input is omitted. Guided diagnosis now
+  starts with current unresolved problems, groups repeated stage/stream
+  failures, and preserves every subject, run, and job selection while
+  drilling down. Exact `subject_id` and `job_id` shortcuts are available
+  in R and the CLI, and full run-wide job lists appear only when
+  explicitly requested.
 
 - Add
   [`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
@@ -183,9 +199,7 @@ Released 2026-09-02
   add matching CLI status views, and deprecate the overlapping
   [`get_project_runs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_runs.md),
   [`get_run_jobs()`](https://hallquistlab.github.io/BrainGnomes/reference/get_run_jobs.md),
-  and
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  entry points.
+  and `diagnose_pipeline()` entry points.
 
 - Make
   [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
@@ -505,8 +519,7 @@ Released 2026-02-17
 - Added a new vignette, “Diagnosing Pipeline Runs”, that walks through
   [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md),
   [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md),
-  and interactive use of
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
+  and interactive use of `diagnose_pipeline()`
 - Improved error logging in HPC scripts so that success and failure are
   indicated more clearly
 - Stale .fail files are removed when a newer .complete file exists,
@@ -539,15 +552,12 @@ Released 2026-02-17
 - Increase consistency of instructions and formatting in
   [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
 - bugfix: avoid spurious “Already disconnected” warnings on exit from
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-- bugfix:
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  now respects configured `metadata/log_directory` instead of assuming
+  `diagnose_pipeline()`
+- bugfix: `diagnose_pipeline()` now respects configured
+  `metadata/log_directory` instead of assuming
   `<project_directory>/logs`
-- bugfix:
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-  now matches subjects by exact `sub-<id>` tokens to avoid accidental
-  partial matches
+- bugfix: `diagnose_pipeline()` now matches subjects by exact `sub-<id>`
+  tokens to avoid accidental partial matches
 - bugfix: `run_bg_and_wait()` now suppresses and restores `ERR` trap
   handling around `wait`, so non-zero container exits can be reconciled
   against success tokens before jobs are marked failed.

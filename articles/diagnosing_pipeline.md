@@ -263,9 +263,9 @@ regardless of how R was started:
 diagnose_project(scfg, run_id = run_id, interactive = TRUE)
 ```
 
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md)
-remains temporarily as a deprecated compatibility wrapper for
-`diagnose_project(..., interactive = TRUE)`.
+[`diagnose_project()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_project.md)
+is the single diagnosis entry point for both the guided browser and
+structured, non-interactive results.
 
 ## Inspect run provenance
 

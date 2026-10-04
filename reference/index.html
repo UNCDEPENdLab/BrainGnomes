@@ -45,9 +45,9 @@
     </div>
 
     <div class="section level2">
-      <h2 id="all-functions">All functions<a class="anchor" aria-label="anchor" href="#all-functions"></a></h2>
+      <h2 id="start-and-configure-a-project">Start and configure a project<a class="anchor" aria-label="anchor" href="#start-and-configure-a-project"></a></h2>
 
-
+      <div class="section-desc"><p>Begin with setup_project(), then pass its result, a configuration YAML, or a project directory to the workflow functions. Omit the input to use the current directory. Validation and doctor checks are optional tools for reviewing settings and the submission environment.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -56,31 +56,133 @@
 
       <dl><dt>
 
-          <code><a href="add_tracked_job_parent.html">add_tracked_job_parent()</a></code>
+          <code><a href="setup_project.html">setup_project()</a></code>
 
         </dt>
-        <dd>Add parent/child id relationship to tracking database</dd>
+        <dd>Set up a BrainGnomes project workflow for a new fMRI study</dd>
 
         <dt>
 
-          <code><a href="automask.html">automask()</a></code>
+          <code><a href="load_project.html">load_project()</a></code>
 
         </dt>
-        <dd>Create an automatic brain mask from a NIfTI image (Rcpp implementation)</dd>
+        <dd>Load a project configuration from a file</dd>
 
         <dt>
 
-          <code><a href="butterworth_filter_4d.html">butterworth_filter_4d()</a></code>
+          <code><a href="edit_project.html">edit_project()</a></code>
 
         </dt>
-        <dd>Apply a Butterworth Filter to a 4D NIfTI Image</dd>
+        <dd>Interactively edit a project configuration by field (field-guided)</dd>
 
         <dt>
 
-          <code><a href="calculate_motion_outliers.html">calculate_motion_outliers()</a></code>
+          <code><a href="write_project_config.html">write_project_config()</a></code>
 
         </dt>
-        <dd>Summarize framewise displacement outliers across runs</dd>
+        <dd>Write a project configuration without interactive prompts</dd>
+
+        <dt>
+
+          <code><a href="validate_project_config.html">validate_project_config()</a></code>
+
+        </dt>
+        <dd>Validate a BrainGnomes project configuration without changing it</dd>
+
+        <dt>
+
+          <code><a href="doctor_project.html">doctor_project()</a></code>
+
+        </dt>
+        <dd>Run non-mutating project and runtime preflight checks</dd>
+      </dl></div><div class="section level2">
+      <h2 id="preview-and-run-work">Preview and run work<a class="anchor" aria-label="anchor" href="#preview-and-run-work"></a></h2>
+
+      <div class="section-desc"><p>Run directly with run_project(); use dry_run = TRUE to preview without submission. Plans are optional when you want to inspect, save, or share a resolved request before submitting it.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="run_project.html">run_project()</a></code>
+
+        </dt>
+        <dd>Run the project workflow</dd>
+
+        <dt>
+
+          <code><a href="plan_project.html">plan_project()</a></code>
+
+        </dt>
+        <dd>Inspect or persist the resolved project execution model</dd>
+
+        <dt>
+
+          <code><a href="write_project_plan.html">write_project_plan()</a></code>
+
+        </dt>
+        <dd>Save an execution plan to YAML</dd>
+
+        <dt>
+
+          <code><a href="read_project_plan.html">read_project_plan()</a></code>
+
+        </dt>
+        <dd>Read a saved execution plan</dd>
+
+        <dt>
+
+          <code><a href="submit_project_plan.html">submit_project_plan()</a></code>
+
+        </dt>
+        <dd>Submit a saved or in-memory request plan</dd>
+
+        <dt>
+
+          <code><a href="run_bids_validation.html">run_bids_validation()</a></code>
+
+        </dt>
+        <dd>Run BIDS validation on the project BIDS directory</dd>
+      </dl></div><div class="section level2">
+      <h2 id="monitor-diagnose-and-recover">Monitor, diagnose, and recover<a class="anchor" aria-label="anchor" href="#monitor-diagnose-and-recover"></a></h2>
+
+      <div class="section-desc"><p>Inspect current progress, investigate failures with diagnose_project(), and preview retries or cancellations before acting. Diagnosis supports both a guided browser and structured results.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="inspect_project.html">inspect_project()</a></code>
+
+        </dt>
+        <dd>Inspect current project progress</dd>
+
+        <dt>
+
+          <code><a href="diagnose_project.html">diagnose_project()</a></code>
+
+        </dt>
+        <dd>Diagnose failed project work</dd>
+
+        <dt>
+
+          <code><a href="find_run_logs.html">find_run_logs()</a></code>
+
+        </dt>
+        <dd>Find output and error logs for one run</dd>
+
+        <dt>
+
+          <code><a href="retry_project_run.html">retry_project_run()</a></code>
+
+        </dt>
+        <dd>Create a new run for failed work</dd>
 
         <dt>
 
@@ -91,17 +193,114 @@
 
         <dt>
 
-          <code><a href="cluster_job_submit.html">cluster_job_submit()</a></code>
+          <code><a href="get_project_status.html">get_project_status()</a></code>
 
         </dt>
-        <dd>This function submits a single script to a high-performance cluster using a scheduler (Slurm or TORQUE). It accepts a vector of arguments to be passed to the scheduler and a vector of environment variables that should be passed to the compute node at job execution.</dd>
+        <dd>Get processing status for all subjects</dd>
 
         <dt>
+
+          <code><a href="get_subject_status.html">get_subject_status()</a></code>
+
+        </dt>
+        <dd>Get processing status for a single subject</dd>
+      </dl></div><div class="section level2">
+      <h2 id="review-quality-control">Review quality control<a class="anchor" aria-label="anchor" href="#review-quality-control"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
 
           <code><a href="collect_qc_inventory.html">collect_qc_inventory()</a></code>
 
         </dt>
         <dd>Collect a study QC inventory from existing diagnostics</dd>
+
+        <dt>
+
+          <code><a href="write_qc_inventory.html">write_qc_inventory()</a></code>
+
+        </dt>
+        <dd>Export a QC inventory as RDS, TSV tables, and a snapshot description</dd>
+
+        <dt>
+
+          <code><a href="render_qc_dashboard.html">render_qc_dashboard()</a></code>
+
+        </dt>
+        <dd>Render a Quarto dashboard for a study QC snapshot</dd>
+
+        <dt>
+
+          <code><a href="calculate_motion_outliers.html">calculate_motion_outliers()</a></code>
+
+        </dt>
+        <dd>Summarize framewise displacement outliers across runs</dd>
+      </dl></div><div class="section level2">
+      <h2 id="inspect-and-share-provenance">Inspect and share provenance<a class="anchor" aria-label="anchor" href="#inspect-and-share-provenance"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="get_run_provenance.html">get_run_provenance()</a></code>
+
+        </dt>
+        <dd>Read the complete provenance record for a project run</dd>
+
+        <dt>
+
+          <code><a href="read_derivative_provenance.html">read_derivative_provenance()</a></code>
+
+        </dt>
+        <dd>Read the portable record associated with a derivative</dd>
+
+        <dt>
+
+          <code><a href="export_derivative_provenance.html">export_derivative_provenance()</a></code>
+
+        </dt>
+        <dd>Export a derivative with its portable processing record</dd>
+      </dl></div><div class="section level2">
+      <h2 id="find-data-and-work-with-bids-names">Find data and work with BIDS names<a class="anchor" aria-label="anchor" href="#find-data-and-work-with-bids-names"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="get_fmriprep_outputs.html">get_fmriprep_outputs()</a></code>
+
+        </dt>
+        <dd>Identify fMRIPrep-Derived Outputs for a NIfTI File</dd>
+
+        <dt>
+
+          <code><a href="get_postproc_output_files.html">get_postproc_output_files()</a></code>
+
+        </dt>
+        <dd>List postprocessed output files for paired input specifications</dd>
+
+        <dt>
+
+          <code><a href="extract_bids_info.html">extract_bids_info()</a></code>
+
+        </dt>
+        <dd>Extract fields from BIDS filenames</dd>
 
         <dt>
 
@@ -123,48 +322,22 @@
 
         </dt>
         <dd>Derive a conservative functional reference core from 4D BOLD data</dd>
+      </dl></div><div class="section level2">
+      <h2 id="process-images-and-extract-rois-directly">Process images and extract ROIs directly<a class="anchor" aria-label="anchor" href="#process-images-and-extract-rois-directly"></a></h2>
 
-        <dt>
+      <div class="section-desc"><p>Lower-level tools for custom analyses. Routine project processing uses run_project() and the configured postprocessing and extraction streams.</p></div>
 
-          <code><a href="diagnose_pipeline.html">diagnose_pipeline()</a></code>
+      <dl></dl></div><div class="section level2">
 
-        </dt>
-        <dd>Deprecated interactive pipeline diagnosis</dd>
 
-        <dt>
 
-          <code><a href="diagnose_project.html">diagnose_project()</a></code>
 
-        </dt>
-        <dd>Diagnose failed project work</dd>
+      <dl><dt>
 
-        <dt>
-
-          <code><a href="doctor_project.html">doctor_project()</a></code>
+          <code><a href="postprocess_subject.html">postprocess_subject()</a></code>
 
         </dt>
-        <dd>Run non-mutating project and runtime preflight checks</dd>
-
-        <dt>
-
-          <code><a href="edit_project.html">edit_project()</a></code>
-
-        </dt>
-        <dd>Interactively edit a project configuration by field (field-guided)</dd>
-
-        <dt>
-
-          <code><a href="export_derivative_provenance.html">export_derivative_provenance()</a></code>
-
-        </dt>
-        <dd>Export a derivative with its portable processing record</dd>
-
-        <dt>
-
-          <code><a href="extract_bids_info.html">extract_bids_info()</a></code>
-
-        </dt>
-        <dd>Extract fields from BIDS filenames</dd>
+        <dd>Postprocess a single fMRI BOLD image using a configured pipeline</dd>
 
         <dt>
 
@@ -175,80 +348,24 @@
 
         <dt>
 
+          <code><a href="automask.html">automask()</a></code>
+
+        </dt>
+        <dd>Create an automatic brain mask from a NIfTI image (Rcpp implementation)</dd>
+
+        <dt>
+
+          <code><a href="butterworth_filter_4d.html">butterworth_filter_4d()</a></code>
+
+        </dt>
+        <dd>Apply a Butterworth Filter to a 4D NIfTI Image</dd>
+
+        <dt>
+
           <code><a href="filtfilt_cpp.html">filtfilt_cpp()</a></code>
 
         </dt>
         <dd>Zero-Phase IIR Filtering via Forward and Reverse Filtering</dd>
-
-        <dt>
-
-          <code><a href="find_run_logs.html">find_run_logs()</a></code>
-
-        </dt>
-        <dd>Find output and error logs for one run</dd>
-
-        <dt>
-
-          <code><a href="get_fmriprep_outputs.html">get_fmriprep_outputs()</a></code>
-
-        </dt>
-        <dd>Identify fMRIPrep-Derived Outputs for a NIfTI File</dd>
-
-        <dt>
-
-          <code><a href="get_postproc_output_files.html">get_postproc_output_files()</a></code>
-
-        </dt>
-        <dd>List postprocessed output files for paired input specifications</dd>
-
-        <dt>
-
-          <code><a href="get_project_runs.html">get_project_runs()</a></code>
-
-        </dt>
-        <dd>List submitted runs for a project</dd>
-
-        <dt>
-
-          <code><a href="get_project_status.html">get_project_status()</a></code>
-
-        </dt>
-        <dd>Get processing status for all subjects</dd>
-
-        <dt>
-
-          <code><a href="get_run_jobs.html">get_run_jobs()</a></code>
-
-        </dt>
-        <dd>Inspect the jobs submitted for one project run</dd>
-
-        <dt>
-
-          <code><a href="get_run_provenance.html">get_run_provenance()</a></code>
-
-        </dt>
-        <dd>Read the complete provenance record for a project run</dd>
-
-        <dt>
-
-          <code><a href="get_subject_status.html">get_subject_status()</a></code>
-
-        </dt>
-        <dd>Get processing status for a single subject</dd>
-
-        <dt>
-
-          <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>
-
-        </dt>
-        <dd>Query job status in tracking SQLite database</dd>
-
-        <dt>
-
-          <code><a href="getline.html">getline()</a></code>
-
-        </dt>
-        <dd>Read a Line of Input from the User in Both Interactive and Non-Interactive Sessions</dd>
 
         <dt>
 
@@ -259,38 +376,10 @@
 
         <dt>
 
-          <code><a href="insert_df_sqlite.html">insert_df_sqlite()</a></code>
-
-        </dt>
-        <dd>helper function to insert a keyed data.frame into the sqlite storage database</dd>
-
-        <dt>
-
-          <code><a href="insert_tracked_job.html">insert_tracked_job()</a></code>
-
-        </dt>
-        <dd>Internal helper function to insert a job into the tracking SQLite database</dd>
-
-        <dt>
-
-          <code><a href="inspect_project.html">inspect_project()</a></code>
-
-        </dt>
-        <dd>Inspect current project progress</dd>
-
-        <dt>
-
           <code><a href="lmfit_residuals_4d.html">lmfit_residuals_4d()</a></code>
 
         </dt>
         <dd>Apply Confound Regression to 4D fMRI Data Using Voxelwise Linear Models</dd>
-
-        <dt>
-
-          <code><a href="load_project.html">load_project()</a></code>
-
-        </dt>
-        <dd>Load a project configuration from a file</dd>
 
         <dt>
 
@@ -308,59 +397,10 @@
 
         <dt>
 
-          <code><a href="parse_cli_args.html">parse_cli_args()</a></code>
-
-        </dt>
-        <dd>Parse CLI-style arguments into a nested list using args_to_df()</dd>
-
-        <dt>
-
-          <code><a href="plan_project.html">plan_project()</a></code>
-
-        </dt>
-        <dd>Inspect or persist the resolved project execution model</dd>
-
-        <dt>
-
-          <code><a href="postprocess_subject.html">postprocess_subject()</a></code>
-
-        </dt>
-        <dd>Postprocess a single fMRI BOLD image using a configured pipeline</dd>
-
-        <dt>
-
-          <code><a href="print.bg_qc_inventory.html">print(<i>&lt;bg_qc_inventory&gt;</i>)</a></code>
-
-        </dt>
-        <dd>Print a compact QC snapshot summary</dd>
-
-        <dt>
-
-          <code><a href="read_derivative_provenance.html">read_derivative_provenance()</a></code>
-
-        </dt>
-        <dd>Read the portable record associated with a derivative</dd>
-
-        <dt>
-
-          <code><a href="read_project_plan.html">read_project_plan()</a></code>
-
-        </dt>
-        <dd>Read a saved execution plan</dd>
-
-        <dt>
-
           <code><a href="remove_nifti_volumes.html">remove_nifti_volumes()</a></code>
 
         </dt>
         <dd>Remove Specified Timepoints from a 4D NIfTI Image</dd>
-
-        <dt>
-
-          <code><a href="render_qc_dashboard.html">render_qc_dashboard()</a></code>
-
-        </dt>
-        <dd>Render a Quarto dashboard for a study QC snapshot</dd>
 
         <dt>
 
@@ -371,45 +411,114 @@
 
         <dt>
 
-          <code><a href="retry_project_run.html">retry_project_run()</a></code>
-
-        </dt>
-        <dd>Create a new run for failed work</dd>
-
-        <dt>
-
-          <code><a href="run_bids_validation.html">run_bids_validation()</a></code>
-
-        </dt>
-        <dd>Run BIDS validation on the project BIDS directory</dd>
-
-        <dt>
-
           <code><a href="run_fsl_command.html">run_fsl_command()</a></code>
 
         </dt>
         <dd>Run an FSL command with optional Singularity container support and structured logging</dd>
+      </dl></div><div class="section level2">
+      <h2 id="advanced-scheduler-and-cli-utilities">Advanced scheduler and CLI utilities<a class="anchor" aria-label="anchor" href="#advanced-scheduler-and-cli-utilities"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="cluster_job_submit.html">cluster_job_submit()</a></code>
+
+        </dt>
+        <dd>This function submits a single script to a high-performance cluster using a scheduler (Slurm or TORQUE). It accepts a vector of arguments to be passed to the scheduler and a vector of environment variables that should be passed to the compute node at job execution.</dd>
 
         <dt>
 
-          <code><a href="run_project.html">run_project()</a></code>
+          <code><a href="wait_for_job.html">wait_for_job()</a></code>
 
         </dt>
-        <dd>Run the project workflow</dd>
+        <dd>This function pauses execution of an R script while a scheduled qsub job is not yet complete.</dd>
 
         <dt>
 
-          <code><a href="setup_project.html">setup_project()</a></code>
+          <code><a href="insert_tracked_job.html">insert_tracked_job()</a></code>
 
         </dt>
-        <dd>Set up a BrainGnomes project workflow for a new fMRI study</dd>
+        <dd>Internal helper function to insert a job into the tracking SQLite database</dd>
 
         <dt>
 
-          <code><a href="submit_project_plan.html">submit_project_plan()</a></code>
+          <code><a href="update_tracked_job_status.html">update_tracked_job_status()</a></code>
 
         </dt>
-        <dd>Submit a saved or in-memory request plan</dd>
+        <dd>Update Job Status in Tracking SQLite Database</dd>
+
+        <dt>
+
+          <code><a href="add_tracked_job_parent.html">add_tracked_job_parent()</a></code>
+
+        </dt>
+        <dd>Add parent/child id relationship to tracking database</dd>
+
+        <dt>
+
+          <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>
+
+        </dt>
+        <dd>Query job status in tracking SQLite database</dd>
+
+        <dt>
+
+          <code><a href="parse_cli_args.html">parse_cli_args()</a></code>
+
+        </dt>
+        <dd>Parse CLI-style arguments into a nested list using args_to_df()</dd>
+
+        <dt>
+
+          <code><a href="getline.html">getline()</a></code>
+
+        </dt>
+        <dd>Read a Line of Input from the User in Both Interactive and Non-Interactive Sessions</dd>
+      </dl></div><div class="section level2">
+      <h2 id="legacy-run-inspection">Legacy run inspection<a class="anchor" aria-label="anchor" href="#legacy-run-inspection"></a></h2>
+
+      <div class="section-desc"><p>These retained getters are deprecated. Use inspect_project() for current project state or select a run with its run_id argument.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="get_project_runs.html">get_project_runs()</a></code>
+
+        </dt>
+        <dd>List submitted runs for a project</dd>
+
+        <dt>
+
+          <code><a href="get_run_jobs.html">get_run_jobs()</a></code>
+
+        </dt>
+        <dd>Inspect the jobs submitted for one project run</dd>
+      </dl></div><div class="section level2">
+      <h2 id="printing-and-summarizing-results">Printing and summarizing results<a class="anchor" aria-label="anchor" href="#printing-and-summarizing-results"></a></h2>
+
+
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="print.bg_qc_inventory.html">print(<i>&lt;bg_qc_inventory&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Print a compact QC snapshot summary</dd>
 
         <dt>
 
@@ -424,50 +533,9 @@
 
         </dt>
         <dd>Summarize project status</dd>
-
-        <dt>
-
-          <code><a href="update_tracked_job_status.html">update_tracked_job_status()</a></code>
-
-        </dt>
-        <dd>Update Job Status in Tracking SQLite Database</dd>
-
-        <dt>
-
-          <code><a href="validate_project_config.html">validate_project_config()</a></code>
-
-        </dt>
-        <dd>Validate a BrainGnomes project configuration without changing it</dd>
-
-        <dt>
-
-          <code><a href="wait_for_job.html">wait_for_job()</a></code>
-
-        </dt>
-        <dd>This function pauses execution of an R script while a scheduled qsub job is not yet complete.</dd>
-
-        <dt>
-
-          <code><a href="write_project_config.html">write_project_config()</a></code>
-
-        </dt>
-        <dd>Write a project configuration without interactive prompts</dd>
-
-        <dt>
-
-          <code><a href="write_project_plan.html">write_project_plan()</a></code>
-
-        </dt>
-        <dd>Save an execution plan to YAML</dd>
-
-        <dt>
-
-          <code><a href="write_qc_inventory.html">write_qc_inventory()</a></code>
-
-        </dt>
-        <dd>Export a QC inventory as RDS, TSV tables, and a snapshot description</dd>
       </dl></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

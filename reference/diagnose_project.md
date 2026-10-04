@@ -40,9 +40,8 @@ diagnose_project(
   structured diagnosis. The default is
   [`base::interactive()`](https://rdrr.io/r/base/interactive.html), so
   console users get the guided browser while scripts, tests, and reports
-  get structured output. Interactive mode retains the behavior formerly
-  provided by
-  [`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md).
+  get structured output. Both modes support subject, job, and historical
+  run selection.
 
 - subject_id:
 

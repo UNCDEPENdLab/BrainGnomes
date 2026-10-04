@@ -27,8 +27,7 @@ submit selected stages using
 and inspect progress with
 [`get_project_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_project_status.md),
 [`get_subject_status()`](https://hallquistlab.github.io/BrainGnomes/reference/get_subject_status.md),
-or
-[`diagnose_pipeline()`](https://hallquistlab.github.io/BrainGnomes/reference/diagnose_pipeline.md).
+or `diagnose_pipeline()`.
 
 Supported stages include optional Flywheel synchronization,
 DICOM-to-BIDS conversion, standalone BIDS validation, MRIQC, fMRIPrep,

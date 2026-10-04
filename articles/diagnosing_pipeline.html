@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist &amp; Dan Shallal</h4>
             
-            <h4 data-toc-skip class="date">04 Sep 2026</h4>
+            <h4 data-toc-skip class="date">04 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/diagnosing_pipeline.Rmd" class="external-link"><code>vignettes/diagnosing_pipeline.Rmd</code></a></small>
       <div class="d-none name"><code>diagnosing_pipeline.Rmd</code></div>
@@ -290,9 +290,8 @@ an interactive R session:</p>
 browser regardless of how R was started:</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, run_id <span class="op">=</span> <span class="va">run_id</span>, interactive <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="../reference/diagnose_pipeline.html">diagnose_pipeline()</a></code> remains temporarily as a deprecated
-compatibility wrapper for
-<code>diagnose_project(..., interactive = TRUE)</code>.</p>
+<p><code><a href="../reference/diagnose_project.html">diagnose_project()</a></code> is the single diagnosis entry point
+for both the guided browser and structured, non-interactive results.</p>
 </div>
 <div class="section level2">
 <h2 id="inspect-run-provenance">Inspect run provenance<a class="anchor" aria-label="anchor" href="#inspect-run-provenance"></a>
