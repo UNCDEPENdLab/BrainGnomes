@@ -4,23 +4,24 @@ test_that("BrainGnomes --help prints global help", {
   expect_true(any(grepl("^Usage: BrainGnomes <command> \\[options\\]$", res$output)))
   expect_true(any(grepl("^Typical workflow:$", res$output)))
   expect_true(any(grepl("^  setup_project <project_name>", res$output)))
-  expect_true(any(grepl("^  run_project <project_directory", res$output)))
+  expect_true(any(grepl("^  run_project \\[project_directory", res$output)))
   expect_true(any(grepl("^Optional inspection and automation:$", res$output)))
-  expect_true(any(grepl("^  doctor <project_directory\\|config\\.yaml>", res$output)))
-  expect_true(any(grepl("^  plan <project_directory\\|config\\.yaml>", res$output)))
-  expect_true(any(grepl("^  validate-bids <project_directory\\|config\\.yaml>", res$output)))
-  expect_true(any(grepl("^  provenance <project_directory\\|config\\.yaml>", res$output)))
-  expect_true(any(grepl("^  retry <project_directory\\|config\\.yaml>", res$output)))
+  expect_true(any(grepl("^  doctor \\[project_directory\\|config\\.yaml\\]", res$output)))
+  expect_true(any(grepl("^  plan \\[project_directory\\|config\\.yaml\\]", res$output)))
+  expect_true(any(grepl("^  validate-bids \\[project_directory\\|config\\.yaml\\]", res$output)))
+  expect_true(any(grepl("^  provenance \\[project_directory\\|config\\.yaml\\]", res$output)))
+  expect_true(any(grepl("^  retry \\[project_directory\\|config\\.yaml\\]", res$output)))
   expect_true(any(grepl("Use 'BrainGnomes help <command>'", res$output, fixed = TRUE)))
   expect_true(any(grepl("Config, doctor, and plan are optional", res$output, fixed = TRUE)))
+  expect_true(any(grepl("default to the current working directory", res$output, fixed = TRUE)))
   expect_false(any(grepl("--steps=.*bids_validation", res$output)))
 })
 
 test_that("BrainGnomes help run_project prints command help", {
   res <- run_brain_gnomes_cli(c("help", "run_project"))
   expect_equal(res$status, 0L)
-  expect_true(any(grepl("^Usage: BrainGnomes run_project <project_directory\\|config\\.yaml\\|plan\\.yaml> \\[options\\]$", res$output)))
-  expect_true(any(grepl("^Alias: BrainGnomes run <project_directory", res$output)))
+  expect_true(any(grepl("^Usage: BrainGnomes run_project \\[project_directory\\|config\\.yaml\\|plan\\.yaml\\] \\[options\\]$", res$output)))
+  expect_true(any(grepl("^Alias: BrainGnomes run \\[project_directory", res$output)))
   expect_true(any(grepl("^Options:$", res$output)))
   expect_true(any(grepl("schema_version brain-gnomes-plan-v1", res$output, fixed = TRUE)))
   expect_true(any(grepl("standard path", res$output, fixed = TRUE)))
@@ -30,7 +31,7 @@ test_that("BrainGnomes help run_project prints command help", {
 test_that("BrainGnomes run_project --help prints command help", {
   res <- run_brain_gnomes_cli(c("run_project", "--help"))
   expect_equal(res$status, 0L)
-  expect_true(any(grepl("^Usage: BrainGnomes run_project <project_directory\\|config\\.yaml\\|plan\\.yaml> \\[options\\]$", res$output)))
+  expect_true(any(grepl("^Usage: BrainGnomes run_project \\[project_directory\\|config\\.yaml\\|plan\\.yaml\\] \\[options\\]$", res$output)))
   expect_true(any(grepl("^  --debug", res$output)))
   expect_true(any(grepl("^  --force", res$output)))
   expect_true(any(grepl("^  --dry-run", res$output)))
@@ -77,7 +78,7 @@ test_that("run_project CLI forwards selected extraction streams", {
 test_that("BrainGnomes status --help prints command help", {
   res <- run_brain_gnomes_cli(c("status", "--help"))
   expect_equal(res$status, 0L)
-  expect_true(any(grepl("^Usage: BrainGnomes status <project_directory\\|config\\.yaml> \\[options\\]$", res$output)))
+  expect_true(any(grepl("^Usage: BrainGnomes status \\[project_directory\\|config\\.yaml\\] \\[options\\]$", res$output)))
   expect_true(any(grepl("^  --sub-id=<id>", res$output)))
   expect_true(any(grepl("^  --summary", res$output)))
   expect_true(any(grepl("^  --run=<id\\|latest>", res$output)))
@@ -89,6 +90,7 @@ test_that("BrainGnomes lifecycle commands have command-specific help", {
   for (command in c("init", "config", "doctor", "plan", "validate-bids", "provenance", "logs", "diagnose", "retry", "cancel")) {
     res <- run_brain_gnomes_cli(c(command, "--help"))
     expect_equal(res$status, 0L, info = command)
+    expect_true(any(grepl("Omit the project path", res$output, fixed = TRUE)), info = command)
     displayed_command <- if (command == "init") "setup_project" else command
     expect_true(
       any(grepl(paste0("^Usage: BrainGnomes ", displayed_command), res$output)),

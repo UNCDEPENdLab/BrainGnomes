@@ -23,8 +23,8 @@ runs, \code{"latest"} for the newest run, or an explicit historical run ID.}
 \item{interactive}{If \code{TRUE}, open the guided interactive browser. If
 \code{FALSE}, return a structured diagnosis. The default is
 \code{base::interactive()}, so console users get the guided browser while
-scripts, tests, and reports get structured output. Interactive mode retains
-the behavior formerly provided by \code{\link[=diagnose_pipeline]{diagnose_pipeline()}}.}
+scripts, tests, and reports get structured output. Both modes support
+subject, job, and historical run selection.}
 
 \item{subject_id}{Optional subject identifier, with or without the \verb{sub-}
 prefix. Restricts both structured and interactive diagnosis to that

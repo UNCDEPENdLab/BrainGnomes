@@ -42,24 +42,56 @@ test_that("machine-readable CLI results parse from the entire stdout stream", {
     logs = c("logs", root, "--run=failed-run", "--tail=1")
   )
   before <- list.files(root, recursive = TRUE, all.files = TRUE, include.dirs = TRUE)
-  for (name in names(cases)) {
-    res <- run_brain_gnomes_cli(c(cases[[name]], "--format=json"))
-    expect_true(res$status %in% if (name == "doctor") c(0L, 1L) else 0L,
-      info = paste(name, paste(res$stderr, collapse = "\n")))
-    json <- paste(res$stdout, collapse = "\n")
-    expect_true(jsonlite::validate(json), info = paste(name, json))
-    parsed <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-    if (name %in% c("run", "plan", "retry")) {
-      expect_true(length(parsed$preview$work) > 0L, info = name)
+  for (mode in c("explicit", "cwd")) {
+    for (name in names(cases)) {
+      args <- cases[[name]]
+      if (mode == "cwd") args <- args[args != root]
+      res <- run_brain_gnomes_cli(c(args, "--format=json"), wd = root)
+      expect_true(res$status %in% if (name == "doctor") c(0L, 1L) else 0L,
+        info = paste(mode, name, paste(res$stderr, collapse = "\n")))
+      json <- paste(res$stdout, collapse = "\n")
+      expect_true(jsonlite::validate(json), info = paste(mode, name, json))
+      parsed <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+      if (name %in% c("run", "plan", "retry")) {
+        expect_true(length(parsed$preview$work) > 0L, info = name)
+      }
+      if (name == "run") expect_match(paste(res$stderr, collapse = "\n"), "Dry run enabled", fixed = TRUE)
+      if (name == "logs") expect_match(paste(res$stderr, collapse = "\n"), "Human log text, not JSON", fixed = TRUE)
+      if (name == "cancel") expect_identical(parsed[[1L]]$status, "would_cancel")
     }
-    if (name == "run") expect_match(paste(res$stderr, collapse = "\n"), "Dry run enabled", fixed = TRUE)
-    if (name == "logs") expect_match(paste(res$stderr, collapse = "\n"), "Human log text, not JSON", fixed = TRUE)
-    if (name == "cancel") expect_identical(parsed[[1L]]$status, "would_cancel")
   }
   expect_identical(list.files(root, recursive = TRUE, all.files = TRUE, include.dirs = TRUE), before)
   human <- run_brain_gnomes_cli(c("run", root, "--steps=fmriprep", "--dry-run"))
   expect_identical(human$status, 0L)
   expect_equal(sum(grepl("Concrete work preview", human$output, fixed = TRUE)), 1L)
+})
+
+test_that("current-directory CLI runs retain first options, aliases, and explicit YAML selection", {
+  cfg <- make_json_cli_project()
+  root <- cfg$metadata$project_directory
+  dir.create(file.path(cfg$metadata$bids_directory, "sub-selected"))
+  for (command in c("run", "run_project", "plan")) {
+    result <- run_brain_gnomes_cli(c(command, "--steps", "fmriprep",
+      "--subject-filter=selected", if (command != "plan") "--dry-run", "--format=json"), wd = root)
+    expect_identical(result$status, 0L, info = paste(result$stderr, collapse = "\n"))
+    plan <- jsonlite::fromJSON(paste(result$stdout, collapse = "\n"))
+    expect_identical(plan$request$steps, "fmriprep")
+    expect_identical(plan$request$subject_filter, "selected")
+    expect_identical(plan$subjects$sub_id, "selected")
+  }
+
+  alternate <- file.path(root, "alternate config.yaml")
+  contents <- as.list(cfg)
+  contents$metadata$project_name <- "alternate"
+  yaml::write_yaml(contents, alternate)
+  explicit <- run_brain_gnomes_cli(c("config", "show", alternate, "--format=json"), wd = root)
+  expect_identical(explicit$status, 0L)
+  expect_identical(jsonlite::fromJSON(paste(explicit$stdout, collapse = "\n"))$metadata$project_name,
+    "alternate")
+  default <- run_brain_gnomes_cli(c("config", "show", "--format=json"), wd = root)
+  expect_identical(default$status, 0L)
+  expect_identical(jsonlite::fromJSON(paste(default$stdout, collapse = "\n"))$metadata$project_name,
+    "json")
 })
 
 test_that("machine formats fail before interactive or unsupported operations", {

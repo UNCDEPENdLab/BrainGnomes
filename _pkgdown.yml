@@ -2,3 +2,109 @@ url: https://hallquistlab.github.io/BrainGnomes/
 template:
   bootstrap: 5
   bootswatch: spacelab
+
+reference:
+- title: Start and configure a project
+  desc: >-
+    Begin with setup_project(), then pass its result, a configuration YAML,
+    or a project directory to the workflow functions. Omit the input to use
+    the current directory. Validation and doctor checks are optional tools
+    for reviewing settings and the submission environment.
+  contents:
+  - setup_project
+  - load_project
+  - edit_project
+  - write_project_config
+  - validate_project_config
+  - doctor_project
+
+- title: Preview and run work
+  desc: >-
+    Run directly with run_project(); use dry_run = TRUE to preview without
+    submission. Plans are optional when you want to inspect, save, or share
+    a resolved request before submitting it.
+  contents:
+  - run_project
+  - plan_project
+  - write_project_plan
+  - read_project_plan
+  - submit_project_plan
+  - run_bids_validation
+
+- title: Monitor, diagnose, and recover
+  desc: >-
+    Inspect current progress, investigate failures with diagnose_project(),
+    and preview retries or cancellations before acting. Diagnosis supports
+    both a guided browser and structured results.
+  contents:
+  - inspect_project
+  - diagnose_project
+  - find_run_logs
+  - retry_project_run
+  - cancel_project_run
+  - get_project_status
+  - get_subject_status
+
+- title: Review quality control
+  contents:
+  - collect_qc_inventory
+  - write_qc_inventory
+  - render_qc_dashboard
+  - calculate_motion_outliers
+
+- title: Inspect and share provenance
+  contents:
+  - get_run_provenance
+  - read_derivative_provenance
+  - export_derivative_provenance
+
+- title: Find data and work with BIDS names
+  contents:
+  - get_fmriprep_outputs
+  - get_postproc_output_files
+  - extract_bids_info
+  - construct_bids_filename
+  - construct_bids_regex
+  - derive_reference_core
+
+- title: Process images and extract ROIs directly
+  desc: >-
+    Lower-level tools for custom analyses. Routine project processing uses
+    run_project() and the configured postprocessing and extraction streams.
+  contents:
+  - postprocess_subject
+  - extract_rois
+  - automask
+  - butterworth_filter_4d
+  - filtfilt_cpp
+  - image_quantile
+  - lmfit_residuals_4d
+  - natural_spline_4d
+  - natural_spline_interp
+  - remove_nifti_volumes
+  - resample_template_to_img
+  - run_fsl_command
+
+- title: Advanced scheduler and CLI utilities
+  contents:
+  - cluster_job_submit
+  - wait_for_job
+  - insert_tracked_job
+  - update_tracked_job_status
+  - add_tracked_job_parent
+  - get_tracked_job_status
+  - parse_cli_args
+  - getline
+
+- title: Legacy run inspection
+  desc: >-
+    These retained getters are deprecated. Use inspect_project() for current
+    project state or select a run with its run_id argument.
+  contents:
+  - get_project_runs
+  - get_run_jobs
+
+- title: Printing and summarizing results
+  contents:
+  - matches("^print\\.")
+  - matches("^summary\\.")

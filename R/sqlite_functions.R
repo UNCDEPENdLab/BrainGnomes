@@ -14,6 +14,7 @@
 #'   we are still getting errors even with the immediate approach.
 #'
 #' @return a TRUE/FALSE indicating whether the record was successfully inserted
+#' @keywords internal
 #' @importFrom checkmate assert_integerish test_null assert_data_frame assert_string
 #' @importFrom DBI dbDataType dbConnect dbDisconnect dbIsValid dbCommit dbRollback dbBegin
 #' @importFrom glue glue_sql

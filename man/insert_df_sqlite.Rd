@@ -46,3 +46,4 @@ a TRUE/FALSE indicating whether the record was successfully inserted
 \description{
 helper function to insert a keyed data.frame into the sqlite storage database
 }
+\keyword{internal}

@@ -1,7 +1,7 @@
 ---
 title: "BrainGnomes Quickstart"
 author: "Michael Hallquist"
-date: "02 Oct 2026"
+date: "04 Oct 2026"
 output: 
   rmarkdown::html_vignette:
     toc: true
@@ -637,6 +637,24 @@ cancel_project_run(scfg, run$run_id, dry_run = FALSE)
 BrainGnomes preserves the same primary workflow without requiring an interactive
 R session. The established command names are shown here; `init` and `run` are
 available as shorter aliases.
+
+Every project command accepts an explicit project directory or configuration
+YAML, or uses the current working directory when you omit that argument.
+Existing-project commands look for `project_config.yaml` in that directory;
+they do not search parent directories. For example:
+
+```bash
+cd /project/my_study
+BrainGnomes run --steps=fmriprep --dry-run
+BrainGnomes status --view=subjects
+BrainGnomes config validate --steps=fmriprep --format=json
+```
+
+For headless creation in the current directory, use `BrainGnomes init my_study`.
+The project name is still required. Replacing an existing configuration requires
+`--overwrite`; retry and cancellation still require `--dry-run` or `--yes`.
+Saved plans require an explicit path, such as `BrainGnomes run run.yaml`.
+Explicit project paths continue to work from any directory:
 
 ```bash
 BrainGnomes setup_project my_study /project/my_study
