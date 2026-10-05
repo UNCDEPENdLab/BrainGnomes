@@ -1012,13 +1012,16 @@ parent directories. For example:</p>
 <span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--dry-run</span></span>
 <span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status <span class="at">--view</span><span class="op">=</span>subjects</span>
 <span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> config validate <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--format</span><span class="op">=</span>json</span></code></pre></div>
-<p>For headless creation in the current directory, use
-<code>BrainGnomes init my_study</code>. The project name is still
-required. Replacing an existing configuration requires
-<code>--overwrite</code>; retry and cancellation still require
-<code>--dry-run</code> or <code>--yes</code>. Saved plans require an
-explicit path, such as <code>BrainGnomes run run.yaml</code>. Explicit
-project paths continue to work from any directory:</p>
+<p>Run <code>BrainGnomes setup_project</code> (or
+<code>BrainGnomes init</code>) with no arguments for guided setup; it
+prompts for the project name, project directory, and workflow settings.
+For headless creation in the current directory, use
+<code>BrainGnomes init my_study</code>. Replacing an existing
+prompt-free configuration requires <code>--overwrite</code>; retry and
+cancellation still require <code>--dry-run</code> or <code>--yes</code>.
+Saved plans require an explicit path, such as
+<code>BrainGnomes run run.yaml</code>. Explicit project paths continue
+to work from any directory:</p>
 <div class="sourceCode" id="cb26"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
 <span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
 <span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a></span>
@@ -1063,7 +1066,7 @@ built, so it stays synchronized with <code>inst/BrainGnomes</code>:</p>
 <pre><code>Usage: BrainGnomes &lt;command&gt; [options]
 
 Typical workflow:
-  setup_project &lt;project_name&gt; [project_directory]
+  setup_project [project_name] [project_directory]
   run_project [project_directory|config.yaml] [run options]
   status [project_directory|config.yaml] [--run=&lt;id|latest&gt;] [--watch]
   diagnose [project_directory|config.yaml] [--interactive]
@@ -1085,7 +1088,7 @@ Run operations:
 
 Project paths are optional and default to the current working directory.
 Existing projects require project_config.yaml there; parent directories are not searched.
-init/setup_project still requires a project name; saved plans require an explicit path.
+Run init/setup_project without a project name for guided setup; saved plans require an explicit path.
 
 Also accepted: init, edit_project, and run.
 Config, doctor, and plan are optional; run_project resolves and submits directly.

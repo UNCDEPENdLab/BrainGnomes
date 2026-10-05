@@ -29,3 +29,11 @@ A list representing the project configuration (class
 `"bg_project_cfg"`). If `validate` is TRUE, the returned object has a
 `validation` attribute produced by
 [`validate_project_config()`](https://hallquistlab.github.io/BrainGnomes/reference/validate_project_config.md).
+
+## Details
+
+Project YAML files must be stored in their project root. A relative
+`metadata/project_directory` is resolved from the YAML directory; all
+other recognized relative filesystem paths are resolved from that
+project root. Returned runtime paths are absolute and independent of the
+working directory.

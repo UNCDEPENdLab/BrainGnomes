@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">31 Aug 2026</h4>
+            <h4 data-toc-skip class="date">04 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/postprocessing.Rmd" class="external-link"><code>vignettes/postprocessing.Rmd</code></a></small>
       <div class="d-none name"><code>postprocessing.Rmd</code></div>
@@ -308,7 +308,10 @@ low-pass cutoff</p>
 <p><code>Apply temporal filtering? &gt; yes</code>
 <code>Low-pass cutoff (Hz) (Press enter to skip) &gt; 0.009</code>
 <code>High-pass cutoff (Hz)  (Press enter to skip) &gt; 0.08</code>
-<code>Filtering method (fslmaths/butterworth) &gt; butterworth</code></p>
+BrainGnomes presents the filtering implementations as a numbered menu.
+Select <code>FSL fslmaths -bptf</code> for Gaussian-weighted filtering
+or <code>Butterworth</code> for the bidirectional R-based filter; you do
+not need to type the internal method name.</p>
 </div>
 <div class="section level3">
 <h3 id="scrubbing-highmotion-volumes">Scrubbing High‑Motion Volumes<a class="anchor" aria-label="anchor" href="#scrubbing-highmotion-volumes"></a>

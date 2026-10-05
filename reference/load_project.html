@@ -76,6 +76,13 @@ attached as the <code>validation</code> attribute. Default: TRUE.</p></dd>
     <p>A list representing the project configuration (class <code>"bg_project_cfg"</code>). If <code>validate</code> is TRUE,
 the returned object has a <code>validation</code> attribute produced by <code><a href="validate_project_config.html">validate_project_config()</a></code>.</p>
     </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Project YAML files must be stored in their project root. A relative
+<code>metadata/project_directory</code> is resolved from the YAML directory; all other
+recognized relative filesystem paths are resolved from that project root.
+Returned runtime paths are absolute and independent of the working directory.</p>
+    </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

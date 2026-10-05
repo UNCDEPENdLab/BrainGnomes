@@ -256,8 +256,11 @@ low-pass cutoff
 
 `Apply temporal filtering? > yes`
 `Low-pass cutoff (Hz) (Press enter to skip) > 0.009`
-`High-pass cutoff (Hz) (Press enter to skip) > 0.08`
-`Filtering method (fslmaths/butterworth) > butterworth`
+`High-pass cutoff (Hz) (Press enter to skip) > 0.08` BrainGnomes
+presents the filtering implementations as a numbered menu. Select
+`FSL fslmaths -bptf` for Gaussian-weighted filtering or `Butterworth`
+for the bidirectional R-based filter; you do not need to type the
+internal method name.
 
 ### Scrubbing High‑Motion Volumes
 

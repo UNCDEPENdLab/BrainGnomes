@@ -942,12 +942,14 @@ BrainGnomes status --view=subjects
 BrainGnomes config validate --steps=fmriprep --format=json
 ```
 
-For headless creation in the current directory, use
-`BrainGnomes init my_study`. The project name is still required.
-Replacing an existing configuration requires `--overwrite`; retry and
-cancellation still require `--dry-run` or `--yes`. Saved plans require
-an explicit path, such as `BrainGnomes run run.yaml`. Explicit project
-paths continue to work from any directory:
+Run `BrainGnomes setup_project` (or `BrainGnomes init`) with no
+arguments for guided setup; it prompts for the project name, project
+directory, and workflow settings. For headless creation in the current
+directory, use `BrainGnomes init my_study`. Replacing an existing
+prompt-free configuration requires `--overwrite`; retry and cancellation
+still require `--dry-run` or `--yes`. Saved plans require an explicit
+path, such as `BrainGnomes run run.yaml`. Explicit project paths
+continue to work from any directory:
 
 ``` bash
 BrainGnomes setup_project my_study /project/my_study
@@ -1013,7 +1015,7 @@ stays synchronized with `inst/BrainGnomes`:
     Usage: BrainGnomes <command> [options]
 
     Typical workflow:
-      setup_project <project_name> [project_directory]
+      setup_project [project_name] [project_directory]
       run_project [project_directory|config.yaml] [run options]
       status [project_directory|config.yaml] [--run=<id|latest>] [--watch]
       diagnose [project_directory|config.yaml] [--interactive]
@@ -1035,7 +1037,7 @@ stays synchronized with `inst/BrainGnomes`:
 
     Project paths are optional and default to the current working directory.
     Existing projects require project_config.yaml there; parent directories are not searched.
-    init/setup_project still requires a project name; saved plans require an explicit path.
+    Run init/setup_project without a project name for guided setup; saved plans require an explicit path.
 
     Also accepted: init, edit_project, and run.
     Config, doctor, and plan are optional; run_project resolves and submits directly.

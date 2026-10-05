@@ -65,7 +65,9 @@
 
 <dt id="arg-file">file<a class="anchor" aria-label="anchor" href="#arg-file"></a></dt>
 <dd><p>Destination YAML path. Defaults to <code>project_config.yaml</code> beneath
-the configured project directory.</p></dd>
+the configured project directory. The destination must be in the project
+root. Project-contained paths are written relative to that root; external
+paths remain absolute.</p></dd>
 
 
 <dt id="arg-overwrite">overwrite<a class="anchor" aria-label="anchor" href="#arg-overwrite"></a></dt>

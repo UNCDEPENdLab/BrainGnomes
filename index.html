@@ -192,12 +192,16 @@
 <span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="op">)</span>  <span class="co"># guided browser in an interactive R session</span></span></code></pre></div>
 <p>Use <code><a href="reference/load_project.html">load_project()</a></code> when you want to inspect or modify the configuration object itself; it accepts the same inputs and also defaults to the current directory.</p>
 <p>The command-line interface preserves the same workflow. The shorter <code>init</code> and <code>run</code> command names are also accepted.</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
-<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Fully guided setup (prompts for the project name and directory):</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Prompt-free setup for scripts and automation:</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
 <p>All project CLI commands also default to the current working directory. For an existing project, that directory must contain <code>project_config.yaml</code>; BrainGnomes does not search parent directories. Options are unchanged when the path is omitted:</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="bu">cd</span> /project/my_study</span>
 <span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--dry-run</span></span>

@@ -110,9 +110,10 @@ supplied in interactive mode, it is used as the initial project name.</p></dd>
 
 
 <dt id="arg-project-directory">project_directory<a class="anchor" aria-label="anchor" href="#arg-project-directory"></a></dt>
-<dd><p>Project root directory. Required in non-interactive
-mode. When supplied in interactive mode, it is used as the initial project
-directory.</p></dd>
+<dd><p>Project root directory. Relative setup inputs are
+resolved once from the setup working directory. The saved configuration is
+colocated in this directory and records the root as <code>.</code>. Required in
+non-interactive mode; when supplied interactively, it is the initial root.</p></dd>
 
 
 <dt id="arg-template">template<a class="anchor" aria-label="anchor" href="#arg-template"></a></dt>

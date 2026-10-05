@@ -49,9 +49,11 @@ setup_project(
 
 - project_directory:
 
-  Project root directory. Required in non-interactive mode. When
-  supplied in interactive mode, it is used as the initial project
-  directory.
+  Project root directory. Relative setup inputs are resolved once from
+  the setup working directory. The saved configuration is colocated in
+  this directory and records the root as `.`. Required in
+  non-interactive mode; when supplied interactively, it is the initial
+  root.
 
 - template:
 
