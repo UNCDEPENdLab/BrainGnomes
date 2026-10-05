@@ -650,9 +650,11 @@ BrainGnomes status --view=subjects
 BrainGnomes config validate --steps=fmriprep --format=json
 ```
 
-For headless creation in the current directory, use `BrainGnomes init my_study`.
-The project name is still required. Replacing an existing configuration requires
-`--overwrite`; retry and cancellation still require `--dry-run` or `--yes`.
+Run `BrainGnomes setup_project` (or `BrainGnomes init`) with no arguments for
+guided setup; it prompts for the project name, project directory, and workflow
+settings. For headless creation in the current directory, use
+`BrainGnomes init my_study`. Replacing an existing prompt-free configuration
+requires `--overwrite`; retry and cancellation still require `--dry-run` or `--yes`.
 Saved plans require an explicit path, such as `BrainGnomes run run.yaml`.
 Explicit project paths continue to work from any directory:
 

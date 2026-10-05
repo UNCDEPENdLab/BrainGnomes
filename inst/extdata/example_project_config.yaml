@@ -3,14 +3,14 @@
 # paths, and enable only stages whose prerequisites are available.
 metadata:
   project_name: example_project
-  project_directory: /path/to/example_project
-  dicom_directory: /path/to/example_project/data_dicoms
-  bids_directory: /path/to/example_project/data_bids
-  fmriprep_directory: /path/to/example_project/data_fmriprep
-  mriqc_directory: /path/to/example_project/data_mriqc
-  postproc_directory: /path/to/example_project/data_postproc
-  rois_directory: /path/to/example_project/data_rois
-  log_directory: /path/to/example_project/logs
+  project_directory: "."
+  dicom_directory: data_dicoms
+  bids_directory: data_bids
+  fmriprep_directory: data_fmriprep
+  mriqc_directory: data_mriqc
+  postproc_directory: data_postproc
+  rois_directory: data_rois
+  log_directory: logs
   scratch_directory: /path/to/scratch/example_project
   templateflow_home: /path/to/templateflow
 

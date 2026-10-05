@@ -135,6 +135,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   } else {
     env_variables["sqlite_db"] <- NA
   }
+  assert_absolute_scheduler_paths(env_variables, tracking_sqlite_db)
   contract_env_variables <- env_variables
   if (!is.null(env_variables)) {
     env_variables <- paste_args(env_variables) #convert to appropriate name-value pairs

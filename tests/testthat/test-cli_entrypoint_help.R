@@ -3,7 +3,7 @@ test_that("BrainGnomes --help prints global help", {
   expect_equal(res$status, 0L)
   expect_true(any(grepl("^Usage: BrainGnomes <command> \\[options\\]$", res$output)))
   expect_true(any(grepl("^Typical workflow:$", res$output)))
-  expect_true(any(grepl("^  setup_project <project_name>", res$output)))
+  expect_true(any(grepl("^  setup_project \\[project_name\\]", res$output)))
   expect_true(any(grepl("^  run_project \\[project_directory", res$output)))
   expect_true(any(grepl("^Optional inspection and automation:$", res$output)))
   expect_true(any(grepl("^  doctor \\[project_directory\\|config\\.yaml\\]", res$output)))
@@ -86,6 +86,21 @@ test_that("BrainGnomes status --help prints command help", {
   expect_true(any(grepl("^  --watch", res$output)))
 })
 
+test_that("inspect command aliases stay hidden but retain status help", {
+  global <- run_brain_gnomes_cli("--help")
+  expect_false(any(grepl("^  inspect(_project)? ", global$output)))
+
+  for (command in c("inspect", "inspect_project")) {
+    res <- run_brain_gnomes_cli(c(command, "--help"))
+    expect_identical(res$status, 0L, info = command)
+    expect_true(any(grepl(
+      "^Usage: BrainGnomes status \\[project_directory\\|config\\.yaml\\] \\[options\\]$",
+      res$output
+    )), info = command)
+    expect_false(any(grepl("Alias:", res$output, fixed = TRUE)), info = command)
+  }
+})
+
 test_that("BrainGnomes lifecycle commands have command-specific help", {
   for (command in c("init", "config", "doctor", "plan", "validate-bids", "provenance", "logs", "diagnose", "retry", "cancel")) {
     res <- run_brain_gnomes_cli(c(command, "--help"))
@@ -164,6 +179,8 @@ test_that("BrainGnomes init and config validate support a headless first project
   init_help <- run_brain_gnomes_cli(c("init", "--help"))
   expect_equal(init_help$status, 0L)
   expect_false(any(grepl("--non-interactive", init_help$output, fixed = TRUE)))
+  expect_true(any(grepl("With no project name, open guided setup", init_help$output, fixed = TRUE)))
+  expect_true(any(grepl("Omit the project name to start guided setup", init_help$output, fixed = TRUE)))
 
   installed_interface <- suppressWarnings(system2(
     file.path(R.home("bin"), "Rscript"),
@@ -214,13 +231,15 @@ test_that("installed CLI templates isolate paths unless sharing is explicit", {
   original <- file.path(root, "original")
   expect_equal(run_brain_gnomes_cli(c("init", "original", original))$status, 0L)
   template <- file.path(original, "project_config.yaml")
-  source <- yaml::read_yaml(template)
+  source <- load_project(template, validate = FALSE)
   for (reuse in c(FALSE, TRUE)) {
     destination <- file.path(root, if (reuse) "shared" else "isolated")
     result <- run_brain_gnomes_cli(c("init", "copy", destination,
       paste0("--template=", template), if (reuse) "--reuse-template-paths"))
     expect_equal(result$status, 0L, info = paste(result$output, collapse = "\n"))
-    clone <- yaml::read_yaml(file.path(destination, "project_config.yaml"))
+    clone <- load_project(
+      file.path(destination, "project_config.yaml"), validate = FALSE
+    )
     for (field in c("bids_directory", "fmriprep_directory", "postproc_directory",
         "rois_directory", "log_directory", "scratch_directory", "sqlite_db")) {
       expected <- if (reuse) source$metadata[[field]] else file.path(

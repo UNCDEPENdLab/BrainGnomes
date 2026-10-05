@@ -30,9 +30,10 @@ fields will be prompted for. Only available in interactive mode.}
 \item{project_name}{Project label. Required in non-interactive mode. When
 supplied in interactive mode, it is used as the initial project name.}
 
-\item{project_directory}{Project root directory. Required in non-interactive
-mode. When supplied in interactive mode, it is used as the initial project
-directory.}
+\item{project_directory}{Project root directory. Relative setup inputs are
+resolved once from the setup working directory. The saved configuration is
+colocated in this directory and records the root as \code{.}. Required in
+non-interactive mode; when supplied interactively, it is the initial root.}
 
 \item{template}{Optional configuration object, YAML file, or project
 directory to use as a base. Supply either \code{input} or \code{template}, not both.}

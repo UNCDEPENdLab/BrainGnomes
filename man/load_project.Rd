@@ -22,3 +22,9 @@ the returned object has a \code{validation} attribute produced by \code{\link[=v
 \description{
 Load a project configuration from a file
 }
+\details{
+Project YAML files must be stored in their project root. A relative
+\code{metadata/project_directory} is resolved from the YAML directory; all other
+recognized relative filesystem paths are resolved from that project root.
+Returned runtime paths are absolute and independent of the working directory.
+}

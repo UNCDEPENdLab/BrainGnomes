@@ -270,9 +270,11 @@ test_that("voxel PSC config does not require a scalar target", {
 })
 
 test_that("interactive setup centers the run-scalar versus PSC decision", {
-  answers <- list(TRUE, "voxel_psc")
+  answers <- list(TRUE)
   answer_index <- 0L
   prompts <- list()
+  instructions <- character()
+  menu <- NULL
 
   result <- with_mocked_bindings(
     setup_intensity_normalization(list()),
@@ -283,19 +285,30 @@ test_that("interactive setup centers the run-scalar versus PSC decision", {
         instruct = as.character(instruct)
       )
       answers[[answer_index]]
+    },
+    menu_safe = function(choices, title) {
+      menu <<- list(choices = choices, title = title)
+      2L
+    },
+    cli_instruction = function(x, ...) {
+      instructions <<- c(instructions, as.character(x))
+      invisible(TRUE)
     }
   )
 
   expect_true(result$intensity_normalize$enable)
   expect_identical(result$intensity_normalize$mode, "voxel_psc")
-  mode_prompt <- Filter(
-    function(x) identical(x$prompt, "Intensity-normalization mode"),
-    prompts
-  )[[1L]]$instruct
+  mode_prompt <- paste(c(
+    vapply(prompts, `[[`, character(1), "instruct"),
+    instructions
+  ), collapse = "\n")
   expect_match(mode_prompt, "run_scalar")
   expect_match(mode_prompt, "voxel_psc")
   expect_match(mode_prompt, "percent signal change")
   expect_false(grepl("denominator|floor|fallback", mode_prompt, ignore.case = TRUE))
+  expect_identical(menu$title, "Choose an intensity-normalization mode:")
+  expect_true(any(grepl("Run-wise scalar", menu$choices, fixed = TRUE)))
+  expect_true(any(grepl("Voxelwise percent signal change", menu$choices, fixed = TRUE)))
 })
 
 test_that("derive_voxel_psc_scale guards denominators without masking voxels", {

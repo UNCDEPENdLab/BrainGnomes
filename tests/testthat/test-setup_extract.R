@@ -34,7 +34,10 @@ test_that("interactive extraction setup retains masks for existing and new strea
   expect_identical(updated_existing$extract_rois$demo$mask_file, mask_path)
   existing_yaml <- file.path(tmp, "existing.yaml")
   save_project_config(updated_existing, file = existing_yaml)
-  expect_identical(yaml::read_yaml(existing_yaml)$extract_rois$demo$mask_file, mask_path)
+  expect_identical(
+    yaml::read_yaml(existing_yaml)$extract_rois$demo$mask_file,
+    basename(mask_path)
+  )
 
   new_stream <- structure(list(
     metadata = list(project_directory = tmp),
@@ -49,7 +52,10 @@ test_that("interactive extraction setup retains masks for existing and new strea
   expect_identical(updated_new$extract_rois$fresh$mask_file, mask_path)
   new_yaml <- file.path(tmp, "new.yaml")
   save_project_config(updated_new, file = new_yaml)
-  expect_identical(yaml::read_yaml(new_yaml)$extract_rois$fresh$mask_file, mask_path)
+  expect_identical(
+    yaml::read_yaml(new_yaml)$extract_rois$fresh$mask_file,
+    basename(mask_path)
+  )
   expect_identical(response_index, 3L)
 })
 

@@ -5,6 +5,10 @@
 #' @param validate Logical indicating whether to validate the configuration after loading. Validation is
 #'   non-interactive and never changes or saves the configuration. The structured validation result is
 #'   attached as the `validation` attribute. Default: TRUE.
+#' @details Project YAML files must be stored in their project root. A relative
+#'   `metadata/project_directory` is resolved from the YAML directory; all other
+#'   recognized relative filesystem paths are resolved from that project root.
+#'   Returned runtime paths are absolute and independent of the working directory.
 #' @return A list representing the project configuration (class `"bg_project_cfg"`). If `validate` is TRUE,
 #'   the returned object has a `validation` attribute produced by [validate_project_config()].
 #' @importFrom yaml read_yaml
@@ -13,7 +17,8 @@ load_project <- function(input = getwd(), validate = TRUE) {
   checkmate::assert_flag(validate)
   if (is.null(input)) input <- getwd()
   if (inherits(input, "bg_project_cfg")) {
-    scfg <- input
+    scfg <- resolve_project_paths(input)
+    assert_project_config_colocation(scfg)
     if (validate) {
       validation <- validate_project_config(scfg, quiet = TRUE)
       attr(scfg, "validation") <- validation[c("valid", "issues", "messages")]
@@ -26,8 +31,8 @@ load_project <- function(input = getwd(), validate = TRUE) {
   if (!checkmate::test_file_exists(input)) stop("Cannot find file: ", input)
   yaml_path <- normalizePath(input, winslash = "/", mustWork = TRUE)
   scfg <- read_yaml(yaml_path)
-  class(scfg) <- unique(c("bg_project_cfg", class(scfg)))
-  attr(scfg, "yaml_file") <- yaml_path
+  scfg <- resolve_project_paths(scfg, yaml_file = yaml_path)
+  assert_project_config_colocation(scfg, yaml_path)
   if (validate) {
     validation <- validate_project_config(scfg, quiet = TRUE)
     attr(scfg, "validation") <- validation[c("valid", "issues", "messages")]
@@ -96,9 +101,10 @@ get_scfg_from_input <- function(input = NULL) {
 #'   fields will be prompted for. Only available in interactive mode.
 #' @param project_name Project label. Required in non-interactive mode. When
 #'   supplied in interactive mode, it is used as the initial project name.
-#' @param project_directory Project root directory. Required in non-interactive
-#'   mode. When supplied in interactive mode, it is used as the initial project
-#'   directory.
+#' @param project_directory Project root directory. Relative setup inputs are
+#'   resolved once from the setup working directory. The saved configuration is
+#'   colocated in this directory and records the root as `.`. Required in
+#'   non-interactive mode; when supplied interactively, it is the initial root.
 #' @param template Optional configuration object, YAML file, or project
 #'   directory to use as a base. Supply either `input` or `template`, not both.
 #' @param interactive Whether to use the guided configuration workflow. Defaults
@@ -273,7 +279,8 @@ create_project_from_defaults <- function(project_name, project_directory,
   scfg$metadata$project_name <- project_name
   scfg$metadata$project_directory <- project_directory
   # Execution context belongs to an invocation, never to a new project.
-  for (attribute in c("yaml_file", "validation", "provenance_context", "retry_work_units")) {
+  for (attribute in c(
+      "yaml_file", "validation", "provenance_context", "retry_work_units")) {
     attr(scfg, attribute) <- NULL
   }
   for (field in names(default_dirs)) {
@@ -451,6 +458,11 @@ setup_project_metadata <- function(scfg = NULL, fields = NULL) {
 
   if ("metadata/project_directory" %in% fields) {
     scfg$metadata$project_directory <- prompt_input("What is the root directory where project files will be stored?", type = "character")
+    # Capture the setup working directory exactly once. The saved YAML will use
+    # `project_directory: .`, while runtime code receives this absolute root.
+    scfg$metadata$project_directory <- normalize_project_path(
+      scfg$metadata$project_directory
+    )
     if (!checkmate::test_directory_exists(scfg$metadata$project_directory)) {
       create <- prompt_input(
         instruct = glue("The directory {scfg$metadata$project_directory} does not exist."),

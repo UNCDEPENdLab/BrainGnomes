@@ -1,7 +1,7 @@
 ---
 title: "Postprocessing Walkthrough"
 author: "Michael Hallquist"
-date: "31 Aug 2026"
+date: "04 Oct 2026"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Postprocessing Walkthrough}
@@ -228,7 +228,9 @@ of the filter will not be applied. For example, if you only enter a low-pass cut
 `Apply temporal filtering? > yes`
 `Low-pass cutoff (Hz) (Press enter to skip) > 0.009`
 `High-pass cutoff (Hz)  (Press enter to skip) > 0.08`
-`Filtering method (fslmaths/butterworth) > butterworth`
+BrainGnomes presents the filtering implementations as a numbered menu. Select
+`FSL fslmaths -bptf` for Gaussian-weighted filtering or `Butterworth` for the
+bidirectional R-based filter; you do not need to type the internal method name.
 
 
 ## Scrubbing High‑Motion Volumes

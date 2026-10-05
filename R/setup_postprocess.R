@@ -292,8 +292,10 @@ setup_postprocess_stream <- function(scfg = list(), fields = NULL, stream_name =
   ppcfg <- setup_confound_calculate(ppcfg, fields)
   ppcfg <- setup_scrubbing(ppcfg, fields)
   ppcfg <- setup_confound_regression(ppcfg, fields)
-  ppcfg <- setup_motion_filter(ppcfg, fields)
   ppcfg <- maybe_add_framewise_displacement(ppcfg, fields)
+  # Adding FD makes this a motion-aware stream, so collect and persist the
+  # motion-filter decision only after the optional FD addition is complete.
+  ppcfg <- setup_motion_filter(ppcfg, fields)
   ppcfg <- setup_postprocess_steps(ppcfg, fields)
 
   # repopulate the relevant part of scfg
@@ -1390,8 +1392,7 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
   }
 
   if ("postprocess/intensity_normalize/mode" %in% fields) {
-    ppcfg$intensity_normalize$mode <- prompt_input(
-      instruct = glue("
+    cli_instruction(glue("
         Choose the units that best match your analysis:
 
           run_scalar (default)
@@ -1408,11 +1409,16 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
         Use one mode consistently across the runs and participants in an
         analysis. BrainGnomes applies the necessary robustness safeguards
         automatically. Both choices use the same filename prefix.
-      ", .trim = TRUE),
-      prompt = "Intensity-normalization mode",
-      type = "character", among = c("run_scalar", "voxel_psc"),
-      default = "run_scalar"
-    )
+      ", .trim = TRUE), after = FALSE)
+    mode_values <- c("run_scalar", "voxel_psc")
+    mode_selection <- menu_safe(c(
+      "Run-wise scalar — one FSL-style multiplier for the entire run (target 10,000)",
+      "Voxelwise percent signal change — scale each voxel to its own baseline (target 100)"
+    ), title = "Choose an intensity-normalization mode:")
+    if (mode_selection == 0L) {
+      stop("Intensity-normalization mode selection cancelled.", call. = FALSE)
+    }
+    ppcfg$intensity_normalize$mode <- mode_values[[mode_selection]]
   }
   if (is.null(ppcfg$intensity_normalize$mode)) {
     ppcfg$intensity_normalize$mode <- "run_scalar"
@@ -1595,14 +1601,19 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
 
 
   if ("postprocess/temporal_filter/method" %in% fields) {
-    ppcfg$temporal_filter$method <- prompt_input(
-      prompt = "Filtering method (fslmaths/butterworth)",
-      type = "character", among = c("fslmaths", "butterworth"), default = "fslmaths",
-      instruct = glue("\n
+    cli_instruction(glue("\n
         Choose the implementation for temporal filtering:
           - 'fslmaths' uses FSL's fslmaths -bptf command.
-          - 'butterworth' uses an R-based Butterworth filter.\n")
-    )
+          - 'butterworth' uses an R-based Butterworth filter.\n"), after = FALSE)
+    method_values <- c("fslmaths", "butterworth")
+    method_selection <- menu_safe(c(
+      "FSL fslmaths -bptf — Gaussian-weighted filtering, commonly used for task fMRI",
+      "Butterworth — bidirectional R-based filtering, commonly used for resting-state fMRI"
+    ), title = "Choose a temporal-filtering method:")
+    if (method_selection == 0L) {
+      stop("Temporal-filtering method selection cancelled.", call. = FALSE)
+    }
+    ppcfg$temporal_filter$method <- method_values[[method_selection]]
   }
   
   if ("postprocess/temporal_filter/prefix" %in% fields) {

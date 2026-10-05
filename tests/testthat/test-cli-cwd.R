@@ -1,11 +1,15 @@
-test_that("CLI initialization defaults to cwd but requires a name and protects existing YAML", {
+test_that("CLI initialization offers guided setup or prompt-free cwd creation", {
   root <- tempfile("cli current directory ")
   dir.create(root)
   withr::defer(unlink(root, recursive = TRUE))
 
   missing_name <- run_brain_gnomes_cli(c("init", "--overwrite"), wd = root)
-  expect_identical(missing_name$status, 2L)
-  expect_match(paste(missing_name$stderr, collapse = "\n"), "requires <project_name>", fixed = TRUE)
+  # The test subprocess has no TTY, so guided setup cannot read answers. Reaching
+  # the TTY guard confirms that the command entered setup instead of rejecting
+  # the omitted name as a usage error.
+  expect_identical(missing_name$status, 1L)
+  expect_match(paste(missing_name$output, collapse = "\n"), "BrainGnomes project setup", fixed = TRUE)
+  expect_match(paste(missing_name$stderr, collapse = "\n"), "TTY-connected Rscript session", fixed = TRUE)
   expect_length(list.files(root, all.files = TRUE, no.. = TRUE), 0L)
 
   created <- run_brain_gnomes_cli(c("init", "cwd_demo"), wd = root)

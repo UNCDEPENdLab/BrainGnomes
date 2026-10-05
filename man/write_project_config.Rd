@@ -10,7 +10,9 @@ write_project_config(input, file = NULL, overwrite = FALSE)
 \item{input}{A \code{bg_project_cfg} object.}
 
 \item{file}{Destination YAML path. Defaults to \code{project_config.yaml} beneath
-the configured project directory.}
+the configured project directory. The destination must be in the project
+root. Project-contained paths are written relative to that root; external
+paths remain absolute.}
 
 \item{overwrite}{Replace an existing file.}
 }

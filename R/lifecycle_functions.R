@@ -9,7 +9,11 @@ supported_project_steps <- function() {
 
 project_config_from_input <- function(input = getwd()) {
   if (is.null(input)) input <- getwd()
-  if (inherits(input, "bg_project_cfg")) return(input)
+  if (inherits(input, "bg_project_cfg")) {
+    scfg <- resolve_project_paths(input)
+    assert_project_config_colocation(scfg)
+    return(scfg)
+  }
   if (checkmate::test_string(input)) {
     if (checkmate::test_directory_exists(input)) {
       config_file <- file.path(input, "project_config.yaml")
@@ -366,25 +370,37 @@ value_or_default <- function(x, y) {
 #'
 #' @param input A `bg_project_cfg` object.
 #' @param file Destination YAML path. Defaults to `project_config.yaml` beneath
-#'   the configured project directory.
+#'   the configured project directory. The destination must be in the project
+#'   root. Project-contained paths are written relative to that root; external
+#'   paths remain absolute.
 #' @param overwrite Replace an existing file.
 #' @return The configuration, invisibly, with its `yaml_file` attribute set.
 #' @export
 write_project_config <- function(input, file = NULL, overwrite = FALSE) {
-  scfg <- project_config_from_input(input)
   checkmate::assert_flag(overwrite)
+  if (!is.null(file)) {
+    checkmate::assert_string(file)
+    file <- normalize_project_path(file)
+  }
+  scfg <- if (inherits(input, "bg_project_cfg")) {
+    resolve_project_paths(
+      input,
+      yaml_file = if (!is.null(file)) file else attr(input, "yaml_file", exact = TRUE)
+    )
+  } else {
+    project_config_from_input(input)
+  }
   if (is.null(file)) file <- file.path(scfg$metadata$project_directory, "project_config.yaml")
-  checkmate::assert_string(file)
-  file <- path.expand(file)
+  file <- normalize_project_path(file)
   if (file.exists(file) && !overwrite) stop("Configuration file already exists: ", file, call. = FALSE)
   if (!dir.exists(dirname(file))) stop("Configuration directory does not exist: ", dirname(file), call. = FALSE)
   temp <- tempfile("project-config-", tmpdir = dirname(file), fileext = ".yaml")
   on.exit(if (file.exists(temp)) unlink(temp), add = TRUE)
-  payload <- as.list(scfg)
-  payload$schema_version <- value_or_default(payload$schema_version, 1L)
+  payload <- project_config_payload(scfg, file)
   yaml::write_yaml(payload, temp)
   if (!file.rename(temp, file)) stop("Failed to atomically write configuration: ", file, call. = FALSE)
-  attr(scfg, "yaml_file") <- normalizePath(file, winslash = "/", mustWork = TRUE)
+  scfg <- resolve_project_paths(scfg, yaml_file = file)
+  assert_project_config_colocation(scfg, file)
   invisible(scfg)
 }
 

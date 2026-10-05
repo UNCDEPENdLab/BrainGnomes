@@ -94,6 +94,23 @@ test_that("current-directory CLI runs retain first options, aliases, and explici
     "json")
 })
 
+test_that("hidden inspect aliases return the status synopsis", {
+  cfg <- make_json_cli_project()
+  root <- cfg$metadata$project_directory
+  expected <- run_brain_gnomes_cli(c("status", root, "--summary", "--format=json"))
+  expect_identical(expected$status, 0L)
+
+  for (command in c("inspect", "inspect_project")) {
+    observed <- run_brain_gnomes_cli(c(command, root, "--summary", "--format=json"))
+    expect_identical(observed$status, 0L, info = paste(command, observed$stderr, collapse = "\n"))
+    expect_identical(
+      jsonlite::fromJSON(paste(observed$stdout, collapse = "\n")),
+      jsonlite::fromJSON(paste(expected$stdout, collapse = "\n")),
+      info = command
+    )
+  }
+})
+
 test_that("machine formats fail before interactive or unsupported operations", {
   cases <- list(
     c("run", "missing-project", "--steps=fmriprep", "--format=invalid"),
