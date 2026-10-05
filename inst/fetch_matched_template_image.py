@@ -1,6 +1,6 @@
 import nibabel as nib
 import re
-from nilearn.image import resample_to_img
+from nilearn.image import resample_img
 
 def parse_entity_from_filename(filename, entity):
     match = re.search(rf"{entity}-([a-zA-Z0-9]+)", filename)
@@ -48,13 +48,21 @@ def fetch_template_image(template, resolution, suffix, desc=None, extension=".ni
     return api.get(**query)
 
 def resample_image_to_reference(source_file, reference_file, output, interpolation="nearest"):
+    """Resample source voxels onto reference geometry without reading target voxels.
+
+    The reference contributes only its spatial shape, affine and xform codes;
+    the output contains the resampled source data.
+    """
     source_img = nib.load(source_file)
     reference_img = nib.load(reference_file)
 
-    # https://nilearn.github.io/stable/auto_examples/06_manipulating_images/plot_resample_to_template.html
-    resampled_img = resample_to_img(
-        source_img=source_img,
-        target_img=reference_img,
+    # resample_to_img validates its target through check_niimg, which can load
+    # every BOLD volume. resample_img takes the same spatial geometry directly
+    # and leaves the reference's lazy data proxy untouched.
+    resampled_img = resample_img(
+        img=source_img,
+        target_affine=reference_img.affine,
+        target_shape=reference_img.shape[:3],
         interpolation=interpolation,
         force_resample=True,
         copy_header=True

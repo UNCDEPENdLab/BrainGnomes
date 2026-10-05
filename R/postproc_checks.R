@@ -1927,6 +1927,45 @@ validate_intensity_normalize <- function(pre_file, post_file,
   return(out)
 }
 
+#' Construct a separately fitted, validated isotropic 2 mm calibration model
+#'
+#' @param coeffs Gain coefficients fitted on the six internal calibration subjects.
+#' @param tolerance_mm Error limit established by internal cohort-transfer checks.
+#' @param validation_max_abs_error_mm Largest error on the 16 held-out subjects.
+#' @param lodo_max_abs_error_mm Largest leave-one-internal-cohort-out error.
+#' @return Grid-specific model metadata; estimator preparation comes from its
+#'   mask-specific base model and always uses 96 distributed volumes.
+#' @noRd
+pp_isotropic_2mm_model <- function(coeffs, tolerance_mm,
+                                  validation_max_abs_error_mm,
+                                  lodo_max_abs_error_mm) {
+  checkmate::assert_numeric(coeffs, len = 2L, finite = TRUE)
+  checkmate::assert_number(tolerance_mm, lower = 0, upper = 1, finite = TRUE)
+  checkmate::assert_number(validation_max_abs_error_mm, lower = 0,
+                           upper = tolerance_mm, finite = TRUE)
+  checkmate::assert_number(lodo_max_abs_error_mm, lower = 0,
+                           upper = tolerance_mm, finite = TRUE)
+  if (coeffs[1] <= 0 || 3 * coeffs[1] + 2 * coeffs[2] <= 0) {
+    stop("2 mm calibration must predict positive, increasing effective kernels.",
+         call. = FALSE)
+  }
+  list(
+    model_version = "smoothness-calibration-v5-isotropic2mm-distributed96-k3-8",
+    support_version = "v5-2mm-four-cohort-2026-10-05",
+    type = "quadrature_ratio_linear", coeffs = coeffs,
+    tolerance_mm = tolerance_mm,
+    kernel_range_mm = c(3, 8), voxel_range_mm = c(2, 2),
+    voxel_spacing_mm = c(2, 2, 2),
+    max_volumes = 96L, volume_sampling = "distributed_full_run",
+    smoothing_context = "full_run",
+    source = "isotropic2mm_four_cohort_2026-10-05",
+    n_calibration = 36L, n_validation = 96L,
+    n_calibration_subjects = 6L, n_validation_subjects = 16L,
+    max_validation_abs_error_mm = validation_max_abs_error_mm,
+    max_lodo_abs_error_mm = lodo_max_abs_error_mm
+  )
+}
+
 #' Empirical calibration models for classic FWHM after spatial smoothing
 #'
 #' The Gaussian and diagnostic no-mask models were derived from three real-BOLD
@@ -1943,6 +1982,10 @@ validate_intensity_normalize <- function(pre_file, post_file,
 #' the complete run. Each model stores its exact estimator, mask condition, and
 #' volume-sampling rule; these cannot be changed independently of its
 #' coefficients.
+#' Separately fitted isotropic 2 mm models use six internal calibration subjects
+#' and 16 held-out subjects across four cohorts. The 2 mm error limits reflect
+#' internal cohort-transfer uncertainty and are capped at 1 mm. These grid models
+#' leave the coarser-resolution coefficients and tolerances unchanged.
 #'
 #' The primary model predicts post-smoothing FWHM by Gaussian quadrature while
 #' allowing the program's effective kernel gain to depend on the dimensionless
@@ -1964,6 +2007,10 @@ pp_calibration_coeffs <- list(
         model_version = "smoothness-calibration-v1",
         type = "quadrature_ratio_linear", coeffs = c(1.18475396, -0.47521770),
         tolerance_mm = 0.8, mode = "afni_blurinmask",
+        grid_models = list(pp_isotropic_2mm_model(
+          c(1.30809130529369, -0.63074151564478), 1.0,
+          0.882129051164767, 0.953784067678562
+        )),
         kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644),
         estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
         demean = TRUE, unif = TRUE
@@ -1972,6 +2019,10 @@ pp_calibration_coeffs <- list(
         model_version = "smoothness-calibration-v1",
         type = "quadrature_ratio_linear", coeffs = c(1.13001562, -0.11747280),
         tolerance_mm = 1.0, mode = "afni_3dmerge",
+        grid_models = list(pp_isotropic_2mm_model(
+          c(1.24988284481605, -0.295781373028067), 1.0,
+          0.976447645660981, 0.98047251095565
+        )),
         kernel_range_mm = c(3, 8), voxel_range_mm = c(2.408688, 3.116644),
         estimator = "detrend_mad", preprocess = TRUE, polydeg = 3L,
         demean = TRUE, unif = TRUE
@@ -1987,6 +2038,10 @@ pp_calibration_coeffs <- list(
           type = "quadrature_ratio_linear",
           coeffs = c(1.27820370989578, -0.520302740093367),
           tolerance_mm = 0.7, mode = "fsl_susan_mask",
+          grid_models = list(pp_isotropic_2mm_model(
+            c(1.10220613641656, -0.213982388044236), 1.0,
+            0.574624589439372, 0.935861223330425
+          )),
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
           max_volumes = 96L, volume_sampling = "distributed_full_run",
@@ -2000,6 +2055,10 @@ pp_calibration_coeffs <- list(
           type = "quadrature_ratio_linear",
           coeffs = c(1.23406155442799, -0.451054336264315),
           tolerance_mm = 0.8, mode = "fsl_susan_mask",
+          grid_models = list(pp_isotropic_2mm_model(
+            c(1.07083826948811, -0.171250125258737), 0.8,
+            0.7000611339037, 0.606596576799392
+          )),
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
           max_volumes = 96L, volume_sampling = "distributed_full_run",
@@ -2021,6 +2080,10 @@ pp_calibration_coeffs <- list(
             max_abs_error_mm = 0.409227471374049
           )),
           tolerance_mm = 0.6, mode = "fsl_susan_mask",
+          grid_models = list(pp_isotropic_2mm_model(
+            c(0.966412455815948, -0.039207620804717), 0.8,
+            0.483461725618932, 0.760936087388357
+          )),
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
           max_volumes = 96L, volume_sampling = "distributed_full_run",
@@ -2147,6 +2210,11 @@ pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
 #' @noRd
 pp_calibration_support <- function(model, kernel_fwhm, voxel_mm) {
   if (isTRUE(model$input_mask_extrapolated)) return("EXTRAPOLATED")
+  if (!is.null(model$voxel_spacing_mm) &&
+      (length(voxel_mm) != length(model$voxel_spacing_mm) ||
+       any(abs(voxel_mm - model$voxel_spacing_mm) > 1e-6))) {
+    return("EXTRAPOLATED")
+  }
   voxel_geom_mm <- exp(mean(log(voxel_mm)))
   # NIfTI spacing is stored in floating point; permit representation rounding
   # at the documented boundaries without widening the scientific domain.
@@ -2160,17 +2228,53 @@ pp_calibration_support <- function(model, kernel_fwhm, voxel_mm) {
     if (in_range(kernel_fwhm, support$kernel_range_mm) &&
         in_range(voxel_geom_mm, support$voxel_range_mm) &&
         (is.null(support$voxel_spacing_mm) ||
-         all(abs(voxel_mm - support$voxel_spacing_mm) <= 1e-6))) {
+         (length(voxel_mm) == length(support$voxel_spacing_mm) &&
+          all(abs(voxel_mm - support$voxel_spacing_mm) <= 1e-6)))) {
       return("externally_validated")
     }
   }
   "EXTRAPOLATED"
 }
 
+#' Resolve a separately calibrated model for an exact spatial grid
+#'
+#' @param model Mask-specific model containing optional `grid_models`.
+#' @param voxel_mm Three spatial voxel sizes, or `NULL` for the base model.
+#' @return The base model or its matching grid model with shared preparation
+#'   metadata. A grid model cannot inherit external support from the base fit.
+#' @noRd
+pp_calibration_model_for_grid <- function(model, voxel_mm = NULL) {
+  if (is.null(voxel_mm) || !length(model$grid_models)) return(model)
+  checkmate::assert_numeric(voxel_mm, lower = 1e-6, finite = TRUE,
+                            min.len = 3L, max.len = 3L)
+  for (grid_model in model$grid_models) {
+    spacing <- grid_model$voxel_spacing_mm
+    if (length(spacing) != 3L) {
+      stop("Grid calibration must specify three spatial voxel sizes.", call. = FALSE)
+    }
+    if (all(abs(voxel_mm - spacing) <= 1e-6)) {
+      selected <- utils::modifyList(model, grid_model)
+      selected$grid_models <- NULL
+      selected$external_support <- grid_model$external_support
+      selected$support_version <- grid_model$support_version
+      selected$base_model_version <- model$model_version
+      selected$grid_model_selected <- TRUE
+      return(selected)
+    }
+  }
+  model
+}
+
 #' Select the calibration model for a given smoother and mask usage
+#' @param smoother Smoothing algorithm.
+#' @param used_mask Whether a threshold or smoothing mask was used.
+#' @param input_mask Mask applied to the input BOLD before smoothing.
+#' @param voxel_mm Optional spatial voxel sizes for a separately fitted grid.
+#' @return Exact mask-specific and, when available, grid-specific model.
 #' @keywords internal
 #' @noRd
-pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
+pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
+                                  voxel_mm = NULL) {
   checkmate::assert_choice(input_mask, c("none", "fmriprep", "template", "custom"))
   smooth_entry <- pp_calibration_coeffs[[smoother]]
   if (is.null(smooth_entry)) {
@@ -2230,6 +2334,7 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
     stop("Calibration entry for input mask '", input_mask, "' is malformed.",
          call. = FALSE)
   }
+  model <- pp_calibration_model_for_grid(model, voxel_mm)
   model$calibrated_input_mask <- calibrated_input_mask
   model$input_mask_extrapolated <- input_mask_extrapolated
   model
@@ -2258,9 +2363,18 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
 #' for diagnostic and legacy calibration use, but it must match the selected
 #' calibration. `preprocess = NULL` enforces that model-specific choice.
 #' Requests outside the model's fitted domain and explicit external support
-#' are reported as extrapolations and cannot pass validation. The template-mask model also
-#' supports the externally validated 5 mm kernel on isotropic 2 mm images;
-#' this case does not extend support to other kernels at that resolution.
+#' are reported as extrapolations and cannot pass validation. Isotropic 2 mm
+#' images use separately fitted models for 3--8 mm kernels: masked-threshold
+#' SUSAN with unmasked, fMRIPrep-masked, or template-masked input, and Gaussian
+#' smoothing with or without an automask on otherwise unmasked input. These
+#' models require `max_volumes = 96` and the calibrated estimator preparation.
+#' The three internal cohorts were resampled to 2 mm; ten held-out subjects had
+#' genuine 2 mm fMRIPrep outputs. Each 2 mm error limit is established from
+#' internal cohort-transfer checks, capped at 1 mm, and verified on the held-out
+#' subjects. Coarser-resolution models retain their original limits. An image
+#' with no measurable smoothness increase fails even when its error falls within
+#' the calibrated tolerance. Diagnostic SUSAN without a threshold mask has no
+#' isotropic 2 mm calibration.
 #'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
@@ -2337,7 +2451,8 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   vox_mm <- pp_pixdim_mm(pre_file)
   has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
   cal_model <- if (has_kernel) {
-    pp_select_calibration(smoother, used_mask, input_mask = input_mask)
+    pp_select_calibration(smoother, used_mask, input_mask = input_mask,
+                          voxel_mm = vox_mm)
   } else {
     NULL
   }
@@ -2399,13 +2514,21 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     checkmate::assert_number(tolerance_mm, lower = 0, finite = TRUE)
     diff_cal <- delta_observed - delta_expected
     within_tol <- abs(diff_cal) <= tolerance_mm
+    # With a small kernel and an already smooth baseline, the expected change
+    # can be smaller than the calibrated uncertainty. An unchanged image must
+    # still fail. The 0.001 mm floor excludes numerical roundoff; it is far
+    # below the smallest increase observed in the production calibration runs.
+    min_smoothness_increase_mm <- 0.001
+    smoothness_increased <- delta_observed > min_smoothness_increase_mm
     exact_input_mask_calibration <-
       !isTRUE(cal_model$input_mask_extrapolated)
-    passed <- within_tol && !calibration_extrapolated
+    passed <- within_tol && !calibration_extrapolated && smoothness_increased
     status <- if (!exact_input_mask_calibration) {
       "FAIL (no exact input-mask calibration)"
     } else if (calibration_extrapolated) {
       "FAIL (outside calibration support)"
+    } else if (!smoothness_increased) {
+      "FAIL (no measurable smoothness increase)"
     } else if (passed) {
       "PASS"
     } else {
@@ -2442,8 +2565,12 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
         isTRUE(cal_model$input_mask_extrapolated),
       exact_input_mask_calibration = exact_input_mask_calibration,
       within_tolerance = within_tol,
+      smoothness_increased = smoothness_increased,
+      min_smoothness_increase_mm = min_smoothness_increase_mm,
       calibration_mode = cal_model$mode,
       calibration_model_version = cal_model$model_version,
+      calibration_base_model_version = cal_model$base_model_version,
+      calibration_grid_model_selected = isTRUE(cal_model$grid_model_selected),
       calibration_type = cal_model$type,
       calibration_estimator = preparation$estimator,
       calibration_coeffs = cal_model$coeffs,

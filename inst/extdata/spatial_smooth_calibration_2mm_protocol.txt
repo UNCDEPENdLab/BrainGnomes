@@ -1,0 +1,58 @@
+Isotropic 2 mm spatial smoothness calibration, 05 Oct 2026
+
+Scope: SUSAN with an automask for brightness-threshold estimation and no
+previous input mask, an fMRIPrep input mask, or a TemplateFlow input mask;
+Gaussian AFNI 3dBlurInMask and 3dmerge with no previous input mask.
+Kernels measured separately: 3, 4, 5, 6, 7, and 8 mm FWHM.
+Tools: FSL 6.0.7.16 and AFNI 26.0.00.
+
+The experiment includes one run per subject: 12 subjects from three internal
+fMRIPrep cohorts, resampled with AFNI cubic interpolation to isotropic 2 mm,
+and 10 independent subjects with fMRIPrep 25.2.5 res-2 outputs. Six internal
+subjects (two per cohort) supply 36 calibration observations per condition.
+The remaining six internal subjects and all 10 external subjects supply 96
+held-out observations per condition. External subjects are never used to fit
+coefficients or establish error limits. Internal resampling broadens baseline
+smoothness coverage but does not replace evidence from genuine res-2 outputs.
+
+SUSAN uses the production full-run brightness threshold, temporal mean image,
+and temporal-minimum extents, then smooths the 96 distributed volumes used by
+the estimator. A full-run replay confirms this operator agrees with production
+spatial_smooth(). Gaussian smoothing acts independently on each volume.
+Smoothness measurement uses classic FWHM after cubic detrending, demeaning,
+and voxelwise MAD scaling. Input masks and automasks match postprocessing.
+Sampled NIfTI images are reconstructed with spatial header geometry to avoid
+stale AFNI extensions that describe the original time dimension.
+
+The original coefficients are evaluated first. Separate 2 mm fits retain the
+two-parameter quadrature model:
+  effective_kernel = b0 * requested_kernel_mm + b1 * voxel_mm
+  expected_post_fwhm = sqrt(pre_fwhm^2 + effective_kernel^2)
+Fit by minimizing post-FWHM squared error on the calibration observations,
+with b0 > 0 and effective_kernel(3 mm) > 0. Positivity and monotonicity therefore
+hold throughout 3--8 mm. Coarser-resolution coefficients remain unchanged.
+
+Leave-one-internal-cohort-out checks fit the four calibration subjects from
+two cohorts and evaluate all four subjects in the excluded cohort, producing
+72 observations per condition. The 2 mm error limit is the larger of the
+original condition's limit and the maximum error on the 36 excluded calibration
+observations in those cohort-transfer folds, rounded up
+to 0.1 mm, capped at 1.0 mm. Held-out subjects do not determine the limit. This error-limit rule was specified before the
+final template-mask measurements completed, after initial transfer errors
+exceeded the original limits. It is an empirical acceptance limit, not a
+statistical confidence bound. Promotion requires every held-out error and
+every cohort-transfer error to meet that limit. Aggregate coefficients and
+errors are in spatial_smooth_calibration_2mm.csv.
+
+Support is restricted to all three voxel spacings equal to 2 mm within 1e-6
+and kernels within 3--8 mm. Anisotropic grids with geometric mean 2 mm are
+excluded. Untested estimator preparation, Gaussian input-mask conditions,
+and SUSAN without a threshold-estimation mask are excluded. Continuous kernel
+support between measured integer kernels assumes the fitted monotone model.
+Validation also requires a measurable post-smoothing FWHM increase, so an
+unchanged image cannot pass solely because of the acceptance limit.
+
+Independent production replays check full-run outputs and deliberately wrong
+kernel controls. All serialized evidence consists of scalar summaries and
+small geometry metadata. NIfTI images remain separate scratch files; voxel
+arrays and image objects never enter calibration JSON or provenance.

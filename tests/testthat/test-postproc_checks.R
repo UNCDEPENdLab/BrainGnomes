@@ -1721,7 +1721,7 @@ test_that("estimate_classic_fwhm returns larger FWHM for smoother data", {
   expect_gt(fwhm_smooth, fwhm_noisy)
 })
 
-test_that("external 2 mm smoothing support is confined to the validated context", {
+test_that("legacy v4 external support is confined to its validated 2 mm case", {
   model <- pp_select_calibration("susan", TRUE, input_mask = "template")
   expect_identical(pp_calibration_support(model, 5, c(2, 2, 2)), "externally_validated")
   expect_identical(pp_calibration_support(model, 5, rep(2 + 1e-7, 3)), "externally_validated")
@@ -1753,7 +1753,10 @@ test_that("external smoothing support metadata agrees with the validation eviden
   expect_lte(evidence$max_abs_error_mm, model$tolerance_mm)
 })
 
-test_that("externally supported smoothing still enforces the numerical tolerance", {
+test_that("legacy external support still enforces the numerical tolerance", {
+  calibration <- pp_calibration_coeffs
+  calibration$susan$classic$mask$template$grid_models <- NULL
+  local_mocked_bindings(pp_calibration_coeffs = calibration)
   pre_file <- tempfile(fileext = ".nii.gz")
   post_file <- tempfile(fileext = ".nii.gz")
   mask_file <- tempfile(fileext = ".nii.gz")
@@ -1780,4 +1783,150 @@ test_that("externally supported smoothing still enforces the numerical tolerance
   expect_false(attr(result, "details")$calibration_extrapolated)
   post_fwhm <- 7
   expect_false(validate())
+})
+
+test_that("grid models preserve the base coefficients and exact mask gates", {
+  calibration <- pp_calibration_coeffs
+  base <- calibration$susan$classic$mask$template
+  grid <- list(
+    model_version = "test-2mm-fit", coeffs = c(1.1, -0.2),
+    kernel_range_mm = c(3, 8), voxel_range_mm = c(2, 2),
+    voxel_spacing_mm = c(2, 2, 2), max_volumes = 96L
+  )
+  calibration$susan$classic$mask$template$grid_models <- list(grid)
+  with_mocked_bindings({
+    selected <- pp_select_calibration("susan", TRUE, "template", c(2, 2, 2))
+    expect_identical(selected$coeffs, grid$coeffs)
+    expect_identical(selected$base_model_version, base$model_version)
+    expect_true(selected$grid_model_selected)
+    expect_null(selected$external_support)
+    expect_null(selected$support_version)
+    expect_identical(selected$estimator, base$estimator)
+    expect_identical(pp_calibration_support(selected, 3, rep(2, 3)), "interpolated")
+    expect_identical(pp_calibration_support(selected, 8, rep(2, 3)), "interpolated")
+    expect_identical(pp_calibration_support(selected, 5, c(1, 2, 4)), "EXTRAPOLATED")
+    expect_identical(pp_calibration_support(selected, 2, rep(2, 3)), "EXTRAPOLATED")
+    for (spacing in list(NULL, rep(2.7, 3), c(1, 2, 4), rep(2.1, 3))) {
+      original <- pp_select_calibration("susan", TRUE, "template", spacing)
+      expect_identical(original$coeffs, base$coeffs)
+      expect_false(isTRUE(original$grid_model_selected))
+    }
+    expect_warning(
+      custom <- pp_select_calibration("susan", TRUE, "custom", rep(2, 3)),
+      "No exact smoothness calibration"
+    )
+    expect_identical(pp_calibration_support(custom, 5, rep(2, 3)), "EXTRAPOLATED")
+  }, pp_calibration_coeffs = calibration)
+})
+
+test_that("spatial validation selects and enforces the grid model", {
+  calibration <- pp_calibration_coeffs
+  grid <- list(
+    model_version = "test-2mm-fit", coeffs = c(0.8, -0.1),
+    kernel_range_mm = c(3, 8), voxel_range_mm = c(2, 2),
+    voxel_spacing_mm = c(2, 2, 2), max_volumes = 96L
+  )
+  calibration$gaussian$classic$mask$grid_models <- list(grid)
+  files <- c(tempfile(fileext = ".nii"), tempfile(fileext = ".nii"),
+             tempfile(fileext = ".nii"))
+  on.exit(unlink(files), add = TRUE)
+  image <- RNifti::asNifti(array(1, c(2, 2, 2, 100)))
+  RNifti::pixdim(image) <- c(2, 2, 2, 1)
+  RNifti::writeNifti(image, files[1])
+  RNifti::writeNifti(image, files[2])
+  RNifti::writeNifti(RNifti::asNifti(array(1, c(2, 2, 2)), reference = image), files[3])
+  expected_post <- sqrt(2.5^2 + (6 * grid$coeffs[1] + 2 * grid$coeffs[2])^2)
+  with_mocked_bindings({
+    result <- validate_spatial_smooth(files[1], files[2], files[3],
+                                     fwhm_mm = 6, smoother = "gaussian")
+    expect_true(result)
+    expect_true(attr(result, "details")$calibration_grid_model_selected)
+    expect_identical(attr(result, "details")$calibration_model_version, grid$model_version)
+    expect_equal(attr(result, "details")$post_expected_mm, expected_post)
+    expect_error(
+      validate_spatial_smooth(files[1], files[2], files[3], fwhm_mm = 6,
+                             smoother = "gaussian", max_volumes = 95L),
+      "requires max_volumes=96"
+    )
+  }, pp_calibration_coeffs = calibration,
+  pp_estimate_classic_smoothness_file = function(path, ...) list(
+    geom = if (identical(path, files[1])) 2.5 else expected_post,
+    volumes_used = 96L, total_volumes = 100L,
+    volume_indices = pp_distributed_volume_indices(100L, 96L),
+    volume_sampling = "distributed"
+  ))
+})
+
+test_that("published 2 mm fits agree with held-out evidence and preserve native fits", {
+  evidence <- utils::read.csv(system.file("extdata", "spatial_smooth_calibration_2mm.csv",
+                                         package = "BrainGnomes"), stringsAsFactors = FALSE)
+  expect_gt(nrow(evidence), 0L)
+  for (index in seq_len(nrow(evidence))) {
+    row <- evidence[index, ]
+    smoother <- if (startsWith(row$mode, "fsl_susan")) "susan" else "gaussian"
+    used_mask <- !row$mode %in% c("afni_3dmerge", "fsl_susan_nomask")
+    fitted <- pp_select_calibration(smoother, used_mask, row$input_mask, rep(2, 3))
+    native <- pp_select_calibration(smoother, used_mask, row$input_mask, rep(2.7, 3))
+    expect_identical(fitted$model_version, row$model_version)
+    expect_identical(fitted$base_model_version, row$base_model_version)
+    expect_identical(native$model_version, row$base_model_version)
+    expect_false(isTRUE(native$grid_model_selected))
+    expect_equal(fitted$coeffs, c(row$coeff_b0, row$coeff_b1))
+    expect_equal(fitted$tolerance_mm, row$tolerance_mm)
+    expect_lte(fitted$tolerance_mm, 1)
+    expect_equal(fitted$n_calibration, row$n_calibration)
+    expect_equal(fitted$n_validation, row$n_validation)
+    expect_equal(fitted$n_calibration_subjects, row$n_calibration_subjects)
+    expect_equal(fitted$n_validation_subjects, row$n_validation_subjects)
+    expect_equal(fitted$max_validation_abs_error_mm, row$validation_max_abs_error_mm)
+    expect_equal(fitted$max_lodo_abs_error_mm, row$lodo_max_abs_error_mm)
+    expect_lte(row$validation_max_abs_error_mm, row$tolerance_mm)
+    expect_lte(row$lodo_max_abs_error_mm, row$tolerance_mm)
+    expect_equal(row$tolerance_mm,
+                 max(native$tolerance_mm,
+                     ceiling(row$lodo_calibration_max_abs_error_mm * 10) / 10))
+    for (kernel in c(3, 5, 8)) {
+      expect_identical(pp_calibration_support(fitted, kernel, rep(2, 3)), "interpolated")
+      expect_identical(pp_calibration_support(fitted, kernel, c(1, 2, 4)), "EXTRAPOLATED")
+    }
+    for (kernel in c(2, 9)) {
+      expect_identical(pp_calibration_support(fitted, kernel, rep(2, 3)), "EXTRAPOLATED")
+    }
+    expect_silent(assert_provenance_metadata(fitted))
+  }
+  # Native-grid accuracy limits keep their independently calibrated values.
+  expect_equal(pp_select_calibration("susan", TRUE, "none", rep(2.7, 3))$tolerance_mm, 0.7)
+  expect_equal(pp_select_calibration("gaussian", TRUE, "none", rep(2.7, 3))$tolerance_mm, 0.8)
+})
+
+test_that("2 mm models require positive kernels and validation below the limit", {
+  expect_error(pp_isotropic_2mm_model(c(1, -2), 1, 0.5, 0.5), "positive, increasing")
+  expect_error(pp_isotropic_2mm_model(c(1, 0), 1, 1.1, 0.5), "validation_max_abs_error_mm")
+  expect_error(pp_isotropic_2mm_model(c(1, 0), 1, 0.5, 1.1), "lodo_max_abs_error_mm")
+  expect_error(pp_isotropic_2mm_model(c(1, 0), 1.1, 0.5, 0.5), "tolerance_mm")
+})
+
+test_that("a calibrated small-kernel tolerance never accepts unchanged images", {
+  files <- c(tempfile(fileext = ".nii"), tempfile(fileext = ".nii"),
+             tempfile(fileext = ".nii"))
+  on.exit(unlink(files), add = TRUE)
+  image <- RNifti::asNifti(array(1, c(2, 2, 2, 100)))
+  RNifti::pixdim(image) <- c(2, 2, 2, 1)
+  RNifti::writeNifti(image, files[1])
+  RNifti::writeNifti(image, files[2])
+  RNifti::writeNifti(RNifti::asNifti(array(1, c(2, 2, 2)), reference = image), files[3])
+  with_mocked_bindings({
+    result <- validate_spatial_smooth(files[1], files[2], files[3],
+                                     fwhm_mm = 3, smoother = "susan", input_mask = "none")
+    expect_false(result)
+    details <- attr(result, "details")
+    expect_true(details$within_tolerance)
+    expect_false(details$calibration_extrapolated)
+    expect_false(details$smoothness_increased)
+    expect_match(attr(result, "message"), "no measurable smoothness increase")
+  }, pp_estimate_classic_smoothness_file = function(...) list(
+    geom = 4.16, volumes_used = 96L, total_volumes = 100L,
+    volume_indices = pp_distributed_volume_indices(100L, 96L),
+    volume_sampling = "distributed"
+  ))
 })

@@ -185,3 +185,65 @@ test_that("Python template resampling preserves target xforms and codes", {
     observed_sform[[1L]], reference_sform[[1L]], tolerance = 1e-7
   )
 })
+
+test_that("Python resampling never reads reference voxel data", {
+  skip_if_not_installed("reticulate")
+  required_modules <- c("nibabel", "nilearn", "numpy")
+  available <- vapply(
+    required_modules, reticulate::py_module_available, logical(1)
+  )
+  skip_if_not(all(available), "Python image-resampling modules unavailable")
+  script <- system.file("fetch_matched_template_image.py", package = "BrainGnomes")
+  module <- reticulate::import_from_path(
+    "fetch_matched_template_image", path = dirname(script), convert = FALSE
+  )
+  tmp_dir <- tempfile("resample_header_only_")
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  reticulate::py_run_string(paste(c(
+    "import os",
+    "import numpy as np",
+    "import nibabel as nib",
+    "from unittest.mock import patch",
+    "",
+    "# A long 4D image whose geometry is valid but whose voxels cannot be read.",
+    "class UnreadableReference:",
+    "    shape = (8, 9, 7, 10000)",
+    "    dtype = np.dtype('float32')",
+    "    def __array__(self, *args, **kwargs):",
+    "        raise AssertionError('Reference voxel data were accessed')",
+    "    def __getitem__(self, key):",
+    "        raise AssertionError('Reference voxel data were accessed')",
+    "",
+    "def check_header_only_resampling(module, directory):",
+    "    # Assert header-only access and identical resampled voxels and transforms.",
+    "    affine = np.diag([2., 2., 2., 1.])",
+    "    reference = nib.Nifti1Image(np.zeros((8, 9, 7), dtype=np.float32), affine)",
+    "    reference.set_qform(affine, code=4)",
+    "    reference.set_sform(affine, code=4)",
+    "    reference._dataobj = UnreadableReference()",
+    "    reference.header.set_data_shape(reference.shape)",
+    "    source_file = os.path.join(directory, 'source.nii.gz')",
+    "    output_file = os.path.join(directory, 'output.nii.gz')",
+    "    source = nib.Nifti1Image(np.ones((5, 6, 4), dtype=np.uint8), np.eye(4))",
+    "    nib.save(source, source_file)",
+    "    real_load = nib.load",
+    "    def guarded_load(path, *args, **kwargs):",
+    "        return reference if path == 'unreadable_reference' else real_load(path, *args, **kwargs)",
+    "    with patch.object(module.nib, 'load', side_effect=guarded_load):",
+    "        module.resample_image_to_reference(source_file, 'unreadable_reference', output_file)",
+    "    observed = real_load(output_file)",
+    "    from nilearn.image import resample_to_img",
+    "    small_reference = nib.Nifti1Image(np.zeros((8, 9, 7), dtype=np.float32), affine)",
+    "    expected = resample_to_img(source, small_reference, interpolation='nearest',",
+    "                               force_resample=True, copy_header=True)",
+    "    np.testing.assert_array_equal(observed.get_fdata(), expected.get_fdata())",
+    "    assert observed.shape == (8, 9, 7)",
+    "    assert int(observed.get_qform(coded=True)[1]) == 4",
+    "    assert int(observed.get_sform(coded=True)[1]) == 4",
+    "    return True"
+  ), collapse = "\n"))
+  expect_true(reticulate::py_to_r(
+    reticulate::py$check_header_only_resampling(module, tmp_dir)
+  ))
+})
