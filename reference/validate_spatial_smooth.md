@@ -124,6 +124,15 @@ It is retained for diagnostic and legacy calibration use, but it must
 match the selected calibration. `preprocess = NULL` enforces that
 model-specific choice. Requests outside the model's fitted domain and
 explicit external support are reported as extrapolations and cannot pass
-validation. The template-mask model also supports the externally
-validated 5 mm kernel on isotropic 2 mm images; this case does not
-extend support to other kernels at that resolution.
+validation. Isotropic 2 mm images use separately fitted models for 3–8
+mm kernels: masked-threshold SUSAN with unmasked, fMRIPrep-masked, or
+template-masked input, and Gaussian smoothing with or without an
+automask on otherwise unmasked input. These models require
+`max_volumes = 96` and the calibrated estimator preparation. The three
+internal cohorts were resampled to 2 mm; ten held-out subjects had
+genuine 2 mm fMRIPrep outputs. Each 2 mm error limit is established from
+internal cohort-transfer checks, capped at 1 mm, and verified on the
+held-out subjects. Coarser-resolution models retain their original
+limits. An image with no measurable smoothness increase fails even when
+its error falls within the calibrated tolerance. Diagnostic SUSAN
+without a threshold mask has no isotropic 2 mm calibration.

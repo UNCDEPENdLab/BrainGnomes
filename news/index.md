@@ -2,6 +2,17 @@
 
 ## BrainGnomes (development version)
 
+- Calibrate SUSAN and Gaussian spatial validation for isotropic 2 mm
+  images with 3–8 mm kernels using separate resolution-specific fits.
+  Verify those fits on held-out subjects, including genuine 2 mm
+  fMRIPrep outputs. Establish 2 mm error limits from internal
+  cohort-transfer checks, capped at 1 mm, while preserving
+  coarser-resolution coefficients and limits. Reject unchanged images
+  even when their predicted change is smaller than the error limit.
+
+- Resample template masks and atlases using reference header geometry
+  without loading the reference BOLD voxel data.
+
 - Reject image objects, spatial arrays, and binary payloads before
   writing provenance JSON, configuration snapshots, validation records,
   or QC inventories. Keep image files out of provenance companion
@@ -10,10 +21,7 @@
 - Keep intensity-reference NIfTI voxel arrays out of derivative JSON;
   record published companion paths and compact header geometry instead.
   Validate intensity normalization across all volumes in bounded chunks
-  to avoid memory spikes on long runs. Recognize the externally
-  validated template-mask SUSAN case of a 5 mm kernel on isotropic 2 mm
-  images, while keeping other uncalibrated resolution/kernel
-  combinations outside support.
+  to avoid memory spikes on long runs.
 
 - Match QC validation audits to missing outputs through filesystem
   aliases, retaining their failed status instead of incorrectly marking
