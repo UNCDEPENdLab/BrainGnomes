@@ -97,7 +97,8 @@ prepare_intensity_reference(
 
 List containing paths to the reference-region outputs, the run reference
 intensity (`reference_location`), requested `target`, calculated scalar
-factor or PSC multiplier map, logical baseline-estimation volume vector
+factor or PSC multiplier-map path (an in-memory map is returned only
+when `scale_file` is empty), logical baseline-estimation volume vector
 (`include_frames`), and QA summaries.
 
 ## Details

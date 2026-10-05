@@ -20,7 +20,9 @@ validate_intensity_normalize(
   scale_file = NULL,
   core_file = NULL,
   include_frames = NULL,
-  tolerance = 1e-05
+  tolerance = 1e-05,
+  chunk_size = 8L,
+  scratch_directory = tempdir()
 )
 ```
 
@@ -70,6 +72,18 @@ validate_intensity_normalize(
 - tolerance:
 
   Maximum allowed relative numerical error for each check.
+
+- chunk_size:
+
+  Maximum number of volumes read together. All volumes are checked;
+  chunking bounds memory independently of run length.
+
+- scratch_directory:
+
+  Writable directory for temporary decompressed images. Compressed
+  images are streamed to disk once so successive chunks do not
+  repeatedly decompress the beginning of a long run. Copies are removed
+  on success or failure. Defaults to the R temporary directory.
 
 ## Value
 

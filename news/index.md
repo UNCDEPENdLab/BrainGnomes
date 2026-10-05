@@ -2,6 +2,21 @@
 
 ## BrainGnomes (development version)
 
+- Keep intensity-reference NIfTI voxel arrays out of derivative JSON;
+  record published companion paths and compact header geometry instead.
+  Validate intensity normalization across all volumes in bounded chunks
+  to avoid memory spikes on long runs. Recognize the externally
+  validated template-mask SUSAN case of a 5 mm kernel on isotropic 2 mm
+  images, while keeping other uncalibrated resolution/kernel
+  combinations outside support.
+
+- Match QC validation audits to missing outputs through filesystem
+  aliases, retaining their failed status instead of incorrectly marking
+  them invalid. Canonicalize missing-configuration diagnostics
+  consistently across platforms. Keep setup menu text portable and bound
+  headless CLI tests so inherited Windows consoles cannot stall the test
+  suite.
+
 - Resolve relative configuration paths from a colocated project YAML:
   the YAML establishes the project root, all runtime and scheduler paths
   become absolute, and project-contained paths are saved portably

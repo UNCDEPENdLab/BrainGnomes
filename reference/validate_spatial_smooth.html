@@ -177,8 +177,10 @@ non-Gaussian core behavior without treating the full ACF as Gaussian.</p>
 mean, and voxelwise temporal scale before the classic estimate. It is retained
 for diagnostic and legacy calibration use, but it must match the selected
 calibration. <code>preprocess = NULL</code> enforces that model-specific choice.
-Requests outside the model's stored kernel or voxel-size range are reported
-as extrapolations and cannot pass validation.</p>
+Requests outside the model's fitted domain and explicit external support
+are reported as extrapolations and cannot pass validation. The template-mask model also
+supports the externally validated 5 mm kernel on isotropic 2 mm images;
+this case does not extend support to other kernels at that resolution.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
