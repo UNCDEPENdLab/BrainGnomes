@@ -149,8 +149,12 @@ test_that("run_project interactive mode prompts for dry run and honors selection
 test_that("run_project dry_run prints resolved stream settings", {
   root <- tempfile("run_project_stream_plan_")
   dir.create(root, recursive = TRUE, showWarnings = FALSE)
+  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
   on.exit(unlink(root, recursive = TRUE, force = TRUE), add = TRUE)
   dir.create(file.path(root, "bids", "sub-01"), recursive = TRUE)
+  # Use native absolute external paths rather than POSIX-only fake roots.
+  atlas_paths <- file.path(normalizePath(tempdir(), winslash = "/"),
+    "atlases", c("network.nii.gz", "subcortex.nii.gz"))
 
   scfg <- list(
     metadata = list(
@@ -189,8 +193,8 @@ test_that("run_project dry_run prints resolved stream settings", {
       enable = TRUE,
       networks = list(
         input_streams = "clean",
-        atlases = c("/atlases/network.nii.gz", "/atlases/subcortex.nii.gz"),
-        mask_file = "/masks/group-mask.nii.gz",
+        atlases = atlas_paths,
+        mask_file = file.path(dirname(atlas_paths[1L]), "group-mask.nii.gz"),
         roi_reduce = "median",
         correlation = list(method = c("pearson", "cor.shrink")),
         min_vox_per_roi = "80%",
@@ -228,7 +232,7 @@ test_that("run_project dry_run prints resolved stream settings", {
   expect_match(output, "processing order: apply_mask, spatial_smooth, temporal_filter", fixed = TRUE)
   expect_match(output, "Resolved extraction plan:", fixed = TRUE)
   expect_match(output, "clean [space:MNI152NLin2009cAsym desc:preproc suffix:bold -> desc:clean]", fixed = TRUE)
-  expect_match(output, "atlases: /atlases/network.nii.gz, /atlases/subcortex.nii.gz", fixed = TRUE)
+  expect_match(output, paste0("atlases: ", paste(atlas_paths, collapse = ", ")), fixed = TRUE)
   expect_match(output, "correlation methods: pearson, cor.shrink", fixed = TRUE)
   expect_match(output, "minimum voxels per ROI: 80%", fixed = TRUE)
   expect_match(output, "save time series: false", fixed = TRUE)

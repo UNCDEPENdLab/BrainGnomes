@@ -139,6 +139,7 @@ test_that("prepare_intensity_reference explains denominator-guarded PSC policy",
   expect_equal(result$target, 100)
   expect_null(result$scale_factor)
   expect_true(file.exists(scale_file))
+  expect_null(result$scale_map)
   expect_equal(sidecar$normalization_mode, "voxel_psc")
   expect_equal(sidecar$normalization_method, "guarded_voxel_psc_v1")
   expect_equal(sidecar$psc_guard$denominator_floor, 200)
@@ -338,4 +339,95 @@ test_that("derive_voxel_psc_scale guards denominators without masking voxels", {
   expect_equal(sum(result$qa_mask_counts[-1]), 8L)
   expect_true(file.exists(out_file))
   expect_equal(dim(RNifti::readNifti(out_file)), c(2, 2, 2))
+})
+
+test_that("intensity validation reads bounded chunks and checks the final volume", {
+  pre_file <- tempfile(fileext = ".nii")
+  post_file <- tempfile(fileext = ".nii")
+  scale_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, scale_file)), add = TRUE)
+  dims <- c(2L, 2L, 2L, 19L)
+  pre <- array(seq_len(prod(dims)), dims)
+  scale <- array(seq_len(8) / 10, dims[1:3])
+  post <- pre * as.numeric(scale)
+  RNifti::writeNifti(pre, pre_file)
+  RNifti::writeNifti(post, post_file)
+  RNifti::writeNifti(scale, scale_file)
+  reads <- list()
+  read_chunk <- pp_read_volume_matrix
+  validate <- function() {
+    with_mocked_bindings(
+      validate_intensity_normalize(
+        pre_file, post_file, reference_location = 1000, target = 100,
+        mode = "voxel_psc", scale_file = scale_file, chunk_size = 4L
+      ),
+      pp_read_volume_matrix = function(path, volumes, spatial_dims) {
+        reads[[length(reads) + 1L]] <<- list(path = path, volumes = volumes)
+        read_chunk(path, volumes, spatial_dims)
+      }
+    )
+  }
+  result <- validate()
+  expect_true(result)
+  expect_equal(attr(result, "details")$volumes_compared, 19L)
+  expect_true(all(lengths(lapply(reads, `[[`, "volumes")) <= 4L))
+  expect_identical(unlist(lapply(
+    Filter(function(x) identical(x$path, pre_file), reads), `[[`, "volumes"
+  ), use.names = FALSE), seq_len(19L))
+
+  post[2, 2, 2, 19] <- post[2, 2, 2, 19] + 100
+  RNifti::writeNifti(post, post_file)
+  expect_false(validate())
+  post[2, 2, 2, 19] <- NA_real_
+  RNifti::writeNifti(post, post_file)
+  result <- validate()
+  expect_false(result)
+  expect_match(attr(result, "message"), "finite-value patterns differ")
+})
+
+test_that("chunked scalar validation handles nonfinite chunks and time mismatches", {
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file)), add = TRUE)
+  pre <- array(NA_real_, c(2, 2, 2, 5))
+  pre[, , , 5] <- 50
+  RNifti::writeNifti(pre, pre_file)
+  RNifti::writeNifti(pre * 2, post_file)
+  validate <- function() validate_intensity_normalize(
+    pre_file, post_file, reference_location = 50, target = 100,
+    scale_factor = 2, chunk_size = 2L
+  )
+  expect_true(validate())
+  RNifti::writeNifti(array(100, c(2, 2, 2, 4)), post_file)
+  expect_match(attr(validate(), "message"), "dimensions mismatch")
+  RNifti::writeNifti(array(NA_real_, c(2, 2, 2, 5)), pre_file)
+  RNifti::writeNifti(array(NA_real_, c(2, 2, 2, 5)), post_file)
+  expect_match(attr(validate(), "message"), "No jointly finite")
+})
+
+test_that("chunked validation removes staged images after success and failure", {
+  root <- tempfile("intensity-chunks-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  pre_file <- file.path(root, "pre.nii.gz")
+  post_file <- file.path(root, "post.nii.gz")
+  pre <- array(50, c(2, 2, 2, 9))
+  RNifti::writeNifti(pre, pre_file)
+  RNifti::writeNifti(pre * 2, post_file)
+  result <- validate_intensity_normalize(
+    pre_file, post_file, reference_location = 50, target = 100,
+    scale_factor = 2, chunk_size = 2L, scratch_directory = root
+  )
+  expect_true(result)
+  expect_length(list.files(root, pattern = "intensity-validation"), 0L)
+  expect_error(with_mocked_bindings(
+    validate_intensity_normalize(
+      pre_file, post_file, reference_location = 50, target = 100,
+      scale_factor = 2, scratch_directory = root
+    ),
+    pp_read_volume_matrix = function(...) stop("interrupted chunk read")
+  ), "interrupted chunk read")
+  expect_length(list.files(root, pattern = "intensity-validation"), 0L)
+  expect_true(file.exists(pre_file))
+  expect_true(file.exists(post_file))
 })

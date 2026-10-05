@@ -139,6 +139,32 @@ pp_read_volume_matrix <- function(path, volumes, spatial_dims) {
   matrix(as.numeric(image), nrow = prod(spatial_dims), ncol = length(volumes))
 }
 
+#' Stage a compressed NIfTI for repeated volume reads using bounded I/O buffers
+#'
+#' @param path Existing NIfTI path. Uncompressed files are returned unchanged.
+#' @param directory Writable scratch directory for the temporary `.nii` file.
+#' @return Path suitable for seeking to successive volume chunks. The caller
+#'   must remove a returned temporary copy when it differs from `path`.
+#' @noRd
+pp_stage_nifti_for_chunks <- function(path, directory) {
+  if (!grepl("\\.nii\\.gz$", path, ignore.case = TRUE)) return(path)
+  checkmate::assert_directory_exists(directory, access = "w")
+  staged <- tempfile("intensity-validation-", tmpdir = directory, fileext = ".nii")
+  input <- gzfile(path, "rb")
+  on.exit(close(input), add = TRUE)
+  output <- file(staged, "wb")
+  on.exit(close(output), add = TRUE)
+  completed <- FALSE
+  on.exit(if (!completed) unlink(staged), add = TRUE)
+  repeat {
+    buffer <- readBin(input, what = "raw", n = 4L * 1024L * 1024L)
+    if (!length(buffer)) break
+    writeBin(buffer, output)
+  }
+  completed <- TRUE
+  staged
+}
+
 #' Select deterministic timepoints distributed over a complete run
 #'
 #' Finite caps retain regularly spaced, ordered timepoints and include the
@@ -1670,6 +1696,12 @@ pp_max_abs_diff <- function(a, b) {
 #'   `TRUE` identifies a volume used to estimate the temporal baselines. The
 #'   pipeline supplies the same vector used for `reference_location`.
 #' @param tolerance Maximum allowed relative numerical error for each check.
+#' @param chunk_size Maximum number of volumes read together. All volumes are
+#'   checked; chunking bounds memory independently of run length.
+#' @param scratch_directory Writable directory for temporary decompressed
+#'   images. Compressed images are streamed to disk once so successive chunks
+#'   do not repeatedly decompress the beginning of a long run. Copies are
+#'   removed on success or failure. Defaults to the R temporary directory.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
 #'   The `message` attribute gives a readable summary. The `details` attribute
@@ -1685,7 +1717,9 @@ validate_intensity_normalize <- function(pre_file, post_file,
                                          scale_file = NULL,
                                          core_file = NULL,
                                          include_frames = NULL,
-                                         tolerance = 1e-5) {
+                                         tolerance = 1e-5,
+                                         chunk_size = 8L,
+                                         scratch_directory = tempdir()) {
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_choice(mode, c("run_scalar", "voxel_psc"))
@@ -1746,31 +1780,16 @@ validate_intensity_normalize <- function(pre_file, post_file,
     if (!isTRUE(pre_core_grid$passed)) return(pp_grid_failure(pre_core_grid))
   }
 
-  pre <- RNifti::readNifti(pre_file)
-  post <- RNifti::readNifti(post_file)
-  if (!identical(dim(pre), dim(post))) {
+  checkmate::assert_count(chunk_size, positive = TRUE)
+  pre_dims <- pp_nifti_dims4(pre_file)
+  post_dims <- pp_nifti_dims4(post_file)
+  if (!identical(pre_dims, post_dims)) {
     out <- FALSE
     attr(out, "message") <- sprintf(
       "Pre/post dimensions mismatch: [%s] vs [%s].",
-      paste(dim(pre), collapse = "x"), paste(dim(post), collapse = "x")
+      paste(pre_dims, collapse = "x"), paste(post_dims, collapse = "x")
     )
-    attr(out, "details") <- list(pre_dim = dim(pre), post_dim = dim(post))
-    return(out)
-  }
-
-  pre_values <- as.vector(pre)
-  post_values <- as.vector(post)
-  if (!identical(is.finite(pre_values), is.finite(post_values))) {
-    out <- FALSE
-    attr(out, "message") <- "Pre/post finite-value patterns differ after intensity normalization."
-    attr(out, "details") <- list()
-    return(out)
-  }
-  finite <- is.finite(pre_values) & is.finite(post_values)
-  if (!any(finite)) {
-    out <- FALSE
-    attr(out, "message") <- "No jointly finite pre/post values are available for validation."
-    attr(out, "details") <- list()
+    attr(out, "details") <- list(pre_dim = pre_dims, post_dim = post_dims)
     return(out)
   }
 
@@ -1780,35 +1799,74 @@ validate_intensity_normalize <- function(pre_file, post_file,
     expected_target <- reference_location * scale_factor
     target_relative_error <- abs(expected_target - target) /
       max(1, abs(target))
-    multipliers <- rep(scale_factor, length(pre_values))
+    multipliers <- scale_factor
   } else {
     scale_map <- RNifti::readNifti(scale_file)
-    if (!identical(dim(scale_map), dim(pre)[1:3])) {
+    if (!identical(as.integer(dim(scale_map)), pre_dims[1:3])) {
       out <- FALSE
       attr(out, "message") <- sprintf(
         "PSC scale-map dimensions [%s] do not match BOLD spatial dimensions [%s].",
         paste(dim(scale_map), collapse = "x"),
-        paste(dim(pre)[1:3], collapse = "x")
+        paste(pre_dims[1:3], collapse = "x")
       )
       attr(out, "details") <- list(
-        scale_dim = dim(scale_map), bold_spatial_dim = dim(pre)[1:3]
+        scale_dim = dim(scale_map), bold_spatial_dim = pre_dims[1:3]
       )
       return(out)
     }
-    scale_values <- as.vector(scale_map)
-    if (any(!is.finite(scale_values)) || any(scale_values <= 0)) {
+    multipliers <- as.numeric(scale_map)
+    rm(scale_map)
+    if (any(!is.finite(multipliers)) || any(multipliers <= 0)) {
       out <- FALSE
       attr(out, "message") <- "PSC multiplier map contains nonfinite or nonpositive values."
       attr(out, "details") <- list()
       return(out)
     }
-    multipliers <- rep(scale_values, times = dim(pre)[4])
   }
 
-  expected_values <- pre_values[finite] * multipliers[finite]
-  value_relative_error <- max(
-    abs(post_values[finite] - expected_values) / pmax(1, abs(expected_values))
+  # The spatial multiplier repeats down each matrix column without allocating
+  # a 4D multiplier array. Read every volume, including the final partial chunk.
+  value_relative_error <- 0
+  finite_values <- 0
+  volume_chunks <- split(
+    seq_len(pre_dims[4]), ceiling(seq_len(pre_dims[4]) / chunk_size)
   )
+  # Gzip cannot seek cheaply to later volumes. Decompress each input once to
+  # scratch with a fixed buffer, then release both copies on every exit path.
+  staged_files <- character()
+  on.exit(unlink(staged_files), add = TRUE)
+  pre_chunk_file <- pp_stage_nifti_for_chunks(pre_file, scratch_directory)
+  if (!identical(pre_chunk_file, pre_file)) staged_files <- c(staged_files, pre_chunk_file)
+  post_chunk_file <- pp_stage_nifti_for_chunks(post_file, scratch_directory)
+  if (!identical(post_chunk_file, post_file)) staged_files <- c(staged_files, post_chunk_file)
+  invisible(gc(FALSE))
+  for (volumes in volume_chunks) {
+    pre_values <- pp_read_volume_matrix(pre_chunk_file, volumes, pre_dims[1:3])
+    post_values <- pp_read_volume_matrix(post_chunk_file, volumes, pre_dims[1:3])
+    finite <- is.finite(pre_values)
+    if (!identical(finite, is.finite(post_values))) {
+      out <- FALSE
+      attr(out, "message") <- "Pre/post finite-value patterns differ after intensity normalization."
+      attr(out, "details") <- list(volume_indices = volumes)
+      return(out)
+    }
+    finite_values <- finite_values + sum(finite)
+    if (any(finite)) {
+      expected_values <- (pre_values * multipliers)[finite]
+      value_relative_error <- max(value_relative_error, max(
+        abs(post_values[finite] - expected_values) / pmax(1, abs(expected_values))
+      ))
+      rm(expected_values)
+    }
+    rm(pre_values, post_values, finite)
+    invisible(gc(FALSE))
+  }
+  if (finite_values == 0) {
+    out <- FALSE
+    attr(out, "message") <- "No jointly finite pre/post values are available for validation."
+    attr(out, "details") <- list()
+    return(out)
+  }
   observed_target <- NA_real_
   observed_target_relative_error <- NA_real_
   if (identical(mode, "run_scalar") && !is.null(core_file)) {
@@ -1862,7 +1920,9 @@ validate_intensity_normalize <- function(pre_file, post_file,
     target_relative_error = target_relative_error,
     observed_target = observed_target,
     observed_target_relative_error = observed_target_relative_error,
-    value_relative_error = value_relative_error
+    value_relative_error = value_relative_error,
+    volumes_compared = pre_dims[4],
+    chunk_size = as.integer(chunk_size)
   )
   return(out)
 }
@@ -1952,6 +2012,14 @@ pp_calibration_coeffs <- list(
           input_mask = "template",
           type = "quadrature_ratio_linear",
           coeffs = c(1.16494890257513, -0.381080413733339),
+          support_version = "v4-pp-entrypoints-2mm-k5-2026-10-05",
+          external_support = list(list(
+            kernel_range_mm = c(5, 5), voxel_range_mm = c(2, 2),
+            voxel_spacing_mm = c(2, 2, 2),
+            source = "pp_entrypoints_2026-10-05",
+            n_validation = 50L, n_subjects = 10L,
+            max_abs_error_mm = 0.409227471374049
+          )),
           tolerance_mm = 0.6, mode = "fsl_susan_mask",
           kernel_range_mm = c(3, 8),
           voxel_range_mm = c(2.40865896, 3.11664432),
@@ -2070,6 +2138,35 @@ pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
   }
 }
 
+#' Classify smoothing support in the fitted domain or an external validation case
+#'
+#' @param model Selected mask-specific calibration model.
+#' @param kernel_fwhm Requested smoothing kernel in millimeters.
+#' @param voxel_mm Spatial voxel sizes in millimeters.
+#' @return One of `interpolated`, `externally_validated`, or `EXTRAPOLATED`.
+#' @noRd
+pp_calibration_support <- function(model, kernel_fwhm, voxel_mm) {
+  if (isTRUE(model$input_mask_extrapolated)) return("EXTRAPOLATED")
+  voxel_geom_mm <- exp(mean(log(voxel_mm)))
+  # NIfTI spacing is stored in floating point; permit representation rounding
+  # at the documented boundaries without widening the scientific domain.
+  # Check numeric values against one inclusive support interval.
+  in_range <- function(value, bounds) {
+    all(value >= bounds[1] - 1e-6 & value <= bounds[2] + 1e-6)
+  }
+  if (in_range(kernel_fwhm, model$kernel_range_mm) &&
+      in_range(voxel_geom_mm, model$voxel_range_mm)) return("interpolated")
+  for (support in model$external_support) {
+    if (in_range(kernel_fwhm, support$kernel_range_mm) &&
+        in_range(voxel_geom_mm, support$voxel_range_mm) &&
+        (is.null(support$voxel_spacing_mm) ||
+         all(abs(voxel_mm - support$voxel_spacing_mm) <= 1e-6))) {
+      return("externally_validated")
+    }
+  }
+  "EXTRAPOLATED"
+}
+
 #' Select the calibration model for a given smoother and mask usage
 #' @keywords internal
 #' @noRd
@@ -2160,8 +2257,10 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none") {
 #' mean, and voxelwise temporal scale before the classic estimate. It is retained
 #' for diagnostic and legacy calibration use, but it must match the selected
 #' calibration. `preprocess = NULL` enforces that model-specific choice.
-#' Requests outside the model's stored kernel or voxel-size range are reported
-#' as extrapolations and cannot pass validation.
+#' Requests outside the model's fitted domain and explicit external support
+#' are reported as extrapolations and cannot pass validation. The template-mask model also
+#' supports the externally validated 5 mm kernel on isotropic 2 mm images;
+#' this case does not extend support to other kernels at that resolution.
 #'
 #' @param pre_file Path to 4D BOLD before `spatial_smooth`.
 #' @param post_file Path to 4D BOLD after `spatial_smooth`.
@@ -2294,13 +2393,8 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     )
     expected_post <- pre_f + delta_expected
     calibration_gain <- pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
-    voxel_geom_mm <- exp(mean(log(vox_mm)))
-    calibration_extrapolated <-
-      isTRUE(cal_model$input_mask_extrapolated) ||
-      fwhm_mm < cal_model$kernel_range_mm[1] ||
-      fwhm_mm > cal_model$kernel_range_mm[2] ||
-      voxel_geom_mm < cal_model$voxel_range_mm[1] ||
-      voxel_geom_mm > cal_model$voxel_range_mm[2]
+    calibration_support <- pp_calibration_support(cal_model, fwhm_mm, vox_mm)
+    calibration_extrapolated <- identical(calibration_support, "EXTRAPOLATED")
     if (is.null(tolerance_mm)) tolerance_mm <- cal_model$tolerance_mm
     checkmate::assert_number(tolerance_mm, lower = 0, finite = TRUE)
     diff_cal <- delta_observed - delta_expected
@@ -2328,7 +2422,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       expected_post, delta_expected, smoother, used_mask, input_mask, cal_model$type,
       preparation$estimator, cal_model$model_version,
       volumes_used, total_volumes,
-      if (calibration_extrapolated) "EXTRAPOLATED" else "interpolated",
+      calibration_support,
       abs(diff_cal), tolerance_mm,
       status
     )
@@ -2362,6 +2456,11 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       calibration_volume_sampling = cal_model$volume_sampling,
       calibration_smoothing_context = cal_model$smoothing_context,
       calibration_extrapolated = calibration_extrapolated,
+      calibration_support = calibration_support,
+      calibration_support_version = cal_model$support_version,
+      calibration_external_support = cal_model$external_support,
+      voxel_spacing_mm = vox_mm,
+      voxel_geom_mm = exp(mean(log(vox_mm))),
       volumes_used = volumes_used,
       total_volumes = total_volumes,
       max_volumes = max_volumes,

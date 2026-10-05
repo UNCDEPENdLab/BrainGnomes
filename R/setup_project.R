@@ -25,6 +25,9 @@ load_project <- function(input = getwd(), validate = TRUE) {
     }
     return(scfg)
   }
+  # Keep diagnostics consistent with runtime paths, including Windows short
+  # names and macOS/symlink aliases when the directory has no configuration.
+  input <- normalize_project_path(input)
   if (checkmate::test_directory_exists(input) && checkmate::test_file_exists(file.path(input, "project_config.yaml"))) {
     input <- file.path(input, "project_config.yaml") # if input is directory, look for project_config.yaml in it.
   }

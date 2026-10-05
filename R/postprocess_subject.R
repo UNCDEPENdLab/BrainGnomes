@@ -821,6 +821,7 @@ postprocess_subject_impl <- function(in_file, cfg, provenance) {
           scale_file = normalization_reference$scale_file,
           core_file = normalization_reference$core_file,
           include_frames = normalization_reference$include_frames,
+          scratch_directory = workspace_dir,
           tolerance = 1e-5
         )
       },
@@ -1211,7 +1212,10 @@ postprocess_subject_impl <- function(in_file, cfg, provenance) {
   validation_pipeline_completed <- TRUE
   provenance$record$Validation <- validation_records
   provenance$record$Resolved$IntensityReference <- if (!is.null(normalization_reference)) {
-    normalization_reference
+    intensity_reference_provenance(
+      normalization_reference, final_reference_core_file,
+      final_reference_json, final_psc_scale_file
+    )
   } else NULL
   if (validation_orchestration_started) {
     write_validation_summary()

@@ -197,9 +197,10 @@ qc_path_key <- function(path) {
   if (!length(path)) return(character())
   result <- as.character(path)
   valid <- !is.na(result) & nzchar(result)
-  result[valid] <- normalizePath(
-    path.expand(result[valid]), winslash = "/", mustWork = FALSE
-  )
+  # Audits can describe failed outputs that do not exist yet. Resolve aliases
+  # through existing ancestors just as the runtime configuration resolver does.
+  result[valid] <- vapply(result[valid], normalize_project_path, character(1),
+    USE.NAMES = FALSE)
   # Windows paths are case-insensitive even though string comparisons are not.
   if (.Platform$OS.type == "windows") result[valid] <- tolower(result[valid])
   result

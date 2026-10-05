@@ -14,7 +14,9 @@ validate_intensity_normalize(
   scale_file = NULL,
   core_file = NULL,
   include_frames = NULL,
-  tolerance = 1e-05
+  tolerance = 1e-05,
+  chunk_size = 8L,
+  scratch_directory = tempdir()
 )
 }
 \arguments{
@@ -42,6 +44,14 @@ BrainGnomes pipeline supplies this to verify the achieved target directly.}
 pipeline supplies the same vector used for \code{reference_location}.}
 
 \item{tolerance}{Maximum allowed relative numerical error for each check.}
+
+\item{chunk_size}{Maximum number of volumes read together. All volumes are
+checked; chunking bounds memory independently of run length.}
+
+\item{scratch_directory}{Writable directory for temporary decompressed
+images. Compressed images are streamed to disk once so successive chunks
+do not repeatedly decompress the beginning of a long run. Copies are
+removed on success or failure. Defaults to the R temporary directory.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).

@@ -37,6 +37,17 @@ test_that("QC path identities normalize filesystem aliases", {
   )
 })
 
+test_that("QC path identities normalize missing targets and preserve sentinels", {
+  root <- tempfile("qc-missing-identity-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  target <- file.path(root, "future", "artifact.nii.gz")
+  alias <- file.path(root, ".", "future", "artifact.nii.gz")
+  expect_identical(qc_path_key(c(alias, NA_character_, "")),
+    c(qc_path_key(target), NA_character_, ""))
+  expect_false(file.exists(target))
+})
+
 # Add one acquisition, matching derivative evidence, and an optional failed job.
 populate_qc_fixture <- function(fixture, subject = "001", run = "01", failed = FALSE) {
   cfg <- fixture$cfg
@@ -80,6 +91,31 @@ populate_qc_fixture <- function(fixture, subject = "001", run = "01", failed = F
   list(raw = raw, preproc = preproc, pp = pp, rois = rois, audit = audit,
     confounds = confounds, censor = censor, diag = diag, report = report, mriqc = mriqc)
 }
+
+test_that("QC retains failed audits for missing outputs under symlink aliases", {
+  skip_on_os("windows") # Creating directory symlinks requires extra privileges.
+  root <- tempfile("qc-real-root-")
+  dir.create(root)
+  alias <- paste0(root, "-alias")
+  on.exit(unlink(c(alias, root), recursive = TRUE))
+  skip_if_not(file.symlink(root, alias), "Directory symlinks unavailable")
+  fixture <- make_qc_fixture(alias)
+  paths <- populate_qc_fixture(fixture, failed = TRUE)
+  expect_false(file.exists(paths$pp))
+
+  result <- collect_qc_inventory(fixture$cfg)
+  expect_identical(subset(result$inventory, stage == "postprocess")$validation_status,
+    "failed")
+  expect_false(any(grepl("matching target", result$issues$message, fixed = TRUE)))
+
+  # A different missing filename must remain distinct, even under the alias.
+  audit <- jsonlite::read_json(paths$audit)
+  audit$intended_final_file <- paste0(paths$pp, "-different")
+  jsonlite::write_json(audit, paths$audit, auto_unbox = TRUE)
+  unmatched <- collect_qc_inventory(fixture$cfg)
+  expect_identical(subset(unmatched$inventory, stage == "postprocess")$validation_status,
+    "invalid")
+})
 
 test_that("empty projects produce typed inventories and retain explicit expectations", {
   fixture <- make_qc_fixture()

@@ -1720,3 +1720,64 @@ test_that("estimate_classic_fwhm returns larger FWHM for smoother data", {
   expect_true(is.finite(fwhm_smooth))
   expect_gt(fwhm_smooth, fwhm_noisy)
 })
+
+test_that("external 2 mm smoothing support is confined to the validated context", {
+  model <- pp_select_calibration("susan", TRUE, input_mask = "template")
+  expect_identical(pp_calibration_support(model, 5, c(2, 2, 2)), "externally_validated")
+  expect_identical(pp_calibration_support(model, 5, rep(2 + 1e-7, 3)), "externally_validated")
+  expect_identical(pp_calibration_support(model, 5, rep(2.7, 3)), "interpolated")
+  expect_identical(pp_calibration_support(model, 3, rep(2, 3)), "EXTRAPOLATED")
+  expect_identical(pp_calibration_support(model, 8, rep(2, 3)), "EXTRAPOLATED")
+  expect_identical(pp_calibration_support(model, 5, c(1, 2, 4)), "EXTRAPOLATED")
+  expect_identical(pp_calibration_support(model, 5, rep(1.9, 3)), "EXTRAPOLATED")
+  for (mask in c("none", "fmriprep")) {
+    other <- pp_select_calibration("susan", TRUE, input_mask = mask)
+    expect_identical(pp_calibration_support(other, 5, rep(2, 3)), "EXTRAPOLATED")
+  }
+  model$input_mask_extrapolated <- TRUE
+  expect_identical(pp_calibration_support(model, 5, rep(2, 3)), "EXTRAPOLATED")
+})
+
+test_that("external smoothing support metadata agrees with the validation evidence", {
+  path <- system.file("extdata", "spatial_smooth_calibration_support.csv", package = "BrainGnomes")
+  evidence <- utils::read.csv(path, stringsAsFactors = FALSE)
+  model <- pp_select_calibration("susan", TRUE, input_mask = "template")
+  support <- model$external_support[[1L]]
+  expect_identical(evidence$model_version, model$model_version)
+  expect_identical(evidence$support_version, model$support_version)
+  expect_equal(c(evidence$kernel_min_mm, evidence$kernel_max_mm), support$kernel_range_mm)
+  expect_equal(c(evidence$voxel_min_mm, evidence$voxel_max_mm), support$voxel_range_mm)
+  expect_equal(evidence$n_validation, support$n_validation)
+  expect_equal(evidence$n_subjects, support$n_subjects)
+  expect_equal(evidence$max_abs_error_mm, support$max_abs_error_mm)
+  expect_lte(evidence$max_abs_error_mm, model$tolerance_mm)
+})
+
+test_that("externally supported smoothing still enforces the numerical tolerance", {
+  pre_file <- tempfile(fileext = ".nii.gz")
+  post_file <- tempfile(fileext = ".nii.gz")
+  mask_file <- tempfile(fileext = ".nii.gz")
+  on.exit(unlink(c(pre_file, post_file, mask_file)), add = TRUE)
+  image <- RNifti::asNifti(array(1, c(2, 2, 2, 100)))
+  RNifti::pixdim(image) <- c(2, 2, 2, 1)
+  RNifti::writeNifti(image, pre_file)
+  RNifti::writeNifti(image, post_file)
+  RNifti::writeNifti(RNifti::asNifti(array(1, c(2, 2, 2)), reference = image), mask_file)
+  post_fwhm <- 5.5877
+  validate <- function() with_mocked_bindings(
+    validate_spatial_smooth(pre_file, post_file, mask_file,
+      fwhm_mm = 5, input_mask = "template"),
+    pp_estimate_classic_smoothness_file = function(path, ...) list(
+      geom = if (identical(path, pre_file)) 2.6135 else post_fwhm,
+      volumes_used = 96L, total_volumes = 100L,
+      volume_indices = pp_distributed_volume_indices(100L, 96L),
+      volume_sampling = "distributed"
+    )
+  )
+  result <- validate()
+  expect_true(result)
+  expect_identical(attr(result, "details")$calibration_support, "externally_validated")
+  expect_false(attr(result, "details")$calibration_extrapolated)
+  post_fwhm <- 7
+  expect_false(validate())
+})

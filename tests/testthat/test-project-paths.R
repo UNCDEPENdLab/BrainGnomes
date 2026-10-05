@@ -76,8 +76,21 @@ test_that("relative external resources resolve from the project root", {
 })
 
 test_that("absolute nonexistent external paths retain one root separator", {
-  path <- "/external-assets/atlas-that-does-not-exist.nii.gz"
+  # Use the native drive root on Windows rather than a POSIX-only rooted path.
+  root <- if (.Platform$OS.type == "windows") {
+    substr(normalizePath(tempdir(), winslash = "/"), 1L, 3L)
+  } else "/"
+  path <- paste0(root, "external-assets/atlas-that-does-not-exist.nii.gz")
   expect_identical(BrainGnomes:::normalize_project_path(path), path)
+})
+
+test_that("missing configurations report the canonical directory", {
+  root <- tempfile("missing-config-")
+  dir.create(root)
+  on.exit(unlink(root, recursive = TRUE))
+  expect_error(load_project(file.path(root, "."), validate = FALSE),
+    paste0("Cannot find file: ", normalizePath(root, winslash = "/")),
+    fixed = TRUE)
 })
 
 test_that("a duplicated relative project root fails during loading", {

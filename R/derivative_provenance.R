@@ -54,6 +54,30 @@ derivative_provenance_geometry <- function(file) {
   }, error = function(e) NULL))
 }
 
+#' Describe a published intensity reference without embedding voxel arrays
+#'
+#' @param reference Runtime intensity-reference list, possibly containing a map.
+#' @param core_file Published reference-core NIfTI path.
+#' @param sidecar_file Published intensity-reference JSON path.
+#' @param scale_file Published PSC multiplier NIfTI path, if available.
+#' @return Compact QA/settings list with relative companion paths and scale-map
+#'   header geometry. Temporary automasks and in-memory images are excluded.
+#' @noRd
+intensity_reference_provenance <- function(reference, core_file, sidecar_file,
+                                           scale_file) {
+  reference$scale_map <- NULL
+  reference$automask_file <- NULL
+  reference$core_file <- basename(core_file)
+  reference$sidecar_file <- basename(sidecar_file)
+  reference$scale_file <- if (checkmate::test_file_exists(scale_file)) {
+    basename(scale_file)
+  } else NULL
+  reference$scale_geometry <- if (!is.null(reference$scale_file)) {
+    derivative_provenance_geometry(scale_file)
+  } else NULL
+  reference
+}
+
 #' Locate the nearest containing dataset description
 #'
 #' @param file Source or derivative path.

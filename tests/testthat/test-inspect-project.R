@@ -1,6 +1,9 @@
 make_inspection_project <- function() {
   root <- tempfile("inspection-project-")
   dir.create(root)
+  # Runtime configurations canonicalize aliases; build an equally canonical
+  # fixture so strict object comparisons still detect unrelated mutations.
+  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
   log_dir <- file.path(root, "logs")
   dir.create(log_dir)
   db <- file.path(root, "tracking.sqlite")

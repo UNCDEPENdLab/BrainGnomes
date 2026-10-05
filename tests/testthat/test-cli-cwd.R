@@ -1,3 +1,24 @@
+test_that("CLI test subprocesses are headless, bounded, and report timeouts", {
+  runner <- run_brain_gnomes_cli
+  stdin_path <- NULL
+  # Isolate the shell stub in a copy of the helper's environment. The stub
+  # verifies launch arguments and simulates system2's documented timeout code.
+  launch <- function(command, args, stdout, stderr, stdin, timeout) {
+    expect_true(file.exists(stdin))
+    expect_equal(file.info(stdin)$size, 0)
+    expect_identical(timeout, 3)
+    stdin_path <<- stdin
+    writeLines("partial output", stdout)
+    writeLines("partial error", stderr)
+    124L
+  }
+  environment(runner) <- list2env(list(system2 = launch),
+    parent = environment(run_brain_gnomes_cli))
+  expect_error(runner("init", timeout = 3),
+    "CLI command timed out after 3 seconds: init", fixed = TRUE)
+  expect_false(file.exists(stdin_path))
+})
+
 test_that("CLI initialization offers guided setup or prompt-free cwd creation", {
   root <- tempfile("cli current directory ")
   dir.create(root)

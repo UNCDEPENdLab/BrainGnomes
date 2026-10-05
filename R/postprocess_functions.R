@@ -985,7 +985,8 @@ intensity_reference_frames <- function(in_file, confounds_file = NULL,
 #' @param lg Optional logger.
 #' @return List containing paths to the reference-region outputs, the run
 #'   reference intensity (`reference_location`), requested `target`, calculated
-#'   scalar factor or PSC multiplier map, logical baseline-estimation volume
+#'   scalar factor or PSC multiplier-map path (an in-memory map is returned
+#'   only when `scale_file` is empty), logical baseline-estimation volume
 #'   vector (`include_frames`), and QA summaries.
 #' @keywords internal
 prepare_intensity_reference <- function(in_file, target = 10000,
@@ -1251,7 +1252,11 @@ prepare_intensity_reference <- function(in_file, target = 10000,
   summary$automask_file <- automask_file
   summary$sidecar_file <- sidecar_file
   summary$scale_file <- scale_file
-  summary$scale_map <- if (identical(mode, "voxel_psc")) psc_result$scale else NULL
+  # A saved multiplier map is represented by its path. Only direct callers
+  # requesting no output file need to retain the in-memory NIfTI object.
+  summary$scale_map <- if (identical(mode, "voxel_psc") && !nzchar(scale_file)) {
+    psc_result$scale
+  } else NULL
   summary
 }
 

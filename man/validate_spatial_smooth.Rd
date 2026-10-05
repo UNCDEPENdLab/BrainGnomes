@@ -87,7 +87,9 @@ Optional preprocessing can remove a low-order polynomial trend, the temporal
 mean, and voxelwise temporal scale before the classic estimate. It is retained
 for diagnostic and legacy calibration use, but it must match the selected
 calibration. \code{preprocess = NULL} enforces that model-specific choice.
-Requests outside the model's stored kernel or voxel-size range are reported
-as extrapolations and cannot pass validation.
+Requests outside the model's fitted domain and explicit external support
+are reported as extrapolations and cannot pass validation. The template-mask model also
+supports the externally validated 5 mm kernel on isotropic 2 mm images;
+this case does not extend support to other kernels at that resolution.
 }
 \keyword{internal}

@@ -1,0 +1,2 @@
+model_version,support_version,mode,input_mask,kernel_min_mm,kernel_max_mm,voxel_min_mm,voxel_max_mm,voxel_spacing_mm,n_validation,n_subjects,rmse_mm,max_abs_error_mm,tolerance_mm,within_tolerance,source,validation_date,fsl_version,volume_sampling,volumes_per_run
+smoothness-calibration-v4-fullcontext-distributed96-k3-8,v4-pp-entrypoints-2mm-k5-2026-10-05,fsl_susan_mask,template,5,5,2,2,2;2;2,50,10,0.2005115683788196,0.409227471374049,0.6,TRUE,pp_entrypoints,2026-10-05,6.0.7.16,distributed_full_run,96

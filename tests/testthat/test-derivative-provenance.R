@@ -365,3 +365,50 @@ test_that("uncomputed connectivity and all-missing matrices are described accura
   expect_length(skipped, 1)
   expect_identical(tail(skipped[[1]]$Operations, 1)[[1]]$Status, "skipped")
 })
+
+test_that("PSC provenance publishes compact metadata instead of a NIfTI map", {
+  root <- tempfile("psc-provenance-")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  fixture <- make_derivative_provenance_fixture(root)
+  RNifti::writeNifti(array(1000, c(8, 8, 4, 30)), fixture$bold)
+  fixture$cfg$intensity_normalize <- list(
+    enable = TRUE, prefix = "n", mode = "voxel_psc", target = 100
+  )
+  fixture$cfg$validate_postproc_steps <- TRUE
+  fixture$cfg$stop_on_failed_validation <- TRUE
+  withr::local_envvar(log_file = file.path(root, "logs", "subject.log"))
+  output <- with_mocked_bindings(
+    postprocess_subject(fixture$bold, fixture$cfg),
+    automask = function(img, outfile, ...) {
+      RNifti::writeNifti(array(1L, c(8, 8, 4)), outfile)
+      outfile
+    },
+    intensity_normalize = function(in_file, out_file, scale_file, ...) {
+      pre <- RNifti::readNifti(in_file)
+      scale <- as.numeric(RNifti::readNifti(scale_file))
+      RNifti::writeNifti(pre * scale, out_file)
+      out_file
+    }
+  )
+  sidecar <- derivative_provenance_paths(output)$json
+  record <- read_derivative_provenance(output)$BrainGnomes
+  expect_identical(record$Status, "completed")
+  reference <- record$Resolved$IntensityReference
+  expect_null(reference$scale_map)
+  expect_null(reference$automask_file)
+  expect_true(file.exists(file.path(dirname(output), reference$scale_file)))
+  expect_true(file.exists(file.path(dirname(output), reference$core_file)))
+  expect_equal(unlist(reference$scale_geometry$dim)[2:4], c(8, 8, 4))
+  expect_lt(file.info(sidecar)$size, 30000)
+  expect_identical(record$Validation[[1]]$status, "passed")
+
+  # Even a direct caller's unsaved in-memory map must not enter provenance.
+  reference$scale_map <- RNifti::asNifti(array(0.1, c(8, 8, 4)))
+  compact <- intensity_reference_provenance(
+    reference, file.path(dirname(output), reference$core_file),
+    file.path(dirname(output), reference$sidecar_file),
+    file.path(dirname(output), reference$scale_file)
+  )
+  expect_null(compact$scale_map)
+  expect_no_error(jsonlite::toJSON(compact, auto_unbox = TRUE))
+})

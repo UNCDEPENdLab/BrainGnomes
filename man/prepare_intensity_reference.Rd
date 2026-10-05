@@ -62,7 +62,8 @@ Used only for \code{voxel_psc}; an empty string keeps the map in memory only.}
 \value{
 List containing paths to the reference-region outputs, the run
 reference intensity (\code{reference_location}), requested \code{target}, calculated
-scalar factor or PSC multiplier map, logical baseline-estimation volume
+scalar factor or PSC multiplier-map path (an in-memory map is returned
+only when \code{scale_file} is empty), logical baseline-estimation volume
 vector (\code{include_frames}), and QA summaries.
 }
 \description{

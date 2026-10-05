@@ -1412,8 +1412,8 @@ setup_intensity_normalization <- function(ppcfg = list(), fields = NULL) {
       ", .trim = TRUE), after = FALSE)
     mode_values <- c("run_scalar", "voxel_psc")
     mode_selection <- menu_safe(c(
-      "Run-wise scalar — one FSL-style multiplier for the entire run (target 10,000)",
-      "Voxelwise percent signal change — scale each voxel to its own baseline (target 100)"
+      "Run-wise scalar - one FSL-style multiplier for the entire run (target 10,000)",
+      "Voxelwise percent signal change - scale each voxel to its own baseline (target 100)"
     ), title = "Choose an intensity-normalization mode:")
     if (mode_selection == 0L) {
       stop("Intensity-normalization mode selection cancelled.", call. = FALSE)
@@ -1607,8 +1607,8 @@ setup_temporal_filter <- function(ppcfg = list(), fields = NULL) {
           - 'butterworth' uses an R-based Butterworth filter.\n"), after = FALSE)
     method_values <- c("fslmaths", "butterworth")
     method_selection <- menu_safe(c(
-      "FSL fslmaths -bptf — Gaussian-weighted filtering, commonly used for task fMRI",
-      "Butterworth — bidirectional R-based filtering, commonly used for resting-state fMRI"
+      "FSL fslmaths -bptf - Gaussian-weighted filtering, commonly used for task fMRI",
+      "Butterworth - bidirectional R-based filtering, commonly used for resting-state fMRI"
     ), title = "Choose a temporal-filtering method:")
     if (method_selection == 0L) {
       stop("Temporal-filtering method selection cancelled.", call. = FALSE)
