@@ -1195,6 +1195,7 @@ prepare_intensity_reference <- function(in_file, target = 10000,
   }
 
   if (checkmate::test_string(sidecar_file) && nzchar(sidecar_file)) {
+    assert_provenance_metadata(summary, "intensity_reference")
     dir.create(dirname(sidecar_file), recursive = TRUE, showWarnings = FALSE)
     writeLines(
       jsonlite::toJSON(summary, auto_unbox = TRUE, pretty = TRUE, digits = NA),

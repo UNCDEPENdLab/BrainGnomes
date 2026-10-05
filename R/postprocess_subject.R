@@ -165,6 +165,7 @@ evaluate_postproc_validation <- function(step_name, validator,
 write_postproc_validation_summary <- function(path, summary) {
   checkmate::assert_string(path, min.chars = 1L)
   checkmate::assert_list(summary)
+  assert_provenance_metadata(summary, "validation")
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   if (!dir.exists(dirname(path))) return(FALSE)
 

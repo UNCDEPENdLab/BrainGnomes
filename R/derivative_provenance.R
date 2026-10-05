@@ -17,7 +17,25 @@ derivative_provenance_paths <- function(file) {
 #' @noRd
 derivative_provenance_read_json <- function(file) {
   if (!checkmate::test_file_exists(file)) return(NULL)
-  jsonlite::read_json(file, simplifyVector = FALSE)
+  metadata <- jsonlite::read_json(file, simplifyVector = FALSE)
+  assert_provenance_metadata(metadata)
+  metadata
+}
+
+#' Limit provenance companions to metadata, citations, and report resources
+#'
+#' @param file Candidate companion path.
+#' @return NULL invisibly; unsupported file types or JSON image payloads raise
+#'   an error before copying. Scientific image files remain separate derivatives.
+#' @noRd
+assert_provenance_asset <- function(file) {
+  if (!grepl("\\.(json|bib|md|txt|html|tex|css|js|svg|png|jpe?g|gif|ico|woff2?|ttf|webp)$",
+             file, ignore.case = TRUE)) {
+    stop("Image/data files are not permitted as provenance assets: ", file,
+         call. = FALSE)
+  }
+  if (grepl("\\.json$", file, ignore.case = TRUE)) derivative_provenance_read_json(file)
+  invisible(NULL)
 }
 
 #' Identify a source or output using the run-provenance fingerprint format
@@ -170,6 +188,7 @@ derivative_provenance_upstream_assets <- function(file, metadata) {
   # optional assets are ignored. Updates the map and returns NULL invisibly.
   add <- function(path, relative) {
     if (checkmate::test_file_exists(path)) {
+      assert_provenance_asset(path)
       files[[relative]] <<- normalizePath(path, winslash = "/", mustWork = TRUE)
     }
     invisible(NULL)
@@ -506,6 +525,9 @@ derivative_provenance_publish <- function(tracker) {
   checkmate::assert_file_exists(file)
   paths <- derivative_provenance_paths(file)
   record <- tracker$record
+  # Validate all inputs before creating companion files or copying assets.
+  assert_provenance_metadata(record)
+  invisible(lapply(tracker$assets, assert_provenance_asset))
   # Include namespaces loaded by the actual operation (for example corpcor),
   # while retaining configured container identities resolved by the caller.
   record$Software <- modifyList(record$Software, derivative_provenance_software())
@@ -634,6 +656,7 @@ derivative_provenance_check_companions <- function(file, metadata) {
     if (!startsWith(target, paste0(root, "/")) || !checkmate::test_file_exists(target)) {
       stop("Missing or unsafe provenance asset: ", asset$File, call. = FALSE)
     }
+    assert_provenance_asset(target)
     if (!identical(unname(tools::md5sum(target)), asset$Original$checksum)) {
       stop("Provenance asset does not match its recorded checksum: ", asset$File, call. = FALSE)
     }
@@ -710,6 +733,7 @@ export_derivative_provenance <- function(file, output_dir, datalad = NULL) {
     if (!startsWith(source, paste0(source_root, "/"))) {
       stop("Unsafe provenance companion: ", relative, call. = FALSE)
     }
+    assert_provenance_asset(source)
     target <- file.path(staging, relative)
     dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
     if (!file.copy(source, target)) stop("Cannot copy provenance companion: ", source)

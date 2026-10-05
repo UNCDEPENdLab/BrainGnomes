@@ -1,5 +1,9 @@
 # BrainGnomes (development version)
 
+* Reject image objects, spatial arrays, and binary payloads before writing
+  provenance JSON, configuration snapshots, validation records, or QC inventories.
+  Keep image files out of provenance companion directories.
+
 * Keep intensity-reference NIfTI voxel arrays out of derivative JSON; record
   published companion paths and compact header geometry instead. Validate
   intensity normalization across all volumes in bounded chunks to avoid

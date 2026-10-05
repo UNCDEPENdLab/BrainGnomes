@@ -12,6 +12,7 @@
 #' @export
 write_qc_inventory <- function(x, output_dir) {
   checkmate::assert_class(x, "bg_qc_inventory")
+  assert_provenance_metadata(x, "qc_inventory")
   checkmate::assert_string(output_dir, min.chars = 1L)
   if (dir.exists(output_dir) && length(list.files(output_dir, all.files = TRUE,
       no.. = TRUE))) stop("output_dir must be new or empty; use a new snapshot directory.", call. = FALSE)

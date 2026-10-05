@@ -412,3 +412,45 @@ test_that("PSC provenance publishes compact metadata instead of a NIfTI map", {
   expect_null(compact$scale_map)
   expect_no_error(jsonlite::toJSON(compact, auto_unbox = TRUE))
 })
+
+test_that("attempts and companion publication refuse image payloads and image assets", {
+  root <- tempfile("guarded-provenance-")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  fixture <- make_derivative_provenance_fixture(root)
+  output <- file.path(fixture$cfg$output_dir, "sub-01_desc-clean_bold.nii.gz")
+  file.copy(fixture$bold, output)
+  tracker <- derivative_provenance_new(output, fixture$bold, "postprocessing")
+  tracker$record$Resolved$UnexpectedImage <- RNifti::readNifti(fixture$bold)
+  for (status in c("completed", "failed")) {
+    expect_error(derivative_provenance_attempt(tracker, status), "UnexpectedImage")
+  }
+  expect_error(derivative_provenance_publish(tracker), "UnexpectedImage")
+  expect_false(dir.exists(derivative_provenance_paths(output)$directory))
+  expect_false(file.exists(derivative_provenance_paths(output)$json))
+  tracker$record$Resolved$UnexpectedImage <- NULL
+  tracker$assets[["upstream/scale.nii.gz"]] <- fixture$bold
+  expect_error(derivative_provenance_publish(tracker), "provenance assets")
+  expect_false(dir.exists(derivative_provenance_paths(output)$directory))
+  tracker$assets[["upstream/scale.nii.gz"]] <- NULL
+  expect_no_error(derivative_provenance_publish(tracker))
+  expect_no_error(derivative_provenance_attempt(tracker, "completed"))
+  companions <- list.files(derivative_provenance_paths(output)$directory,
+                          recursive = TRUE, full.names = TRUE)
+  expect_false(any(grepl("\\.nii(\\.gz)?$", companions)))
+  for (file in companions[grepl("\\.json$", companions)]) {
+    expect_no_error(derivative_provenance_read_json(file))
+  }
+})
+
+test_that("upstream JSON cannot reintroduce flattened or nested voxel payloads", {
+  root <- tempfile("upstream-image-metadata-")
+  on.exit(unlink(root, recursive = TRUE), add = TRUE)
+  fixture <- make_derivative_provenance_fixture(root)
+  sidecar <- derivative_provenance_paths(fixture$bold)$json
+  jsonlite::write_json(list(voxel_values = as.numeric(1:24)), sidecar)
+  expect_error(derivative_provenance_new("output.nii.gz", fixture$bold,
+               "postprocessing"), "voxel_values")
+  jsonlite::write_json(list(Data = array(1:24, c(2, 3, 4))), sidecar)
+  expect_error(derivative_provenance_new("output.nii.gz", fixture$bold,
+               "postprocessing"), "metadata\\$Data")
+})

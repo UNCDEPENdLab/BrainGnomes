@@ -10,7 +10,64 @@ run_provenance_file <- function(scfg, run_id) {
   file.path(run_provenance_directory(scfg, run_id), "provenance.json")
 }
 
+#' Reject image payloads before serializing provenance metadata
+#'
+#' @param value Metadata tree containing settings, identities, headers, or QA summaries.
+#' @param path Field path used to identify a rejected payload.
+#' @return NULL invisibly; image objects, spatial arrays, scientific matrices,
+#'   and binary payloads raise an error. Header transforms and sampled locations
+#'   remain valid metadata.
+#' @noRd
+assert_provenance_metadata <- function(value, path = "metadata") {
+  # Map a numeric vector/list to its array rank, or NA for a named record.
+  # Named records interrupt the structure so lists of records are not spatial data.
+  numeric_rank <- function(x) {
+    if (is.numeric(x) || is.logical(x)) return(if (length(x) > 1L) 1L else 0L)
+    if (!is.list(x) || !is.null(names(x)) || !length(x)) return(NA_integer_)
+    ranks <- vapply(x, numeric_rank, integer(1))
+    if (anyNA(ranks)) return(NA_integer_)
+    1L + max(ranks)
+  }
+  rank <- numeric_rank(value)
+  image <- inherits(value, c("niftiImage", "internalImage", "nifti", "anlz"))
+  field <- tail(strsplit(path, "$", fixed = TRUE)[[1L]], 1L)
+  numeric_matrix <- (is.matrix(value) && (is.numeric(value) || is.logical(value))) ||
+    (!is.na(rank) && rank == 2L)
+  # Numeric matrices could be voxel-by-time data. Allow only the documented
+  # coordinate/transform fields; scientific matrices belong in derivative files.
+  shape <- if (is.matrix(value)) dim(value) else if (numeric_matrix) {
+    c(length(value), length(value[[1L]]))
+  } else integer()
+  metadata_matrix <- (field == "normalized_coords" && length(shape) == 2L &&
+    shape[2L] == 3L) || (field %in% c("Transform", "qform", "sform") &&
+    identical(as.integer(shape), c(4L, 4L)))
+  spatial <- length(dim(value)) >= 3L || (!is.na(rank) && rank >= 3L) ||
+    (numeric_matrix && !metadata_matrix)
+  binary <- is.raw(value) || typeof(value) %in% c("externalptr", "environment")
+  # These names identify voxel payloads even when callers flatten an image.
+  payload <- field %in% c("scale_map", "voxel_data", "voxel_values", "image_data",
+                         "baseline_map") && !is.null(value)
+  if (image || spatial || binary || payload) {
+    stop("Voxel/image or binary data are not permitted in provenance: ", path,
+         ". Store image data in a NIfTI file and record its path/header.", call. = FALSE)
+  }
+  if (is.list(value)) {
+    labels <- names(value)
+    if (is.null(labels)) labels <- paste0("[", seq_along(value), "]")
+    for (i in seq_along(value)) {
+      assert_provenance_metadata(value[[i]], paste0(path, "$", labels[[i]]))
+    }
+  }
+  # RDS snapshots also preserve custom attributes. Check those for payloads;
+  # ordinary shape/class attributes and data.table's bookkeeping pointer are safe.
+  extra <- attributes(value)
+  extra[c("names", "class", "dim", "dimnames", "row.names", ".internal.selfref")] <- NULL
+  if (length(extra)) assert_provenance_metadata(extra, paste0(path, "$attributes"))
+  invisible(NULL)
+}
+
 write_json_atomic <- function(value, file) {
+  assert_provenance_metadata(value)
   dir.create(dirname(file), recursive = TRUE, showWarnings = FALSE)
   temp <- tempfile("provenance-", tmpdir = dirname(file), fileext = ".json")
   on.exit(if (file.exists(temp)) unlink(temp), add = TRUE)
@@ -28,6 +85,7 @@ write_json_atomic <- function(value, file) {
 }
 
 write_yaml_atomic <- function(value, file) {
+  assert_provenance_metadata(value)
   dir.create(dirname(file), recursive = TRUE, showWarnings = FALSE)
   temp <- tempfile("run-config-", tmpdir = dirname(file), fileext = ".yaml")
   on.exit(if (file.exists(temp)) unlink(temp), add = TRUE)

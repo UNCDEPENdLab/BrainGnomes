@@ -418,6 +418,7 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
     run_dir <- file.path(scfg$metadata$log_directory, "runs", sequence_id)
     snap_file <- file.path(run_dir, "run_project_snapshot.rds")
     dir.create(run_dir, showWarnings = FALSE, recursive = TRUE)
+    assert_provenance_metadata(snapshot, "run_project_snapshot")
     saveRDS(snapshot, snap_file)
 
     # Lightweight controller job to schedule subjects after flywheel completes

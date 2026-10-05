@@ -189,6 +189,7 @@ job_contract_artifacts <- function(script, env_variables, tracking_args,
 }
 
 write_job_contract_once <- function(value, file, label) {
+  assert_provenance_metadata(value, label)
   if (file.exists(file)) {
     stop(label, " already exists and will not be replaced: ", file, call. = FALSE)
   }
