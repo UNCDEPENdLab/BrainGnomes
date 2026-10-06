@@ -1,14 +1,16 @@
-# Validate spatial smoothing (classic FWHM pre vs post, calibration-corrected)
+# Validate spatial smoothing with calibrated FWHM or operator replay
 
-Measures the observed FWHM change using `estimate_classic_fwhm()` and
-compares it to the calibration-predicted delta for the requested kernel
-size. The calibration accounts for the fact that fMRI data are
-non-Gaussian and the naive first-differences FWHM estimate has a
-systematic bias that depends on smoother type and whether masking was
-used. The calibrated preprocessing mode is selected together with the
-calibration model. The production masked-SUSAN calibration stores and
-enforces the estimator preparation selected by cross-dataset validation;
-the estimator is not chosen at validation time.
+Uses an accepted FWHM calibration or compares sampled output with the
+requested spatial operator. The calibration mode measures the observed
+FWHM change using `estimate_classic_fwhm()` and compares it to the
+calibration-predicted delta for the requested kernel size. The
+calibration accounts for the fact that fMRI data are non-Gaussian and
+the naive first-differences FWHM estimate has a systematic bias that
+depends on smoother type and whether masking was used. The calibrated
+preprocessing mode is selected together with the calibration model. The
+production masked-SUSAN calibration stores and enforces the estimator
+preparation selected by cross-dataset validation; the estimator is not
+chosen at validation time.
 
 ## Usage
 
@@ -26,7 +28,9 @@ validate_spatial_smooth(
   polydeg = NULL,
   demean = NULL,
   unif = NULL,
-  max_volumes = 96L
+  max_volumes = 96L,
+  validation_mode = c("auto", "calibration", "replay"),
+  fsl_img = NULL
 )
 ```
 
@@ -72,9 +76,10 @@ validate_spatial_smooth(
 
 - tolerance_mm:
 
-  Tolerance in mm for `|observed_post - expected_post|`. `NULL` (the
-  default) uses the program/mask-specific cross-validation tolerance
-  stored with the calibration model.
+  Tolerance in mm for `|observed_post - expected_post|`. For continuous
+  models an explicit value also applies to each axis. `NULL` (the
+  default) uses the selected calibration's empirical limit; continuous
+  limits scale separately by each axis and geometric voxel spacing.
 
 - preprocess:
 
@@ -102,11 +107,23 @@ validate_spatial_smooth(
   every timepoint, and `Inf` uses all volumes. A calibrated model may
   require its stored cap and reject a different override.
 
+- validation_mode:
+
+  `"auto"` selects the validated check for the grid and operation,
+  replaying in-domain outputs if their FWHM comparison fails;
+  `"calibration"` requires an accepted FWHM response model; `"replay"`
+  compares distributed output volumes with the requested operator.
+
+- fsl_img:
+
+  Optional FSL container for SUSAN operator replay. Gaussian replay
+  requires the corresponding AFNI executable in the runtime environment.
+
 ## Value
 
 A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
-Attributes: `message`, `details` (pre/post/delta/expected_delta/diff
-FWHM mm).
+Attributes: `message`, `details` (compact calibration or operator-replay
+QA).
 
 ## Details
 
@@ -124,15 +141,43 @@ It is retained for diagnostic and legacy calibration use, but it must
 match the selected calibration. `preprocess = NULL` enforces that
 model-specific choice. Requests outside the model's fitted domain and
 explicit external support are reported as extrapolations and cannot pass
-validation. Isotropic 2 mm images use separately fitted models for 3–8
-mm kernels: masked-threshold SUSAN with unmasked, fMRIPrep-masked, or
-template-masked input, and Gaussian smoothing with or without an
-automask on otherwise unmasked input. These models require
-`max_volumes = 96` and the calibrated estimator preparation. The three
-internal cohorts were resampled to 2 mm; ten held-out subjects had
-genuine 2 mm fMRIPrep outputs. Each 2 mm error limit is established from
-internal cohort-transfer checks, capped at 1 mm, and verified on the
-held-out subjects. Coarser-resolution models retain their original
-limits. An image with no measurable smoothness increase fails even when
-its error falls within the calibrated tolerance. Diagnostic SUSAN
-without a threshold mask has no isotropic 2 mm calibration.
+coefficient-based validation. Continuous-domain checks cover each voxel
+axis from 1.8 through 4 mm, including anisotropic grids, and kernels
+1.5–3 times geometric mean voxel spacing. For example, 2.1 mm isotropic
+data support 3.15–6.3 mm kernels, and 2x2x4 mm data support about
+3.78–7.56 mm kernels. Directional and geometric FWHM errors must all
+meet limits established by calibration-only cohort and spacing
+cross-validation, capped at half a voxel. Independent subjects verify
+these limits; most new grids are controlled resamplings of real BOLD
+rather than native acquisition resolutions. Separate checks cover all
+three input-mask conditions for masked-threshold SUSAN and both Gaussian
+implementations. These models use cubic detrending, demeaning, temporal
+MAD scaling, and 96 distributed volumes when their FWHM response is
+accepted. Conditions failing either accuracy check require operator
+replay instead. Replay compares all spatial values in 96 distributed
+output volumes against the matching operator, with a numerical tolerance
+of 1e-5. SUSAN replay preserves the full-run brightness threshold,
+temporal mean and extents; Gaussian replay uses `3dBlurInMask` or
+`3dmerge` as appropriate. Replay adds computation and requires the same
+FSL/AFNI runtime as smoothing. It does not relax FWHM error limits. In
+the current catalog, template-masked-input SUSAN has an accepted smooth
+response function. SUSAN with unmasked or fMRIPrep-masked input and all
+six Gaussian contexts use operator replay over the continuous domain. In
+`"auto"` mode, an in-domain FWHM failure also triggers operator replay.
+The failed FWHM comparison remains in the QA details alongside the
+replay result. `"calibration"` mode reports the FWHM failure directly.
+Pre- and post-smoothing images must preserve spatial header geometry.
+Outside this relative-kernel band, previously validated legacy models
+may still apply within their original domains. Isotropic 2 mm images use
+separately fitted models for 3–8 mm kernels: masked-threshold SUSAN with
+unmasked, fMRIPrep-masked, or template-masked input, and Gaussian
+smoothing with or without an automask on otherwise unmasked input. These
+models require `max_volumes = 96` and the calibrated estimator
+preparation. The three internal cohorts were resampled to 2 mm; ten
+held-out subjects had genuine 2 mm fMRIPrep outputs. Each 2 mm error
+limit is established from internal cohort-transfer checks, capped at 1
+mm, and verified on the held-out subjects. Coarser-resolution models
+retain their original limits. An image with no measurable smoothness
+increase fails even when its error falls within the calibrated
+tolerance. Diagnostic SUSAN without a threshold mask has no isotropic 2
+mm calibration.

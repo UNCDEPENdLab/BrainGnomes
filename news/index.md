@@ -2,6 +2,21 @@
 
 ## BrainGnomes (development version)
 
+- Extend spatial smoothing checks to isotropic and anisotropic voxel
+  spacings of 1.8–4 mm and kernels 1.5–3 times geometric mean voxel
+  spacing. Use smooth directional FWHM response functions only where
+  calibration and independent validation meet the half-voxel error
+  limit. Use operator replay for conditions whose FWHM response cannot
+  meet that limit, preserving full-run SUSAN parameters and checking
+  Gaussian output with the matching AFNI operator. Replay compares 96
+  distributed volumes in bounded chunks, rejects incorrect kernels and
+  unchanged outputs, and records only compact QA metadata. Automatic
+  checks also replay in-domain outputs whose FWHM comparison fails,
+  retaining the failed comparison and the replay result separately in
+  QA. The current continuous coefficient model passes for
+  template-masked-input SUSAN; the other eight production contexts
+  require replay.
+
 - Calibrate SUSAN and Gaussian spatial validation for isotropic 2 mm
   images with 3–8 mm kernels using separate resolution-specific fits.
   Verify those fits on held-out subjects, including genuine 2 mm
