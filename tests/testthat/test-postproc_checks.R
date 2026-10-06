@@ -890,8 +890,11 @@ test_that("spatial replay sampling scales with E2E-like matrix dimensions", {
 
 # --- validate_spatial_smooth --------------------------------------------------
 
-test_that("validate_spatial_smooth passes when post FWHM exceeds pre FWHM", {
+test_that("legacy spatial validation reports an observed FWHM increase", {
   skip_if_not_installed("RNifti")
+  calibration <- pp_calibration_coeffs
+  calibration$gaussian$classic$mask$continuous_models <- NULL
+  local_mocked_bindings(pp_calibration_coeffs = calibration)
 
   set.seed(701)
   nx <- 16; ny <- 16; nz <- 8; nt <- 10
@@ -944,8 +947,14 @@ test_that("validate_spatial_smooth passes when post FWHM exceeds pre FWHM", {
   expect_true("delta_diff_mm" %in% names(details))
 })
 
-test_that("validate_spatial_smooth calibration returns expected structure", {
+test_that("legacy spatial calibration returns expected structure", {
   skip_if_not_installed("RNifti")
+  calibration <- pp_calibration_coeffs
+  calibration$susan$classic$mask <- lapply(calibration$susan$classic$mask, function(model) {
+    model$continuous_models <- NULL
+    model
+  })
+  local_mocked_bindings(pp_calibration_coeffs = calibration)
 
   set.seed(702)
   nx <- 16; ny <- 16; nz <- 8; nt <- 5
@@ -1756,6 +1765,7 @@ test_that("external smoothing support metadata agrees with the validation eviden
 test_that("legacy external support still enforces the numerical tolerance", {
   calibration <- pp_calibration_coeffs
   calibration$susan$classic$mask$template$grid_models <- NULL
+  calibration$susan$classic$mask$template$continuous_models <- NULL
   local_mocked_bindings(pp_calibration_coeffs = calibration)
   pre_file <- tempfile(fileext = ".nii.gz")
   post_file <- tempfile(fileext = ".nii.gz")
@@ -1827,6 +1837,7 @@ test_that("spatial validation selects and enforces the grid model", {
     voxel_spacing_mm = c(2, 2, 2), max_volumes = 96L
   )
   calibration$gaussian$classic$mask$grid_models <- list(grid)
+  calibration$gaussian$classic$mask$continuous_models <- NULL
   files <- c(tempfile(fileext = ".nii"), tempfile(fileext = ".nii"),
              tempfile(fileext = ".nii"))
   on.exit(unlink(files), add = TRUE)
@@ -1907,6 +1918,8 @@ test_that("2 mm models require positive kernels and validation below the limit",
 })
 
 test_that("a calibrated small-kernel tolerance never accepts unchanged images", {
+  calibration <- pp_calibration_coeffs
+  calibration$susan$classic$mask$none$continuous_models <- NULL
   files <- c(tempfile(fileext = ".nii"), tempfile(fileext = ".nii"),
              tempfile(fileext = ".nii"))
   on.exit(unlink(files), add = TRUE)
@@ -1917,15 +1930,18 @@ test_that("a calibrated small-kernel tolerance never accepts unchanged images", 
   RNifti::writeNifti(RNifti::asNifti(array(1, c(2, 2, 2)), reference = image), files[3])
   with_mocked_bindings({
     result <- validate_spatial_smooth(files[1], files[2], files[3],
-                                     fwhm_mm = 3, smoother = "susan", input_mask = "none")
+                                     fwhm_mm = 3, smoother = "susan", input_mask = "none",
+                                     tolerance_mm = 10)
     expect_false(result)
     details <- attr(result, "details")
     expect_true(details$within_tolerance)
     expect_false(details$calibration_extrapolated)
     expect_false(details$smoothness_increased)
     expect_match(attr(result, "message"), "no measurable smoothness increase")
-  }, pp_estimate_classic_smoothness_file = function(...) list(
-    geom = 4.16, volumes_used = 96L, total_volumes = 100L,
+  }, pp_calibration_coeffs = calibration,
+  pp_estimate_classic_smoothness_file = function(...) list(
+    geom = 4.16, geom_axes = rep(4.16, 3L),
+    volumes_used = 96L, total_volumes = 100L,
     volume_indices = pp_distributed_volume_indices(100L, 96L),
     volume_sampling = "distributed"
   ))

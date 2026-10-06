@@ -1,0 +1,193 @@
+Final spatial-validation outcome, 05 Oct 2026
+
+Supported domain: each voxel axis 1.8--4 mm; scalar kernel 1.5--3 times
+geometric mean spacing. Final design: 296 subject/grid jobs, 22 subjects,
+360 calibration and 1120 held-out observations per context, nine contexts.
+Template-masked-input SUSAN passes coefficient CV and independent acceptance
+at 0.45 voxel. The other eight contexts require operator replay. All eighteen
+full-run replay cases pass with zero numerical error; all 36 wrong-kernel
+and unchanged controls are rejected. Most target grids are controlled
+resamplings, not native acquisitions at every target spacing.
+
+The original protocol and dated development addenda follow to preserve the
+calibration/validation separation. Earlier design counts are superseded by
+the final coverage addendum; failed FWHM references remain explicitly recorded.
+
+Continuous spatial-smoothness calibration protocol, initiated 05 Oct 2026
+
+Scope confirmed by user: every voxel spacing between 1.8 and 4 mm, including
+anisotropic grids; requested scalar kernel divided by geometric mean voxel
+spacing between 1.5 and 3. Kernels therefore span 2.7--12 mm across the domain.
+Axis-level FWHM is modeled explicitly; anisotropy is not collapsed into a single
+spacing before prediction. The resulting geometric FWHM remains a reported QA
+metric alongside directional errors.
+
+Production conditions: SUSAN with automask threshold and input mask none /
+fMRIPrep / TemplateFlow res-01; Gaussian AFNI 3dBlurInMask / 3dmerge under each
+of those three input-mask conditions (nine condition-specific models).
+FSL image 6.0.7.16; AFNI 26.0.00; R 4.5.1. Match full-run brightness threshold,
+mean image, temporal-minimum extents, masks, distributed 96-volume sampling,
+cubic detrending, demeaning, and temporal MAD scaling. Reconstruct sampled
+NIfTI headers to remove stale AFNI temporal extensions.
+
+22 subjects across four cohorts: six designated internal calibration subjects
+(two per internal cohort), six internal held-out subjects, and ten external
+fMRIPrep25.2.5 subjects. These are the same subject partition used for the 2 mm
+experiment. Six subjects provide calibration measurements at twelve grid
+profiles spanning the cube, including all distinct boundary-corner shapes.
+Sixteen held-out subjects provide measurements at twelve validation profiles,
+including intermediate isotropic resolutions, intermediate anisotropy,
+extreme-axis permutations, domain corners and native res-2 outputs.
+Most new grids are controlled AFNI-cubic resamplings of real preprocessed BOLD;
+this does not imply that all target spacings were native acquisition sizes.
+Five kernel ratios per grid. Calibration: 1.5, 1.875, 2.25, 2.625, 3.
+Held out: 1.5, 1.8, 2.25, 2.7, 3 (intermediate kernel ratios are never fitted).
+264 subject/grid jobs; 72 calibration jobs and 192 held-out jobs.
+
+Model input: directional pre-smoothing FWHM, directional voxel spacing,
+scalar requested kernel, geometric mean spacing, and symmetric anisotropy.
+For each axis, q = pre-FWHM / axis spacing and r = kernel / axis spacing.
+Candidates share coefficients across axes to preserve permutation symmetry.
+Resolution features are powers through degree 0, 1, or 2 of log(axis spacing /
+2.5 mm); optional baseline feature log(q); optional anisotropy features
+log(axis spacing / geometric mean) and mean squared log-spacing deviations.
+Degree and feature inclusion are chosen only by internal-calibration cross
+validation. The candidate families predict positive effective kernels with
+strictly increasing response to the requested kernel:
+  power: e_axis / spacing = exp(A) * r^p,
+    with p = 0.3 + 2.7 * logistic(B);
+  affine: e_axis / spacing = exp(A) + exp(B) * (r - 0.75).
+Here A and B are smooth linear combinations of the selected features. The
+smallest axis ratio in the declared voxel/kernel domain exceeds 0.75, so the
+affine family is positive everywhere in the domain. Expected post-FWHM per
+axis is sqrt(pre-FWHM_axis^2 + e_axis^2); combine directional expectations by
+geometric mean. Smooth functions are fitted directly to measured operator
+responses, without interpolating independently estimated old coefficients.
+
+Fit by minimizing squared directional post-FWHM error divided by directional
+voxel spacing. All three axes of an observation stay in the same split.
+Calibrate using six subjects only. Rank candidate complexity and normalized
+prediction errors using leave-one-internal-cohort-out and leave-one-training-
+spacing-out checks; neither held-out subjects nor held-out grid/kernel results
+enter fitting, feature selection, or tolerance selection. Freeze the selected
+candidate before revealing held-out aggregate scores. If the selected model
+fails held-out acceptance, do not tune it against those subjects and claim an
+independent validation pass.
+
+Accuracy policy declared before broad measurements: derive each condition's
+normalized tolerance from the largest internal-calibration cross-validation
+error (including directional and geometric errors), rounded up to 0.05 voxel,
+with a maximum permitted limit of 0.5 voxel. Convert to millimeters separately
+for each axis and for the geometric QA summary. Every held-out directional
+and geometric error must meet its corresponding limit. This is an empirical
+acceptance limit, not a confidence bound or a guarantee for future cohorts.
+A candidate that requires a larger limit is not promoted. Expected response
+must remain positive, monotone in kernel, and finite throughout a dense domain
+check. Unchanged-image and deliberately wrong-kernel controls must fail.
+
+Interactive pilot compares low-ratio anisotropic sample smoothing with a full
+production spatial_smooth() output. After fitting, independent full-run
+replays cover anisotropic low-ratio and coarse-grid upper-kernel settings.
+Unit tests check smooth continuity, axis permutations, boundary/domain gates,
+model selection, native/legacy fallback, preparation invariants and numerical
+negative controls. Serialized evidence includes only aggregate/directional
+QA scalars, compact headers and model parameters. Working voxel data remain
+NIfTI scratch files and are removed after jobs. No voxel payloads enter JSON,
+CSV, RDS, or provenance companions.
+
+Optimizer/selection detail frozen before broad calibration scores: analytic
+L-BFGS-B gradients, coefficient bounds -6 to 6, three fixed starting powers
+0.7/1.2/1.7 or slopes 0.5/1/1.5, max 1500 iterations. Admissible candidates
+must converge without touching a coefficient bound in any fold, and have
+worst normalized CV error <= 0.5 voxel. Among candidates within 0.01 voxel
+of the smallest worst-case CV error, choose the fewest parameters, then CV
+RMSE, then deterministic candidate order. Five spacing folds exclude every
+calibration grid having any axis at 1.8, 2, 2.4, 3.2, or 4 mm respectively.
+Three cohort folds exclude each internal cohort in turn. Fit all calibration
+measurements after choosing the candidate, then freeze its parameters before
+reading any held-out observations. Failed held-out acceptance is reported.
+
+Design coverage addendum, before broad model scores were read: add both
+remaining thin-axis boundary permutations, 4x1.8x4 and 4x4x1.8 mm, for all
+sixteen held-out subjects (32 additional jobs). This tests every orientation
+of both extreme anisotropic corner shapes. Calibration data, candidate forms,
+selection rules, and accuracy policy are unchanged. The final design has
+296 subject/grid jobs: 72 calibration and 224 held out, with fourteen held-out
+grid profiles, 360 calibration and 1120 held-out observations per context.
+Final totals: 13,320 geometric measurements and 39,960 directional measurements
+across nine conditions. The original 264-row manifest stays immutable; the
+additional jobs use manifest-permutations.csv. Validation reads the combined
+manifest-validation.csv. No held-out model error informed this addition.
+
+Calibration-only model development addendum: the first 24 candidate forms
+failed the half-voxel cross-validation ceiling for some conditions. Before
+reading any held-out model scores, add two smooth, permutation-symmetric
+baseline summaries: mean log(pre-FWHM / spacing) across the three axes, and
+the variance of those three log ratios. Three-dimensional filtering can change
+one directional gradient through filtering along the other axes; axis-local
+baseline information alone does not capture this coupling. Include these
+features jointly as an option only for baseline-enabled candidates. This adds
+12 candidate forms (36 total); the previous 24 remain eligible. Keep the same
+cross-validation splits, optimizer, selection rule and half-voxel ceiling.
+Refit only the six calibration subjects; freeze final parameters before any
+held-out scoring. This development does not use held-out response errors.
+
+Further calibration-only development: residual diagnoses show the largest
+errors at the upper kernel ratio on anisotropic grids, with systematic changes
+across baseline smoothness and resolution. Add a squared directional log
+baseline and, when resolution is included, its product with log resolution.
+Together with degree-two resolution this gives a full quadratic in resolution
+and baseline, while the effective-kernel families remain positive and monotone.
+Add these terms only to baseline-enabled forms without the coupled summaries:
+12 further forms, 48 total. All earlier forms remain eligible; selection rules,
+cohort/spacing folds and the half-voxel ceiling stay unchanged. Held-out model
+scores remain unread. A separate eighth-power training-loss diagnostic tests
+whether balancing large calibration residuals improves transfer; it does not
+change the final fitting protocol unless separately recorded before validation.
+
+Validation-method addendum before independent FWHM scores: retain the
+half-voxel acceptance ceiling. The original coefficient-only plan cannot meet
+that ceiling for every production condition. Freeze the best calibration-only
+reference fits for all nine conditions, including rejected fits marked as
+reference-only, then score them on the independent subjects without refitting.
+Only a response passing both internal CV and independent FWHM acceptance can
+become a coefficient-based validator. Conditions failing either stage instead
+require operator replay; failed coefficients are never accepted by loosening
+the limit. Replay compares 96 distributed observed volumes with the requested
+FSL/AFNI operator at numerical tolerance 1e-5, preserving full-run SUSAN
+brightness threshold, temporal mean and temporal-minimum extents. It compares
+all spatial values, including outside the measurement mask, in eight-volume
+chunks. Working images and buffers are never included in provenance.
+Two independent full-run replays per production condition cover 4x1.8x1.8 mm
+with ratio 1.5 and 4 mm isotropic with ratio 3 (12 mm kernel), and must accept
+the actual outputs while rejecting wrong-kernel and unchanged-image controls.
+The operator's use of actual NIfTI voxel spacing supplies continuous grid
+coverage without claiming that an inaccurate FWHM reference has calibrated it.
+Published evidence distinguishes FWHM reference errors from replay acceptance.
+
+Runtime fallback policy: auto mode first uses an accepted response function
+where available. A new in-domain output can still miss that empirical FWHM
+reference; in that case replay the requested operator without changing any
+coefficient or FWHM tolerance. Preserve the failed reference comparison,
+trigger and numerical replay result separately in compact QA. Strict
+calibration mode reports the original failure. Outside-domain or unknown-mask
+legacy references are not rescued by this automatic policy. This fallback
+is a verification of the applied operator, not a claim that the reference
+FWHM error met its acceptance limit.
+
+Independent outcome (parameters and limits unchanged): the template-masked
+SUSAN reference passes both internal CV and all 1120 held-out observations.
+Its largest held-out directional/geometric error is 0.4050872 voxel with
+a 0.45-voxel acceptance limit. The other eight contexts fail internal CV or
+independent FWHM acceptance and are designated operator-replay checks.
+This is not a successful universal coefficient calibration: replay verifies
+the requested operation without accepting the failed response references.
+All 296 measurement jobs completed with exit zero and no operator failures.
+
+Full-run controls completed successfully: 18 matching-operator comparisons
+(two per context) have zero numerical replay error; all 36 wrong-kernel and
+unchanged-image controls fail as required. The accepted template-masked SUSAN
+FWHM response also passes the two full-run-equivalent statistic checks
+(maximum normalized errors 0.09804383 and 0.12277756); its wrong-kernel
+controls exceed 1.4 voxels, and unchanged controls fail. No parameters or
+limits were changed after the independent outcomes were read.

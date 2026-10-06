@@ -2,7 +2,7 @@
 % Please edit documentation in R/postproc_checks.R
 \name{validate_spatial_smooth}
 \alias{validate_spatial_smooth}
-\title{Validate spatial smoothing (classic FWHM pre vs post, calibration-corrected)}
+\title{Validate spatial smoothing with calibrated FWHM or operator replay}
 \usage{
 validate_spatial_smooth(
   pre_file,
@@ -17,7 +17,9 @@ validate_spatial_smooth(
   polydeg = NULL,
   demean = NULL,
   unif = NULL,
-  max_volumes = 96L
+  max_volumes = 96L,
+  validation_mode = c("auto", "calibration", "replay"),
+  fsl_img = NULL
 )
 }
 \arguments{
@@ -43,8 +45,9 @@ different input-mask condition is reported as an extrapolation but cannot
 pass validation, because masking materially changes the calibrated gain.}
 
 \item{tolerance_mm}{Tolerance in mm for \verb{|observed_post - expected_post|}.
-\code{NULL} (the default) uses the program/mask-specific cross-validation
-tolerance stored with the calibration model.}
+For continuous models an explicit value also applies to each axis.
+\code{NULL} (the default) uses the selected calibration's empirical limit;
+continuous limits scale separately by each axis and geometric voxel spacing.}
 
 \item{preprocess}{Logical or \code{NULL}. \code{NULL} (the default) uses the preprocessing
 mode recorded by the selected calibration model. An explicit value must
@@ -60,13 +63,23 @@ match that model; without \code{fwhm_mm}, \code{TRUE} applies diagnostic detrend
 Timepoints are deterministically distributed over the complete run;
 shorter runs use every timepoint, and \code{Inf} uses all volumes. A calibrated
 model may require its stored cap and reject a different override.}
+
+\item{validation_mode}{\code{"auto"} selects the validated check for the grid and
+operation, replaying in-domain outputs if their FWHM comparison fails;
+\code{"calibration"} requires an accepted FWHM response model;
+\code{"replay"} compares distributed output volumes with the requested operator.}
+
+\item{fsl_img}{Optional FSL container for SUSAN operator replay. Gaussian
+replay requires the corresponding AFNI executable in the runtime environment.}
 }
 \value{
 A logical scalar (\code{TRUE} if validation passed, \code{FALSE} if failed).
-Attributes: \code{message}, \code{details} (pre/post/delta/expected_delta/diff FWHM mm).
+Attributes: \code{message}, \code{details} (compact calibration or operator-replay QA).
 }
 \description{
-Measures the observed FWHM change using \code{estimate_classic_fwhm()} and compares
+Uses an accepted FWHM calibration or compares sampled output with the
+requested spatial operator. The calibration mode measures the observed
+FWHM change using \code{estimate_classic_fwhm()} and compares
 it to the calibration-predicted delta for the requested kernel size. The
 calibration accounts for the fact that fMRI data are non-Gaussian and the
 naive first-differences FWHM estimate has a systematic bias that depends on
@@ -88,7 +101,34 @@ mean, and voxelwise temporal scale before the classic estimate. It is retained
 for diagnostic and legacy calibration use, but it must match the selected
 calibration. \code{preprocess = NULL} enforces that model-specific choice.
 Requests outside the model's fitted domain and explicit external support
-are reported as extrapolations and cannot pass validation. Isotropic 2 mm
+are reported as extrapolations and cannot pass coefficient-based validation.
+Continuous-domain checks
+cover each voxel axis from 1.8 through 4 mm, including anisotropic grids,
+and kernels 1.5--3 times geometric mean voxel spacing. For example, 2.1 mm
+isotropic data support 3.15--6.3 mm kernels, and 2x2x4 mm data support about
+3.78--7.56 mm kernels. Directional and geometric FWHM errors must all meet
+limits established by calibration-only cohort and spacing cross-validation,
+capped at half a voxel. Independent subjects verify these limits; most new
+grids are controlled resamplings of real BOLD rather than native acquisition
+resolutions. Separate checks cover all three input-mask conditions for
+masked-threshold SUSAN and both Gaussian implementations. These models use
+cubic detrending, demeaning, temporal MAD scaling, and 96 distributed volumes
+when their FWHM response is accepted. Conditions failing either accuracy
+check require operator replay instead. Replay compares all spatial values
+in 96 distributed output volumes against the matching operator, with a
+numerical tolerance of 1e-5. SUSAN replay preserves the full-run brightness
+threshold, temporal mean and extents; Gaussian replay uses \verb{3dBlurInMask}
+or \verb{3dmerge} as appropriate. Replay adds computation and requires the same
+FSL/AFNI runtime as smoothing. It does not relax FWHM error limits.
+In the current catalog, template-masked-input SUSAN has an accepted smooth
+response function. SUSAN with unmasked or fMRIPrep-masked input and all six
+Gaussian contexts use operator replay over the continuous domain.
+In \code{"auto"} mode, an in-domain FWHM failure also triggers operator replay.
+The failed FWHM comparison remains in the QA details alongside the replay
+result. \code{"calibration"} mode reports the FWHM failure directly.
+Pre- and post-smoothing images must preserve spatial header geometry.
+Outside this relative-kernel band, previously validated legacy models may
+still apply within their original domains. Isotropic 2 mm
 images use separately fitted models for 3--8 mm kernels: masked-threshold
 SUSAN with unmasked, fMRIPrep-masked, or template-masked input, and Gaussian
 smoothing with or without an automask on otherwise unmasked input. These

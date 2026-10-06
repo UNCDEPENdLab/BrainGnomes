@@ -1986,14 +1986,30 @@ pp_isotropic_2mm_model <- function(coeffs, tolerance_mm,
 #' and 16 held-out subjects across four cohorts. The 2 mm error limits reflect
 #' internal cohort-transfer uncertainty and are capped at 1 mm. These grid models
 #' leave the coarser-resolution coefficients and tolerances unchanged.
+#' Continuous-domain checks cover every voxel axis from 1.8 through 4 mm
+#' and kernels from 1.5 through 3 times geometric mean voxel spacing. They use
+#' the same six calibration and sixteen held-out subjects, with controlled
+#' resamplings spanning isotropic and anisotropic grids. Accepted smooth response
+#' functions predict each axis before combining predictions geometrically.
+#' Accuracy limits are determined from calibration-only cohort and spacing
+#' cross-validation, capped at half a voxel, and verified independently on the
+#' held-out subjects. These empirical limits do not guarantee transfer to every
+#' future acquisition. The aggregate evidence and protocol are in `inst/extdata`.
+#' A condition whose response fails either accuracy check uses operator replay
+#' instead: compare distributed volumes numerically against the requested
+#' operator, preserving full-run SUSAN parameters. Failed FWHM coefficients
+#' are never promoted by widening the acceptance limit.
 #'
-#' The primary model predicts post-smoothing FWHM by Gaussian quadrature while
+#' The legacy ratio-linear model predicts post-smoothing FWHM by quadrature while
 #' allowing the program's effective kernel gain to depend on the dimensionless
 #' voxel-to-kernel ratio:
 #' `gain = coeffs[1] + coeffs[2] * voxel_mm / kernel_mm` and
 #' `post = sqrt(pre^2 + (gain * kernel_mm)^2)`.
 #'
 #' Structure: `smoother -> method -> mask/nomask -> model`
+#'   - `type = "quadrature_axis_surface"`: positive, monotone directional
+#'     effective kernels conditioned on resolution and baseline smoothness
+#'   - `type = "operator_replay"`: direct comparison with the requested operator
 #'   - `type = "quadrature_ratio_linear"`: baseline-conditioned model above
 #'   - `type = "linear"`: `coeffs[1] + coeffs[2] * kernel`
 #'   - `type = "poly"`:   polynomial in kernel (`sum(coeffs * kernel^(0:p))`)
@@ -2104,6 +2120,11 @@ pp_calibration_coeffs <- list(
   )
 )
 
+# Attach only independently accepted responses or tested operator checks.
+pp_calibration_coeffs <- pp_attach_continuous_calibration(
+  pp_calibration_coeffs, pp_continuous_calibration_models()
+)
+
 #' Resolve the exact estimator preparation stored with a calibration model
 #' @keywords internal
 #' @noRd
@@ -2162,10 +2183,21 @@ pp_calibration_preparation <- function(model = NULL, preprocess = NULL,
   resolved
 }
 
-#' Predict the expected FWHM delta from a calibration model
+#' Calculate the equivalent geometric effective-kernel gain
+#' @param model Selected quadrature calibration model.
+#' @param kernel_fwhm Requested scalar smoothing kernel in millimeters.
+#' @param voxel_mm Spatial voxel spacings in millimeters.
+#' @param pre_axis_fwhm Directional baseline FWHM, required by axis surfaces.
+#' @return Effective geometric kernel divided by the requested scalar kernel.
 #' @keywords internal
 #' @noRd
-pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm) {
+pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm,
+                                pre_axis_fwhm = NULL) {
+  if (identical(model$type, "quadrature_axis_surface")) {
+    return(pp_calibration_surface_prediction(
+      model, kernel_fwhm, pre_axis_fwhm, voxel_mm
+    )$equivalent_geometric_gain)
+  }
   checkmate::assert_number(kernel_fwhm, lower = 1e-6, finite = TRUE)
   checkmate::assert_numeric(voxel_mm, lower = 1e-6, finite = TRUE, min.len = 1L)
   voxel_geom_mm <- exp(mean(log(voxel_mm)))
@@ -2181,12 +2213,24 @@ pp_calibration_gain <- function(model, kernel_fwhm, voxel_mm) {
   gain
 }
 
+#' Predict the calibrated geometric FWHM increase
+#' @param model Selected calibration model.
+#' @param kernel_fwhm Requested smoothing kernel in millimeters.
+#' @param pre_fwhm Baseline geometric FWHM for legacy quadrature models.
+#' @param voxel_mm Spatial voxel spacings in millimeters.
+#' @param pre_axis_fwhm Directional baseline FWHM, required by axis surfaces.
+#' @return Predicted increase in geometric FWHM, in millimeters.
 #' @keywords internal
 #' @noRd
 pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
-                                    voxel_mm = NULL) {
+                                    voxel_mm = NULL, pre_axis_fwhm = NULL) {
   coeffs <- model$coeffs
-  if (model$type == "quadrature_ratio_linear") {
+  if (model$type == "quadrature_axis_surface") {
+    prediction <- pp_calibration_surface_prediction(
+      model, kernel_fwhm, pre_axis_fwhm, voxel_mm
+    )
+    return(prediction$expected_geom_mm - exp(mean(log(pre_axis_fwhm))))
+  } else if (model$type == "quadrature_ratio_linear") {
     checkmate::assert_number(pre_fwhm, lower = 0, finite = TRUE)
     gain <- pp_calibration_gain(model, kernel_fwhm, voxel_mm)
     expected_post <- sqrt(pre_fwhm^2 + (gain * kernel_fwhm)^2)
@@ -2210,6 +2254,19 @@ pp_predict_calibration <- function(model, kernel_fwhm, pre_fwhm = NULL,
 #' @noRd
 pp_calibration_support <- function(model, kernel_fwhm, voxel_mm) {
   if (isTRUE(model$input_mask_extrapolated)) return("EXTRAPOLATED")
+  if (isTRUE(model$type %in% c("quadrature_axis_surface", "operator_replay"))) {
+    return(if (pp_calibration_surface_domain(model, voxel_mm, kernel_fwhm)) {
+      "interpolated"
+    } else "EXTRAPOLATED")
+  }
+  # A geometric mean inside the original interval cannot support an axis
+  # outside the measured voxel cube. Keep this bound on legacy fallbacks too.
+  if (!is.null(model$voxel_axis_range_mm) &&
+      (length(voxel_mm) != 3L || any(!is.finite(voxel_mm)) ||
+       any(voxel_mm < model$voxel_axis_range_mm[1L] - 1e-6 |
+           voxel_mm > model$voxel_axis_range_mm[2L] + 1e-6))) {
+    return("EXTRAPOLATED")
+  }
   if (!is.null(model$voxel_spacing_mm) &&
       (length(voxel_mm) != length(model$voxel_spacing_mm) ||
        any(abs(voxel_mm - model$voxel_spacing_mm) > 1e-6))) {
@@ -2270,11 +2327,12 @@ pp_calibration_model_for_grid <- function(model, voxel_mm = NULL) {
 #' @param used_mask Whether a threshold or smoothing mask was used.
 #' @param input_mask Mask applied to the input BOLD before smoothing.
 #' @param voxel_mm Optional spatial voxel sizes for a separately fitted grid.
+#' @param kernel_fwhm Optional kernel used to select a continuous surface.
 #' @return Exact mask-specific and, when available, grid-specific model.
 #' @keywords internal
 #' @noRd
 pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
-                                  voxel_mm = NULL) {
+                                  voxel_mm = NULL, kernel_fwhm = NULL) {
   checkmate::assert_choice(input_mask, c("none", "fmriprep", "template", "custom"))
   smooth_entry <- pp_calibration_coeffs[[smoother]]
   if (is.null(smooth_entry)) {
@@ -2322,7 +2380,12 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
     }
     model <- model[[input_key]]
     calibrated_input_mask <- input_key
-  } else if (!identical(input_mask, calibrated_input_mask)) {
+  }
+  if (!input_mask_extrapolated) {
+    surface <- pp_select_calibration_surface(model, input_mask, voxel_mm, kernel_fwhm)
+    if (!is.null(surface)) return(surface)
+  }
+  if (!identical(input_mask, calibrated_input_mask) && !input_mask_extrapolated) {
     warning(
       "No exact smoothness calibration for input mask '", input_mask,
       "'; using '", calibrated_input_mask, "' as an extrapolation.",
@@ -2340,9 +2403,11 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
   model
 }
 
-#' Validate spatial smoothing (classic FWHM pre vs post, calibration-corrected)
+#' Validate spatial smoothing with calibrated FWHM or operator replay
 #'
-#' Measures the observed FWHM change using `estimate_classic_fwhm()` and compares
+#' Uses an accepted FWHM calibration or compares sampled output with the
+#' requested spatial operator. The calibration mode measures the observed
+#' FWHM change using `estimate_classic_fwhm()` and compares
 #' it to the calibration-predicted delta for the requested kernel size. The
 #' calibration accounts for the fact that fMRI data are non-Gaussian and the
 #' naive first-differences FWHM estimate has a systematic bias that depends on
@@ -2363,7 +2428,34 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
 #' for diagnostic and legacy calibration use, but it must match the selected
 #' calibration. `preprocess = NULL` enforces that model-specific choice.
 #' Requests outside the model's fitted domain and explicit external support
-#' are reported as extrapolations and cannot pass validation. Isotropic 2 mm
+#' are reported as extrapolations and cannot pass coefficient-based validation.
+#' Continuous-domain checks
+#' cover each voxel axis from 1.8 through 4 mm, including anisotropic grids,
+#' and kernels 1.5--3 times geometric mean voxel spacing. For example, 2.1 mm
+#' isotropic data support 3.15--6.3 mm kernels, and 2x2x4 mm data support about
+#' 3.78--7.56 mm kernels. Directional and geometric FWHM errors must all meet
+#' limits established by calibration-only cohort and spacing cross-validation,
+#' capped at half a voxel. Independent subjects verify these limits; most new
+#' grids are controlled resamplings of real BOLD rather than native acquisition
+#' resolutions. Separate checks cover all three input-mask conditions for
+#' masked-threshold SUSAN and both Gaussian implementations. These models use
+#' cubic detrending, demeaning, temporal MAD scaling, and 96 distributed volumes
+#' when their FWHM response is accepted. Conditions failing either accuracy
+#' check require operator replay instead. Replay compares all spatial values
+#' in 96 distributed output volumes against the matching operator, with a
+#' numerical tolerance of 1e-5. SUSAN replay preserves the full-run brightness
+#' threshold, temporal mean and extents; Gaussian replay uses `3dBlurInMask`
+#' or `3dmerge` as appropriate. Replay adds computation and requires the same
+#' FSL/AFNI runtime as smoothing. It does not relax FWHM error limits.
+#' In the current catalog, template-masked-input SUSAN has an accepted smooth
+#' response function. SUSAN with unmasked or fMRIPrep-masked input and all six
+#' Gaussian contexts use operator replay over the continuous domain.
+#' In `"auto"` mode, an in-domain FWHM failure also triggers operator replay.
+#' The failed FWHM comparison remains in the QA details alongside the replay
+#' result. `"calibration"` mode reports the FWHM failure directly.
+#' Pre- and post-smoothing images must preserve spatial header geometry.
+#' Outside this relative-kernel band, previously validated legacy models may
+#' still apply within their original domains. Isotropic 2 mm
 #' images use separately fitted models for 3--8 mm kernels: masked-threshold
 #' SUSAN with unmasked, fMRIPrep-masked, or template-masked input, and Gaussian
 #' smoothing with or without an automask on otherwise unmasked input. These
@@ -2391,8 +2483,9 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
 #'   different input-mask condition is reported as an extrapolation but cannot
 #'   pass validation, because masking materially changes the calibrated gain.
 #' @param tolerance_mm Tolerance in mm for `|observed_post - expected_post|`.
-#'   `NULL` (the default) uses the program/mask-specific cross-validation
-#'   tolerance stored with the calibration model.
+#'   For continuous models an explicit value also applies to each axis.
+#'   `NULL` (the default) uses the selected calibration's empirical limit;
+#'   continuous limits scale separately by each axis and geometric voxel spacing.
 #' @param preprocess Logical or `NULL`. `NULL` (the default) uses the preprocessing
 #'   mode recorded by the selected calibration model. An explicit value must
 #'   match that model; without `fwhm_mm`, `TRUE` applies diagnostic detrending.
@@ -2403,9 +2496,15 @@ pp_select_calibration <- function(smoother, used_mask, input_mask = "none",
 #'   Timepoints are deterministically distributed over the complete run;
 #'   shorter runs use every timepoint, and `Inf` uses all volumes. A calibrated
 #'   model may require its stored cap and reject a different override.
+#' @param validation_mode `"auto"` selects the validated check for the grid and
+#'   operation, replaying in-domain outputs if their FWHM comparison fails;
+#'   `"calibration"` requires an accepted FWHM response model;
+#'   `"replay"` compares distributed output volumes with the requested operator.
+#' @param fsl_img Optional FSL container for SUSAN operator replay. Gaussian
+#'   replay requires the corresponding AFNI executable in the runtime environment.
 #'
 #' @return A logical scalar (`TRUE` if validation passed, `FALSE` if failed).
-#'   Attributes: `message`, `details` (pre/post/delta/expected_delta/diff FWHM mm).
+#'   Attributes: `message`, `details` (compact calibration or operator-replay QA).
 #'
 #' @keywords internal
 validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA_real_,
@@ -2413,7 +2512,10 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
                                     input_mask = "none",
                                     tolerance_mm = NULL, preprocess = NULL,
                                     polydeg = NULL, demean = NULL, unif = NULL,
-                                    max_volumes = 96L) {
+                                    max_volumes = 96L,
+                                    validation_mode = c("auto", "calibration", "replay"),
+                                    fsl_img = NULL) {
+  validation_mode <- match.arg(validation_mode)
   checkmate::assert_file_exists(pre_file)
   checkmate::assert_file_exists(post_file)
   checkmate::assert_file_exists(mask_file)
@@ -2450,11 +2552,67 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 
   vox_mm <- pp_pixdim_mm(pre_file)
   has_kernel <- checkmate::test_number(fwhm_mm, lower = 1e-6, finite = TRUE)
+  # Run the exact operator check and convert unavailable/failed backends into
+  # an ordinary failed QA result. Return only compact operation metadata.
+  replay_validation <- function(model = NULL, calibration_details = NULL,
+                                 trigger = NULL) {
+    checkmate::assert_number(fwhm_mm, lower = 1e-6, finite = TRUE)
+    if (!is.null(model$max_volumes) && !isTRUE(max_volumes == model$max_volumes)) {
+      stop("Selected spatial validation requires max_volumes=", model$max_volumes,
+           ".", call. = FALSE)
+    }
+    result <- tryCatch(
+      pp_replay_spatial_smooth(pre_file, post_file, mask_file, fwhm_mm,
+                               smoother, used_mask, fsl_img, max_volumes),
+      error = function(error) {
+        out <- FALSE
+        attr(out, "message") <- paste("Spatial smoothing replay failed:", conditionMessage(error))
+        attr(out, "details") <- list(validation_method = "operator_replay",
+                                      failure = conditionMessage(error))
+        out
+      }
+    )
+    details <- attr(result, "details")
+    details$input_mask <- input_mask
+    details$voxel_spacing_mm <- vox_mm
+    if (!is.null(model)) {
+      details$calibration_model_version <- model$model_version
+      details$calibration_support <- pp_calibration_support(model, fwhm_mm, vox_mm)
+      details$calibration_extrapolated <- FALSE
+      details$operator_replay_required <- TRUE
+      details$replay_reason <- model$replay_reason
+    }
+    if (!is.null(calibration_details)) {
+      calibration_details$validation_method <- "operator_replay"
+      calibration_details$fwhm_calibration_passed <- FALSE
+      calibration_details$operator_replay_trigger <- trigger
+      calibration_details$operator_replay <- details
+      assert_provenance_metadata(calibration_details)
+      details <- calibration_details
+      attr(result, "message") <- paste0(
+        "FWHM reference did not pass (", trigger, "); ", attr(result, "message")
+      )
+    }
+    attr(result, "details") <- details
+    result
+  }
+  if (validation_mode == "replay") return(replay_validation())
   cal_model <- if (has_kernel) {
     pp_select_calibration(smoother, used_mask, input_mask = input_mask,
-                          voxel_mm = vox_mm)
+                          voxel_mm = vox_mm, kernel_fwhm = fwhm_mm)
   } else {
     NULL
+  }
+  if (!is.null(cal_model) && identical(cal_model$type, "operator_replay")) {
+    if (validation_mode == "calibration") {
+      out <- FALSE
+      attr(out, "message") <- "No accepted FWHM calibration for this condition; operator replay is required."
+      attr(out, "details") <- list(validation_method = "calibration",
+                                    calibration_accepted = FALSE,
+                                    calibration_model_version = cal_model$model_version)
+      return(out)
+    }
+    return(replay_validation(cal_model))
   }
   if (has_kernel && !is.null(cal_model$max_volumes)) {
     supplied_cap <- suppressWarnings(as.integer(max_volumes))
@@ -2481,13 +2639,17 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
   }
   pre_estimate <- estimate_file(pre_file)
   pre_f <- pre_estimate$geom
+  pre_axes <- pre_estimate$geom_axes
   volumes_used <- pre_estimate$volumes_used
   total_volumes <- pre_estimate$total_volumes
   volume_indices <- pre_estimate$volume_indices
   volume_sampling <- pre_estimate$volume_sampling
   rm(pre_estimate)
   invisible(gc(FALSE))
-  post_f <- estimate_file(post_file)$geom
+  post_estimate <- estimate_file(post_file)
+  post_f <- post_estimate$geom
+  post_axes <- post_estimate$geom_axes
+  rm(post_estimate)
 
   if (!is.finite(pre_f) || !is.finite(post_f) || pre_f <= 0 || post_f <= 0) {
     out <- FALSE
@@ -2496,6 +2658,11 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       format(pre_f, digits = 5), format(post_f, digits = 5)
     )
     attr(out, "details") <- list(pre_fwhm_mm = pre_f, post_fwhm_mm = post_f)
+    if (has_kernel && validation_mode == "auto" &&
+        identical(cal_model$type, "quadrature_axis_surface") &&
+        identical(pp_calibration_support(cal_model, fwhm_mm, vox_mm), "interpolated")) {
+      return(replay_validation(cal_model, attr(out, "details"), "invalid_geometric_FWHM"))
+    }
     return(out)
   }
 
@@ -2503,17 +2670,65 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
 
   # --- calibration-based comparison ---
   if (has_kernel) {
-    delta_expected <- pp_predict_calibration(
-      cal_model, fwhm_mm, pre_fwhm = pre_f, voxel_mm = vox_mm
-    )
+    surface_selected <- identical(cal_model$type, "quadrature_axis_surface")
+    if (surface_selected &&
+        (!checkmate::test_numeric(pre_axes, len = 3L, lower = 1e-6,
+                                  finite = TRUE, any.missing = FALSE) ||
+         !checkmate::test_numeric(post_axes, len = 3L, lower = 1e-6,
+                                  finite = TRUE, any.missing = FALSE))) {
+      out <- FALSE
+      attr(out, "message") <- "Cannot estimate positive finite FWHM along every spatial axis."
+      attr(out, "details") <- list(pre_fwhm_mm = pre_f, post_fwhm_mm = post_f,
+                                    pre_axis_fwhm_mm = pre_axes,
+                                    post_axis_fwhm_mm = post_axes)
+      if (validation_mode == "auto" &&
+          identical(pp_calibration_support(cal_model, fwhm_mm, vox_mm), "interpolated")) {
+        return(replay_validation(cal_model, attr(out, "details"), "invalid_directional_FWHM"))
+      }
+      return(out)
+    }
+    surface_prediction <- if (surface_selected) {
+      tryCatch(pp_calibration_surface_prediction(cal_model, fwhm_mm, pre_axes, vox_mm),
+                error = function(error) error)
+    } else NULL
+    if (inherits(surface_prediction, "error")) {
+      if (validation_mode != "auto" ||
+          !identical(pp_calibration_support(cal_model, fwhm_mm, vox_mm), "interpolated")) {
+        stop(surface_prediction)
+      }
+      return(replay_validation(cal_model, list(
+        pre_fwhm_mm = pre_f, post_fwhm_mm = post_f,
+        prediction_failure = conditionMessage(surface_prediction)
+      ), "FWHM_prediction_failed"))
+    }
+    delta_expected <- if (surface_selected) {
+      surface_prediction$expected_geom_mm - pre_f
+    } else {
+      pp_predict_calibration(cal_model, fwhm_mm, pre_fwhm = pre_f, voxel_mm = vox_mm)
+    }
     expected_post <- pre_f + delta_expected
-    calibration_gain <- pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
+    calibration_gain <- if (surface_selected) {
+      surface_prediction$equivalent_geometric_gain
+    } else pp_calibration_gain(cal_model, fwhm_mm, vox_mm)
     calibration_support <- pp_calibration_support(cal_model, fwhm_mm, vox_mm)
     calibration_extrapolated <- identical(calibration_support, "EXTRAPOLATED")
-    if (is.null(tolerance_mm)) tolerance_mm <- cal_model$tolerance_mm
+    supplied_tolerance <- !is.null(tolerance_mm)
+    if (!supplied_tolerance) tolerance_mm <- cal_model$tolerance_mm
     checkmate::assert_number(tolerance_mm, lower = 0, finite = TRUE)
     diff_cal <- delta_observed - delta_expected
     within_tol <- abs(diff_cal) <= tolerance_mm
+    axis_errors <- axis_tolerance <- NULL
+    if (surface_selected) {
+      axis_tolerance <- if (supplied_tolerance) rep(tolerance_mm, 3L) else {
+        cal_model$tolerance_axis_mm
+      }
+      checkmate::assert_numeric(post_axes, len = 3L, lower = 1e-6, finite = TRUE,
+                                any.missing = FALSE)
+      axis_errors <- abs(post_axes - surface_prediction$expected_axes_mm)
+      # The geometric mean can hide errors in opposite directions. Every
+      # directional error must pass the calibrated limit as well.
+      within_tol <- within_tol && all(axis_errors <= axis_tolerance)
+    }
     # With a small kernel and an already smooth baseline, the expected change
     # can be smaller than the calibrated uncertainty. An unchanged image must
     # still fail. The 0.001 mm floor excludes numerical roundoff; it is far
@@ -2549,7 +2764,15 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       abs(diff_cal), tolerance_mm,
       status
     )
+    if (surface_selected) {
+      msg <- paste0(msg, " Directional |obs-exp|=",
+                    paste(formatC(axis_errors, format = "f", digits = 4), collapse = "/"),
+                    " mm (tol=",
+                    paste(formatC(axis_tolerance, format = "f", digits = 4), collapse = "/"),
+                    " mm).")
+    }
     details <- list(
+      validation_method = "calibration",
       pre_fwhm_mm = pre_f,
       post_fwhm_mm = post_f,
       delta_observed_mm = delta_observed,
@@ -2571,6 +2794,7 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
       calibration_model_version = cal_model$model_version,
       calibration_base_model_version = cal_model$base_model_version,
       calibration_grid_model_selected = isTRUE(cal_model$grid_model_selected),
+      calibration_surface_model_selected = surface_selected,
       calibration_type = cal_model$type,
       calibration_estimator = preparation$estimator,
       calibration_coeffs = cal_model$coeffs,
@@ -2600,6 +2824,27 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
         unif = isTRUE(preparation$unif)
       )
     )
+    if (surface_selected) {
+      details$pre_axis_fwhm_mm <- as.numeric(pre_axes)
+      details$post_axis_fwhm_mm <- as.numeric(post_axes)
+      details$expected_axis_fwhm_mm <- surface_prediction$expected_axes_mm
+      details$axis_abs_error_mm <- as.numeric(axis_errors)
+      details$axis_tolerance_mm <- as.numeric(axis_tolerance)
+      details$effective_kernel_axis_mm <- surface_prediction$effective_kernel_axes_mm
+      details$calibration_axis_gain <- surface_prediction$axis_gain
+      details$calibration_surface_family <- cal_model$surface_family
+      details$calibration_resolution_degree <- cal_model$resolution_degree
+      details$calibration_baseline_feature <- cal_model$baseline_feature
+      details$calibration_anisotropy_feature <- cal_model$anisotropy_feature
+      details$calibration_coupled_baseline_feature <-
+        isTRUE(cal_model$coupled_baseline_feature)
+      details$calibration_quadratic_baseline_feature <-
+        isTRUE(cal_model$quadratic_baseline_feature)
+      details$calibration_voxel_axis_range_mm <- cal_model$voxel_axis_range_mm
+      details$calibration_kernel_ratio_range <- cal_model$kernel_ratio_range
+      details$calibration_tolerance_voxels <- cal_model$tolerance_voxels
+      details$kernel_voxel_ratio <- fwhm_mm / exp(mean(log(vox_mm)))
+    }
   } else {
     # no kernel specified: just check that smoothness did not decrease
     passed <- delta_observed >= 0
@@ -2628,6 +2873,15 @@ validate_spatial_smooth <- function(pre_file, post_file, mask_file, fwhm_mm = NA
     )
   }
 
+  if (has_kernel) {
+    details$fwhm_calibration_passed <- passed
+    if (!passed && validation_mode == "auto" && surface_selected && !calibration_extrapolated) {
+      # A validated empirical response can still miss a new cohort. Verify
+      # the actual operator rather than widening the FWHM limit or accepting
+      # an extrapolation. Preserve the failed reference comparison in metadata.
+      return(replay_validation(cal_model, details, "FWHM_error_or_effect_check_failed"))
+    }
+  }
   out <- passed
   attr(out, "message") <- msg
   attr(out, "details") <- details

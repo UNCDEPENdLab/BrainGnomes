@@ -758,6 +758,7 @@ postprocess_subject_impl <- function(in_file, cfg, provenance) {
           post_file = post_file,
           mask_file = brain_mask,
           fwhm_mm = cfg$spatial_smooth$fwhm_mm,
+          fsl_img = fsl_img,
           input_mask = smoothness_input_mask_condition(
             completed_steps,
             mask_setting = cfg$apply_mask$mask_file,
