@@ -9,6 +9,9 @@ test_that("project setup writes portable relative paths and loads absolute paths
     project_directory = root,
     interactive = FALSE
   )
+  # Resolve Windows short-name aliases while the root exists: normalizePath()
+  # cannot resolve them after a nonexistent SQLite filename is appended.
+  root <- normalizePath(root, winslash = "/", mustWork = TRUE)
   yaml_path <- file.path(root, "project_config.yaml")
   raw <- yaml::read_yaml(yaml_path)
 
