@@ -259,6 +259,7 @@ create_tracking_db = function(sqlite_db) {
   }, error = function(e) {
     stop(format_tracking_db_error(sqlite_db, operation = "create_tracking_db schema creation", err = e), call. = FALSE)
   })
+  ensure_job_submission_schema(sqlite_db)
 }
 
 
@@ -309,6 +310,20 @@ insert_tracked_job = function(sqlite_db, job_id, tracking_args = list()) {
       tracking_args$job_manifest_checksum <- unname(tools::md5sum(
         tracking_args$job_manifest_path
       ))
+    }
+  }
+
+  if (checkmate::test_string(tracking_args$contract_id)) {
+    attempts <- read_job_submission_attempts(sqlite_db)
+    if (nrow(attempts) && tracking_args$contract_id %in% attempts$contract_id) {
+      # Prepared external workers may bind themselves before the submitter's
+      # legacy insertion helper runs. Never reset their STARTED/terminal state.
+      bind_job_submission(sqlite_db, tracking_args$contract_id, job_id)
+      if (!is.null(tracking_args$job_obj)) {
+        submit_tracking_query("UPDATE job_tracking SET job_obj = ? WHERE job_id = ?",
+                              sqlite_db, param = list(tracking_args$job_obj, job_id))
+      }
+      return(invisible(NULL))
     }
   }
   

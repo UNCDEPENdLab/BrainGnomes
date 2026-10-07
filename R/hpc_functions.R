@@ -28,6 +28,9 @@
 #' @param repolling_interval The number of seconds to wait before rechecking job status (used only for local scheduler)
 #' @param tracking_sqlite_db Path to a SQLite database used for job tracking. If provided, job submission metadata
 #'   will be recorded, including job dependencies and parent-child relationships.
+#'   Tracked jobs use a sealed, project-owned runtime and register a UUID attempt
+#'   before scheduler submission. Unconfirmed submissions block automatic
+#'   resubmission of the same work unit and role until their outcome is confirmed.
 #' @param tracking_args A named list of metadata fields to track about the submitted job. This may include the parent job ID,
 #'   batch script path, and scheduler options. The optional
 #'   \code{contract_artifact_env_names} element explicitly identifies additional
@@ -36,6 +39,24 @@
 #'   as tracking databases, logs, status markers, and output manifests are
 #'   always excluded. This is used in conjunction with
 #'   \code{tracking_sqlite_db} to support job tracking.
+#'
+#' @details Tracked workers execute project-owned copies rather than scripts or
+#'   BrainGnomes code in a mutable installation. A checksummed runtime is reused
+#'   under \code{runs/<run_id>/runtime/}; attempt-specific scripts, bootstrap
+#'   receipts, scheduler output, and acknowledgements live beside the job
+#'   manifest. Without a run ID, contracts live under \code{job_contracts/}.
+#'   External R dependencies, the R executable, and containers are not copied.
+#'   Worker startup requires Bash and \code{md5sum}. Development source runtimes
+#'   additionally require \pkg{pkgload}; installed runtimes do not.
+#'   \code{BG_WORKER_JOB_ID} identifies the allocation (the wrapper PID for
+#'   local execution), and \code{BG_ATTEMPT_ID} identifies its prepared UUID.
+#'
+#'   SQLite's additive \code{job_submission_attempts} table records the UUID
+#'   before scheduler invocation. Either the submitter or an early worker can
+#'   bind the scheduler ID without resetting worker state. Unconfirmed outcomes
+#'   remain visible in \code{inspect_project()$submissions}; absence from a queue
+#'   alone is not sufficient evidence to retry. Bootstrap failure receipts are
+#'   retained when database reporting fails, but are not automatically replayed.
 #'
 #' @return A character string containing the jobid of the scheduled job.
 #'
@@ -73,6 +94,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   checkmate::assert_logical(echo, max.len = 1L)
   checkmate::assert_logical(fail_on_error, max.len=1L)
   if (is.character(tracking_args) || is.numeric(tracking_args)) tracking_args <- as.list(tracking_args) # coerce tracking args to list
+  if (is.null(tracking_args)) tracking_args <- list()
   if (length(tracking_args) > 0 && is.null(tracking_sqlite_db)) {
     warning("Tracking arguments provided to `cluster_job_submit` but `tracking_sqlite_db` is NULL")
   }
@@ -99,6 +121,33 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
   # Thus, arguments like '--mem=5g' and '-n 12' are not handled differently
   if (!is.null(sched_args)) { sched_args <- paste(sched_args, collapse=" ") }
 
+  if (is.null(tracking_args$unit_key) &&
+      (checkmate::test_string(tracking_args$job_name) || checkmate::test_string(tracking_args$stage))) {
+    tracking_args$unit_key <- tracking_unit_key(tracking_args$stage, tracking_args$stream,
+                                              tracking_args$sub_id, tracking_args$ses_id,
+                                              tracking_args$job_role, tracking_args$job_name)
+  }
+  if (is.null(tracking_args$unit_key) && !is.null(tracking_sqlite_db)) {
+    # Generic tracked scripts also need a stable identity for uncertain-launch
+    # protection. Hash one-line commands rather than exposing their contents.
+    if (script_exists) {
+      tracking_args$unit_key <- paste0("script::", normalizePath(script, winslash = "/", mustWork = TRUE))
+    } else {
+      identity <- tempfile("submission-command-")
+      on.exit(unlink(identity), add = TRUE)
+      writeLines(script, identity)
+      tracking_args$unit_key <- paste0("command::", unname(tools::md5sum(identity)))
+    }
+  }
+  if (is.null(tracking_args$scheduler)) {
+    tracking_args$scheduler <- switch(scheduler, sbatch = "slurm", qsub = "torque", "local")
+  }
+  if (is.null(tracking_args$parent_job_id) && length(wait_jobs)) {
+    tracking_args$parent_job_id <- tail(wait_jobs, 1L)
+  }
+  if (!is.null(tracking_args$parent_job_id) && is.null(tracking_args$child_level)) tracking_args$child_level <- 1L
+  assert_absolute_scheduler_paths(env_variables, tracking_sqlite_db)
+
   if (is.null(tracking_args$attempt) &&
       checkmate::test_string(tracking_args$unit_key)) {
     tracking_args$attempt <- next_job_contract_attempt(
@@ -109,9 +158,26 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
   contract <- allocate_job_contract(tracking_sqlite_db, tracking_args)
   if (!is.null(contract)) {
+    env_variables["sqlite_db"] <- if (is.null(tracking_sqlite_db)) "" else tracking_sqlite_db
     env_variables["BG_JOB_MANIFEST"] <- contract$manifest_path
-    env_variables["BG_RUN_ID"] <- tracking_args$sequence_id
+    if (!is.null(tracking_args$sequence_id)) env_variables["BG_RUN_ID"] <- tracking_args$sequence_id
     env_variables["BG_CONTRACT_DIRECTORY"] <- dirname(contract$directory)
+    original_script <- script
+    original_environment <- env_variables
+    execution <- prepare_job_execution(contract, script, scheduler, env_variables)
+    script <- execution$script
+    script_exists <- TRUE
+    env_variables <- execution$environment
+    tracking_args$runtime <- execution$runtime
+    tracking_args$execution_payload <- execution$payload
+    # Checksums should protect the code the worker actually uses, not mutable
+    # installation paths that no longer drive this sealed execution.
+    for (field in intersect(c("batch_file", "compute_file", "code_file"), names(tracking_args))) {
+      if (identical(tracking_args[[field]], original_script)) tracking_args[[field]] <- execution$payload
+      for (name in intersect(names(original_environment), names(env_variables))) {
+        if (identical(tracking_args[[field]], original_environment[[name]])) tracking_args[[field]] <- env_variables[[name]]
+      }
+    }
   }
 
   #subfunction to handle variable=value and variable combinations
@@ -163,16 +229,16 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
 
   # use unique temp files to avoid parallel collisions in job tracking
   script_label <- if (script_exists) tools::file_path_sans_ext(basename(script)) else "oneliner"
-  sub_stdout <- paste0(tempfile(), "_", script_label, "_stdout")
-  sub_stderr <- paste0(tempfile(), "_", script_label, "_stderr")
-  sub_pid <- paste0(tempfile(), "_", script_label, "_pid")
+  sub_stdout <- if (is.null(contract)) paste0(tempfile(), "_", script_label, "_stdout") else file.path(contract$directory, "submission.stdout")
+  sub_stderr <- if (is.null(contract)) paste0(tempfile(), "_", script_label, "_stderr") else file.path(contract$directory, "submission.stderr")
+  sub_pid <- if (is.null(contract)) paste0(tempfile(), "_", script_label, "_pid") else file.path(contract$directory, "submission.pid")
 
   if (scheduler == "sh") {
     # if an R script file is provided, execute with Rscript --vanilla
     if (script_exists && grepl(".+\\.R$", script, ignore.case = TRUE)) {
-      run_part <- paste("Rscript --vanilla", script)
+      run_part <- paste("Rscript --vanilla", shQuote(script))
     } else if (script_exists) {
-      run_part <- paste("sh", script)
+      run_part <- paste(if (is.null(contract)) "sh" else "bash", shQuote(script))
     } else {
       run_part <- script
     }
@@ -213,18 +279,37 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     tracking_args$contract_id <- manifest$contract_id
     tracking_args$job_manifest_path <- manifest$path
     tracking_args$job_manifest_checksum <- manifest$checksum
+    register_job_submission(tracking_sqlite_db, contract, tracking_args)
   }
 
+  if (!is.null(contract) && scheduler != "sh" && !nzchar(Sys.which(scheduler))) {
+    # No scheduler process could have run. Unlike a lost acknowledgement this
+    # is a known rejection, so loading the executable and retrying is safe.
+    set_job_submission_state(tracking_sqlite_db, contract$contract_id, "REJECTED", 127L,
+                             "Scheduler executable was unavailable; submission was not invoked.")
+    write_job_contract_once(list(schema_version = "brain-gnomes-submission-ack-v1",
+                                 contract_id = contract$contract_id, recorded_at = job_contract_timestamp(),
+                                 state = "REJECTED", job_id = NULL, exit_code = 127L),
+                            file.path(contract$directory, "submission-ack.json"), "Submission acknowledgement")
+    message <- paste("Scheduler executable is unavailable:", scheduler)
+    if (fail_on_error) stop(message, call. = FALSE) else warning(message, call. = FALSE)
+    return(NULL)
+  }
+  if (!is.null(contract)) set_job_submission_state(tracking_sqlite_db, contract$contract_id, "SUBMITTING")
+  # The attempt is durable before entering the scheduler. If process launch or
+  # acknowledgement fails, record uncertainty and never automatically resubmit.
+  submission_error <- NULL
+  tryCatch({
   if (scheduler == "sh") {
     if (isTRUE(echo)) cat(cmd, "\n") # echo command to terminal
     # submit the job script and return the jobid by forking to background and returning PID
-    jobres <- system(paste(cmd, ">", sub_stdout, "2>", sub_stderr, "& echo $! >", sub_pid), wait = FALSE)
+    jobres <- system(paste(cmd, ">", shQuote(sub_stdout), "2>", shQuote(sub_stderr), "& echo $! >", shQuote(sub_pid)), wait = FALSE)
     Sys.sleep(.05) #sometimes the pid file is not in place when file.exists executes -- add a bit of time to ensure that it reads
     jobid <- if (file.exists(sub_pid)) scan(file = sub_pid, what = "char", sep = "\n", quiet = TRUE) else ""
   } else {
     if (script_exists) {
       if (isTRUE(echo)) cat(cmd, "\n")
-      jobres <- system2(scheduler, args = paste(sched_args, script), stdout = sub_stdout, stderr = sub_stderr)
+      jobres <- system2(scheduler, args = paste(sched_args, shQuote(script)), stdout = sub_stdout, stderr = sub_stderr)
     } else if (scheduler == "sbatch") {
       # one-liner command to sbatch using --wrap
       if (isTRUE(echo)) cat(cmd, "\n")
@@ -239,6 +324,31 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     }
     jobid <- if (file.exists(sub_stdout)) scan(file = sub_stdout, what = "char", sep = "\n", quiet = TRUE) else ""
   }
+  }, error = function(error) {
+    submission_error <<- error
+  })
+  if (!is.null(submission_error)) {
+    if (!is.null(contract)) set_job_submission_state(
+      tracking_sqlite_db, contract$contract_id, "UNKNOWN", detail = "Scheduler process did not return a confirmed acknowledgement."
+    )
+    stop(submission_error)
+  }
+
+  jobid <- parse_job_submission_id(jobid, scheduler)
+  if (!is.null(contract)) {
+    outcome <- if (jobres == 0L && !is.null(jobid)) "ACCEPTED" else "UNKNOWN"
+    write_job_contract_once(list(schema_version = "brain-gnomes-submission-ack-v1",
+                                 contract_id = contract$contract_id, recorded_at = job_contract_timestamp(),
+                                 state = outcome, job_id = jobid, exit_code = jobres),
+                            file.path(contract$directory, "submission-ack.json"), "Submission acknowledgement")
+    if (outcome == "ACCEPTED" && !is.null(tracking_sqlite_db)) {
+      bind_job_submission(tracking_sqlite_db, contract$contract_id, jobid)
+      if (!is.null(tracking_args$job_obj)) insert_tracked_job(tracking_sqlite_db, jobid, tracking_args)
+    } else if (outcome == "UNKNOWN") {
+      set_job_submission_state(tracking_sqlite_db, contract$contract_id, "UNKNOWN", jobres,
+                               "No unique successful scheduler acknowledgement; confirm before resubmission.")
+    }
+  }
 
   joberr <- if (file.exists(sub_stderr)) {
     paste(scan(file = sub_stderr, what = "char", sep = "\n", quiet = TRUE), collapse = ". ")
@@ -246,7 +356,7 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
     ""
   }
 
-  if (jobres != 0) {
+  if (jobres != 0 || is.null(jobid)) {
     jobid <- NULL
     if (isTRUE(fail_on_error)) {
       stop("Job submission failed: ", script, ", error: ", joberr, ", errcode: ", jobres)
@@ -254,20 +364,22 @@ cluster_job_submit <- function(script, scheduler="slurm", sched_args=NULL,
       warning("Job submission failed: ", script, ", error: ", joberr, ", errcode: ", jobres)
     }
   } else {
-    jobid <- sub("Submitted batch job ", "", jobid, fixed = TRUE) # replace irrelevant details if needed
     if (!is.null(tracking_args)) tracking_args$status <- "QUEUED" # on successful submission, tracking status defaults to "QUEUED"
   }
 
   # once a job_id has been generated, we add it to the tracking db
   # if a job has a NULL id or the tracking_sqlite_db arg is NULL, the function will return invisible NULL
-  insert_tracked_job(sqlite_db = tracking_sqlite_db, job_id = jobid, tracking_args = tracking_args)
+  if (is.null(contract) || is.null(tracking_sqlite_db)) {
+    insert_tracked_job(sqlite_db = tracking_sqlite_db, job_id = jobid, tracking_args = tracking_args)
+  }
 
   if (!is.null(wait_jobs)) {
     # add any parent jobs using the wait_jobs argument (defaults to last parent id in list)
     add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = wait_jobs[length(wait_jobs)], child_level = 1)
   } else if (!is.null(tracking_args$parent_job_id)) {
     # in the case that a parent job id is passed in through the tracking_args list
-    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id, child_level = 1)
+    add_tracked_job_parent(sqlite_db = tracking_sqlite_db, job_id = jobid, parent_job_id = tracking_args$parent_job_id,
+                           child_level = tracking_args$child_level)
   }
   
   if (!is.null(jobid)) attr(jobid, "cmd") <- cmd # add the command executed as an attribute

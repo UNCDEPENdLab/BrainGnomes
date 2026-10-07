@@ -11,7 +11,7 @@ Description: Configures, submits, and monitors reproducible functional magnetic
     a cluster. Full pipeline execution requires a supported scheduler and
     stage-specific external software; template-dependent operations may also
     use Python and TemplateFlow.
-SystemRequirements: Full scheduled workflows: SLURM or TORQUE/PBS, Bash,
+SystemRequirements: Full scheduled workflows: SLURM or TORQUE/PBS, Bash, md5sum,
     Singularity (or Apptainer providing a Singularity-compatible command), and
     stage-specific container images. Optional stages may additionally require
     the Flywheel CLI, a BIDS validator, a HeuDiConv heuristic, a FreeSurfer
@@ -49,6 +49,7 @@ Imports:
 Suggests: 
     testthat (>= 3.0.0),
     withr,
+    pkgload,
     knitr,
     rmarkdown,
     MASS,

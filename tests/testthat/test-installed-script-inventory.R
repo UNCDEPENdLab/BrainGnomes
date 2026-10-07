@@ -19,9 +19,10 @@ test_that("installed R-script inventory contains only supported entry points and
     public = "BrainGnomes",
     scheduler_helpers = c(
       "add_parent.R", "insert_tracked_job.R", "prepare_job_manifest.R",
-      "upd_job_status.R"
+      "submit_job.R", "upd_job_status.R"
     ),
-    internal_workers = c("extract_cli.R", "postprocess_cli.R")
+    internal_workers = c("extract_cli.R", "postprocess_cli.R"),
+    runtime_support = c("worker_bootstrap.R", "worker_runtime_load.R")
   )
   inst_dir <- system.file(package = "BrainGnomes")
   if (!nzchar(inst_dir) || !file.exists(file.path(inst_dir, "BrainGnomes"))) {

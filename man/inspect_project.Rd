@@ -31,7 +31,7 @@ relies only on the tracking database.}
 \value{
 A \code{bg_project_inspection} object. Its \code{overview}, \code{stages},
 \code{active}, \code{reconciliation}, \code{subjects}, \code{subject_stages}, \code{runs},
-\code{attempts}, and \code{jobs} elements are data frames suitable for programmatic
+\code{attempts}, \code{submissions}, and \code{jobs} elements are data frames suitable for programmatic
 queries.
 }
 \description{
@@ -48,6 +48,9 @@ The \code{overview} table contains one row for the selected scope.
 requested wall time, and health flags. When \code{refresh = TRUE},
 \code{reconciliation} compares those database states with the scheduler without
 modifying either source.
+\code{submissions} exposes UUID attempts registered before scheduler submission,
+including uncertain outcomes without a scheduler ID. Those outcomes remain
+visible and prevent a project from being reported as completed.
 \code{subject_stages} retains the stage and stream detail; \code{runs} summarizes
 submissions; and \code{attempts} retains both current and superseded logical
 attempts. \code{jobs} contains the underlying tracking rows and marks the rows
