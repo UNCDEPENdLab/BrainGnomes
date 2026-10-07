@@ -304,6 +304,13 @@ test_that("scheduler refresh is read-only and exposes reconciliation", {
   expect_true(all(!refreshed$reconciliation$agrees))
   expect_equal(refreshed$overview$n_active_attention, 2L)
   expect_equal(refreshed$overview$n_active_stale, 2L)
+  # Even authoritative-looking scheduler completion remains an observation.
+  # Project work-unit and tracked-job summaries must still describe SQLite.
+  expect_equal(refreshed$overview$n_completed, 0L)
+  expect_equal(refreshed$overview$n_running, 1L)
+  expect_equal(refreshed$overview$n_queued, 1L)
+  expect_equal(refreshed$overview$n_jobs_running, 1L)
+  expect_equal(refreshed$overview$n_jobs_queued, 1L)
 
   con <- DBI::dbConnect(RSQLite::SQLite(), fixture$db)
   on.exit(DBI::dbDisconnect(con), add = TRUE)

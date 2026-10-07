@@ -18,7 +18,7 @@ print_help <- function() {
             "used internally in command-line only scripts submitted to `cluster_job_submit`.",
             "Options:",
             "  --job_id <job_id>: The job id of the job whose status is to be updated.",
-            "  --sqlite_db <sqlite_db>: The path to the tracking SQLite database",
+            "  --sqlite_db <sqlite_db>: The path to the tracking SQLite database (NULL or empty disables tracking).",
             "  --status <status>: The new status of the job specified by `--job_id`.",
             "                     One of QUEUED, STARTED, COMPLETED, FAILED, or FAILED_BY_EXT",
             "  --output_dir <dir>: Directory to capture output manifest from (only used when status is COMPLETED).",
@@ -39,6 +39,14 @@ if ("--help" %in% tmp) { print_help(); quit(save = "no", status = 0) }
 
 args <- BrainGnomes::parse_cli_args(tmp)
 
+# The general parser collapses argv whitespace, which turns an explicitly empty
+# value into a bare flag. Preserve the shell's empty-database tracking opt-out.
+sqlite_arg_index <- match("--sqlite_db", tmp)
+if ((!is.na(sqlite_arg_index) && sqlite_arg_index < length(tmp) &&
+     identical(tmp[[sqlite_arg_index + 1L]], "")) || "--sqlite_db=" %in% tmp) {
+  args$sqlite_db <- NULL
+}
+
 # convert string versions of NULL to regular NULL
 if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL
 if (isTRUE(args$sqlite_db == "NULL")) args$sqlite_db <- NULL
@@ -46,6 +54,12 @@ if (isTRUE(args$status == "NULL")) args$status <- NULL
 args$cascade <- isTRUE(args$cascade)
 if (isTRUE(args$output_dir == "NULL")) args$output_dir <- NULL
 if (isTRUE(args$output_manifest_file == "NULL")) args$output_manifest_file <- NULL
+
+# Low-level submission APIs allow intentionally untracked jobs. Preserve that
+# opt-out, but require strict persistence whenever a database path is supplied.
+if (is.null(args$sqlite_db) || identical(args$sqlite_db, "")) {
+  quit(save = "no", status = 0)
+}
 
 # Very short jobs, especially array tasks, can start before the submission
 # process has finished inserting their tracking row. Resolve/retry here so the
@@ -79,7 +93,8 @@ tryCatch({
     sqlite_db = args$sqlite_db,
     status = args$status,
     output_manifest = output_manifest,
-    cascade = args$cascade
+    cascade = args$cascade,
+    strict = TRUE
   )
 }, error = function(e) {
   msg <- paste(

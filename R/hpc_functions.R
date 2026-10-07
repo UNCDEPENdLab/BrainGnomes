@@ -380,7 +380,11 @@ scheduler_job_status <- function(job_ids, scheduler = "local", user = NULL) {
     job_id = job_ids, scheduler = scheduler,
     scheduler_status = normalize_scheduler_job_status(raw_status, scheduler),
     scheduler_raw_status = raw_status,
-    query_detail = rep(NA_character_, length(job_ids)),
+    query_detail = if ("QueryDetail" %in% names(result)) {
+      as.character(result$QueryDetail[keep])[match_index]
+    } else {
+      rep(NA_character_, length(job_ids))
+    },
     stringsAsFactors = FALSE
   )
 }
@@ -408,6 +412,12 @@ scheduler_job_status <- function(job_ids, scheduler = "local", user = NULL) {
 #'
 #' @details Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;
 #'   "slurm" and "sbatch" are the same, and "sh" and "local" are the same.
+#'   This function waits on scheduler observations, not the project's SQLite
+#'   tracking state. Missing Slurm or TORQUE records are not evidence of success:
+#'   waiting continues until a known terminal state or the timeout. In particular,
+#'   expired TORQUE records cannot establish successful completion.
+#'   Confirmed terminal states are retained for this wait invocation while other
+#'   jobs finish, so subsequent accounting expiry does not erase that evidence.
 #' @examples
 #' \dontrun{
 #' # example on qsub/torque cluster
@@ -432,12 +442,23 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
 
   job_complete <- FALSE
   wait_start <- Sys.time()
+  terminal_status <- rep(NA_character_, length(job_ids))
 
-  get_job_status <- function() { # use variables in parent environment
-    status <- scheduler_job_status(job_ids, scheduler = scheduler)
-    state <- tolower(status$scheduler_status)
-    state[state == "completed"] <- "complete"
-    state[state == "unavailable"] <- "unknown"
+  # Poll unresolved jobs only; terminal observations cannot expire out of this
+  # invocation's evidence while slower jobs are still running. This cache is
+  # not a tracking-database update, and never infers success from disappearance.
+  get_job_status <- function() {
+    unresolved <- which(is.na(terminal_status))
+    state <- terminal_status
+    if (length(unresolved)) {
+      status <- scheduler_job_status(job_ids[unresolved], scheduler = scheduler)
+      observed <- tolower(status$scheduler_status)
+      observed[observed == "completed"] <- "complete"
+      observed[observed == "unavailable"] <- "unknown"
+      state[unresolved] <- observed
+      terminal <- observed %in% c("complete", "failed", "cancelled")
+      terminal_status[unresolved[terminal]] <<- observed[terminal]
+    }
     state
   }
 
@@ -493,101 +514,149 @@ wait_for_job <- function(job_ids, repolling_interval = 60, max_wait = 60 * 60 * 
   return(invisible(ret_code))
 }
 
-# calls sacct with a job list
-slurm_job_status <- function(job_ids = NULL, user = NULL, sacct_format = "jobid,submit,timelimit,start,end,state") {
-  jstring <- if (!is.null(job_ids)) paste("-j", paste(job_ids, collapse = ",")) else ""
-  ustring <- if (!is.null(user)) paste("-u", paste(user, collapse = ",")) else ""
-
-  # -P specifies a parsable output separated by pipes
-  # -X avoids printing subsidiary jobs within each job id
-  #cmd <- paste("sacct", jstring, ustring, "-X -P -o", sacct_format)
-  cmd <- paste(jstring, ustring, "-X -P -o", sacct_format)
-  # cat(cmd, "\n")
-  res <- system2("sacct", args = cmd, stdout = TRUE)
-
-  df_base <- data.frame(JobID = job_ids, stringsAsFactors = FALSE)
-  df_empty <- data.frame(
-    JobID = job_ids,
-    Submit = NA_character_,
-    Timelimit = NA_character_,
-    Start = NA_character_,
-    End = NA_character_,
-    State = "MISSING",
-    stringsAsFactors = FALSE
-  )
-
-  # handle non-zero exit status -- return empty data
-  if (!is.null(attr(res, "status"))) {
-    warning("sacct call generated non-zero exit status")
-    print(cmd)
-    return(df_empty)
+#' Collapse Slurm allocation/task observations to the requested job identifiers
+#'
+#' @param records Parsed sacct allocation records with JobID and State columns.
+#' @param job_ids Requested allocation or individual array-task identifiers.
+#' @return One row per requested identifier, with array state counts in QueryDetail.
+#' @noRd
+aggregate_slurm_job_status <- function(records, job_ids) {
+  records$JobID <- as.character(records$JobID)
+  # Steps are not independently scheduled tasks; do not let a .batch/.extern
+  # record mask its allocation state. Exact task requests remain independent.
+  records <- records[!grepl("[.]", records$JobID), , drop = FALSE]
+  if (length(job_ids) == 0L) {
+    records$QueryDetail <- character(nrow(records))
+    return(records[FALSE, , drop = FALSE])
   }
-
-  # parse sacct output into data frame
-  out <- data.table::fread(text = res, data.table=FALSE)
-  
-  if (!checkmate::test_subset(c("JobID", "State"), names(out))) {
-    warning("Missing columns in sacct output")
-    return(df_empty)
-  }
-
-  out$JobID <- as.character(out$JobID)
-
-  # base R left join
-  merged <- merge(df_base, out, by = "JobID", all.x = TRUE)
-
-  # fill in missing State values with "MISSING"
-  if ("State" %in% names(merged)) {
-    merged$State[is.na(merged$State)] <- "MISSING"
-  } else {
-    merged$State <- "MISSING"
-  }
-
-  return(merged)
+  rows <- lapply(as.character(job_ids), function(job_id) {
+    task_rows <- grepl("_[0-9]+$", records$JobID) &
+      sub("_[0-9]+$", "", records$JobID) == job_id
+    indices <- if (any(task_rows)) which(task_rows) else which(records$JobID == job_id)
+    if (!length(indices)) {
+      row <- records[NA_integer_, , drop = FALSE]
+      row$JobID <- job_id
+      row$State <- "MISSING"
+      row$QueryDetail <- NA_character_
+      return(row)
+    }
+    observed <- records[indices, , drop = FALSE]
+    row <- observed[1L, , drop = FALSE]
+    row$JobID <- job_id
+    row$QueryDetail <- NA_character_
+    if (any(task_rows)) {
+      states <- normalize_scheduler_job_status(observed$State, "slurm")
+      # Keep waiting while any task is active, even when another has failed.
+      # Unknown tasks prevent a successful terminal result. Accounting is an
+      # observation only: these aggregates never write tracking SQLite state.
+      precedence <- c("RUNNING", "QUEUED", "SUSPENDED", "UNAVAILABLE",
+                      "MISSING", "UNKNOWN", "FAILED", "CANCELLED", "COMPLETED")
+      state <- precedence[precedence %in% states][[1L]]
+      row$State <- state
+      counts <- table(states)
+      row$QueryDetail <- paste0(
+        "Observed ", nrow(observed), " array tasks: ",
+        paste(names(counts), as.integer(counts), sep = "=", collapse = ", ")
+      )
+      # Task-specific values (including exit codes) must not masquerade as
+      # parent allocation values. Only aggregate the standard timestamps.
+      other_columns <- setdiff(names(row), c("JobID", "State", "QueryDetail"))
+      row[other_columns] <- NA_character_
+      for (column in intersect(c("Submit", "Start", "End"), names(row))) {
+        values <- observed[[column]]
+        known <- !is.na(values) & nzchar(values) & !values %in% c("Unknown", "None")
+        if (column == "End") {
+          terminal <- all(states %in% c("COMPLETED", "FAILED", "CANCELLED"))
+          if (terminal && all(known)) row[[column]] <- max(values)
+        } else if (any(known)) {
+          row[[column]] <- min(values[known])
+        }
+      }
+    }
+    row
+  })
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
 }
 
-# torque does not keep information about completed jobs available in qstat or qselect
-# thus, need to log when a job is listed as queued, so that it 'going missing' is evidence of it being completed
+#' Query Slurm accounting, expanding arrays before aggregating task states
+#'
+#' @param job_ids Requested job identifiers, or NULL to list observed allocations.
+#' @param user Optional usernames to filter accounting records.
+#' @param sacct_format Comma-separated sacct fields including JobID and State.
+#' @return A data frame of scheduler observations, not persisted tracking states.
+#' @noRd
+slurm_job_status <- function(job_ids = NULL, user = NULL,
+                             sacct_format = "jobid%100,submit,timelimit,start,end,state%40") {
+  if (!is.null(job_ids) && !length(job_ids)) {
+    return(data.frame(JobID = character(), State = character(), QueryDetail = character()))
+  }
+  args <- c("--array", "-X", "-P", "-o", shQuote(sacct_format))
+  if (!is.null(job_ids)) args <- c(args, "-j", shQuote(paste(job_ids, collapse = ",")))
+  if (!is.null(user)) args <- c(args, "-u", shQuote(paste(user, collapse = ",")))
+  # The timestamp aggregates below require sortable ISO-style timestamps,
+  # regardless of a user's interactive SLURM_TIME_FORMAT preference.
+  res <- suppressWarnings(system2("sacct", args = args, stdout = TRUE, stderr = TRUE,
+                                  env = "SLURM_TIME_FORMAT=standard"))
+  if (!is.null(attr(res, "status")) && attr(res, "status") != 0L) {
+    stop("sacct query failed: ", paste(res, collapse = "\n"), call. = FALSE)
+  }
+  out <- if (length(res) && any(nzchar(trimws(res)))) {
+    data.table::fread(text = paste(res, collapse = "\n"), data.table = FALSE,
+                      colClasses = "character")
+  } else {
+    data.frame(JobID = character(), State = character(), stringsAsFactors = FALSE)
+  }
+  if (!all(c("JobID", "State") %in% names(out))) {
+    stop("Missing JobID or State columns in sacct output.", call. = FALSE)
+  }
+  if (is.null(job_ids)) job_ids <- unique(sub("_[0-9]+$", "", out$JobID[!grepl("[.]", out$JobID)]))
+  aggregate_slurm_job_status(out, job_ids)
+}
+
+#' Query TORQUE without treating expired records as successful jobs
+#'
+#' @param job_ids Requested TORQUE job identifiers.
+#' @param user Optional usernames; defaults to the current user.
+#' @return Scheduler observations; retained C jobs require a known exit status.
+#' @noRd
 torque_job_status <- function(job_ids, user = NULL) {
-  #res <- system2("qstat", args = paste("-f", paste(job_ids, collapse=" "), "| grep -i 'job_state'"), stdout = TRUE)
-
-  # Retrieve job lists from Torque scheduler via qselect
-  q_jobs <- system2("qselect", args = "-u $USER -s QW", stdout = TRUE) # queued jobs
-  r_jobs <- system2("qselect", args = "-u $USER -s EHRT", stdout = TRUE) # running jobs
-  c_jobs <- system2("qselect", args = "-u $USER -s C", stdout = TRUE) # complete jobs
-  m_jobs <- setdiff(job_ids, c(q_jobs, r_jobs, c_jobs)) # missing jobs
-
-  #state_labels <- c("queued", "running", "complete", "missing")
-  state_labels <- c("queued", "running", "complete", "complete")
-
-  # TORQUE clusters only keep jobs with status C (complete) for a limited period of time. After that, the job comes back as missing.
-  # Because of this, if one job finishes at time X and another finishes at time Y, job X will be 'missing' if job Y takes a very long time.
-  # Thus, we return any missing jobs as complete, which could be problematic if they are truly missing immediately after submission (as happened with slurm).
-  # Ideally, we would track a job within wait_for_job such that it can be missing initially, then move into running, then move into complete.
-
-  job_lists <- list(q_jobs, r_jobs, c_jobs, m_jobs)
-
-  # Create a data frame for each state
-  state_dfs <- vector("list", length(job_lists))
-  for (i in seq_along(job_lists)) {
-    if (length(job_lists[[i]]) > 0L) {
-      state_dfs[[i]] <- data.frame(JobID = job_lists[[i]], State = rep(state_labels[i], length(job_lists[[i]])), stringsAsFactors = FALSE)
+  job_ids <- as.character(job_ids)
+  result <- data.frame(JobID = job_ids, State = rep("MISSING", length(job_ids)),
+                       QueryDetail = rep(NA_character_, length(job_ids)))
+  if (!length(job_ids)) return(result)
+  if (is.null(user)) user <- Sys.info()[["user"]]
+  # Query lists separately because qselect permits only a single state selector.
+  lists <- lapply(c("QWH", "ERT", "C"), function(states) {
+    res <- suppressWarnings(system2("qselect", args = c(
+      "-u", shQuote(paste(user, collapse = ",")), "-s", states
+    ), stdout = TRUE, stderr = TRUE))
+    if (!is.null(attr(res, "status")) && attr(res, "status") != 0L) {
+      stop("qselect query failed: ", paste(res, collapse = "\n"), call. = FALSE)
+    }
+    trimws(res[nzchar(trimws(res))])
+  })
+  result$State[job_ids %in% lists[[1L]]] <- "QUEUED"
+  result$State[job_ids %in% lists[[2L]]] <- "RUNNING"
+  for (index in which(job_ids %in% lists[[3L]])) {
+    # C means finished, not necessarily successful. Records can also expire
+    # between qselect and qstat; preserve uncertainty rather than guess success.
+    res <- suppressWarnings(system2("qstat", args = c("-f", shQuote(job_ids[[index]])),
+                                    stdout = TRUE, stderr = TRUE))
+    exit_line <- grep("^[[:space:]]*exit_status[[:space:]]*=[[:space:]]*-?[0-9]+[[:space:]]*$",
+                      res, value = TRUE, ignore.case = TRUE)
+    if ((!is.null(attr(res, "status")) && attr(res, "status") != 0L) ||
+        length(exit_line) != 1L) {
+      result$State[[index]] <- "UNKNOWN"
+      result$QueryDetail[[index]] <- "Retained TORQUE job has no readable exit status."
     } else {
-      state_dfs[[i]] <- NULL
+      exit_code <- trimws(sub(".*=", "", exit_line))
+      result$State[[index]] <- if (exit_code == "0") "COMPLETED" else "FAILED"
+      result$QueryDetail[[index]] <- paste0("TORQUE exit_status=", exit_code)
     }
   }
-
-  # Combine all job states into one data frame
-  state_df <- do.call(rbind, state_dfs)
-
-  if (!is.null(attr(q_jobs, "status"))) {
-    warning("qselect call generated non-zero exit status")
-    return(data.frame(JobID = job_ids, State = "missing"))
-  }
-
-  #job_state <- sub(".*job_state = ([A-z]).*", "\\1", res, perl = TRUE)
-
-  return(state_df)
+  result
 }
 
 #' Query local process status by PID

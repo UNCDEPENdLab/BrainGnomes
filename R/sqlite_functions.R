@@ -212,6 +212,8 @@ submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL,
   if(is.null(str) | is.null(sqlite_db)) return(invisible(NULL))
 
   con <- dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL) # establish connection
+  # Release the connection even when SQLite rejects a query or a busy write.
+  on.exit(dbDisconnect(con), add = TRUE)
   sqliteSetBusyHandler(con, busy_timeout * 1000) # busy_timeout arg in seconds * 1000 ms
   
   if (isTRUE(return_result)) {
@@ -219,9 +221,7 @@ submit_sqlite_query <- function(str = NULL, sqlite_db = NULL, param = NULL,
   } else {
     res <- dbExecute(con, str, param = param) # execute query
   }
-  
-  dbDisconnect(con) # disconnect
-  
+
   return(invisible(res))
 }
 

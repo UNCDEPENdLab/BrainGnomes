@@ -42,6 +42,12 @@ need to be scheduled or complete before the parent script should continue.
 \details{
 Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;
 "slurm" and "sbatch" are the same, and "sh" and "local" are the same.
+This function waits on scheduler observations, not the project's SQLite
+tracking state. Missing Slurm or TORQUE records are not evidence of success:
+waiting continues until a known terminal state or the timeout. In particular,
+expired TORQUE records cannot establish successful completion.
+Confirmed terminal states are retained for this wait invocation while other
+jobs finish, so subsequent accounting expiry does not erase that evidence.
 }
 \examples{
 \dontrun{
