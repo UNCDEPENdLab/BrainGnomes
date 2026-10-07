@@ -10,7 +10,8 @@ update_tracked_job_status(
   status,
   output_manifest = NULL,
   cascade = FALSE,
-  exclude = NULL
+  exclude = NULL,
+  strict = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,10 @@ status is \code{"COMPLETED"}. See \code{\link{capture_output_manifest}}.}
 the failure is recursively propagated to child jobs not listed in \code{exclude}.}
 
 \item{exclude}{Character or numeric vector. One or more job IDs to exclude from cascading failure updates.}
+
+\item{strict}{Logical. If \code{TRUE}, invalid tracking targets, failed SQLite
+writes, and unmatched job identifiers raise errors instead of warning or
+silently returning. Worker commands use this to require persisted updates.}
 }
 \value{
 Invisibly returns \code{NULL}. Side effect is a modification to the SQLite job tracking table.
@@ -49,7 +54,8 @@ match their submission-time checksums. A manifest configured with the default
 \code{"fail"} drift policy stops execution when verification fails.
 
 When \code{status} is \code{"COMPLETED"} and \code{output_manifest} is provided, the manifest
-is stored in the \code{output_manifest} column for later verification.
+is stored in the \code{output_manifest} column for later verification. Completion
+status, its timestamp, and the manifest are written atomically in one SQL update.
 
 If \code{cascade = TRUE}, and the status is \code{"FAILED"} or \code{"FAILED_BY_EXT"}, any dependent jobs (as determined
 via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED_BY_EXT"}, unless their status is already
@@ -58,5 +64,6 @@ via \code{get_tracked_job_status()}) will be recursively marked as \code{"FAILED
 If no tracking row matches \code{job_id}, a warning is emitted and no manifest/cascade
 updates are attempted, preventing silent status-update failures.
 
-If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails silently and returns \code{NULL}.
+If \code{sqlite_db} or \code{job_id} is invalid or missing, the function fails
+silently and returns \code{NULL}, unless \code{strict = TRUE}.
 }
