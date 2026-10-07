@@ -126,7 +126,10 @@ submission fails. Defaults to FALSE (i.e., issue a warning).</p></dd>
 
 <dt id="arg-tracking-sqlite-db">tracking_sqlite_db<a class="anchor" aria-label="anchor" href="#arg-tracking-sqlite-db"></a></dt>
 <dd><p>Path to a SQLite database used for job tracking. If provided, job submission metadata
-will be recorded, including job dependencies and parent-child relationships.</p></dd>
+will be recorded, including job dependencies and parent-child relationships.
+Tracked jobs use a sealed, project-owned runtime and register a UUID attempt
+before scheduler submission. Unconfirmed submissions block automatic
+resubmission of the same work unit and role until their outcome is confirmed.</p></dd>
 
 
 <dt id="arg-tracking-args">tracking_args<a class="anchor" aria-label="anchor" href="#arg-tracking-args"></a></dt>
@@ -143,6 +146,25 @@ always excluded. This is used in conjunction with
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A character string containing the jobid of the scheduled job.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Tracked workers execute project-owned copies rather than scripts or
+BrainGnomes code in a mutable installation. A checksummed runtime is reused
+under <code>runs/&lt;run_id&gt;/runtime/</code>; attempt-specific scripts, bootstrap
+receipts, scheduler output, and acknowledgements live beside the job
+manifest. Without a run ID, contracts live under <code>job_contracts/</code>.
+External R dependencies, the R executable, and containers are not copied.
+Worker startup requires Bash and <code>md5sum</code>. Development source runtimes
+additionally require <span class="pkg">pkgload</span>; installed runtimes do not.
+<code>BG_WORKER_JOB_ID</code> identifies the allocation (the wrapper PID for
+local execution), and <code>BG_ATTEMPT_ID</code> identifies its prepared UUID.</p>
+<p>SQLite's additive <code>job_submission_attempts</code> table records the UUID
+before scheduler invocation. Either the submitter or an early worker can
+bind the scheduler ID without resetting worker state. Unconfirmed outcomes
+remain visible in <code>inspect_project()$submissions</code>; absence from a queue
+alone is not sufficient evidence to retry. Bootstrap failure receipts are
+retained when database reporting fails, but are not automatically replayed.</p>
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>

@@ -91,7 +91,10 @@ cluster_job_submit(
 
   Path to a SQLite database used for job tracking. If provided, job
   submission metadata will be recorded, including job dependencies and
-  parent-child relationships.
+  parent-child relationships. Tracked jobs use a sealed, project-owned
+  runtime and register a UUID attempt before scheduler submission.
+  Unconfirmed submissions block automatic resubmission of the same work
+  unit and role until their outcome is confirmed.
 
 - tracking_args:
 
@@ -107,6 +110,28 @@ cluster_job_submit(
 ## Value
 
 A character string containing the jobid of the scheduled job.
+
+## Details
+
+Tracked workers execute project-owned copies rather than scripts or
+BrainGnomes code in a mutable installation. A checksummed runtime is
+reused under `runs/<run_id>/runtime/`; attempt-specific scripts,
+bootstrap receipts, scheduler output, and acknowledgements live beside
+the job manifest. Without a run ID, contracts live under
+`job_contracts/`. External R dependencies, the R executable, and
+containers are not copied. Worker startup requires Bash and `md5sum`.
+Development source runtimes additionally require pkgload; installed
+runtimes do not. `BG_WORKER_JOB_ID` identifies the allocation (the
+wrapper PID for local execution), and `BG_ATTEMPT_ID` identifies its
+prepared UUID.
+
+SQLite's additive `job_submission_attempts` table records the UUID
+before scheduler invocation. Either the submitter or an early worker can
+bind the scheduler ID without resetting worker state. Unconfirmed
+outcomes remain visible in `inspect_project()$submissions`; absence from
+a queue alone is not sufficient evidence to retry. Bootstrap failure
+receipts are retained when database reporting fails, but are not
+automatically replayed.
 
 ## Author
 

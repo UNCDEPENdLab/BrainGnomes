@@ -46,8 +46,9 @@ inspect_project(
 ## Value
 
 A `bg_project_inspection` object. Its `overview`, `stages`, `active`,
-`reconciliation`, `subjects`, `subject_stages`, `runs`, `attempts`, and
-`jobs` elements are data frames suitable for programmatic queries.
+`reconciliation`, `subjects`, `subject_stages`, `runs`, `attempts`,
+`submissions`, and `jobs` elements are data frames suitable for
+programmatic queries.
 
 ## Details
 
@@ -56,15 +57,18 @@ and `subjects` aggregate its current work units; `active` reports
 current queued and running jobs with elapsed time, requested wall time,
 and health flags. When `refresh = TRUE`, `reconciliation` compares those
 database states with the scheduler without modifying either source.
-`subject_stages` retains the stage and stream detail; `runs` summarizes
-submissions; and `attempts` retains both current and superseded logical
-attempts. `jobs` contains the underlying tracking rows and marks the
-rows contributing to current project status with `is_current_attempt`.
-Printing the object or its `jobs` component deliberately omits long
-scheduler, path, and manifest fields, but those columns remain available
-for ordinary data-frame access. Subject-wide stages use `NA` for
-`ses_id`; stages that run separately by session retain their session
-identifier.
+`submissions` exposes UUID attempts registered before scheduler
+submission, including uncertain outcomes without a scheduler ID. Those
+outcomes remain visible and prevent a project from being reported as
+completed. `subject_stages` retains the stage and stream detail; `runs`
+summarizes submissions; and `attempts` retains both current and
+superseded logical attempts. `jobs` contains the underlying tracking
+rows and marks the rows contributing to current project status with
+`is_current_attempt`. Printing the object or its `jobs` component
+deliberately omits long scheduler, path, and manifest fields, but those
+columns remain available for ordinary data-frame access. Subject-wide
+stages use `NA` for `ses_id`; stages that run separately by session
+retain their session identifier.
 
 ## See also
 

@@ -104,7 +104,7 @@ relies only on the tracking database.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>bg_project_inspection</code> object. Its <code>overview</code>, <code>stages</code>,
 <code>active</code>, <code>reconciliation</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>,
-<code>attempts</code>, and <code>jobs</code> elements are data frames suitable for programmatic
+<code>attempts</code>, <code>submissions</code>, and <code>jobs</code> elements are data frames suitable for programmatic
 queries.</p>
     </div>
     <div class="section level2">
@@ -115,6 +115,9 @@ queries.</p>
 requested wall time, and health flags. When <code>refresh = TRUE</code>,
 <code>reconciliation</code> compares those database states with the scheduler without
 modifying either source.
+<code>submissions</code> exposes UUID attempts registered before scheduler submission,
+including uncertain outcomes without a scheduler ID. Those outcomes remain
+visible and prevent a project from being reported as completed.
 <code>subject_stages</code> retains the stage and stream detail; <code>runs</code> summarizes
 submissions; and <code>attempts</code> retains both current and superseded logical
 attempts. <code>jobs</code> contains the underlying tracking rows and marks the rows

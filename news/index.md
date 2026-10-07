@@ -2,6 +2,22 @@
 
 ## BrainGnomes (development version)
 
+- Snapshot tracked worker scripts, helpers, and the BrainGnomes runtime
+  into sealed, reusable project/run-owned bundles. Package reinstalls no
+  longer change queued workers’ startup code. Independent bootstrap
+  handlers publish failure receipts and record non-array startup
+  failures without loading BrainGnomes; external R dependencies and
+  containers remain shared inputs.
+
+- Register UUID submission attempts in SQLite before invoking Slurm,
+  TORQUE, or local execution, including dynamically submitted
+  postprocessing arrays. Workers can bind their own allocation IDs
+  before submission returns, and late acknowledgements preserve started
+  or completed states. Retain uncertain submissions, block duplicate
+  launches of the same work unit and role, and expose these attempts
+  through `inspect_project()$submissions`. Inspection and scheduler
+  refresh remain read-only and SQLite-first.
+
 - Aggregate Slurm array-task accounting under the tracked array
   identifier, preserving active and uncertain states until all observed
   tasks terminate. Distinguish scheduler query failures from missing
