@@ -2,6 +2,20 @@
 
 ## BrainGnomes (development version)
 
+- Aggregate Slurm array-task accounting under the tracked array
+  identifier, preserving active and uncertain states until all observed
+  tasks terminate. Distinguish scheduler query failures from missing
+  records. Do not infer success from expired TORQUE records; verify
+  retained completed jobs using exit status. Retain confirmed terminal
+  observations while waiting for other jobs to finish. Scheduler refresh
+  remains read-only and project summaries remain SQLite-first.
+
+- Require tracked worker status updates to persist in SQLite or exit
+  with an error. Store completion status, timestamp, and output manifest
+  atomically so failed manifest writes cannot leave a falsely completed
+  job in the tracking database. Close SQLite connections after rejected
+  queries as well as successful ones.
+
 - Extend spatial smoothing checks to isotropic and anisotropic voxel
   spacings of 1.8–4 mm and kernels 1.5–3 times geometric mean voxel
   spacing. Use smooth directional FWHM response functions only where

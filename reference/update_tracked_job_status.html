@@ -58,7 +58,8 @@
 <span>  <span class="va">status</span>,</span>
 <span>  output_manifest <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cascade <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  exclude <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  exclude <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  strict <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -92,6 +93,12 @@ the failure is recursively propagated to child jobs not listed in <code>exclude<
 <dt id="arg-exclude">exclude<a class="anchor" aria-label="anchor" href="#arg-exclude"></a></dt>
 <dd><p>Character or numeric vector. One or more job IDs to exclude from cascading failure updates.</p></dd>
 
+
+<dt id="arg-strict">strict<a class="anchor" aria-label="anchor" href="#arg-strict"></a></dt>
+<dd><p>Logical. If <code>TRUE</code>, invalid tracking targets, failed SQLite
+writes, and unmatched job identifiers raise errors instead of warning or
+silently returning. Worker commands use this to require persisted updates.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -108,13 +115,15 @@ host and verifies that the sealed manifest and execution-driving files still
 match their submission-time checksums. A manifest configured with the default
 <code>"fail"</code> drift policy stops execution when verification fails.</p>
 <p>When <code>status</code> is <code>"COMPLETED"</code> and <code>output_manifest</code> is provided, the manifest
-is stored in the <code>output_manifest</code> column for later verification.</p>
+is stored in the <code>output_manifest</code> column for later verification. Completion
+status, its timestamp, and the manifest are written atomically in one SQL update.</p>
 <p>If <code>cascade = TRUE</code>, and the status is <code>"FAILED"</code> or <code>"FAILED_BY_EXT"</code>, any dependent jobs (as determined
 via <code><a href="get_tracked_job_status.html">get_tracked_job_status()</a></code>) will be recursively marked as <code>"FAILED_BY_EXT"</code>, unless their status is already
 <code>"FAILED"</code> or they are listed in <code>exclude</code>.</p>
 <p>If no tracking row matches <code>job_id</code>, a warning is emitted and no manifest/cascade
 updates are attempted, preventing silent status-update failures.</p>
-<p>If <code>sqlite_db</code> or <code>job_id</code> is invalid or missing, the function fails silently and returns <code>NULL</code>.</p>
+<p>If <code>sqlite_db</code> or <code>job_id</code> is invalid or missing, the function fails
+silently and returns <code>NULL</code>, unless <code>strict = TRUE</code>.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

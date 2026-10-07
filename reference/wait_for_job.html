@@ -108,7 +108,13 @@ and <code>stop_on_timeout = FALSE</code>. Otherwise, stops execution with an err
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Note that for the <code>scheduler</code> argument, "torque" and "qsub" are the same;
-"slurm" and "sbatch" are the same, and "sh" and "local" are the same.</p>
+"slurm" and "sbatch" are the same, and "sh" and "local" are the same.
+This function waits on scheduler observations, not the project's SQLite
+tracking state. Missing Slurm or TORQUE records are not evidence of success:
+waiting continues until a known terminal state or the timeout. In particular,
+expired TORQUE records cannot establish successful completion.
+Confirmed terminal states are retained for this wait invocation while other
+jobs finish, so subsequent accounting expiry does not erase that evidence.</p>
     </div>
     <div class="section level2">
     <h2 id="author">Author<a class="anchor" aria-label="anchor" href="#author"></a></h2>

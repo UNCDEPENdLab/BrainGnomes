@@ -12,7 +12,8 @@ update_tracked_job_status(
   status,
   output_manifest = NULL,
   cascade = FALSE,
-  exclude = NULL
+  exclude = NULL,
+  strict = FALSE
 )
 ```
 
@@ -50,6 +51,13 @@ update_tracked_job_status(
   Character or numeric vector. One or more job IDs to exclude from
   cascading failure updates.
 
+- strict:
+
+  Logical. If `TRUE`, invalid tracking targets, failed SQLite writes,
+  and unmatched job identifiers raise errors instead of warning or
+  silently returning. Worker commands use this to require persisted
+  updates.
+
 ## Value
 
 Invisibly returns `NULL`. Side effect is a modification to the SQLite
@@ -76,7 +84,8 @@ fails.
 
 When `status` is `"COMPLETED"` and `output_manifest` is provided, the
 manifest is stored in the `output_manifest` column for later
-verification.
+verification. Completion status, its timestamp, and the manifest are
+written atomically in one SQL update.
 
 If `cascade = TRUE`, and the status is `"FAILED"` or `"FAILED_BY_EXT"`,
 any dependent jobs (as determined via
@@ -89,4 +98,4 @@ manifest/cascade updates are attempted, preventing silent status-update
 failures.
 
 If `sqlite_db` or `job_id` is invalid or missing, the function fails
-silently and returns `NULL`.
+silently and returns `NULL`, unless `strict = TRUE`.
