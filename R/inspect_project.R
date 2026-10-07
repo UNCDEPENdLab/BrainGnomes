@@ -228,7 +228,8 @@
   keep <- !is.na(x) & nzchar(x)
   if (!any(keep)) return(NA_character_)
   values <- x[keep]
-  parsed <- suppressWarnings(as.numeric(as.POSIXct(values, tz = "UTC")))
+  timestamps <- sub("T", " ", sub("Z$", "", values), fixed = TRUE)
+  parsed <- suppressWarnings(as.numeric(as.POSIXct(timestamps, tz = "UTC")))
   if (all(is.na(parsed))) return(if (which == "min") min(values) else max(values))
   index <- if (which == "min") which.min(replace(parsed, is.na(parsed), Inf)) else which.max(replace(parsed, is.na(parsed), -Inf))
   values[[index]]
@@ -327,7 +328,8 @@
     )
   })
   result <- do.call(rbind, rows)
-  parsed <- suppressWarnings(as.numeric(as.POSIXct(result$submitted, tz = "UTC")))
+  timestamps <- sub("T", " ", sub("Z$", "", result$submitted), fixed = TRUE)
+  parsed <- suppressWarnings(as.numeric(as.POSIXct(timestamps, tz = "UTC")))
   result <- result[
     order(parsed, result$.latest_id, decreasing = TRUE, na.last = TRUE),
     , drop = FALSE
@@ -434,8 +436,16 @@
                                       subject_id = NULL, refresh = FALSE,
                                       all_runs = NULL) {
   retrieved_at <- Sys.time()
+  submissions <- inspect_job_submissions(scfg$metadata$sqlite_db)
+  if (nrow(submissions) && identical(scope, "run")) {
+    submissions <- submissions[!is.na(submissions$run_id) & submissions$run_id == run_id, , drop = FALSE]
+  }
+  if (nrow(submissions) && !is.null(subject_id)) {
+    submissions <- submissions[!is.na(submissions$sub_id) & submissions$sub_id == subject_id, , drop = FALSE]
+  }
   jobs <- .annotate_tracked_jobs(jobs)
   if (is.null(all_runs)) all_runs <- .project_runs_from_jobs(jobs)
+  all_runs <- project_runs_with_submissions(all_runs, submissions)
   attempts <- .aggregate_job_attempts(jobs)
   attempts <- .mark_current_attempts(attempts, all_runs, run_scope = identical(scope, "run"))
   current <- attempts[attempts$is_current, , drop = FALSE]
@@ -456,6 +466,19 @@
     current[!is.na(current$sub_id), , drop = FALSE], c("sub_id", "ses_id")
   )
   overview <- .inspection_overview(current, jobs, all_runs, scope, run_id)
+  overview$n_unconfirmed_submissions <- if (nrow(submissions)) {
+    sum(submissions$submission_state %in% c("SUBMITTING", "UNKNOWN"))
+  } else 0L
+  # A confirmed pre-launch rejection has no scheduler-bound row. Include the
+  # latest result for its unit/role, but not superseded rejection history.
+  overview$n_rejected_submissions <- 0L
+  if (nrow(submissions)) {
+    identities <- paste(submissions$unit_key, submissions$job_role, sep = "\r")
+    latest_submissions <- submissions[!duplicated(identities, fromLast = TRUE), , drop = FALSE]
+    overview$n_rejected_submissions <- sum(latest_submissions$submission_state == "REJECTED")
+  }
+  if (overview$n_rejected_submissions > 0L) overview$overall_status <- "SUBMISSION_FAILED"
+  if (overview$n_unconfirmed_submissions > 0L) overview$overall_status <- "UNCONFIRMED_SUBMISSIONS"
   active_health <- build_active_job_health(
     scfg, jobs[jobs$is_current_attempt, , drop = FALSE],
     retrieved_at = retrieved_at, refresh = refresh
@@ -503,6 +526,7 @@
     subject_stages = subject_stages,
     runs = runs,
     attempts = attempts,
+    submissions = submissions,
     jobs = jobs
   ), class = "bg_project_inspection")
 }
@@ -529,7 +553,7 @@
 #'   relies only on the tracking database.
 #' @return A `bg_project_inspection` object. Its `overview`, `stages`,
 #'   `active`, `reconciliation`, `subjects`, `subject_stages`, `runs`,
-#'   `attempts`, and `jobs` elements are data frames suitable for programmatic
+#'   `attempts`, `submissions`, and `jobs` elements are data frames suitable for programmatic
 #'   queries.
 #' @details The `overview` table contains one row for the selected scope.
 #'   `stages` and `subjects` aggregate its current work units;
@@ -537,6 +561,9 @@
 #'   requested wall time, and health flags. When `refresh = TRUE`,
 #'   `reconciliation` compares those database states with the scheduler without
 #'   modifying either source.
+#'   `submissions` exposes UUID attempts registered before scheduler submission,
+#'   including uncertain outcomes without a scheduler ID. Those outcomes remain
+#'   visible and prevent a project from being reported as completed.
 #'   `subject_stages` retains the stage and stream detail; `runs` summarizes
 #'   submissions; and `attempts` retains both current and superseded logical
 #'   attempts. `jobs` contains the underlying tracking rows and marks the rows
@@ -567,6 +594,8 @@ inspect_project <- function(input = getwd(), run_id = NULL,
   all_jobs <- .read_project_tracking_jobs(scfg)
   all_jobs <- .annotate_tracked_jobs(all_jobs)
   all_runs <- .project_runs_from_jobs(all_jobs)
+  submissions <- inspect_job_submissions(scfg$metadata$sqlite_db)
+  all_runs <- project_runs_with_submissions(all_runs, submissions)
 
   scope <- "project"
   resolved <- NULL
@@ -591,7 +620,13 @@ inspect_project <- function(input = getwd(), run_id = NULL,
   }
   if (!is.null(subject_id)) {
     jobs <- jobs[!is.na(jobs$sub_id) & jobs$sub_id == subject_id, , drop = FALSE]
-    if (nrow(jobs) == 0L) {
+    matching_submissions <- FALSE
+    if (nrow(submissions)) {
+      eligible <- !is.na(submissions$sub_id) & submissions$sub_id == subject_id
+      if (!is.null(resolved)) eligible <- eligible & !is.na(submissions$run_id) & submissions$run_id == resolved
+      matching_submissions <- any(eligible)
+    }
+    if (nrow(jobs) == 0L && !matching_submissions) {
       run_text <- if (is.null(run_id)) "" else paste0(" in the selected run")
       stop(
         "No tracked jobs were found for sub-", subject_id, run_text, ".",
@@ -657,6 +692,14 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
   cli::cli_text(
     "Tracked jobs: {overview$n_jobs} total | {overview$n_jobs_running} running | {overview$n_jobs_queued} queued"
   )
+  if (overview$n_unconfirmed_submissions > 0L) {
+    cli::cli_alert_warning(
+      "Unconfirmed submissions: {overview$n_unconfirmed_submissions}. Inspect x$submissions before resubmitting."
+    )
+  }
+  if (overview$n_rejected_submissions > 0L) {
+    cli::cli_alert_warning("Rejected submissions: {overview$n_rejected_submissions}. Inspect x$submissions for details.")
+  }
 
   if (nrow(x$active) > 0L && max_active > 0L) {
     shown_active <- utils::head(x$active, max_active)
@@ -689,9 +732,9 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
     if (nrow(attention) > nrow(shown)) {
       cli::cli_alert_info("{nrow(attention) - nrow(shown)} additional subject row{?s} omitted from this display.")
     }
-  } else if (nrow(x$subjects) > 0L) {
+  } else if (nrow(x$subjects) > 0L && overview$n_unconfirmed_submissions == 0L && overview$n_rejected_submissions == 0L) {
     cli::cli_alert_success("All currently tracked subject work is complete.")
-  } else if (overview$n_units == 0L) {
+  } else if (overview$n_units == 0L && overview$n_unconfirmed_submissions == 0L) {
     cli::cli_alert_info("No tracked work was found for this scope.")
   }
   cli::cli_alert_info(
@@ -703,7 +746,8 @@ print.bg_project_inspection <- function(x, ..., max_subjects = 12L,
 .get_project_runs_data <- function(input) {
   scfg <- project_config_from_input(input)
   jobs <- .annotate_tracked_jobs(.read_project_tracking_jobs(scfg))
-  .project_runs_from_jobs(jobs)
+  project_runs_with_submissions(.project_runs_from_jobs(jobs),
+                                inspect_job_submissions(scfg$metadata$sqlite_db))
 }
 
 .get_run_jobs_data <- function(input, run_id = "latest") {

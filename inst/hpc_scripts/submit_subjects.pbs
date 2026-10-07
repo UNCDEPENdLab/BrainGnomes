@@ -34,6 +34,7 @@ fi
 "$RSCRIPT_BIN" "$upd_job_status_path" --job_id "$PBS_JOBID" --sqlite_db "$sqlite_db" --status "STARTED"
 
 "$RSCRIPT_BIN" --vanilla -e '
+  if (nzchar(Sys.getenv("BG_RUNTIME_LOADER"))) source(Sys.getenv("BG_RUNTIME_LOADER"));
   snap <- readRDS(Sys.getenv("snapshot_rds"));
   if (!requireNamespace("BrainGnomes", quietly = TRUE)) stop("BrainGnomes package is required.");
   snap$resolved_subjects <- BrainGnomes:::realize_deferred_subjects(snap);

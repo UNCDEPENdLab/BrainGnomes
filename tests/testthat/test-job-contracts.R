@@ -106,7 +106,7 @@ test_that("tracked scheduler submissions seal a job manifest", {
   ))
   artifact_roles <- manifest$artifacts$role
   expect_setequal(artifact_roles, c(
-    "batch_script", "environment.fmriprep_container",
+    "batch_script", "execution_payload", "environment.fmriprep_container",
     "environment.custom_input"
   ))
   expect_true(all(c(

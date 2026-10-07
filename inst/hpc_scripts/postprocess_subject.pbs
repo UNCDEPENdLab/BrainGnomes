@@ -148,15 +148,16 @@ ts=$(date +%Y%m%d%H%M%S)
 array_stdout_log="$(dirname "$stdout_log")/postprocess_${stream_name}_array_${ts}.out"
 array_stderr_log="$(dirname "$stdout_log")/postprocess_${stream_name}_array_${ts}.err"
 
-# Seal the dynamically discovered array specification before submitting it.
+# Use the same pre-registered, sealed submission path as ordinary R jobs.
 export filelist_path task_status_dir
-array_manifest=$("${R_HOME}/bin/Rscript" "${pkg_dir}/prepare_job_manifest.R" \
+array_jid=$("${R_HOME}/bin/Rscript" "${pkg_dir}/submit_job.R" \
   --sqlite_db "$sqlite_db" \
   --sequence_id "$BG_RUN_ID" \
   --contract_directory "$BG_CONTRACT_DIRECTORY" \
   --script "$postprocess_image_sched_script" \
   --scheduler "torque" \
-  --scheduler_options "$sched_args -t 0-${last_idx}%${max_concurrent_images}" \
+  --scheduler_options "$sched_args" \
+  --array "0-${last_idx}%${max_concurrent_images}" \
   --stage "postprocess" \
   --stream "$stream_name" \
   --sub_id "$sub_id" \
@@ -164,45 +165,11 @@ array_manifest=$("${R_HOME}/bin/Rscript" "${pkg_dir}/prepare_job_manifest.R" \
   --job_role "array" \
   --job_name "postprocess_${stream_name}_array" \
   --stdout_log "$array_stdout_log" \
-  --stderr_log "$array_stderr_log")
-
-# Build variable export list for array job
-vars=(
-  "filelist_path=$filelist_path"
-  "task_status_dir=$task_status_dir"
-  "stdout_log=$array_stdout_log"
-  "stderr_log=$array_stderr_log"
-  "pkg_dir=$pkg_dir"
-  "postprocess_cli=$postprocess_cli"
-  "postprocess_rscript=$postprocess_rscript"
-  "out_dir=$out_dir"
-  "sub_id=$sub_id"
-  "log_file=$log_file"
-  "R_HOME=$R_HOME"
-  "debug_pipeline=$debug_pipeline"
-  "ses_id=$ses_id"
-  "sqlite_db=$sqlite_db"
-  "upd_job_status_path=$upd_job_status_path"
-  "BG_JOB_MANIFEST=$array_manifest"
-)
-vlist=$(IFS=, ; echo "${vars[*]}")
-
-# Submit a single job array with concurrency throttle
-array_jid=$(qsub \
-  -V \
-  $sched_args \
-  -N "postprocess_${stream_name}_array" \
-  -o "$array_stdout_log" \
-  -e "$array_stderr_log" \
-  -t "0-${last_idx}%${max_concurrent_images}" \
-  -v "$vlist" \
-  "$postprocess_image_sched_script")
+  --stderr_log "$array_stderr_log" \
+  --parent_job_id "$PBS_JOBID" \
+  --child_level "2")
 
 log_message INFO "Submitted array job $array_jid for $n_files images (max concurrent: $max_concurrent_images) in $out_dir"
-
-# Track the array parent in the DB
-"${R_HOME}/bin/Rscript" "$insert_tracked_job_path" --sqlite_db "$sqlite_db" --job_id "$array_jid" --job_name "postprocess_${stream_name}_array" --scheduler "torque" --scheduler_options "$sched_args" --job_manifest_path "$array_manifest"
-"${R_HOME}/bin/Rscript" "$add_parent_path" --sqlite_db "$sqlite_db" --job_id "$array_jid" --parent_job_id "$PBS_JOBID" --child_level 2
 
 # Read the sentinel job ID written by submit_postprocess() in R
 ses_suffix=""

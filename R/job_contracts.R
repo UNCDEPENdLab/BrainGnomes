@@ -4,12 +4,15 @@ job_contract_timestamp <- function(time = Sys.time()) {
 
 job_contract_directory <- function(tracking_sqlite_db, tracking_args) {
   run_id <- tracking_args$sequence_id
-  if (!checkmate::test_string(run_id)) return(NULL)
   configured <- tracking_args$contract_directory
   if (checkmate::test_string(configured)) {
     return(normalizePath(configured, winslash = "/", mustWork = FALSE))
   }
   if (!checkmate::test_string(tracking_sqlite_db)) return(NULL)
+  if (!checkmate::test_string(run_id)) {
+    return(normalizePath(file.path(dirname(tracking_sqlite_db), "job_contracts"),
+                         winslash = "/", mustWork = FALSE))
+  }
   normalizePath(
     file.path(dirname(tracking_sqlite_db), "runs", run_id, "jobs"),
     winslash = "/", mustWork = FALSE
@@ -29,21 +32,33 @@ allocate_job_contract <- function(tracking_sqlite_db, tracking_args) {
   )
 }
 
+#' Choose the logical run attempt, including submissions without an allocation ID
+#' @param sqlite_db Tracking database path.
+#' @param unit_key Logical work-unit identity.
+#' @param sequence_id Run identity; jobs in the same run share an attempt number.
+#' @return Integer logical attempt number.
+#' @noRd
 next_job_contract_attempt <- function(sqlite_db, unit_key, sequence_id) {
   if (!checkmate::test_string(sqlite_db) || !file.exists(sqlite_db) ||
       !checkmate::test_string(unit_key) || !checkmate::test_string(sequence_id)) {
     return(1L)
   }
-  value <- suppressWarnings(tryCatch(
-    submit_sqlite_query(
-      paste(
-        "SELECT COALESCE(MAX(attempt), 0) AS max_attempt,",
-        "MAX(CASE WHEN sequence_id = ? THEN attempt END) AS run_attempt",
-        "FROM job_tracking WHERE unit_key = ?"
-      ),
-      sqlite_db = sqlite_db, param = list(sequence_id, unit_key),
-      return_result = TRUE
-    ),
+  value <- suppressWarnings(tryCatch({
+      con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, flags = RSQLite::SQLITE_RO, synchronous = NULL)
+      on.exit(DBI::dbDisconnect(con), add = TRUE)
+      records <- "SELECT attempt, sequence_id, unit_key FROM job_tracking"
+      if (DBI::dbExistsTable(con, "job_submission_attempts")) {
+        records <- paste(records, "UNION ALL SELECT attempt, run_id AS sequence_id, unit_key FROM job_submission_attempts")
+      }
+      DBI::dbGetQuery(con,
+        paste(
+          "SELECT COALESCE(MAX(attempt), 0) AS max_attempt,",
+          "MAX(CASE WHEN sequence_id = ? THEN attempt END) AS run_attempt",
+          "FROM (", records, ") WHERE unit_key = ?"
+        ),
+        params = list(sequence_id, unit_key)
+      )
+    },
     error = function(e) NULL
   ))
   if (!is.data.frame(value) || nrow(value) == 0L) return(1L)
@@ -148,7 +163,7 @@ job_contract_environment_artifact_names <- function(env_variables,
 job_contract_artifacts <- function(script, env_variables, tracking_args,
                                    contract_directory) {
   candidates <- list(batch_script = script)
-  for (field in c("batch_file", "compute_file", "code_file", "config_snapshot_file")) {
+  for (field in c("batch_file", "compute_file", "code_file", "config_snapshot_file", "execution_payload")) {
     value <- tracking_args[[field]]
     if (checkmate::test_string(value)) candidates[[field]] <- value
   }
@@ -249,6 +264,7 @@ write_job_manifest <- function(contract, script, scheduler, scheduler_executable
         normalizePath(script, winslash = "/", mustWork = TRUE)
       } else script,
       script_kind = if (file.exists(script)) "file" else "command",
+      runtime = tracking_args$runtime,
       rendered_submission_command = redact_job_contract_command(
         rendered_command, env_variables
       ),
@@ -304,7 +320,7 @@ prepare_external_job_manifest <- function(
   env_variables["BG_RUN_ID"] <- sequence_id
   env_variables["BG_CONTRACT_DIRECTORY"] <- contract_directory
   rendered <- paste(scheduler, scheduler_args, script)
-  write_job_manifest(
+  manifest <- write_job_manifest(
     contract = contract,
     script = script,
     scheduler = scheduler,
@@ -317,6 +333,11 @@ prepare_external_job_manifest <- function(
     rendered_command = rendered,
     tracking_args = tracking_args
   )
+  tracking_args$contract_id <- contract$contract_id
+  tracking_args$job_manifest_path <- manifest$path
+  tracking_args$job_manifest_checksum <- manifest$checksum
+  register_job_submission(tracking_sqlite_db, contract, tracking_args)
+  manifest
 }
 
 tracking_unit_key <- function(stage, stream = NULL, sub_id = NULL, ses_id = NULL,
