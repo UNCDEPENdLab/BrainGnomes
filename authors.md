@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/HallquistLab/BrainGnomes/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/HallquistLab/BrainGnomes/blob/1.0/DESCRIPTION)
 
 Hallquist M (2026). *BrainGnomes: HPC Workflows for Functional MRI
 Preprocessing and Analysis*. R package version 1.0,
