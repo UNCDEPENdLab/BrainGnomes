@@ -23,7 +23,7 @@ natural_spline_interp(x, y, xout)
 
 - xout:
 
-  A numeric vector of points at which to interpolate.
+  A finite numeric vector of points at which to interpolate.
 
 ## Value
 

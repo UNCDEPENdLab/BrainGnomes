@@ -23,15 +23,16 @@ lmfit_residuals_4d(infile, X, include_rows = NULL,
 
 - X:
 
-  A numeric matrix where rows correspond to timepoints and columns to
-  nuisance regressors. Typically includes motion parameters,
+  A finite numeric matrix where rows correspond to timepoints and
+  columns to nuisance regressors. Typically includes motion parameters,
   physiological noise, etc.
 
 - include_rows:
 
   Optional logical vector identifying the timepoints used when
   estimating the model (e.g., uncensored volumes). If supplied it must
-  have length `nrow(X)`; when `NULL`, all timepoints are used.
+  have length `nrow(X)` and contain no missing values; when `NULL`, all
+  timepoints are used.
 
 - add_intercept:
 
@@ -51,14 +52,13 @@ lmfit_residuals_4d(infile, X, include_rows = NULL,
 - preserve_mean:
 
   Logical; if `TRUE`, recenter each output time series to the input mean
-  over the rows used for fitting. Constant time series are therefore
-  left unchanged.
+  over the rows used for fitting.
 
 - set_mean:
 
-  Optional numeric value; if specified, all residual time series will be
-  shifted to have this mean (default is 0). Cannot be used in
-  combination with `preserve_mean = TRUE`.
+  Finite numeric value. A non-zero value recenters residuals to this
+  mean over the fitted rows. The default, 0, leaves the regression
+  residuals unchanged. Ignored when `preserve_mean = TRUE`.
 
 - regress_cols:
 
@@ -75,7 +75,11 @@ lmfit_residuals_4d(infile, X, include_rows = NULL,
 ## Value
 
 A residualized 4D NIfTI image, either as an in-memory array or RNifti
-object (if `internal = TRUE`).
+object (if `internal = TRUE`). Integer inputs are converted to double
+precision for processing. Saved files preserve the input storage
+datatype, with slope and intercept recalculated for the processed
+values. Integer output is quantized to the written header's scale;
+returned values can therefore differ from reread values.
 
 ## Details
 

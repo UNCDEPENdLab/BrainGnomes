@@ -50,6 +50,9 @@ strings (e.g., "50.00%").
 - Throws an error if no voxels are valid after masking or zero
   exclusion.
 
+- Retained voxels must be finite; missing or infinite image values cause
+  an error. Non-finite values outside the supplied mask are ignored.
+
 ## Examples
 
 ``` r

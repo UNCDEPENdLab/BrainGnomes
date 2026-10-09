@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">04 Oct 2026</h4>
+            <h4 data-toc-skip class="date">09 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/braingnomes_quickstart.Rmd" class="external-link"><code>vignettes/braingnomes_quickstart.Rmd</code></a></small>
       <div class="d-none name"><code>braingnomes_quickstart.Rmd</code></div>
@@ -123,12 +123,14 @@ an executable no-cluster introduction.</p>
 <p>BrainGnomes identifies data for all subjects (and sessions) in your
 DICOM and BIDS folders, then determines which subjects need to be
 processed. It processes data by looping over subjects, submitting jobs
-for each subject and processing step to the HPC scheduler. This ensures
-that each subject is processed fully (unless a crash occurs).</p>
-<p><img src="../../../_temp/Library/BrainGnomes/extdata/braingnomes_flow.png" class="r-plt" alt="BrainGnomes pipeline flow" width="70%" style="display: block; margin: auto;"></p>
+for each subject and processing step to the HPC scheduler. Completion
+markers and job-tracking records help identify finished work and
+failures; use <code><a href="../reference/inspect_project.html">inspect_project()</a></code> to check progress after
+submission.</p>
+<p><img src="braingnomes_flow.png" class="r-plt" alt="BrainGnomes pipeline flow" width="70%" style="display: block; margin: auto;"></p>
 </div>
 <div class="section level3">
-<h3 id="running-a-subset-of-subject-or-a-subset-of-processing-steps">Running a subset of subject or a subset of processing steps<a class="anchor" aria-label="anchor" href="#running-a-subset-of-subject-or-a-subset-of-processing-steps"></a>
+<h3 id="running-selected-subjects-or-processing-steps">Running selected subjects or processing steps<a class="anchor" aria-label="anchor" href="#running-selected-subjects-or-processing-steps"></a>
 </h3>
 <p>As detailed below, the <code><a href="../reference/run_project.html">run_project()</a></code> function submits
 fMRI processing jobs to the scheduler. Although BrainGnomes is broadly
@@ -157,13 +159,13 @@ Run ICA-AROMA?
  (yes/no) &gt; n
 Run postprocessing? 
  (yes/no) &gt; y
-Which postprocessing streams should be run? Press ENTER to select all.
+Which postprocessing streams should be run? Select streams, or 0 to cancel.
 
 1:   postproc1
 2:   rest
 
 Enter one or more numbers separated by spaces and then ENTER, or 0 to cancel
-1: 1</code></pre>
+Selection: 1</code></pre>
 <p>You can achieve the same thing by passing in arguments for
 <code>steps</code>, <code>postprocess_streams</code>, and
 <code>subject_filter</code>, which will schedule the jobs without
@@ -244,59 +246,44 @@ runs use the scheduler</td>
 <p>BrainGnomes batch scripts call <code>singularity</code>; Apptainer
 can be used when it provides the compatible <code>singularity</code>
 command.</p>
-<p>The corresponding setup checklist is:</p>
-<ol style="list-style-type: decimal">
-<li>Installation: Install the BrainGnomes R package. The package is not
-on CRAN (yet), so for now, you must install from GitHub. Then load it in
-your R session:</li>
-</ol>
+<p>Install and load the package before starting setup:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Install (if needed) and load BrainGnomes</span></span>
-<span><span class="co"># devtools::install_github("HallquistLab/BrainGnomes")</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"remotes"</span><span class="op">)</span>  <span class="co"># once, if needed</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/BrainGnomes"</span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
-<ol start="2" style="list-style-type: decimal">
-<li>Working Python installation: During postprocessing, the pipeline
-supports masking the data by a brain mask that matches the stereotaxic
-space. For example, if your fmriprep data are in MNI152NLin2009cAsym
-with a resolution of 2mm, a custom brain mask released with the template
-can be applied to the data to remove non-brain voxels. This relies on
-TemplateFlow (<a href="http://templateflow.org/" class="external-link uri">http://templateflow.org/</a>), a Python library that
-provides a number of templates. For this step to work, you must have a
-working Python installation.</li>
-<li>HPC Access: Access to an HPC cluster with a job scheduler supported
-by BrainGnomes (currently SLURM or TORQUE). You should know which
-scheduler your cluster uses.</li>
-<li>Singularity: Singularity must be available on the HPC system</li>
-<li>You must have downloaded or built the required container image files
-for:</li>
-</ol>
+<p>Prepare only the inputs and software for the stages you plan to
+run:</p>
 <ul>
-<li>fMRIPrep (e.g., a .sif image of fMRIPrep)</li>
-<li>HeuDiConv (container for DICOM to BIDS conversion)</li>
-<li>MRIQC (container for MRI quality metrics)</li>
-<li>ICA-AROMA (if you plan to use ICA-AROMA for denoising)</li>
-<li>BIDS Validator (either a container or an installed binary for the
-BIDS validation tool) Make note of the filesystem paths to each of these
-container files or executables, as the configuration will require
-them.</li>
-</ul>
-<ol start="6" style="list-style-type: decimal">
-<li>Data and Files:</li>
-</ol>
-<ul>
-<li>DICOM files for your study, organized in subject (and optionally
-session) folders.</li>
-<li>A heuristic file for HeuDiConv (a Python script defining how to
-translate DICOM filenames into BIDS format). You or your lab should have
-this .py file prepared for your study’s naming conventions.</li>
-<li>A FreeSurfer license file (e.g., license.txt or
-FreeSurferLicense.txt). fMRIPrep requires a valid FreeSurfer license to
-run. You can obtain one for free from the FreeSurfer website. Save the
-license file path for the configuration.</li>
-<li>Optionally, a TemplateFlow directory if you want to use a
-non-default location for TemplateFlow data (standard brain templates).
-If unsure, you can specify an empty or new directory and fMRIPrep will
-manage downloading templates there.</li>
+<li>
+<strong>Input data:</strong> local DICOMs and a HeuDiConv heuristic
+for conversion, a BIDS dataset for preprocessing, or existing fMRIPrep
+derivatives plus the corresponding BIDS dataset for downstream
+processing.</li>
+<li>
+<strong>Scheduler and storage:</strong> identify your scheduler,
+account/partition settings, and shared project, scratch, and log
+locations accessible to compute nodes.</li>
+<li>
+<strong>Containers:</strong> obtain the images for enabled stages,
+including FSL when postprocessing is enabled. Save their absolute paths
+for setup. BIDS validation uses a separately configured executable.</li>
+<li>
+<strong>FreeSurfer license:</strong> fMRIPrep requires a license
+file. Record its path; it can be obtained from the FreeSurfer
+website.</li>
+<li>
+<strong>TemplateFlow cache:</strong> choose a shared, writable cache
+for fMRIPrep. On clusters without compute-node internet access, populate
+the required template resources before submission; an empty directory
+alone is insufficient. See <a href="https://www.nipreps.org/apps/singularity/#restricted-internet-access" class="external-link">NiPreps’
+restricted-network guidance</a>.</li>
+<li>
+<strong>Python for template masks:</strong> template-dependent
+postprocessing needs <code>nibabel</code>, <code>nilearn</code>, and
+<code>templateflow</code> in the Python environment selected by
+reticulate. Set <code>RETICULATE_PYTHON</code> before starting R when
+using a specific environment. The imaging containers supply their own
+Python runtimes.</li>
 </ul>
 <p>With these in place, we can proceed to create a project
 configuration.</p>
@@ -407,13 +394,12 @@ yet. BIDS and fMRIPrep starting points skip this question.</li>
 <li>TemplateFlow Directory – Path to your TemplateFlow data (standard
 templates for fMRIPrep). If you have a central TemplateFlow directory
 (e.g., ~/templateflow or a shared path), provide it.</li>
-<li>Scratch Directory – A path for temporary scratch space. This is
-often on a fast storage (like $TMPDIR or a scratch disk) that is not
-intended for long-term storage. If you’re not sure, you can use a
-sub-directory in your project directory (e.g.,
-“/proj/Longleaf/MyStudy2025/scratch”). Just make sure to keep an eye on
-the size of this folder and clean it up periodically if this isn’t done
-automatically by your HPC system.</li>
+<li>Scratch Directory – Temporary working storage accessible to the
+compute nodes running your jobs. A shared scratch directory or a
+subdirectory of the project is a suitable starting point. A login node’s
+<code>$TMPDIR</code> may be private or short-lived, so do not assume it
+is visible to scheduled workers. Check your site’s storage policy and
+clean completed temporary work periodically.</li>
 </ul>
 <p>Steps implied by the starting point are already selected, so their
 enable questions are not repeated. You then choose optional downstream
@@ -538,10 +524,11 @@ be asked to provide:</p>
 directories in the root of your DICOM directory. Consider, for example,
 a DICOM directory that includes the following folders:
 <code>logs</code>, <code>5300</code>, and <code>5420</code>, where the
-numbered directories are the subject IDs. In this case, a good regular
-expression for identifying subjects would be, <code>[0-9]+</code> –
-matching folders containing numbers. If you want <em>any</em> folder in
-the root of your DICOM directory to be considered a subject folder, use
+numbered directories are the subject IDs. In this case, a regular
+expression for directories consisting entirely of digits is
+<code>^[0-9]+$</code>. Anchors prevent matching unrelated names that
+merely contain digits. If you want <em>any</em> folder in the root of
+your DICOM directory to be considered a subject folder, use
 <code>.*</code>.</p></li>
 <li><p>(Optional) Session Regex: if you have multi-session data and
 these are stored in your DICOM directory as subfolders (i.e., something
@@ -557,13 +544,10 @@ the ID from the folder name. Use parentheses to denote which part of the
 folder name should be preserved as part of the ID. For example, if
 folders are named something like <code>sub-&lt;numbers&gt;</code> and
 you want to keep the numeric part as the ID, the Subject ID Match Regex
-would be, <code>sub-([0-9]+)</code>. If the ID is stored in different
-parts of the folder name, you can use more than one set of parentheses,
-in which case these will be extracted and pasted together with an
-underscore separating each part. For example, consider a folder
-<code>subject-16-visit-3</code>. You could extract a subject ID of
-<code>16_3</code> using the Regex:
-<code>subject-([0-9]+)-visit-([0-9]+)</code>.</p></li>
+would be, <code>sub-([0-9]+)</code>. Prefer a single capture group
+yielding an alphanumeric BIDS subject label, preserving any leading
+zeros. Keep visit information in the session label rather than
+introducing underscores into the subject ID.</p></li>
 <li><p>Session Match Regex: This follows the same logic as the Subject
 ID Match Regex, but applies to session folders nested within subject
 folders. For example, if you have a folder like:
@@ -641,15 +625,15 @@ for details.</li>
 If you say yes, you will be asked for:</p>
 <ol style="list-style-type: decimal">
 <li>Location of the ICA-AROMA container</li>
-<li>Resource requirements: Defaults for BrainGnomes mriqc are 32 GB RAM,
-36 hours, and 1 core</li>
+<li>Resource requirements: Defaults for BrainGnomes ICA-AROMA are 32 GB
+RAM, 36 hours, and 1 core</li>
 <li>Additional command line arguments to fmripost_aroma. See <a href="https://fmripost-aroma.readthedocs.io/latest/usage.html#command-line-arguments" class="external-link uri">https://fmripost-aroma.readthedocs.io/latest/usage.html#command-line-arguments</a>
 for details.</li>
 <li>Additional arguments to be passed to the HPC scheduler</li>
 </ol>
-<p>(Note: As of fMRIPrep v20.2+, ICA-AROMA is no longer integrated in
-fMRIPrep and must be run separately as a BIDS-App called
-fmripost-aroma.)</p>
+<p>BrainGnomes runs ICA-AROMA separately with fMRIPost-AROMA. Integrated
+ICA-AROMA was removed in <a href="https://fmriprep.org/en/stable/changes.html" class="external-link">fMRIPrep
+23.1.0</a>.</p>
 </div>
 <div class="section level3">
 <h3 id="postprocessing-setup">Postprocessing setup<a class="anchor" aria-label="anchor" href="#postprocessing-setup"></a>
@@ -794,9 +778,12 @@ from <code>would_submit</code>; <code>force = TRUE</code> includes
 already-completed work. Project setup checks and deferred Flywheel scope
 are labeled separately. These counts are work units, not exact scheduler
 job counts: postprocessing controllers can expand into image arrays and
-sentinel jobs, and runtime preflight still applies. Console output shows
-at most 20 detailed rows; the returned table retains all rows. Optional
-saved plans and retry previews expose the same information.</p>
+sentinel jobs, and runtime preflight still applies.
+<code>debug = TRUE</code> still submits scheduler jobs with imaging
+commands disabled; use <code>dry_run = TRUE</code> when you want no jobs
+submitted. Console output shows at most 20 detailed rows; the returned
+table retains all rows. Optional saved plans and retry previews expose
+the same information.</p>
 <p>For scripts, keep JSON stdout separate from diagnostic stderr:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Shell equivalent:</span></span>
@@ -1035,17 +1022,19 @@ the command line. These commands are examples, not prerequisites for
 <span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> plan /project/my_study <span class="at">--steps</span><span class="op">=</span>all <span class="at">--output</span><span class="op">=</span>/project/my_study/run.yaml</span>
 <span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> run /project/my_study/run.yaml</span></code></pre></div>
 <p>Run operations support observation and recovery:</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
-<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>subjects</span>
-<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--sub-id</span><span class="op">=</span>540294</span>
-<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>active <span class="at">--refresh</span></span>
-<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
-<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--format</span><span class="op">=</span>json</span>
-<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--failed-only</span> <span class="at">--tail</span><span class="op">=</span>50</span>
-<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span>
-<span id="cb28-10"><a href="#cb28-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb28-11"><a href="#cb28-11" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="co"># Replace this value with the run ID reported by BrainGnomes status.</span></span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a><span class="va">run_id</span><span class="op">=</span><span class="st">"REPLACE_WITH_RUN_ID"</span></span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>subjects</span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--sub-id</span><span class="op">=</span>540294</span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--view</span><span class="op">=</span>active <span class="at">--refresh</span></span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--watch</span></span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a><span class="ex">BrainGnomes</span> provenance /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--format</span><span class="op">=</span>json</span>
+<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a><span class="ex">BrainGnomes</span> logs /project/my_study <span class="at">--run</span><span class="op">=</span>latest <span class="at">--failed-only</span> <span class="at">--tail</span><span class="op">=</span>50</span>
+<span id="cb28-10"><a href="#cb28-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--dry-run</span></span>
+<span id="cb28-11"><a href="#cb28-11" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--yes</span></span>
+<span id="cb28-12"><a href="#cb28-12" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--dry-run</span></span>
+<span id="cb28-13"><a href="#cb28-13" tabindex="-1"></a><span class="ex">BrainGnomes</span> cancel /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--yes</span></span></code></pre></div>
 <p>Use the run ID reported by <code>status --runs</code> when retrying
 so the source is unambiguous. Retry and cancellation require
 <code>--dry-run</code> or the explicit <code>--yes</code> confirmation
@@ -1059,7 +1048,7 @@ installed, run this in an R session.</p>
 <p>Add that package directory to your path when a terminal starts. If
 you use bash, the following portable form can be added to
 <code>~/.bashrc</code>:</p>
-<div class="sourceCode" id="cb30"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package(\"BrainGnomes\"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package("BrainGnomes"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span></code></pre></div>
 <p>This enables the <code>BrainGnomes</code> command. The block below is
 generated by running the installed command itself when this vignette is
 built, so it stays synchronized with <code>inst/BrainGnomes</code>:</p>

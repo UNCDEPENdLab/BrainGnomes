@@ -72,8 +72,10 @@ run_project(
 
 - debug:
 
-  A logical value indicating whether to run in debug mode (verbose
-  output for debugging, no true processing).
+  Logical. Enable verbose worker debugging and suppress imaging
+  commands. Debug mode still submits scheduler jobs and writes
+  tracking/log records; use `dry_run = TRUE` for a submission-free
+  preview.
 
 - force:
 

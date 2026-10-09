@@ -641,11 +641,11 @@ local baseline term $`b_{rv}`$. Consequently:
   change.
 
 Multiplying a complete run by a positive scalar multiplies its beta
-estimates, residual standard deviations, COPEs, and VARCOPEs in the
-corresponding units. Within-run $`t`$ statistics are unchanged apart
-from numerical precision. Correlations are also unchanged, so run-wise
-intensity normalization is usually irrelevant for analyses based only on
-correlation coefficients.
+estimates, residual standard deviations, and COPEs by that scalar.
+Variances, including VARCOPEs, are multiplied by its square. Within-run
+$`t`$ statistics are unchanged apart from numerical precision.
+Correlations are also unchanged, so run-wise intensity normalization is
+usually irrelevant for analyses based only on correlation coefficients.
 
 With `voxel_psc`, a reliable voxel has
 

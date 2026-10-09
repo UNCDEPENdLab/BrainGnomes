@@ -10,11 +10,11 @@ summarizes an fMRIPrep confounds file as one row per BOLD run, including
 maximum FD, mean FD, and the percentage of volumes above one or more
 user-supplied thresholds.
 
-This is an interactive quality-control helper. It reads confounds files
-and can write a run-level summary table, but it does **not** submit
-jobs, change a project configuration, create censor files, or alter BOLD
-data. Later sections explain how its summaries can inform a separately
-configured scrubbing policy.
+This local quality-control helper works in R sessions or scripts. It
+reads confounds files and can write a run-level summary table, but it
+does **not** submit jobs, change a project configuration, create censor
+files, or alter BOLD data. Later sections explain how its summaries can
+inform a separately configured scrubbing policy.
 
 ## Choose the confounds files
 
@@ -250,9 +250,9 @@ utils::read.delim(summary_file, check.names = FALSE)
 #>   subject session task run
 #> 1       1       1 rest   1
 #> 2       2       1 rest   1
-#>                                                                                                   confounds_file
-#> 1 /tmp/RtmptodIFU/braingnomes_motion_qc_24f121eb97f/sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv
-#> 2 /tmp/RtmptodIFU/braingnomes_motion_qc_24f121eb97f/sub-02_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv
+#>                                                                                                    confounds_file
+#> 1 /tmp/RtmpqpyMdn/braingnomes_motion_qc_23bf181bd9c1/sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv
+#> 2 /tmp/RtmpqpyMdn/braingnomes_motion_qc_23bf181bd9c1/sub-02_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv
 #>      fd_max   fd_mean fd_gt_0p2 fd_gt_0p3 fd_gt_0p5
 #> 1 0.5737987 0.2262741  99.16667  3.333333  2.500000
 #> 2 1.0237987 0.2412741  99.16667  3.333333  3.333333

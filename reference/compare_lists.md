@@ -30,4 +30,5 @@ compare_lists(old, new, path = "", max_diffs = 100)
 
 ## Value
 
-Invisibly returns `TRUE` if no differences are found; otherwise `FALSE`.
+A list of human-readable differences, invisibly. Empty if the inputs are
+identical.

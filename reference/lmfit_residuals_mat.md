@@ -47,8 +47,9 @@ lmfit_residuals_mat(
 
 - set_mean:
 
-  Numeric; shift residuals so every column has this mean (ignored when
-  `preserve_mean = TRUE`).
+  Finite numeric value. A non-zero value recenters residuals to this
+  mean over the fitted rows. The default, 0, leaves residuals unchanged.
+  Ignored when `preserve_mean = TRUE`.
 
 - regress_cols:
 

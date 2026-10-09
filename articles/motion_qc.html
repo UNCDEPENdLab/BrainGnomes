@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">31 Aug 2026</h4>
+            <h4 data-toc-skip class="date">09 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/motion_qc.Rmd" class="external-link"><code>vignettes/motion_qc.Rmd</code></a></small>
       <div class="d-none name"><code>motion_qc.Rmd</code></div>
@@ -86,10 +86,10 @@ in millimetres. <code><a href="../reference/calculate_motion_outliers.html">calc
 fMRIPrep confounds file as one row per BOLD run, including maximum FD,
 mean FD, and the percentage of volumes above one or more user-supplied
 thresholds.</p>
-<p>This is an interactive quality-control helper. It reads confounds
-files and can write a run-level summary table, but it does
-<strong>not</strong> submit jobs, change a project configuration, create
-censor files, or alter BOLD data. Later sections explain how its
+<p>This local quality-control helper works in R sessions or scripts. It
+reads confounds files and can write a run-level summary table, but it
+does <strong>not</strong> submit jobs, change a project configuration,
+create censor files, or alter BOLD data. Later sections explain how its
 summaries can inform a separately configured scrubbing policy.</p>
 </div>
 <div class="section level2">
@@ -314,9 +314,9 @@ tab-separated.</p>
 <span><span class="co">#&gt;   subject session task run</span></span>
 <span><span class="co">#&gt; 1       1       1 rest   1</span></span>
 <span><span class="co">#&gt; 2       2       1 rest   1</span></span>
-<span><span class="co">#&gt;                                                                                                   confounds_file</span></span>
-<span><span class="co">#&gt; 1 /tmp/RtmptodIFU/braingnomes_motion_qc_24f121eb97f/sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv</span></span>
-<span><span class="co">#&gt; 2 /tmp/RtmptodIFU/braingnomes_motion_qc_24f121eb97f/sub-02_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv</span></span>
+<span><span class="co">#&gt;                                                                                                    confounds_file</span></span>
+<span><span class="co">#&gt; 1 /tmp/RtmpqpyMdn/braingnomes_motion_qc_23bf181bd9c1/sub-01_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv</span></span>
+<span><span class="co">#&gt; 2 /tmp/RtmpqpyMdn/braingnomes_motion_qc_23bf181bd9c1/sub-02_ses-01_task-rest_run-01_desc-confounds_timeseries.tsv</span></span>
 <span><span class="co">#&gt;      fd_max   fd_mean fd_gt_0p2 fd_gt_0p3 fd_gt_0p5</span></span>
 <span><span class="co">#&gt; 1 0.5737987 0.2262741  99.16667  3.333333  2.500000</span></span>
 <span><span class="co">#&gt; 2 1.0237987 0.2412741  99.16667  3.333333  3.333333</span></span></code></pre></div>

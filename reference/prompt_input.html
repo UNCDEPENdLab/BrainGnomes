@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -149,7 +149,8 @@ terminal-width horizontal rule.</p></dd>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The function will keep prompting the user until a valid input is provided.
 It displays instructions and enforces constraints (e.g., value range, length, uniqueness).
-When <code>empty_keyword</code> is supplied and <code>default</code> is non-<code>NULL</code> with <code>required = FALSE</code>, typing the token (case-insensitive) returns a missing value for the given <code>type</code> without accepting the default.</p>
+When <code>empty_keyword</code> is supplied and <code>default</code> is non-<code>NULL</code> with <code>required = FALSE</code>, typing the token (case-insensitive) returns a missing value for the given <code>type</code> without accepting the default.
+Cancelling terminal input raises an error so the guided workflow stops.</p>
     </div>
     <div class="section level2">
     <h2 id="note">Note<a class="anchor" aria-label="anchor" href="#note"></a></h2>

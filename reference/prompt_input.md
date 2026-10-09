@@ -115,7 +115,8 @@ provided. It displays instructions and enforces constraints (e.g., value
 range, length, uniqueness). When `empty_keyword` is supplied and
 `default` is non-`NULL` with `required = FALSE`, typing the token
 (case-insensitive) returns a missing value for the given `type` without
-accepting the default.
+accepting the default. Cancelling terminal input raises an error so the
+guided workflow stops.
 
 ## Note
 

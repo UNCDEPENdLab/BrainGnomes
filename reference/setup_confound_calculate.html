@@ -11,7 +11,7 @@ task-based modeling to account for noise without directly altering the fMRI data
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,8 +80,9 @@ task-based modeling to account for noise without directly altering the fMRI data
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Confounds can be filtered (e.g., with the same temporal filter as applied to fMRI data) or left unfiltered.
-Filtered regressors should typically include continuous-valued signals (e.g., a_comp_cor_<em>, global signal), while
-spike regressors or discrete values (e.g., motion_outlier</em>) should not be filtered.</p>
+Filtered regressors should typically include continuous-valued signals
+(e.g., <code>a_comp_cor_.*</code>, global signal), while
+spike regressors or discrete values (e.g., <code>motion_outlier.*</code>) should not be filtered.</p>
 <p>This function only generates the confound regressors file. Actual regression is handled separately.</p>
     </div>
 

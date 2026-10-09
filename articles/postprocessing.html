@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">04 Oct 2026</h4>
+            <h4 data-toc-skip class="date">09 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/postprocessing.Rmd" class="external-link"><code>vignettes/postprocessing.Rmd</code></a></small>
       <div class="d-none name"><code>postprocessing.Rmd</code></div>
@@ -146,13 +146,13 @@ TR of your scans and an optional brain mask file are also collected.</p>
 NIfTI files are entered into this postprocessing stream. Instead of
 writing a full regular expression, you may supply BIDS entity-value
 pairs that are converted to a regex at runtime. For example:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>desc<span class="sc">:</span>preproc task<span class="sc">:</span>ridl suffix<span class="sc">:</span>bold</span></code></pre></div>
+<pre class="text"><code>desc:preproc task:ridl suffix:bold</code></pre>
 <p>selects any file containing <code>task-ridl</code> and
 <code>desc-preproc</code> with a <code>bold</code> suffix, producing
 <code>".*task-ridl(_[^_]+)*_desc-preproc(_[^_]+)*_bold\\.nii(\\.gz)?$"</code>.</p>
 <p>To provide a custom regular expression, prefix it with
 <code>regex:</code>:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>regex<span class="sc">:</span> .<span class="sc">*</span>task<span class="sc">-</span>rest.<span class="sc">*</span>preproc.<span class="sc">*</span>\.nii\.gz<span class="sc">$</span></span></code></pre></div>
+<pre class="text"><code>regex: .*_task-rest(_[^_]+)*_desc-preproc_bold\.nii\.gz$</code></pre>
 <p>This pattern matches any file containing <code>task-rest</code> and
 ending in <code>_desc-preproc_bold.nii.gz</code>. You could create
 another configuration for task-based data using a different
@@ -162,8 +162,8 @@ expression.</p>
 <h3 id="output-naming-with-bids_desc">Output naming with <code>bids_desc</code><a class="anchor" aria-label="anchor" href="#output-naming-with-bids_desc"></a>
 </h3>
 <p>Every postprocessing stream is also defined by a <a href="https://bids-specification.readthedocs.io/en/stable/derivatives/common-data-types.html#preprocessed-or-cleaned-data" class="external-link">BIDS
-description field</a>. This field (<code>bids_desc</code>) is used to
-label of every postprocessed for the stream. For example, if the input
+description field</a>. This field (<code>bids_desc</code>) labels every
+final postprocessed image in the stream. For example, if the input
 filename is</p>
 <pre><code>sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz</code></pre>
 <p>and you choose <code>bids_desc = "clean"</code>, the output will be
@@ -234,10 +234,13 @@ components as a postprocessing step. Building on the original papers
 (Pruim et al., 2015), we recommend ‘nonaggressive’ removal, which only
 removes the variance in ‘noise’ components that is not correlated with
 signal components (i.e., partial effects in multiple regression). As
-detailed below, if AROMA is applied to the fMRI data, the components
-will also be regressed out of any confounds. Note that as of 8Aug2025,
-only nonaggressive denoising is supported, regardless of how you respond
-to the prompts.</p>
+detailed below, if AROMA is applied to the fMRI data, the selected noise
+components are also removed from processed confounds. Both nonaggressive
+and aggressive denoising are supported:
+<code>apply_aroma$nonaggressive</code> selects partial regression when
+<code>TRUE</code> and full removal of the noise-component effects when
+<code>FALSE</code>. Unprocessed confounds in <code>noproc_columns</code>
+are retained.</p>
 <pre><code>------------------------------------------------------------------------------------------------------------------------
 ICA-AROMA identifies motion-related independent components from the fMRI data and outputs
 noise regressors (e.g., *_desc-aroma_timeseries.tsv) that can be used to denoise the BOLD signal.
@@ -270,15 +273,11 @@ people often bandpass filter.</p>
 former is more common for task-based fMRI and the latter with
 resting-state fMRI. If filtering is enabled, you will be asked to choose
 between these filtering methods.</p>
-<p>Per FSL’s documentation, -bptf uses a local fit of a straight line
-(Gaussian-weighted within the line to give a smooth response) to remove
-low frequency artifacts. This is preferable to sharp rolloff FIR-based
-filtering as it does not introduce autocorrelations into the data. These
-‘ringing artifacts’ can induce negative autocorrelations, which
-interfere with GLM software that correects for autocorrelation (e.g.,
-Tukey tapering in FSL feat). Low-pass temporal filtering reduces high
-frequency noise by Gaussian smoothing, but also reduces the strength of
-the signal of interest, particularly for single-event experiments.</p>
+<p>FSL’s <code>-bptf</code> high-pass filter removes a Gaussian-weighted
+local linear trend; its low-pass filter uses Gaussian smoothing over
+time. Both filtering methods can change temporal autocorrelation. Choose
+the cutoffs and method to suit the acquisition and downstream model, and
+record them consistently across runs.</p>
 <p>Butterworth filtering is a common temporal filtering technique used
 in fMRI postprocessing to attenuate low-frequency drifts and/or
 high-frequency noise while preserving the passband signal with minimal
@@ -293,25 +292,27 @@ reverse passes). BrainGnomes also uses a second-order Butterworth
 filter, which has a good balance between frequency precision and smooth
 rolloff (higher orders give more precise frequency control at the edges,
 but have bigger risks of artifacts).</p>
-<p>One of the virtues of FSL’s Gaussian line smoothing approach is that
-it has a very gradual rolloff. That said, the frequency response is
-broad and not sharply defined, which can lead to partial attenuation of
-signals near cutoff (e.g., if your upper cutoff is .10 Hz, you might
-still see attenuation at .09 Hz). The Butterworth filter will have more
-precise control over the frequencies retained in the data but may have a
-slightly higher risk of messing up the autocorrelation structure (due to
-ringing).</p>
-<p>Here is the order of prompts with example responses. Note that if you
-skip one of the cutoffs (press enter at the prompt), then that side of
-the filter will not be applied. For example, if you only enter a
-low-pass cutoff</p>
-<p><code>Apply temporal filtering? &gt; yes</code>
-<code>Low-pass cutoff (Hz) (Press enter to skip) &gt; 0.009</code>
-<code>High-pass cutoff (Hz)  (Press enter to skip) &gt; 0.08</code>
-BrainGnomes presents the filtering implementations as a numbered menu.
-Select <code>FSL fslmaths -bptf</code> for Gaussian-weighted filtering
-or <code>Butterworth</code> for the bidirectional R-based filter; you do
-not need to type the internal method name.</p>
+<p>FSL’s Gaussian-weighted filtering has a gradual frequency response.
+Butterworth filtering offers a more defined passband, but neither method
+makes frequencies near the cutoff an exact keep/remove boundary. Inspect
+the resulting time series and use compatible temporal treatment for
+continuous confounds.</p>
+<p>For example, a band-pass interval of 0.009–0.08 Hz uses 0.009 Hz as
+the <strong>high-pass (lower)</strong> cutoff and 0.08 Hz as the
+<strong>low-pass (upper)</strong> cutoff. The setup asks for the lower
+cutoff first:</p>
+<pre class="text"><code>Apply temporal filtering? &gt; yes
+Lower cutoff / high-pass threshold (Hz) &gt; 0.009
+Upper cutoff / low-pass threshold (Hz) &gt; 0.08</code></pre>
+<p>Press Enter at either cutoff prompt to omit that side of the filter.
+Supplying only the lower cutoff gives high-pass filtering; supplying
+only the upper cutoff gives low-pass filtering. The lower cutoff cannot
+exceed the upper one. Both cutoffs must be appropriate for the run’s
+TR.</p>
+<p>BrainGnomes presents the filtering implementations as a numbered
+menu. Select <code>FSL fslmaths -bptf</code> for Gaussian-weighted
+filtering or <code>Butterworth</code> for the bidirectional R-based
+filter; you do not need to type the internal method name.</p>
 </div>
 <div class="section level3">
 <h3 id="scrubbing-highmotion-volumes">Scrubbing High‑Motion Volumes<a class="anchor" aria-label="anchor" href="#scrubbing-highmotion-volumes"></a>
@@ -578,10 +579,14 @@ creates a TSV file of nuisance regressors (motion parameters, CompCor
 components, DVARS, global signal, etc.) that may be filtered to match
 the BOLD data. Columns to include are selected with patterns that can
 contain regular expressions or numeric ranges inside angle brackets. For
-example <code>a_comp_cor_&lt;1-6&gt;</code> expands to
-<code>a_comp_cor_1</code> through <code>a_comp_cor_6</code> and a
-pattern like <code>^trans_</code> will match all six motion parameters.
-This expansion is implemented in
+example <code>a_comp_cor_&lt;0-5&gt;</code> expands to
+<code>a_comp_cor_00</code> through <code>a_comp_cor_05</code>, matching
+fMRIPrep’s zero-based, zero-padded naming. The pattern
+<code>^(rot|trans)_[xyz]$</code> selects the six basic motion
+parameters; <code>^trans_.*</code> selects translation columns,
+including any matching derivatives or powers. Patterns are matched
+against whole column names, so include <code>.*</code> when a prefix
+should match arbitrary trailing text. This expansion is implemented in
 <code>expand_confound_columns()</code>.</p>
 <p>Standard motion-confound bundles can also be selected using shortcuts
 such as <code>"6p"</code>, <code>"12p"</code>, <code>"24p"</code>, or
@@ -642,19 +647,21 @@ motion-based scrubbing and regression; hand-written legacy
 configurations that explicitly request
 <code>framewise_displacement_unfiltered</code> remain supported.</p>
 <p>Confound selection accepts regular expressions and numeric ranges.
-For instance <code>^trans_</code> matches all six translational motion
-parameters and <code>a_comp_cor_&lt;1-6&gt;</code> expands to the first
-six CompCor components. Both filtered and unfiltered sets may use these
-patterns, giving fine-grained control over nuisance regressors.</p>
+For instance <code>^(rot|trans)_[xyz]$</code> matches the six basic
+motion parameters and <code>a_comp_cor_&lt;0-5&gt;</code> selects the
+first six named CompCor columns when present. Both filtered and
+unfiltered sets may use these patterns, giving fine-grained control over
+nuisance regressors.</p>
 <p><code><a href="../reference/setup_confound_regression.html">setup_confound_regression()</a></code> optionally performs
 voxelwise regression of these confounds. If scrubbing is enabled, the
 censor file written during <code><a href="../reference/setup_scrubbing.html">setup_scrubbing()</a></code> is passed to
-the regression step so that model fits are computed using only volumes
-marked as “good.” The residuals are written to new NIfTI files with a
-chosen prefix. Because filtered confounds match the exact temporal
-treatment of the BOLD data, this regression step is safe from mismatch
-artifacts, similar to the strategy described in the xcp-d
-documentation.</p>
+the regression step so that model fits are computed using only retained
+volumes (<code>1</code> in the censor file; <code>0</code> excludes a
+volume). The residuals are written to new NIfTI files with a chosen
+prefix. Processed confounds receive the enabled temporal treatment used
+for BOLD data. Keep binary spike regressors in
+<code>noproc_columns</code> so they retain their indicators rather than
+being filtered as continuous signals.</p>
 </div>
 <div class="section level3">
 <h3 id="ordering-steps">Ordering Steps<a class="anchor" aria-label="anchor" href="#ordering-steps"></a>
@@ -663,8 +670,9 @@ documentation.</p>
 which enabled steps run. By default intensity normalisation follows
 masking and smoothing and precedes AROMA, optional
 scrubbing/interpolation, temporal filtering, and confound regression.
-You may override this order by answering “yes” to the prompt shown in
-the code below.</p>
+You may override this order by answering “yes” to the processing-order
+prompt. The spatial-before-normalization and
+normalization-before-temporal boundaries still apply.</p>
 </div>
 </div>
 <div class="section level2">
@@ -672,20 +680,23 @@ the code below.</p>
 </h2>
 <p>After configuration, running <code><a href="../reference/run_project.html">run_project()</a></code> will execute
 the selected postprocessing steps for each subject.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"postprocess"</span><span class="op">)</span></span></code></pre></div>
-<p>The processing log for each subject is written to the project’s
-<code>logs</code> folder, and the final postprocessed NIfTIs receive the
-BIDS description specified earlier.</p>
+<p>Processing logs are written under the configured
+<code>metadata$log_directory</code>. Final postprocessed NIfTIs receive
+the <code>bids_desc</code> selected for their stream.</p>
 </div>
 <div class="section level2">
 <h2 id="naming-and-use-of-intermediate-files">Naming and use of intermediate files<a class="anchor" aria-label="anchor" href="#naming-and-use-of-intermediate-files"></a>
 </h2>
-<p>During the setup of postprocessing, you will be asked whether to keep
-intermediate files. Generally speaking, you should say ‘no’ since these
-files only have a subset of postprocessing steps applied to them (e.g.,
-smoothed, but not temporally filtered). That said, if you’d like to
-inspect intermediate stages of processing, you acn</p>
+<p>By default, <code>keep_intermediates = FALSE</code> keeps the final
+output and its associated confounds, censor, and provenance records,
+while removing temporary processing images. Set
+<code>keep_intermediates = TRUE</code> when you need to inspect
+individual steps; this can use substantially more disk space.
+Intermediate images contain only the operations completed at that point,
+so use the final <code>bids_desc</code> image for analyses requiring the
+full configured stream.</p>
 </div>
 <div class="section level2">
 <h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>

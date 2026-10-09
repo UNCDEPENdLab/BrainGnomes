@@ -60,3 +60,8 @@ butterworth_filter_cpp(
 ## Value
 
 A 4D filtered NIfTI image as a niftiImage or internalImage object.
+Integer inputs are converted to double precision for processing. Saved
+files preserve the input storage datatype, with slope and intercept
+recalculated for the processed values. Integer output is quantized to
+the written header's scale; returned values can therefore differ from
+reread values.

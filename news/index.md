@@ -1,6 +1,101 @@
 # Changelog
 
-## BrainGnomes (development version)
+## BrainGnomes 1.0 (2026-10-09)
+
+- Preserve integer NIfTI storage types after interpolation, regression,
+  and filtering. Recalculate slope and intercept from the processed
+  range and round to the output grid, avoiding fractional-value
+  truncation, constant-output scaling failures, clipping, and narrowing
+  integer intermediates. Reserve RNifti’s INT32 missing-value code and
+  reject non-finite integer output before writing a file. Regression
+  tests cover all eight integer types, NIfTI-1/2, input scaling,
+  expanded ranges, zero backgrounds, and extreme values.
+
+- Decode integer images into double-precision working buffers and
+  preserve FLOAT64 results without an intermediate FLOAT32 cast. This
+  retains small differences at large offsets and supports NIfTI-2
+  scaling outside FLOAT32’s range. Integer working buffers use twice the
+  memory of the previous FLOAT32 buffers; conversion temporaries are now
+  freed instead of leaked.
+
+- Suppress RNifti pointer/reference-count diagnostics in all native
+  image helpers, including debug builds where pkgbuild overrides
+  `-DNDEBUG`. Preserve normal BrainGnomes logging and other debug
+  settings. Cleanly rebuild the package and create new runtime bundles
+  to update future workers; existing sealed bundles retain their
+  installed binary.
+
+- Correct spline interpolation when retained timepoints are constant:
+  censored spikes and edge samples now receive the retained value.
+  Reject non-finite interpolation points explicitly.
+
+- Apply fitted regression models to censored volumes even when fitted
+  rows are constant. Respect partial regression that retains the
+  intercept, including constant input series. Recenter residuals over
+  fitted rows before applying a requested nonzero mean in both image and
+  matrix regression.
+
+- Support scalar-gain filters without invalid memory access, including
+  steady-state initialization. Validate empty/non-finite coefficients
+  and padding before processing, including all-zero images. Filter and
+  demean nonzero constant signals when requested.
+
+- Reject images with extra dimensions instead of silently processing
+  their first block, and use size-safe voxel indices in native image
+  operations.
+
+- Reject missing regression selections, non-finite designs, and
+  non-finite retained quantile voxels with clear errors. Quantiles
+  continue to permit non-finite values outside a supplied mask.
+
+- Detect configuration changes inside unnamed, mixed-name, and
+  duplicate-name lists so confirmed saves retain those edits.
+
+- Allow SQLite reads for job status, project inspection, submission
+  history, and table existence to wait up to ten seconds for concurrent
+  writers rather than failing immediately while a worker publishes its
+  state.
+
+- Correct menu titles and single-choice selection indices. Reject
+  partial numeric choices and exit menu loops on EOF. Escape, Ctrl+D,
+  and EOF cancel typed prompts cleanly and restore terminal settings.
+  Cancelling guided stream selection stops before submission instead of
+  selecting every stream.
+
+- Preserve negative CLI values, empty assignments, and trailing equals
+  signs. Keep leading zeros in subject/session identifiers and reject
+  invalid boolean options before acting.
+
+- Preserve literal shell-quoted paths containing spaces or apostrophes
+  across CLI plans/setup/validation and worker entry points, while
+  retaining vector option parsing.
+
+- Parse complete BIDS filename entities instead of incidental
+  substrings, and preserve alphanumeric resolution labels when
+  constructing filenames.
+
+- Validate motion-filter flags and require finite motion-QC thresholds
+  before summarization.
+
+- Document CLI activation after installation, correct the quickstart’s
+  Bash activation command, and clarify guided and prompt-free project
+  creation. Update native function documentation for validation, mean
+  handling, storage precision, and quantization behavior.
+
+- Fix the missing quickstart pipeline diagram on the pkgdown website by
+  referencing a vignette-local PNG that is copied into the rendered
+  article. Installed vignette sources fall back to the existing package
+  image.
+
+- Correct reversed temporal-filter examples, zero-padded CompCor and
+  motion column selections, AROMA mode support and its fMRIPrep removal
+  version, and intensity-normalization variance scaling. Clarify ROI
+  masking, censoring, minimum-voxel settings, local extraction,
+  output-directory requirements, and connectivity limits. Refresh
+  container setup, offline TemplateFlow guidance, debug-versus-dry-run
+  behavior, scheduler polling defaults, article links, and contribution
+  instructions; finish the intermediate-file documentation and make
+  shell run-ID examples safe to copy after substituting the ID.
 
 - Snapshot tracked worker scripts, helpers, and the BrainGnomes runtime
   into sealed, reusable project/run-owned bundles. Package reinstalls no

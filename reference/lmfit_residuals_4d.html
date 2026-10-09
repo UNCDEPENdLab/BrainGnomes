@@ -11,7 +11,7 @@ timepoints to obtain predicted values, and the residuals are returned as a clean
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,13 +73,14 @@ timepoints to obtain predicted values, and the residuals are returned as a clean
 
 
 <dt id="arg-x">X<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
-<dd><p>A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
+<dd><p>A finite numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 Typically includes motion parameters, physiological noise, etc.</p></dd>
 
 
 <dt id="arg-include-rows">include_rows<a class="anchor" aria-label="anchor" href="#arg-include-rows"></a></dt>
 <dd><p>Optional logical vector identifying the timepoints used when estimating the model
-(e.g., uncensored volumes). If supplied it must have length <code>nrow(X)</code>; when <code>NULL</code>, all timepoints are used.</p></dd>
+(e.g., uncensored volumes). If supplied it must have length <code>nrow(X)</code>
+and contain no missing values; when <code>NULL</code>, all timepoints are used.</p></dd>
 
 
 <dt id="arg-add-intercept">add_intercept<a class="anchor" aria-label="anchor" href="#arg-add-intercept"></a></dt>
@@ -96,13 +97,13 @@ Typically includes motion parameters, physiological noise, etc.</p></dd>
 
 <dt id="arg-preserve-mean">preserve_mean<a class="anchor" aria-label="anchor" href="#arg-preserve-mean"></a></dt>
 <dd><p>Logical; if <code>TRUE</code>, recenter each output time
-series to the input mean over the rows used for fitting. Constant time
-series are therefore left unchanged.</p></dd>
+series to the input mean over the rows used for fitting.</p></dd>
 
 
 <dt id="arg-set-mean">set_mean<a class="anchor" aria-label="anchor" href="#arg-set-mean"></a></dt>
-<dd><p>Optional numeric value; if specified, all residual time series will be shifted to have this mean
-(default is 0). Cannot be used in combination with <code>preserve_mean = TRUE</code>.</p></dd>
+<dd><p>Finite numeric value. A non-zero value recenters residuals
+to this mean over the fitted rows. The default, 0, leaves the regression
+residuals unchanged. Ignored when <code>preserve_mean = TRUE</code>.</p></dd>
 
 
 <dt id="arg-regress-cols">regress_cols<a class="anchor" aria-label="anchor" href="#arg-regress-cols"></a></dt>
@@ -117,7 +118,11 @@ are used to estimate the model. This allows for partial regression that preserve
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if <code>internal = TRUE</code>).</p>
+    <p>A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if <code>internal = TRUE</code>).
+Integer inputs are converted to double precision for processing. Saved files
+preserve the input storage datatype, with slope and intercept recalculated
+for the processed values. Integer output is quantized to the written header's scale; returned
+values can therefore differ from reread values.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

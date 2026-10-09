@@ -21,17 +21,19 @@ filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
 
 - b:
 
-  A numeric vector of numerator (feedforward) filter coefficients.
+  A non-empty, finite numeric vector of numerator (feedforward) filter
+  coefficients.
 
 - a:
 
-  A numeric vector of denominator (feedback) filter coefficients. Must
-  have `a[0] == 1.0`.
+  A non-empty, finite numeric vector of denominator (feedback) filter
+  coefficients. Must have `a[1] == 1.0`.
 
 - padlen:
 
-  Number of samples to extend on each edge for padding. If `-1`
-  (default), uses `3 * max(length(a), length(b))`.
+  Number of samples to extend on each edge for padding. Must be
+  non-negative or `-1` (default), which uses
+  `3 * max(length(a), length(b))`.
 
 - padtype:
 

@@ -50,13 +50,15 @@ for an executable no-cluster introduction.
 BrainGnomes identifies data for all subjects (and sessions) in your
 DICOM and BIDS folders, then determines which subjects need to be
 processed. It processes data by looping over subjects, submitting jobs
-for each subject and processing step to the HPC scheduler. This ensures
-that each subject is processed fully (unless a crash occurs).
+for each subject and processing step to the HPC scheduler. Completion
+markers and job-tracking records help identify finished work and
+failures; use
+[`inspect_project()`](https://hallquistlab.github.io/BrainGnomes/reference/inspect_project.md)
+to check progress after submission.
 
-![BrainGnomes pipeline
-flow](../../../_temp/Library/BrainGnomes/extdata/braingnomes_flow.png)
+![BrainGnomes pipeline flow](braingnomes_flow.png)
 
-### Running a subset of subject or a subset of processing steps
+### Running selected subjects or processing steps
 
 As detailed below, the
 [`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md)
@@ -91,13 +93,13 @@ on subject 540311, you might respond to the prompts like this:
      (yes/no) > n
     Run postprocessing? 
      (yes/no) > y
-    Which postprocessing streams should be run? Press ENTER to select all.
+    Which postprocessing streams should be run? Select streams, or 0 to cancel.
 
     1:   postproc1
     2:   rest
 
     Enter one or more numbers separated by spaces and then ENTER, or 0 to cancel
-    1: 1
+    Selection: 1
 
 You can achieve the same thing by passing in arguments for `steps`,
 `postprocess_streams`, and `subject_filter`, which will schedule the
@@ -133,59 +135,38 @@ plan to enable:
 BrainGnomes batch scripts call `singularity`; Apptainer can be used when
 it provides the compatible `singularity` command.
 
-The corresponding setup checklist is:
-
-1.  Installation: Install the BrainGnomes R package. The package is not
-    on CRAN (yet), so for now, you must install from GitHub. Then load
-    it in your R session:
+Install and load the package before starting setup:
 
 ``` r
 
-# Install (if needed) and load BrainGnomes
-# devtools::install_github("HallquistLab/BrainGnomes")
+install.packages("remotes")  # once, if needed
+remotes::install_github("HallquistLab/BrainGnomes")
 library(BrainGnomes)
 ```
 
-2.  Working Python installation: During postprocessing, the pipeline
-    supports masking the data by a brain mask that matches the
-    stereotaxic space. For example, if your fmriprep data are in
-    MNI152NLin2009cAsym with a resolution of 2mm, a custom brain mask
-    released with the template can be applied to the data to remove
-    non-brain voxels. This relies on TemplateFlow
-    (<http://templateflow.org/>), a Python library that provides a
-    number of templates. For this step to work, you must have a working
-    Python installation.
-3.  HPC Access: Access to an HPC cluster with a job scheduler supported
-    by BrainGnomes (currently SLURM or TORQUE). You should know which
-    scheduler your cluster uses.
-4.  Singularity: Singularity must be available on the HPC system
-5.  You must have downloaded or built the required container image files
-    for:
+Prepare only the inputs and software for the stages you plan to run:
 
-- fMRIPrep (e.g., a .sif image of fMRIPrep)
-- HeuDiConv (container for DICOM to BIDS conversion)
-- MRIQC (container for MRI quality metrics)
-- ICA-AROMA (if you plan to use ICA-AROMA for denoising)
-- BIDS Validator (either a container or an installed binary for the BIDS
-  validation tool) Make note of the filesystem paths to each of these
-  container files or executables, as the configuration will require
-  them.
-
-6.  Data and Files:
-
-- DICOM files for your study, organized in subject (and optionally
-  session) folders.
-- A heuristic file for HeuDiConv (a Python script defining how to
-  translate DICOM filenames into BIDS format). You or your lab should
-  have this .py file prepared for your study’s naming conventions.
-- A FreeSurfer license file (e.g., license.txt or
-  FreeSurferLicense.txt). fMRIPrep requires a valid FreeSurfer license
-  to run. You can obtain one for free from the FreeSurfer website. Save
-  the license file path for the configuration.
-- Optionally, a TemplateFlow directory if you want to use a non-default
-  location for TemplateFlow data (standard brain templates). If unsure,
-  you can specify an empty or new directory and fMRIPrep will manage
-  downloading templates there.
+- **Input data:** local DICOMs and a HeuDiConv heuristic for conversion,
+  a BIDS dataset for preprocessing, or existing fMRIPrep derivatives
+  plus the corresponding BIDS dataset for downstream processing.
+- **Scheduler and storage:** identify your scheduler, account/partition
+  settings, and shared project, scratch, and log locations accessible to
+  compute nodes.
+- **Containers:** obtain the images for enabled stages, including FSL
+  when postprocessing is enabled. Save their absolute paths for setup.
+  BIDS validation uses a separately configured executable.
+- **FreeSurfer license:** fMRIPrep requires a license file. Record its
+  path; it can be obtained from the FreeSurfer website.
+- **TemplateFlow cache:** choose a shared, writable cache for fMRIPrep.
+  On clusters without compute-node internet access, populate the
+  required template resources before submission; an empty directory
+  alone is insufficient. See [NiPreps’ restricted-network
+  guidance](https://www.nipreps.org/apps/singularity/#restricted-internet-access).
+- **Python for template masks:** template-dependent postprocessing needs
+  `nibabel`, `nilearn`, and `templateflow` in the Python environment
+  selected by reticulate. Set `RETICULATE_PYTHON` before starting R when
+  using a specific environment. The imaging containers supply their own
+  Python runtimes.
 
 With these in place, we can proceed to create a project configuration.
 
@@ -282,13 +263,12 @@ console:
 - TemplateFlow Directory – Path to your TemplateFlow data (standard
   templates for fMRIPrep). If you have a central TemplateFlow directory
   (e.g., ~/templateflow or a shared path), provide it.
-- Scratch Directory – A path for temporary scratch space. This is often
-  on a fast storage (like \$TMPDIR or a scratch disk) that is not
-  intended for long-term storage. If you’re not sure, you can use a
-  sub-directory in your project directory (e.g.,
-  “/proj/Longleaf/MyStudy2025/scratch”). Just make sure to keep an eye
-  on the size of this folder and clean it up periodically if this isn’t
-  done automatically by your HPC system.
+- Scratch Directory – Temporary working storage accessible to the
+  compute nodes running your jobs. A shared scratch directory or a
+  subdirectory of the project is a suitable starting point. A login
+  node’s `$TMPDIR` may be private or short-lived, so do not assume it is
+  visible to scheduled workers. Check your site’s storage policy and
+  clean completed temporary work periodically.
 
 Steps implied by the starting point are already selected, so their
 enable questions are not repeated. You then choose optional downstream
@@ -407,10 +387,11 @@ you will be asked to provide:
     directories in the root of your DICOM directory. Consider, for
     example, a DICOM directory that includes the following folders:
     `logs`, `5300`, and `5420`, where the numbered directories are the
-    subject IDs. In this case, a good regular expression for identifying
-    subjects would be, `[0-9]+` – matching folders containing numbers.
-    If you want *any* folder in the root of your DICOM directory to be
-    considered a subject folder, use `.*`.
+    subject IDs. In this case, a regular expression for directories
+    consisting entirely of digits is `^[0-9]+$`. Anchors prevent
+    matching unrelated names that merely contain digits. If you want
+    *any* folder in the root of your DICOM directory to be considered a
+    subject folder, use `.*`.
 
 2.  (Optional) Session Regex: if you have multi-session data and these
     are stored in your DICOM directory as subfolders (i.e., something
@@ -427,12 +408,10 @@ you will be asked to provide:
     the folder name should be preserved as part of the ID. For example,
     if folders are named something like `sub-<numbers>` and you want to
     keep the numeric part as the ID, the Subject ID Match Regex would
-    be, `sub-([0-9]+)`. If the ID is stored in different parts of the
-    folder name, you can use more than one set of parentheses, in which
-    case these will be extracted and pasted together with an underscore
-    separating each part. For example, consider a folder
-    `subject-16-visit-3`. You could extract a subject ID of `16_3` using
-    the Regex: `subject-([0-9]+)-visit-([0-9]+)`.
+    be, `sub-([0-9]+)`. Prefer a single capture group yielding an
+    alphanumeric BIDS subject label, preserving any leading zeros. Keep
+    visit information in the session label rather than introducing
+    underscores into the subject ID.
 
 4.  Session Match Regex: This follows the same logic as the Subject ID
     Match Regex, but applies to session folders nested within subject
@@ -508,16 +487,16 @@ Next, you will decide whether to include ICA-AROMA in the pipeline:
 say yes, you will be asked for:
 
 1.  Location of the ICA-AROMA container
-2.  Resource requirements: Defaults for BrainGnomes mriqc are 32 GB RAM,
-    36 hours, and 1 core
+2.  Resource requirements: Defaults for BrainGnomes ICA-AROMA are 32 GB
+    RAM, 36 hours, and 1 core
 3.  Additional command line arguments to fmripost_aroma. See
     <https://fmripost-aroma.readthedocs.io/latest/usage.html#command-line-arguments>
     for details.
 4.  Additional arguments to be passed to the HPC scheduler
 
-(Note: As of fMRIPrep v20.2+, ICA-AROMA is no longer integrated in
-fMRIPrep and must be run separately as a BIDS-App called
-fmripost-aroma.)
+BrainGnomes runs ICA-AROMA separately with fMRIPost-AROMA. Integrated
+ICA-AROMA was removed in [fMRIPrep
+23.1.0](https://fmriprep.org/en/stable/changes.html).
 
 ### Postprocessing setup
 
@@ -678,7 +657,9 @@ distinguish `would_skip` from `would_submit`; `force = TRUE` includes
 already-completed work. Project setup checks and deferred Flywheel scope
 are labeled separately. These counts are work units, not exact scheduler
 job counts: postprocessing controllers can expand into image arrays and
-sentinel jobs, and runtime preflight still applies. Console output shows
+sentinel jobs, and runtime preflight still applies. `debug = TRUE` still
+submits scheduler jobs with imaging commands disabled; use
+`dry_run = TRUE` when you want no jobs submitted. Console output shows
 at most 20 detailed rows; the returned table retains all rows. Optional
 saved plans and retry previews expose the same information.
 
@@ -973,6 +954,8 @@ BrainGnomes run /project/my_study/run.yaml
 Run operations support observation and recovery:
 
 ``` bash
+# Replace this value with the run ID reported by BrainGnomes status.
+run_id="REPLACE_WITH_RUN_ID"
 BrainGnomes status /project/my_study
 BrainGnomes status /project/my_study --view=subjects
 BrainGnomes status /project/my_study --sub-id=540294
@@ -980,10 +963,10 @@ BrainGnomes status /project/my_study --view=active --refresh
 BrainGnomes status /project/my_study --run=latest --watch
 BrainGnomes provenance /project/my_study --run=latest --format=json
 BrainGnomes logs /project/my_study --run=latest --failed-only --tail=50
-BrainGnomes retry /project/my_study --run=<run-id> --dry-run
-BrainGnomes retry /project/my_study --run=<run-id> --yes
-BrainGnomes cancel /project/my_study --run=<run-id> --dry-run
-BrainGnomes cancel /project/my_study --run=<run-id> --yes
+BrainGnomes retry /project/my_study --run="$run_id" --dry-run
+BrainGnomes retry /project/my_study --run="$run_id" --yes
+BrainGnomes cancel /project/my_study --run="$run_id" --dry-run
+BrainGnomes cancel /project/my_study --run="$run_id" --yes
 ```
 
 Use the run ID reported by `status --runs` when retrying so the source
@@ -1005,7 +988,7 @@ Add that package directory to your path when a terminal starts. If you
 use bash, the following portable form can be added to `~/.bashrc`:
 
 ``` bash
-export PATH="$(Rscript -e 'cat(find.package(\"BrainGnomes\"))'):$PATH"
+export PATH="$(Rscript -e 'cat(find.package("BrainGnomes"))'):$PATH"
 ```
 
 This enables the `BrainGnomes` command. The block below is generated by

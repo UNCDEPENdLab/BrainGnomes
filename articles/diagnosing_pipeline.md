@@ -330,6 +330,8 @@ cancel_project_run(scfg, run_id, dry_run = FALSE)
 The command line exposes the same inspection resolutions:
 
 ``` bash
+# Replace this value with the run ID reported by BrainGnomes status.
+run_id="REPLACE_WITH_RUN_ID"
 BrainGnomes status /project/my_study
 BrainGnomes status /project/my_study --view=stages
 BrainGnomes status /project/my_study --view=subjects
@@ -337,19 +339,19 @@ BrainGnomes status /project/my_study --sub-id=540294
 BrainGnomes status /project/my_study --view=active --refresh
 BrainGnomes status /project/my_study --view=reconciliation
 BrainGnomes status /project/my_study --run=latest --watch
-BrainGnomes status /project/my_study --run=<run-id> --view=jobs --format=csv
+BrainGnomes status /project/my_study --run="$run_id" --view=jobs --format=csv
 
 BrainGnomes diagnose /project/my_study
-BrainGnomes diagnose /project/my_study --run=<run-id> --interactive
+BrainGnomes diagnose /project/my_study --run="$run_id" --interactive
 BrainGnomes diagnose /project/my_study --subject-id=540294 --interactive
 BrainGnomes diagnose /project/my_study --job-id=66273010 --interactive
-BrainGnomes logs /project/my_study --run=<run-id> --failed-only --tail=50
-BrainGnomes provenance /project/my_study --run=<run-id> --format=json
+BrainGnomes logs /project/my_study --run="$run_id" --failed-only --tail=50
+BrainGnomes provenance /project/my_study --run="$run_id" --format=json
 
-BrainGnomes retry /project/my_study --run=<run-id> --dry-run
-BrainGnomes retry /project/my_study --run=<run-id> --yes
-BrainGnomes cancel /project/my_study --run=<run-id> --dry-run
-BrainGnomes cancel /project/my_study --run=<run-id> --yes
+BrainGnomes retry /project/my_study --run="$run_id" --dry-run
+BrainGnomes retry /project/my_study --run="$run_id" --yes
+BrainGnomes cancel /project/my_study --run="$run_id" --dry-run
+BrainGnomes cancel /project/my_study --run="$run_id" --yes
 ```
 
 Retry and cancellation require either a dry-run preview or explicit

@@ -63,6 +63,9 @@ remotes::install_github("HallquistLab/BrainGnomes")
 library(BrainGnomes)
 ```
 
+GitHub installation compiles the native C++ helpers, so your R
+installation needs a working C++ build toolchain.
+
 ### Install a specific release
 
 To install a particular tagged release rather than the latest
@@ -77,11 +80,32 @@ See the [available
 tags](https://github.com/HallquistLab/BrainGnomes/tags) to choose an
 available tag.
 
+### Use the command-line interface
+
+On Linux or macOS, add the installed package directory to your shell’s
+`PATH` after installation. Run this in Bash, using the same R
+installation and library as your R session:
+
+``` bash
+export PATH="$(Rscript -e 'cat(find.package("BrainGnomes"))'):$PATH"
+BrainGnomes --help
+```
+
+Add the `export` line to `~/.bashrc` to retain it in future Bash
+sessions. You can also run the installed entry point from R without
+changing `PATH`:
+
+``` r
+
+system2(file.path(R.home("bin"), "Rscript"),
+  shQuote(c(system.file("BrainGnomes", package = "BrainGnomes"), "--help")))
+```
+
 ## Typical workflow
 
-The established R workflow remains the primary path. Set up a project
-once, run it directly, inspect progress while work is active, and
-diagnose only when a failure needs investigation.
+Start with the R workflow below. Set up a project once, run it directly,
+inspect progress while work is active, and diagnose only when a failure
+needs investigation.
 
 ``` r
 
@@ -198,11 +222,11 @@ BrainGnomes diagnose --interactive
 BrainGnomes config validate --steps=fmriprep --format=json
 ```
 
-To create a project in the current directory, use
-`BrainGnomes init my_study`. The project name is required, and replacing
-an existing configuration still requires `--overwrite`. Pass an explicit
-directory or configuration YAML to work elsewhere. Saved plans always
-need an explicit path: `BrainGnomes run run.yaml`.
+To create a project in the current directory without prompts, use
+`BrainGnomes init my_study`. Omit the project name to open guided setup.
+Replacing an existing configuration requires `--overwrite`. Pass an
+explicit directory or configuration YAML to work elsewhere. Saved plans
+always need an explicit path: `BrainGnomes run run.yaml`.
 
 ### Optional inspection and automation tools
 
@@ -379,8 +403,10 @@ stop the retry instead of expanding it.
 The CLI requires an explicit choice between a preview and action:
 
 ``` bash
-BrainGnomes retry /project/my_study --run=<run-id> --dry-run
-BrainGnomes retry /project/my_study --run=<run-id> --yes
+# Replace this value with the run ID reported by BrainGnomes status.
+run_id="REPLACE_WITH_RUN_ID"
+BrainGnomes retry /project/my_study --run="$run_id" --dry-run
+BrainGnomes retry /project/my_study --run="$run_id" --yes
 ```
 
 Cancellation follows the same preview-first pattern and affects only
@@ -401,8 +427,8 @@ snapshot:
 qc <- collect_qc_inventory(scfg)
 qc$inventory  # derivative availability and QC summaries
 qc$workflow  # expected work and recorded execution states
-write_qc_inventory(qc, "reports/qc-tables-2026-09-11")
-render_qc_dashboard(qc, "reports/qc-dashboard-2026-09-11")
+write_qc_inventory(qc, "reports/qc-tables-snapshot-01")
+render_qc_dashboard(qc, "reports/qc-dashboard-snapshot-01")
 ```
 
 The Quarto dashboard includes searchable React tables, interactive
@@ -410,7 +436,7 @@ metric plots, regional coverage, and links to existing reports and logs.
 Each output directory contains one snapshot; use a new directory to
 refresh it. Collection does not change workflow state or make inclusion
 decisions. See the [study QC
-vignette](https://hallquistlab.github.io/BrainGnomes/vignettes/study_qc.Rmd)
+vignette](https://hallquistlab.github.io/BrainGnomes/articles/study_qc.html)
 for dependencies and interpretation.
 
 ![Study QC dashboard showing synthetic
@@ -449,6 +475,14 @@ guides:
   Runs](https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html)
   — triage project or subject status and investigate failures from
   job-tracking records and logs.
+- [Portable derivative provenance and methods
+  text](https://hallquistlab.github.io/BrainGnomes/articles/derivative_provenance.html)
+  — inspect derivative sidecars, export their companions, and review
+  generated methods and citations.
+- [Study QC inventory and
+  dashboard](https://hallquistlab.github.io/BrainGnomes/articles/study_qc.html)
+  — collect existing QC evidence, export tables, and render study
+  snapshots.
 - [Run-wise Intensity
   Normalization](https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html)
   — understand the robust reference-core approach, targets, provenance,

@@ -9,7 +9,7 @@ and/or excludes zero-valued voxels. For 4D images, the function pools over all t
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -92,6 +92,8 @@ for the median). <code>NA</code>, <code>NaN</code>, <code>Inf</code>, and <code>
 <ul><li><p>For 4D images, the mask (if used) is applied identically to all volumes.</p></li>
 <li><p>Quantile calculation uses partial sorting for performance (via <code>std::nth_element</code>).</p></li>
 <li><p>Throws an error if no voxels are valid after masking or zero exclusion.</p></li>
+<li><p>Retained voxels must be finite; missing or infinite image values cause an
+error. Non-finite values outside the supplied mask are ignored.</p></li>
 </ul></div>
 
     <div class="section level2">

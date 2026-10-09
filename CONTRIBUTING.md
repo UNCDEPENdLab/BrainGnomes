@@ -2,13 +2,16 @@
 
 Thanks for your interest in improving BrainGnomes! This guide summarizes
 how to develop locally, what CI runs, and what we expect in pull
-requests. For details on structure, style, and commands, see AGENTS.md.
+requests. For details on structure, style, and commands, see
+[AGENTS.md](https://hallquistlab.github.io/BrainGnomes/AGENTS.md).
 
 ## Getting Started
 
 - Install tooling: `Rscript -e 'install.packages(c("devtools"))'`.
 - Set up docs: `Rscript -e 'devtools::document()'`.
 - Run tests: `Rscript -e 'devtools::test()'`.
+- Site preview: `Rscript -e 'pkgdown::build_site()'` (install `pkgdown`
+  first).
 - Full package check: `Rscript -e 'devtools::check()'`.
 
 ## Workflow
@@ -16,15 +19,22 @@ requests. For details on structure, style, and commands, see AGENTS.md.
 - Branch naming: `feature/<short-topic>` or `fix/<short-topic>`.
 - Keep changes focused and small; include roxygen2 updates with code
   changes.
+- Update every edited vignette to a literal date after its author, using
+  `date: "DD Mon YYYY"`. Keep vignette builds self-contained and put
+  article images under `vignettes/` so pkgdown can copy them. Keep
+  installed-vignette resource paths valid as well.
 - Add/adjust tests in `tests/testthat/` (files named `test-*.R`).
 
 ## CI Expectations
 
 - GitHub Actions run R CMD check on PRs
   (`.github/workflows/R-CMD-check.yaml`).
-- Docs build with pkgdown on main (`.github/workflows/pkgdown.yaml`).
-- PRs must pass CI and resolve all warnings/errors from
-  `devtools::check()`.
+- pkgdown builds documentation on pull requests; successful non-PR runs
+  on the main branch or a published release deploy the site
+  (`.github/workflows/pkgdown.yaml`).
+- PRs must pass CI and resolve package-check errors and warnings. Report
+  any environment limitations explicitly, including missing system
+  utilities.
 
 ## Commit & PR Checklist
 
@@ -41,8 +51,10 @@ requests. For details on structure, style, and commands, see AGENTS.md.
 
 ## Security & Data
 
-- Do not commit PHI or large binaries. Use example configs only (see
-  `tests/example_config.yaml`).
+- Do not commit PHI, study data, or large binaries. The installed
+  placeholder configuration is
+  `inst/extdata/example_project_config.yaml`; test fixtures belong under
+  `tests/`.
 
 ## Reference
 

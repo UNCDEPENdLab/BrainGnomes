@@ -13,7 +13,7 @@ including optional initial condition handling via steady-state initialization.">
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -74,15 +74,15 @@ including optional initial condition handling via steady-state initialization.</
 
 
 <dt id="arg-b">b<a class="anchor" aria-label="anchor" href="#arg-b"></a></dt>
-<dd><p>A numeric vector of numerator (feedforward) filter coefficients.</p></dd>
+<dd><p>A non-empty, finite numeric vector of numerator (feedforward) filter coefficients.</p></dd>
 
 
 <dt id="arg-a">a<a class="anchor" aria-label="anchor" href="#arg-a"></a></dt>
-<dd><p>A numeric vector of denominator (feedback) filter coefficients. Must have <code>a[0] == 1.0</code>.</p></dd>
+<dd><p>A non-empty, finite numeric vector of denominator (feedback) filter coefficients. Must have <code>a[1] == 1.0</code>.</p></dd>
 
 
 <dt id="arg-padlen">padlen<a class="anchor" aria-label="anchor" href="#arg-padlen"></a></dt>
-<dd><p>Number of samples to extend on each edge for padding. If <code>-1</code> (default), uses <code>3 * max(length(a), length(b))</code>.</p></dd>
+<dd><p>Number of samples to extend on each edge for padding. Must be non-negative or <code>-1</code> (default), which uses <code>3 * max(length(a), length(b))</code>.</p></dd>
 
 
 <dt id="arg-padtype">padtype<a class="anchor" aria-label="anchor" href="#arg-padtype"></a></dt>

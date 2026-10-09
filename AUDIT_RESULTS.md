@@ -1386,3 +1386,390 @@ No unresolved implementation, documentation, CLI/UX, test, vignette, or
 artifact blocker remains for 0.9-2. The candidate source changes still
 need to be committed before creating the `0.9-2` tag; this audit did not
 publish or tag the release.
+
+## Release audit 09 Oct 2026
+
+Audit date: 09 Oct 2026. Scope: the current development checkout, with
+focused bug fixes and documentation changes. Release preparation sets
+the package version to `1.0` and the release date to `2026-10-09`;
+release tagging and publication remain separate maintainer steps.
+
+The audit found reproducible numerical, configuration-saving, database
+contention, and terminal interface bugs and added regression coverage
+for their fixes. Release readiness still depends on the
+environment-specific validation listed below. This audit does not
+certify every supported external container or scheduler combination.
+
+### Findings and fixes
+
+P1 indicates incorrect numerical output, lost configuration changes, a
+possible native crash, or unintended work selection. P2 indicates
+robustness, documentation, or interface defects.
+
+| Priority | Finding | Result after the fix | Coverage |
+|----|----|----|----|
+| P1 | Spline interpolation skipped voxels whose retained samples were constant, leaving censored spikes unchanged. | Requested samples, including edge samples, receive the retained constant value. | Synthetic spike and edge cases with both extrapolation modes. |
+| P1 | Regression replaced the entire series with zeros when only fitted rows were constant. It also zeroed constant signals when the removed columns excluded the intercept. | Both native and matrix regression apply the fitted model to the full series. Only entirely zero signals take the shortcut. | Censored spikes, a design without an intercept, and partial regression retaining the intercept. |
+| P1 | RNifti integer conversion can truncate in-range fractional values and mishandle constant or wide-integer scaling. Integer storage itself is intentional and supports fractional physical values through header scaling. | Processing remains floating point; saved files retain the input datatype. An explicit output scaling grid is recalculated from processed values, and rounded codes are stored without a narrowing integer intermediate. | All eight integer types, NIfTI-1/2, nontrivial input scaling, range expansion, unsigned negative results, zero backgrounds, fractional constants, tiny/large values, and floating-point controls. |
+| P1 | FLOAT32 integer working buffers erased small differences at large offsets, and explicit FLOAT32 result casts narrowed even FLOAT64 images. | Decode integers into double-precision working images and let the image datatype control result storage. Preserve FLOAT64 results without a narrowing intermediate. | Independently calculated spline, regression, and identity-filter values; 2^24 offsets; heavily scaled 16-bit data; FLOAT64 fractions and large values; genuine NIfTI-2 scales of 1e-100 and 1e100. |
+| P1 | Scalar filter coefficients accessed empty filter state; empty numerator coefficients could also access invalid memory. | Scalar gains work with and without steady-state initialization; empty coefficients fail before indexing. | Identity/gain filters and invalid coefficient tests. |
+| P1 | Configuration comparison silently ignored changes inside two unnamed lists. | Unnamed, mixed-name, or duplicate-name lists are compared as complete values; confirmed saves retain edits. | Structural comparisons and an actual YAML save. |
+| P1 | Cancelling an interactive multiple-stream selection could select all streams. | Cancellation stops the guided run before submission. | Both postprocessing and extraction, with both empty cancellation representations. |
+| P2 | Installed-package tests reproduced a status read failing while a local worker held a SQLite write lock. Related inspection readers had the same missing busy handler. | Status, project inspection, submission-history, and table-existence reads wait up to 10 seconds for concurrent writes. | Exclusive-lock regression cases for all four readers, plus local-worker submission and inspection tests. |
+| P2 | Nonzero constant voxels bypassed requested demeaning and filtering. | Constant signals follow the requested operation; zero background retains its fast path. | Demeaning and scalar-gain examples. |
+| P2 | pkgbuild’s debug flags re-enabled RNifti pointer/reference-count diagnostics despite the package’s `-DNDEBUG`, flooding worker logs. | A shared include disables RNifti’s inline diagnostics while preserving the caller’s debug setting. All native image translation units use it. | Deliberate `-UNDEBUG` build, captured processing/destruction output, and inspection of the resulting binary. |
+| P2 | Conversion temporaries were disowned after `replaceData()` had copied them, leaking a working buffer on every integer-image operation. | Retain ownership of each temporary and let its destructor free it after the copy. | RNifti ownership contracts reviewed; synthetic repeated-operation RSS comparison; output-lifetime tests. |
+| P2 | Nonzero `set_mean` simply added an offset even when partial regression retained a nonzero mean. | Both regression implementations recenter over fitted rows before applying the requested nonzero target. The default `0` preserves existing residual behavior. | Mean checks for a design without an intercept. |
+| P2 | Native helpers accepted images with additional dimensions but processed only the first block. | Interpolation, regression, filtering, and volume removal reject such images. | Five-dimensional input checks. |
+| P2 | Missing regression selections and non-finite designs or quantile voxels could produce misleading output. Filter validation was skipped for zero images. | Invalid inputs fail explicitly; quantiles permit non-finite values only outside the supplied mask. | Missing selections, invalid designs, mask exclusion, and zero-image filter cases. |
+| P2 | Menu titles were passed as the graphics argument; native single selection could return the wrong item. Numeric prefixes and EOF were mishandled. | Titles use named arguments; choices preserve the requested index; invalid suffixes are rejected; EOF terminates menus. | Mocked interactive calls, cancellation tests, and terminal checks. |
+| P2 | Raw terminal Ctrl+D did not implement the documented cancellation behavior. | Escape, Ctrl+D, and EOF return cancellation; typed prompts stop cleanly and terminal settings are restored. | Prompt tests and terminal checks. |
+| P2 | CLI parsing treated negative values as options and dropped trailing equals signs; empty values became missing values. | Negative vectors, trailing equals signs, and empty assignments retain their values. | Parser regression cases. |
+| P2 | Numeric-looking CLI subject/session identifiers lost their leading zeros; invalid boolean strings silently disabled flags. | Identifiers remain text and invalid flags fail before acting. | Installed CLI subject filtering and invalid-flag checks. |
+| P2 | Shell-quoted path options were split again, breaking paths containing spaces or apostrophes. | CLI and worker entry points preserve literal path arguments; generated vector-option blocks retain their established parsing. | Path adapter tests, real plan output, and worker tracking scripts. |
+| P2 | BIDS parsing matched incidental substrings and truncated alphanumeric resolution labels. | Only complete filename entities are parsed; accepted resolution labels round-trip through filename construction. | Entity-boundary and resolution round-trip tests. |
+| P2 | Motion QC coerced invalid filtering flags to `FALSE` and accepted infinite thresholds. | Flags and finite thresholds are validated before summarization. | Invalid argument cases. |
+| P2 | The quickstart’s Bash activation command escaped quotes inside a single-quoted R expression and failed. The README omitted CLI activation and contradicted guided setup. | Correct activation instructions, an R entry-point alternative, and clear guided/prompt-free setup descriptions. | Documentation regeneration, vignette build, and installed CLI help. |
+| P2 | The quickstart linked to a PNG in the installed R library, which pkgdown does not copy into its website. | Use an identical vignette-local PNG and a relative image path so pkgdown copies the asset beside the article. | Asset identity and documentation tests; an actual pkgdown render verifies the image URL and copied PNG. |
+
+The corresponding source documentation and generated Rd files were
+updated. The edited quickstart has the literal current date immediately
+after its author. Unedited vignette dates matched their most recent
+commits when inspected. Every subsequently edited vignette uses the
+current literal date. `NEWS.md` records the user-visible changes.
+
+### Correction of the initial storage-precision assessment
+
+The initial proposal to force floating-point files was withdrawn after
+review of the intended storage policy and NIfTI scaling. Exact equality
+to the returned floating-point image is not the right criterion for
+integer output. The relevant checks are preservation of the storage
+datatype, controlled quantization under the written slope/intercept, and
+absence of clipping, wraparound, or unintended loss of resolution.
+
+Simply restoring RNifti’s original write path failed seven focused
+expectations: in-range fractional values could be truncated rather than
+rounded to the nearest storage point. The corrected writer explicitly
+recalculates output scaling, accounts for the actual NIfTI-1/2 header
+representation before encoding, and uses a binary grid that preserves
+zero backgrounds. It rounds directly into the requested integer width,
+reserves RNifti’s INT32 missing-value code, and handles constant outputs
+with a nonzero slope. Non-finite processed values fail before writing an
+integer file.
+
+The expanded tests require decoding error no greater than half the
+output step plus double-precision arithmetic rounding. They also cap the
+step relative to the resolution available in the requested datatype, so
+an excessively coarse scale cannot disguise a large error. Integer
+quantization remains inherent in the chosen storage type. Integer
+working images now use double precision to avoid premature quantization
+at large offsets or outside FLOAT32’s range; FLOAT64 results also avoid
+an unnecessary FLOAT32 cast. FLOAT32 inputs retain their existing
+storage precision. Integer working buffers use twice the space of
+FLOAT32 buffers, but conversion temporaries no longer leak after
+replacement.
+
+For NIfTI-2 tests, the written double-precision header fields are
+inspected directly. RNifti’s R header accessor and update helper use a
+NIfTI-1 header representation, which can otherwise narrow these values
+and invalidate extreme scaling fixtures or quantization bounds. Tests
+confirm that the fixtures really contain the intended physical values
+before processing.
+
+### RNifti diagnostics and runtime installation
+
+The installed RNifti library itself did not contain the reported pointer
+messages. They were compiled into BrainGnomes from RNifti’s inline C++
+headers. The existing Makevars `-DNDEBUG` was overridden by pkgbuild’s
+later `-UNDEBUG` in development builds. The shared include now
+suppresses diagnostics at their source, including automasking, reference
+measurement, image quantiles, and the other native image helpers. Normal
+logging remains available.
+
+The affected worker used a sealed project/run-owned runtime bundle
+containing the old BrainGnomes binary. A clean reinstall
+(`R CMD INSTALL --preclean`) and new runtime bundles are required for
+future jobs to use this correction. The bundle key includes the package
+binary’s checksum, so new submissions from a fresh R session detect the
+rebuilt package. Jobs inheriting an existing `BG_RUNTIME_BUNDLE` keep
+their pinned runtime. Reinstalling a shared library does not alter
+existing sealed run bundles. Existing production bundles and logs were
+not modified during this audit.
+
+### Documentation review before the PR
+
+A second review read the README, contribution guide, all ten vignettes,
+and public workflow/image help, and compared usage against current
+implementations. Corrections include reversed temporal-filter cutoffs;
+supported AROMA modes; the actual fMRIPrep 23.1.0 removal of integrated
+AROMA; CompCor zero-padding and whole-name regex matching;
+scalar-versus-squared variance units; ROI signal validity versus
+anatomical masking; existing extraction inputs, censor semantics,
+minimum-voxel options, connectivity limits, and writable output
+requirements. The review also finishes the intermediate-image paragraph,
+clarifies debug jobs versus submission-free previews, corrects scheduler
+polling defaults, fixes an undefined example configuration, adds missing
+article links, makes shell run-ID placeholders syntactically safe, and
+refreshes contribution/CI guidance. The setup prompts also use valid
+CompCor regexes and zero-based ranges.
+
+Container instructions now use portable shared paths, explicit
+placeholder versions, and the site’s runtime policy. The upstream AROMA
+example still uses `main`, so its downloaded image must be held fixed
+and its checksum retained. Offline TemplateFlow and compute-visible
+scratch requirements are explicit. Upstream HeuDiConv, NiPreps,
+fMRIPost-AROMA, fMRIPrep, and validator documentation was consulted for
+version- or runtime-dependent guidance. The quickstart first uses its
+local PNG so pkgdown can copy the image. Installed-source rendering
+falls back to the existing image in package `extdata`; no extra
+installed PNG or `.install_extras` rule is needed. Confound regexes are
+formatted as literal code in the help page, and the ROI guide has
+matching YAML and vignette-index titles.
+
+### Audit coverage
+
+The review covered package metadata and build exclusions, public R entry
+points, configuration and path handling, setup and recovery interfaces,
+confound and native image operations, ROI extraction and geometry
+checks, SQLite submission and worker status boundaries, run/derivative
+provenance, QC export, installed scripts, Python helpers,
+scheduler-script syntax, documentation contracts, and release workflows.
+Code inspection concentrated on edge cases and interface boundaries; the
+existing regression suite supplied broader coverage.
+
+No scheduler jobs or imaging containers were launched. Container
+integration tests remain opt-in. No major feature, database schema,
+dependency, or publication was added. The subsequent release preparation
+updates version/date metadata to 1.0.
+
+### Verification
+
+The local environment uses Linux, R **4.5.1**, RNifti **1.10.0**, Rcpp
+**1.1.2**, and RcppArmadillo **15.6.0.1**. Native builds use GCC
+**12.2.0**.
+
+- `devtools::document()` completed and regenerated the affected Rd files
+  and native R wrappers. All exported objects have Rd aliases.
+
+- Full `devtools::test()` against the source and an isolated current
+  installation before the final SQLite contention correction: **4,789
+  passed, 0 failed, 0 errors, 0 warnings, 4 skipped** across 632 test
+  cases in 98 files. The skips are two opt-in Slurm/container
+  integrations, the opt-in Quarto rendering check, and a guarded preview
+  requiring a supplied real project.
+
+- After the SQLite correction, the focused contention, submission
+  durability, project inspection, and worker-status suites passed
+  without warnings or failures. Four exclusive-lock scenarios exercise
+  all affected readers.
+
+- Package installation completed in an isolated library under `/tmp`.
+
+- The earlier vignette-enabled source build completed. Its
+  1,558,701-byte tarball has 431 entries, retains the new tests and
+  calibration tables, and excludes development data, caches, compiled
+  objects, and the audit reports.
+
+- Python syntax passed for both installed Python helpers; Bash syntax
+  passed for all 27 shell/scheduler scripts; the shell-worker regression
+  script passed. R syntax passed for 57 source and entry-point files.
+
+- Seven installed terminal checks passed: correct single selection,
+  rejection of partial numeric selections in both menus, EOF in both
+  menus, and Ctrl+D and Escape cancellation with terminal-setting
+  restoration.
+
+- The README’s Bash activation command successfully ran installed CLI
+  help. The changed vignette’s literal date and the final source
+  snapshot’s agreement with workspace package files were verified.
+
+- Installed-package `devtools::check()` before the storage-policy
+  correction: **0 errors, 1 warning, 1 note**. The installed test suite
+  reports **4,794 passed, 0 failed, 0 warnings, 5 skipped**. Four skips
+  are the opt-in integrations/preview/rendering described above; the
+  fifth is a source-only website configuration check, since that
+  configuration is deliberately excluded from the installed package. All
+  ten vignettes build and rebuild successfully; examples, documentation
+  checks, compiled-code checks, and package loading checks pass.
+
+- The package-check warning is the missing system `qpdf` utility for PDF
+  size-reduction checks. The note is inability to verify the current
+  time. Remote repository-index queries also fail in this
+  network-restricted environment, while the installed dependencies pass
+  the dependency checks. These environment diagnostics should be
+  resolved in the release environment.
+
+- Revised storage-focused suite: **847 passed, 0 failed, 0 errors, 0
+  warnings**.
+
+- Full installed-package check of the revised storage writer, before the
+  diagnostic-suppression addition: **5,547 passed, 0 failed, 0 warnings,
+  5 skipped**; **0 check errors, 1 warning, 1 note** (the same
+  environment diagnostics described above).
+
+- Deliberate pkgbuild debug build with `-UNDEBUG`, before the
+  double-precision working-buffer correction: **892 passed, 0 failed, 0
+  errors, 0 warnings** across storage, filtering, regression, reference,
+  automasking, and diagnostic-suppression tests. The resulting binary
+  contains none of the pointer acquisition, release, or image-creation
+  diagnostic strings.
+
+- A synthetic interpolation using the affected production runtime
+  emitted nine pointer/image diagnostics; the same operation using the
+  corrected isolated installation emitted zero. Only temporary images
+  were written.
+
+- Installed-package tests before the double-precision correction with
+  GCC undefined-behavior and float-cast-overflow sanitizers: **892
+  passed, 0 failed, 0 errors, 0 warnings**. The binary links `libubsan`
+  and contains instrumentation; no sanitizer diagnostics occurred.
+
+- The full installed-package check including diagnostic suppression,
+  before the double-precision correction: **5,548 passed, 0 failed, 0
+  warnings, 5 skipped**; **0 check errors, 1 warning, 1 note**
+  (environment diagnostics).
+
+- The earlier vignette-enabled source build produced a 1,563,375-byte
+  tarball with 435 entries, including both new native headers and the
+  storage/logging regression tests. It excludes local datasets, compiled
+  objects, and audit reports.
+
+- Final double-precision/storage/logging focused tests: **1,122 passed,
+  0 failed, 0 errors, 0 warnings**; a forced clean pkgbuild debug build
+  with `-UNDEBUG` passed the same **1,122 assertions** without RNifti
+  diagnostics.
+
+- The same final revision installed with GCC undefined-behavior and
+  float-cast-overflow sanitizers passed **1,122 assertions, 0 failures,
+  0 errors, 0 warnings**, with no sanitizer diagnostics.
+
+- A synthetic FLOAT64 identity-filter comparison changed values by up to
+  **5.920929e-08** in the affected production runtime and by **0** in
+  the corrected installation. After warm-up, 20 operations on a
+  synthetic 48-by-48-by-48-by-6 integer image increased RSS by **50.625
+  MiB** in the old runtime and **0 MiB** in the corrected installation.
+  This is a local memory-growth check, not a general peak-memory
+  guarantee.
+
+- Final clean installed-package `devtools::check()` for the
+  double-precision, storage, and logging corrections: **5,778 passed, 0
+  failed, 0 warnings, 5 skipped**; **0 check errors, 1 warning, 1
+  note**. The five skips are the guarded integrations, rendering/preview
+  checks, and installed-package website check described above. All ten
+  vignettes build and rebuild; examples, documentation, compiled code,
+  and package loading checks pass. The warning remains missing `qpdf`;
+  the note remains inability to verify the current time.
+
+- The final double-precision source build produced a **1,564,353-byte**
+  tarball with **435 entries**. Both headers and storage/logging
+  regression tests are retained; development datasets, compiled objects,
+  and audit reports are excluded. Its contents match the corresponding
+  numerical-fix revision; subsequent release documentation and packaging
+  checks are recorded below.
+
+- Release preparation sets `DESCRIPTION` to version **1.0**, dated
+  **2026-10-09**, and consolidates all session fixes in the dated 1.0
+  changelog. Documentation regeneration and **223 documentation/workflow
+  assertions** pass without failures, errors, or warnings. Computational
+  behavior matches the revision whose full suite passed above;
+  subsequent documentation corrections also update assets, tests, and
+  setup instructions.
+
+- Release-metadata
+  `devtools::check(args = c("--as-cran", "--no-tests"))` completed with
+  **0 errors, 1 warning, 1 note**. All ten vignettes build and rebuild.
+  The warning remains missing `qpdf`; the note remains inability to
+  verify the current time. Tests were already run on the identical
+  runtime code.
+
+- After the quickstart image correction, **225 documentation/workflow
+  assertions** pass without failures, errors, or warnings. An actual
+  pkgdown article build succeeds without missing-image warnings; its
+  HTML references `figures/braingnomes_flow.png`, and the copied PNG
+  under `articles/figures/` is byte-for-byte identical to the original
+  package asset.
+
+- Final documentation regeneration and **235
+  documentation/workflow/confound assertions** pass without failures,
+  errors, or warnings. All **81 R examples** across the README and ten
+  guides parse; all **19 fenced shell examples** pass Bash syntax
+  checks. Corrected motion/CompCor/BIDS regex examples were checked
+  directly against the current helpers.
+
+- The full pkgdown site for the final release source builds without
+  warnings. All ten articles render, and both local image references
+  resolve. The quickstart HTML points to `braingnomes_flow.png` beside
+  the article, whose bytes match the original package PNG. A standalone
+  render without the local PNG verifies the installed-source fallback:
+  the HTML embeds the exact original PNG. Intermediate attempts to
+  install an additional vignette asset triggered an
+  unused-file/directory note because the installed HTML is
+  self-contained; the final implementation uses the existing `extdata`
+  image instead. Both source paths are verified without a redundant
+  installed copy.
+
+- The full installed-package suite after the documentation audit passes
+  **5,780 assertions**, with **0 failures, 0 test warnings, and 5
+  guarded skips**. This run precedes only the final image-fallback
+  packaging adjustment; the runtime code is unchanged. The final
+  packaging check and installed/source documentation tests below
+  validate that adjustment without repeating the runtime suite. The full
+  check has 0 errors, 1 warning, and 2 notes: missing `qpdf`,
+  unavailable clock verification, and the extra installed PNG from the
+  intermediate asset layout. The final package check confirms that the
+  PNG note is resolved.
+
+- The final source package check after the asset fallback correction
+  completed with **0 errors, 1 warning, 1 note**. All ten vignettes
+  build/rebuild, and documentation, examples, package loading, compiled
+  code, and installed assets pass. The warning is missing system `qpdf`;
+  the note is inability to verify current time. This packaging check
+  skips tests; runtime-suite verification and the separate final
+  documentation tests are recorded here.
+
+- The final installed package passes **130 documentation assertions**
+  with no failures or warnings; the website-configuration test has its
+  expected skip because that maintainer file is not installed.
+  Source-only image checks pass in the 235-assertion source run, and
+  both real rendering paths pass above.
+
+- The final release tarball is **1,788,384 bytes** with **436 entries**.
+  Its DESCRIPTION contains version 1.0 and date 2026-10-09. Both source
+  PNGs match the original exactly; no redundant installed PNG, compiled
+  objects, ignored development datasets, or audit report are included.
+  All **405 intended source files** match the working tree, apart from
+  this excluded audit report.
+
+The direct checkout build encountered broken links in ignored comparator
+data under `local/`. R copied the checkout before applying build
+exclusions. For release checking, a clean staging directory contains the
+tracked files and new audit tests, with the current edits, and omits
+ignored local datasets and compiled objects. This checks the intended
+package contents without modifying the local development data. The check
+uses `R_MAKEVARS_USER=/dev/null` to avoid the site-specific optimization
+and conversion-warning flags in the local user Makevars file; package
+Makevars remain in force.
+
+### Remaining release work
+
+1.  Run the existing Windows, macOS, R release/devel, and older-R CI
+    matrix on the final change. Include the declared R 4.1 minimum
+    explicitly, since `oldrel-1` alone does not guarantee that coverage.
+    The local audit uses Linux and R 4.5.1.
+2.  Run focused opt-in Slurm/container integration tests for the
+    production container versions, following the interactive-allocation
+    instructions in `AGENTS.md`. Retain the real fMRIPrep/postprocessing
+    smoke-test evidence.
+3.  Render the optional QC dashboard with the release environment’s
+    Quarto and optional widget packages; collection/export tests do not
+    replace that check.
+4.  Resolve environment-dependent package-check warnings and notes
+    before claiming a clean release check. The verification results
+    distinguish them from package defects.
+5.  Review the 1.0 changelog’s API removals and changed return types
+    against downstream scripts before tagging and publishing the
+    release. Version and release-date metadata are set to 1.0 and 09 Oct
+    2026.
+
+The audit report is excluded from the source package by the existing
+`.Rbuildignore` rule.

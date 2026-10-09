@@ -32,9 +32,9 @@ updated.
 
 Confounds can be filtered (e.g., with the same temporal filter as
 applied to fMRI data) or left unfiltered. Filtered regressors should
-typically include continuous-valued signals (e.g., a_comp_cor\_*, global
-signal), while spike regressors or discrete values (e.g.,
-motion_outlier*) should not be filtered.
+typically include continuous-valued signals (e.g., `a_comp_cor_.*`,
+global signal), while spike regressors or discrete values (e.g.,
+`motion_outlier.*`) should not be filtered.
 
 This function only generates the confound regressors file. Actual
 regression is handled separately.

@@ -11,7 +11,7 @@ is applied independently to each voxel's time series."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -72,7 +72,7 @@ is applied independently to each voxel's time series.</p>
 
 <dt id="arg-t-interpolate">t_interpolate<a class="anchor" aria-label="anchor" href="#arg-t-interpolate"></a></dt>
 <dd><p>Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-Timepoints outside the valid range <code>[1, T]</code> are ignored with a warning.</p></dd>
+Timepoints outside the valid range <code>[1, T]</code> cause an error.</p></dd>
 
 
 <dt id="arg-edge-nn">edge_nn<a class="anchor" aria-label="anchor" href="#arg-edge-nn"></a></dt>
@@ -103,7 +103,12 @@ with interpolated values inserted at the specified timepoints.</p>
     <p>The function reads the NIfTI image from disk, performs interpolation in memory,
 and optionally writes the result back to a new NIfTI file.</p>
 <p>The interpolation is voxelwise and assumes column-major order. If a voxel time series
-has fewer than three valid (non-interpolated) timepoints, or is constant across time, it is skipped.
+has fewer than three valid (non-interpolated) timepoints, an error is raised.
+Constant retained time series are filled with their retained value at the
+requested timepoints. Integer input is converted to double precision for
+processing. Saved files preserve the input storage datatype, with slope and
+intercept recalculated for the processed values. Integer output is quantized to the written
+header's scale; returned values can therefore differ from reread values.
 Linear extrapolation is used for timepoints outside the valid range if <code>edge_nn = FALSE</code>, matching
 R's <code>splinefun</code> approach with natural splines. If <code>edge_nn = TRUE</code>, nearest-neighbor extrapolation
 is used for interpolation timepoints at the beginning or end of the timeseries, potentially reducing

@@ -39,3 +39,8 @@ get_tracked_job_status(
 ## Value
 
 An R data.frame version of the tracking database
+
+## Details
+
+Status reads wait up to 10 seconds for a concurrent SQLite writer before
+reporting a database lock error.

@@ -8,8 +8,10 @@ function – called via `run_project` – summarizes postprocessed BOLD data
 within atlas‑defined regions and can also compute ROI‑to‑ROI
 connectivity matrices. It is run after postprocessing completes and
 writes its outputs to the project’s `data_rois` directory. At present,
-ROI extraction requires that postprocessing be included in the pipeline
-because postprocessed files serve as the inputs to ROI extraction.
+ROI extraction requires that postprocessing have configured streams
+because their output names determine extraction inputs. When those
+outputs already exist, run only `steps = "extract_rois"`; they do not
+need to be postprocessed again in the same submission.
 
 ROI extraction is enabled during
 [`setup_project()`](https://hallquistlab.github.io/BrainGnomes/reference/setup_project.md)
@@ -120,12 +122,15 @@ signal:
 - **median** – takes the median to reduce sensitivity to outliers.
 - **pca** – extracts the first principal component and aligns its sign
   with the mean, capturing the dominant pattern of variation.
-- **huber** – applies a Huber M‑estimator for a robust trimmed mean.
+- **huber** – applies a Huber M‑estimator of location, reducing the
+  influence of extreme voxel values.
 
 ### Removal of missing voxels
 
 Note that ROI extraction removes any constant voxels (e.g., all zero)
-prior to calculating the aggregated time series.
+prior to calculating the aggregated time series. Voxels containing
+missing values are also excluded; this signal-validity mask is not an
+anatomical brain segmentation.
 
 ### Removal of scrubbed timepoints
 
@@ -133,7 +138,11 @@ If scrubbing was enabled for the relevant postprocessing stream, ROI
 extraction will then use the `_censor.1D` file corresponding to each
 NIfTI. More specifically, any timepoints identified by the scrubbing
 expression will be dropped from the timeseries outputs and functional
-connectivity calculations.
+connectivity calculations. A censor value of `1` retains a volume and
+`0` excludes it. If postprocessing already removed those volumes,
+extraction recognizes the shorter BOLD series and does not remove them
+twice. In that case, the `volume` column indexes the input BOLD series;
+original retained indices are recorded in the provenance sidecar.
 
 ## Choosing correlation methods
 
@@ -181,13 +190,17 @@ was present spatially but contained only zero, constant, or missing BOLD
 signals.
 
 The `rtoz` flag applies Fisher’s $`z`$ (aka `atanh`) transform to
-correlations, producing unbounded values better suited for group
-analysis.
+correlations, producing unbounded values for subsequent analysis.
+Transformed matrices use `NA` on the diagonal because `atanh(1)` is
+infinite.
 
 You can also specify the minimum number of voxels that must be present
 for an ROI to be considered valid. The default is 5. If an ROI has fewer
 voxels, then it will be set to NA in the timeseries and connectivity
-output files.
+output files. You can alternatively require a fraction of the complete
+atlas ROI, such as `min_vox_per_roi = 0.8` or `"80%"`. Connectivity is
+skipped when fewer than 20 timepoints remain; time-series output can
+still be written.
 
 ROI labels are determined from the complete atlas before applying the
 BOLD-derived mask, an optional user-provided mask, or the minimum-voxel
@@ -267,15 +280,19 @@ connectivity from postprocessed fMRI data. By selecting appropriate
 reduction and correlation methods, you can tailor ROI analyses to the
 needs of your study.
 
-*Note*: You can technically call
+Direct
 [`extract_rois()`](https://hallquistlab.github.io/BrainGnomes/reference/extract_rois.md)
-directly, but this is recommended only for testing because it runs the
-compute directly within the R session, rather than scheduling jobs on
-the HPC.
+calls are useful for local analyses or custom workflows and run within
+the current R session. Create a writable output directory first, and
+ensure the atlas grid matches the BOLD image (or explicitly enable the
+validated resampling option described above). For scheduled study
+processing, use configured extraction streams through
+[`run_project()`](https://hallquistlab.github.io/BrainGnomes/reference/run_project.md).
 
 ``` r
 
 library(BrainGnomes)
+dir.create("data_rois", recursive = TRUE, showWarnings = FALSE)
 extract_rois(
   bold_file = "sub-01_task-rest_desc-clean_bold.nii.gz",
   atlas_files = "Schaefer400.nii.gz",

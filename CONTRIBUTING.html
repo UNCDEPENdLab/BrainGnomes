@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -47,25 +47,27 @@
 
 <div id="contributing" class="section level1">
 
-<p>Thanks for your interest in improving BrainGnomes! This guide summarizes how to develop locally, what CI runs, and what we expect in pull requests. For details on structure, style, and commands, see AGENTS.md.</p>
+<p>Thanks for your interest in improving BrainGnomes! This guide summarizes how to develop locally, what CI runs, and what we expect in pull requests. For details on structure, style, and commands, see <a href="AGENTS.html">AGENTS.md</a>.</p>
 <div class="section level2">
 <h2 id="getting-started">Getting Started<a class="anchor" aria-label="anchor" href="#getting-started"></a></h2>
 <ul><li>Install tooling: <code>Rscript -e 'install.packages(c("devtools"))'</code>.</li>
 <li>Set up docs: <code>Rscript -e 'devtools::document()'</code>.</li>
 <li>Run tests: <code>Rscript -e 'devtools::test()'</code>.</li>
+<li>Site preview: <code>Rscript -e 'pkgdown::build_site()'</code> (install <code>pkgdown</code> first).</li>
 <li>Full package check: <code>Rscript -e 'devtools::check()'</code>.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="workflow">Workflow<a class="anchor" aria-label="anchor" href="#workflow"></a></h2>
 <ul><li>Branch naming: <code>feature/&lt;short-topic&gt;</code> or <code>fix/&lt;short-topic&gt;</code>.</li>
 <li>Keep changes focused and small; include roxygen2 updates with code changes.</li>
+<li>Update every edited vignette to a literal date after its author, using <code>date: "DD Mon YYYY"</code>. Keep vignette builds self-contained and put article images under <code>vignettes/</code> so pkgdown can copy them. Keep installed-vignette resource paths valid as well.</li>
 <li>Add/adjust tests in <code>tests/testthat/</code> (files named <code>test-*.R</code>).</li>
 </ul></div>
 <div class="section level2">
 <h2 id="ci-expectations">CI Expectations<a class="anchor" aria-label="anchor" href="#ci-expectations"></a></h2>
 <ul><li>GitHub Actions run R CMD check on PRs (<code>.github/workflows/R-CMD-check.yaml</code>).</li>
-<li>Docs build with pkgdown on main (<code>.github/workflows/pkgdown.yaml</code>).</li>
-<li>PRs must pass CI and resolve all warnings/errors from <code>devtools::check()</code>.</li>
+<li>pkgdown builds documentation on pull requests; successful non-PR runs on the main branch or a published release deploy the site (<code>.github/workflows/pkgdown.yaml</code>).</li>
+<li>PRs must pass CI and resolve package-check errors and warnings. Report any environment limitations explicitly, including missing system utilities.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="commit--pr-checklist">Commit &amp; PR Checklist<a class="anchor" aria-label="anchor" href="#commit--pr-checklist"></a></h2>
@@ -83,7 +85,7 @@
 </ul></div>
 <div class="section level2">
 <h2 id="security--data">Security &amp; Data<a class="anchor" aria-label="anchor" href="#security--data"></a></h2>
-<ul><li>Do not commit PHI or large binaries. Use example configs only (see <code>tests/example_config.yaml</code>).</li>
+<ul><li>Do not commit PHI, study data, or large binaries. The installed placeholder configuration is <code>inst/extdata/example_project_config.yaml</code>; test fixtures belong under <code>tests/</code>.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="reference">Reference<a class="anchor" aria-label="anchor" href="#reference"></a></h2>

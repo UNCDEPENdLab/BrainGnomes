@@ -13,7 +13,7 @@ stats::lm.fit() on the uncensored timepoints."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,7 +98,9 @@ separate time series, and nuisance regressors supplied in <code>X</code> are reg
 
 
 <dt id="arg-set-mean">set_mean<a class="anchor" aria-label="anchor" href="#arg-set-mean"></a></dt>
-<dd><p>Numeric; shift residuals so every column has this mean (ignored when <code>preserve_mean = TRUE</code>).</p></dd>
+<dd><p>Finite numeric value. A non-zero value recenters residuals
+to this mean over the fitted rows. The default, 0, leaves residuals unchanged.
+Ignored when <code>preserve_mean = TRUE</code>.</p></dd>
 
 
 <dt id="arg-regress-cols">regress_cols<a class="anchor" aria-label="anchor" href="#arg-regress-cols"></a></dt>

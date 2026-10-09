@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -147,6 +147,7 @@
 <span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/BrainGnomes"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span></code></pre></div>
+<p>GitHub installation compiles the native C++ helpers, so your R installation needs a working C++ build toolchain.</p>
 <div class="section level3">
 <h3 id="install-a-specific-release">Install a specific release<a class="anchor" aria-label="anchor" href="#install-a-specific-release"></a>
 </h3>
@@ -155,12 +156,23 @@
 <code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"HallquistLab/BrainGnomes"</span>, ref <span class="op">=</span> <span class="st">"0.9-2"</span><span class="op">)</span></span></code></pre></div>
 <p>See the <a href="https://github.com/HallquistLab/BrainGnomes/tags" class="external-link">available tags</a> to choose an available tag.</p>
 </div>
+<div class="section level3">
+<h3 id="use-the-command-line-interface">Use the command-line interface<a class="anchor" aria-label="anchor" href="#use-the-command-line-interface"></a>
+</h3>
+<p>On Linux or macOS, add the installed package directory to your shell’s <code>PATH</code> after installation. Run this in Bash, using the same R installation and library as your R session:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">$(</span><span class="ex">Rscript</span> <span class="at">-e</span> <span class="st">'cat(find.package("BrainGnomes"))'</span><span class="va">)</span><span class="st">:</span><span class="va">$PATH</span><span class="st">"</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> <span class="at">--help</span></span></code></pre></div>
+<p>Add the <code>export</code> line to <code>~/.bashrc</code> to retain it in future Bash sessions. You can also run the installed entry point from R without changing <code>PATH</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/system2.html" class="external-link">system2</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Rhome.html" class="external-link">R.home</a></span><span class="op">(</span><span class="st">"bin"</span><span class="op">)</span>, <span class="st">"Rscript"</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/shQuote.html" class="external-link">shQuote</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/system.file.html" class="external-link">system.file</a></span><span class="op">(</span><span class="st">"BrainGnomes"</span>, package <span class="op">=</span> <span class="st">"BrainGnomes"</span><span class="op">)</span>, <span class="st">"--help"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+</div>
 </div>
 <div class="section level2">
 <h2 id="typical-workflow">Typical workflow<a class="anchor" aria-label="anchor" href="#typical-workflow"></a>
 </h2>
-<p>The established R workflow remains the primary path. Set up a project once, run it directly, inspect progress while work is active, and diagnose only when a failure needs investigation.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<p>Start with the R workflow below. Set up a project once, run it directly, inspect progress while work is active, and diagnose only when a failure needs investigation.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_project.html">setup_project</a></span><span class="op">(</span><span class="op">)</span></span>
@@ -172,7 +184,7 @@
 <p>Guided setup starts with <strong>what you already have</strong>: DICOMs still on Flywheel, local DICOMs, a BIDS dataset, or existing fMRIPrep outputs. It previews the route, skips completed upstream steps, and asks about optional downstream work. Existing inputs must be readable; Flywheel download and conversion destinations may be empty or not yet exist. Existing fMRIPrep inputs also need their corresponding BIDS dataset for subject/session discovery.</p>
 <p>The menu also offers read-only inspection of an existing project and custom stage-by-stage setup. To preselect an entry point, use <code>setup_project(starting_point = "bids")</code>. Configured projects retain their selections unless you explicitly choose a different starting point; use <code><a href="reference/edit_project.html">edit_project()</a></code> for individual changes. Empty projects created with headless setup receive the starting-point menu when you open guided setup later.</p>
 <p>For automation or a headless starting configuration, provide the project name and directory explicitly. This creates the standard directories, writes <code>project_config.yaml</code>, and leaves processing stages disabled until configured:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">scfg</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/setup_project.html">setup_project</a></span><span class="op">(</span></span>
 <span>  project_name <span class="op">=</span> <span class="st">"my_study"</span>,</span>
 <span>  project_directory <span class="op">=</span> <span class="st">"/project/my_study"</span>,</span>
@@ -181,34 +193,34 @@
 <p>The equivalent command-line entry point is <code>BrainGnomes init my_study /project/my_study</code>.</p>
 <p>To reuse settings, add <code>template = existing_project</code> (a configuration object, YAML file, or project directory), or CLI <code>--template=/project/old/project_config.yaml</code>. Enabled stages and processing settings are inherited. Project-owned directories move to the new root; outputs, logs, scratch space, and tracking are isolated. External input directories and resource files (containers, atlases, licenses, and shared TemplateFlow caches) remain shared. To intentionally reuse the original destinations and database, set <code>reuse_template_paths = TRUE</code> or <code>--reuse-template-paths</code>.</p>
 <p>For later sessions, pass the project directory or configuration YAML directly:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="st">"/project/my_study"</span><span class="op">)</span></span></code></pre></div>
 <p>Explicit arguments always take precedence over interactive prompts. For example, <code>run_project(scfg, dry_run = TRUE)</code> lets you choose stages interactively without submitting jobs; only unspecified decisions are prompted for.</p>
 <p>All project lifecycle helpers accept a configuration object, configuration YAML, or project directory. When the current working directory is the project root, omit the project input entirely:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/getwd.html" class="external-link">setwd</a></span><span class="op">(</span><span class="st">"/project/my_study"</span><span class="op">)</span></span>
 <span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="op">)</span>  <span class="co"># guided browser in an interactive R session</span></span></code></pre></div>
 <p>Use <code><a href="reference/load_project.html">load_project()</a></code> when you want to inspect or modify the configuration object itself; it accepts the same inputs and also defaults to the current directory.</p>
 <p>The command-line interface preserves the same workflow. The shorter <code>init</code> and <code>run</code> command names are also accepted.</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Fully guided setup (prompts for the project name and directory):</span></span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project</span>
-<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Prompt-free setup for scripts and automation:</span></span>
-<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
-<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
-<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a></span>
-<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
-<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Fully guided setup (prompts for the project name and directory):</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co"># Prompt-free setup for scripts and automation:</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> setup_project my_study /project/my_study</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="ex">BrainGnomes</span> status /project/my_study</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co"># Only when a run needs investigation:</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose /project/my_study <span class="at">--interactive</span></span></code></pre></div>
 <p>All project CLI commands also default to the current working directory. For an existing project, that directory must contain <code>project_config.yaml</code>; BrainGnomes does not search parent directories. Options are unchanged when the path is omitted:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="bu">cd</span> /project/my_study</span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--dry-run</span></span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status</span>
-<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose <span class="at">--interactive</span></span>
-<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> config validate <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--format</span><span class="op">=</span>json</span></code></pre></div>
-<p>To create a project in the current directory, use <code>BrainGnomes init my_study</code>. The project name is required, and replacing an existing configuration still requires <code>--overwrite</code>. Pass an explicit directory or configuration YAML to work elsewhere. Saved plans always need an explicit path: <code>BrainGnomes run run.yaml</code>.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="bu">cd</span> /project/my_study</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> run <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--dry-run</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> status</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> diagnose <span class="at">--interactive</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="ex">BrainGnomes</span> config validate <span class="at">--steps</span><span class="op">=</span>fmriprep <span class="at">--format</span><span class="op">=</span>json</span></code></pre></div>
+<p>To create a project in the current directory without prompts, use <code>BrainGnomes init my_study</code>. Omit the project name to open guided setup. Replacing an existing configuration requires <code>--overwrite</code>. Pass an explicit directory or configuration YAML to work elsewhere. Saved plans always need an explicit path: <code>BrainGnomes run run.yaml</code>.</p>
 <div class="section level3">
 <h3 id="optional-inspection-and-automation-tools">Optional inspection and automation tools<a class="anchor" aria-label="anchor" href="#optional-inspection-and-automation-tools"></a>
 </h3>
@@ -222,20 +234,20 @@
 <strong>Plan</strong> (<code><a href="reference/plan_project.html">plan_project()</a></code> or <code>BrainGnomes plan</code>) exposes the stages, streams, known subject/session scope, resources, dependencies, and implicit setup work for a request. It is useful for review, persistence, and automated approval workflows. A plan is not a pre-rendered scheduler job list. When Flywheel may add data, it says that scope is deferred and the run records the subjects and sessions found after synchronization. <code><a href="reference/run_project.html">run_project()</a></code> resolves this same request model internally, so users do not need to create or submit a plan first.</li>
 </ul>
 <p>For example, an optional review-and-submit workflow is:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">validation</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/validate_project_config.html">validate_project_config</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">preflight</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/doctor_project.html">doctor_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">plan</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plan_project.html">plan_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/write_project_plan.html">write_project_plan</a></span><span class="op">(</span><span class="va">plan</span>, <span class="st">"run.yaml"</span><span class="op">)</span></span>
 <span><span class="va">run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/submit_project_plan.html">submit_project_plan</a></span><span class="op">(</span><span class="va">plan</span><span class="op">)</span></span></code></pre></div>
 <p>To preview the direct workflow without creating folders, changing permissions, or submitting jobs:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">preview</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_project.html">run_project</a></span><span class="op">(</span><span class="va">scfg</span>, steps <span class="op">=</span> <span class="st">"all"</span>, dry_run <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">preview</span><span class="op">$</span><span class="va">preview</span><span class="op">$</span><span class="va">work</span></span></code></pre></div>
 <p>Dry runs now return a <code>bg_project_plan</code>, not <code>TRUE</code>. The preview shows concrete subjects/sessions, stages/streams, input and output locations, log directories, dependencies, resources, and whether existing completion markers would skip work. <code>force = TRUE</code> shows that work as included. Console output is bounded; the returned table and JSON retain every row. These are work-unit counts, not an exact scheduler job list or a runtime/cost estimate: setup reuse and postprocessing job expansion are decided later, and Flywheel scope can remain unknown until synchronization.</p>
 <p>Plans, direct dry runs, and submission use the same checks for the selected stages and streams. Missing licenses and invalid resource settings fail before project files are written or jobs submitted; unrelated stages and streams do not block the selection. Inspect these checks with <code>validate_project_config(scfg, steps = "fmriprep")</code> or <code>BrainGnomes config validate /project/my_study --steps=fmriprep --format=json</code>. Configured future output directories can remain absent during previews. Saved plans are revalidated when submitted. <code>allow_invalid = TRUE</code> is only for exploratory plans, whose validation failures are retained in the result.</p>
 <p>CLI machine output is one JSON document on <strong>stdout</strong>; progress, warnings, errors, and requested log tails go to <strong>stderr</strong>. Do not merge the two streams when parsing JSON. For example:</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study <span class="at">--steps</span><span class="op">=</span>all <span class="at">--dry-run</span> <span class="at">--format</span><span class="op">=</span>json <span class="op">&gt;</span> preview.json</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> run_project /project/my_study <span class="at">--steps</span><span class="op">=</span>all <span class="at">--dry-run</span> <span class="at">--format</span><span class="op">=</span>json <span class="op">&gt;</span> preview.json</span></code></pre></div>
 <p>JSON runs require explicit <code>--steps</code> (or a saved plan) to avoid interactive prompts. <code>status --watch</code> and <code>diagnose --interactive</code> are table-only; poll <code>status --format=json</code> for individual machine-readable snapshots. Invalid formats are rejected before work starts. Usage errors exit with status 2; execution errors exit with status 1 and empty stdout. Validation/doctor reports can return a valid JSON result with status 1 when their checks fail.</p>
 </div>
 <div class="section level3">
@@ -245,13 +257,13 @@
 <p>The run record distinguishes intended work from work actually sent to the scheduler. Immediately before each managed <code>sbatch</code> or <code>qsub</code> submission, BrainGnomes writes an immutable job manifest beneath <code>&lt;log_directory&gt;/runs/&lt;run_id&gt;/jobs/</code>. It records the stage, subject/session, resources, dependencies, command, relevant environment, logs, and checksums of the scripts, configuration, containers, and other files that control that job. When the scheduler starts the job, a runtime receipt records the compute host and verifies those checksums. A missing or changed manifest or execution-driving file stops the job with a pointer to its receipt. These paths also appear in <code>inspect_project(scfg)$jobs</code> and the run provenance.</p>
 <p>For a Flywheel run, the initial plan and run record mark subject scope as deferred. After synchronization succeeds, BrainGnomes saves <code>scope-realization.json</code> with the subjects and sessions it found, then creates the downstream job manifests. This permits new Flywheel data to enter the run without treating the earlier plan as an exact job roster.</p>
 <p><code>inspect_project(scfg)</code> reports the current effective project state across runs, using the newest attempt for each subject, stage, and stream. Its <code>overview</code>, <code>active</code>, <code>reconciliation</code>, <code>stages</code>, <code>subjects</code>, <code>subject_stages</code>, <code>runs</code>, <code>attempts</code>, and <code>jobs</code> elements are ordinary data frames. Supply <code>subject_id</code> to focus every view on one subject, or <code>run_id = "latest"</code>/an explicit ID to restrict inspection to one submission. The default remains database-only; <code>refresh = TRUE</code> adds a read-only scheduler comparison for jobs recorded as queued or running.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">subject_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
 <span><span class="va">active_status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span>, refresh <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">active_status</span><span class="op">$</span><span class="va">active</span></span>
 <span><span class="va">active_status</span><span class="op">$</span><span class="va">reconciliation</span></span></code></pre></div>
 <p>If work fails, first inspect the failed jobs and logs, correct the underlying problem, and then preview the retry:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">status</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/inspect_project.html">inspect_project</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">diagnosis</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">status</span>, interactive <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="va">failed_logs</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/find_run_logs.html">find_run_logs</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, failed_only <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
@@ -260,13 +272,15 @@
 <span><span class="co"># This submits a new run; it does not change the original run.</span></span>
 <span><span class="va">retry_run</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/retry_project_run.html">retry_project_run</a></span><span class="op">(</span><span class="va">scfg</span>, <span class="va">run</span><span class="op">$</span><span class="va">run_id</span>, dry_run <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <p>In an interactive session, <code>diagnose_project(scfg)</code> starts with current unresolved problems and carries each stage, subject, or run selection forward until a specific job and its logs are reached. Skip directly to a known subject or scheduler job when useful:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, subject_id <span class="op">=</span> <span class="st">"540294"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/diagnose_project.html">diagnose_project</a></span><span class="op">(</span><span class="va">scfg</span>, job_id <span class="op">=</span> <span class="st">"66273010"</span><span class="op">)</span></span></code></pre></div>
 <p>By default, retry includes jobs that failed or were cancelled. Set <code>include_blocked = TRUE</code> only when the new run should also include downstream jobs that could not start because an earlier job failed. The new run records the source run ID in provenance. Retries retain exact subject/session/stage/stream combinations, including after saving and reloading a plan. Required setup jobs are shown separately; array or sentinel failures retry their owning work unit. If only setup jobs failed, include blocked work to recover its scope or start a direct run with an explicit selection. Ambiguous legacy records or missing inputs stop the retry instead of expanding it.</p>
 <p>The CLI requires an explicit choice between a preview and action:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --dry-run</span>
-<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=&lt;</span>run-id<span class="op">&gt;</span> --yes</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="co"># Replace this value with the run ID reported by BrainGnomes status.</span></span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a><span class="va">run_id</span><span class="op">=</span><span class="st">"REPLACE_WITH_RUN_ID"</span></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--dry-run</span></span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="ex">BrainGnomes</span> retry /project/my_study <span class="at">--run</span><span class="op">=</span><span class="st">"</span><span class="va">$run_id</span><span class="st">"</span> <span class="at">--yes</span></span></code></pre></div>
 <p>Cancellation follows the same preview-first pattern and affects only queued or running scheduler jobs; it does not delete project data or outputs. BIDS validation remains independently schedulable with <code><a href="reference/run_bids_validation.html">run_bids_validation()</a></code> or <code>BrainGnomes validate-bids</code>. The <a href="https://hallquistlab.github.io/BrainGnomes/articles/braingnomes_quickstart.html">Quickstart</a> shows the primary workflow and these optional tools.</p>
 </div>
 </div>
@@ -274,13 +288,13 @@
 <h2 id="study-qc-dashboard">Study QC dashboard<a class="anchor" aria-label="anchor" href="#study-qc-dashboard"></a>
 </h2>
 <p>Collect existing workflow records and diagnostic files into a study snapshot:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">qc</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/collect_qc_inventory.html">collect_qc_inventory</a></span><span class="op">(</span><span class="va">scfg</span><span class="op">)</span></span>
 <span><span class="va">qc</span><span class="op">$</span><span class="va">inventory</span>  <span class="co"># derivative availability and QC summaries</span></span>
 <span><span class="va">qc</span><span class="op">$</span><span class="va">workflow</span>  <span class="co"># expected work and recorded execution states</span></span>
-<span><span class="fu"><a href="reference/write_qc_inventory.html">write_qc_inventory</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-tables-2026-09-11"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/render_qc_dashboard.html">render_qc_dashboard</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-dashboard-2026-09-11"</span><span class="op">)</span></span></code></pre></div>
-<p>The Quarto dashboard includes searchable React tables, interactive metric plots, regional coverage, and links to existing reports and logs. Each output directory contains one snapshot; use a new directory to refresh it. Collection does not change workflow state or make inclusion decisions. See the <a href="vignettes/study_qc.Rmd">study QC vignette</a> for dependencies and interpretation.</p>
+<span><span class="fu"><a href="reference/write_qc_inventory.html">write_qc_inventory</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-tables-snapshot-01"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/render_qc_dashboard.html">render_qc_dashboard</a></span><span class="op">(</span><span class="va">qc</span>, <span class="st">"reports/qc-dashboard-snapshot-01"</span><span class="op">)</span></span></code></pre></div>
+<p>The Quarto dashboard includes searchable React tables, interactive metric plots, regional coverage, and links to existing reports and logs. Each output directory contains one snapshot; use a new directory to refresh it. Collection does not change workflow state or make inclusion decisions. See the <a href="https://hallquistlab.github.io/BrainGnomes/articles/study_qc.html">study QC vignette</a> for dependencies and interpretation.</p>
 <div class="float">
 <img src="reference/figures/qc-dashboard.png" alt="Study QC dashboard showing synthetic data"><div class="figcaption">Study QC dashboard showing synthetic data</div>
 </div>
@@ -304,6 +318,10 @@
 <a href="https://hallquistlab.github.io/BrainGnomes/articles/extract_rois.html">Extracting ROI Timeseries and Connectivity</a> — configure atlas/mask ROI extraction and connectivity outputs.</li>
 <li>
 <a href="https://hallquistlab.github.io/BrainGnomes/articles/diagnosing_pipeline.html">Diagnosing Pipeline Runs</a> — triage project or subject status and investigate failures from job-tracking records and logs.</li>
+<li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/derivative_provenance.html">Portable derivative provenance and methods text</a> — inspect derivative sidecars, export their companions, and review generated methods and citations.</li>
+<li>
+<a href="https://hallquistlab.github.io/BrainGnomes/articles/study_qc.html">Study QC inventory and dashboard</a> — collect existing QC evidence, export tables, and render study snapshots.</li>
 <li>
 <a href="https://hallquistlab.github.io/BrainGnomes/articles/intensity_normalization.html">Run-wise Intensity Normalization</a> — understand the robust reference-core approach, targets, provenance, quality checks, and troubleshooting.</li>
 </ul>

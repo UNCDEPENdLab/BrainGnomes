@@ -35,7 +35,8 @@ resample_template_to_img(
 
 - template_resolution:
 
-  Integer specifying the TemplateFlow resolution index (e.g., 1 = 1mm).
+  TemplateFlow resolution index. The index is template-specific and is
+  not necessarily the voxel size in millimeters.
 
 - suffix:
 

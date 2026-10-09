@@ -137,8 +137,7 @@ run_project() and the configured postprocessing and extraction streams.
   to be passed to the scheduler and a vector of environment variables
   that should be passed to the compute node at job execution.
 - [`wait_for_job()`](https://hallquistlab.github.io/BrainGnomes/reference/wait_for_job.md)
-  : This function pauses execution of an R script while a scheduled qsub
-  job is not yet complete.
+  : Wait for scheduler jobs or local processes to finish
 - [`insert_tracked_job()`](https://hallquistlab.github.io/BrainGnomes/reference/insert_tracked_job.md)
   : Internal helper function to insert a job into the tracking SQLite
   database

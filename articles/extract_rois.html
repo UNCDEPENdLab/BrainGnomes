@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">BrainGnomes</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.9-2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,7 +69,7 @@
                         <h4 data-toc-skip class="author">Michael
 Hallquist</h4>
             
-            <h4 data-toc-skip class="date">04 Sep 2026</h4>
+            <h4 data-toc-skip class="date">09 Oct 2026</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/HallquistLab/BrainGnomes/blob/main/vignettes/extract_rois.Rmd" class="external-link"><code>vignettes/extract_rois.Rmd</code></a></small>
       <div class="d-none name"><code>extract_rois.Rmd</code></div>
@@ -85,8 +85,10 @@ Hallquist</h4>
 atlas‑defined regions and can also compute ROI‑to‑ROI connectivity
 matrices. It is run after postprocessing completes and writes its
 outputs to the project’s <code>data_rois</code> directory. At present,
-ROI extraction requires that postprocessing be included in the pipeline
-because postprocessed files serve as the inputs to ROI extraction.</p>
+ROI extraction requires that postprocessing have configured streams
+because their output names determine extraction inputs. When those
+outputs already exist, run only <code>steps = "extract_rois"</code>;
+they do not need to be postprocessed again in the same submission.</p>
 <p>ROI extraction is enabled during <code><a href="../reference/setup_project.html">setup_project()</a></code> or
 <code><a href="../reference/edit_project.html">edit_project()</a></code>. During the setup, you will be asked about
 how to reduce voxels within ROIs to an aggregated time series and how to
@@ -190,14 +192,16 @@ outliers.</li>
 aligns its sign with the mean, capturing the dominant pattern of
 variation.</li>
 <li>
-<strong>huber</strong> – applies a Huber M‑estimator for a robust
-trimmed mean.</li>
+<strong>huber</strong> – applies a Huber M‑estimator of location,
+reducing the influence of extreme voxel values.</li>
 </ul>
 <div class="section level3">
 <h3 id="removal-of-missing-voxels">Removal of missing voxels<a class="anchor" aria-label="anchor" href="#removal-of-missing-voxels"></a>
 </h3>
 <p>Note that ROI extraction removes any constant voxels (e.g., all zero)
-prior to calculating the aggregated time series.</p>
+prior to calculating the aggregated time series. Voxels containing
+missing values are also excluded; this signal-validity mask is not an
+anatomical brain segmentation.</p>
 </div>
 <div class="section level3">
 <h3 id="removal-of-scrubbed-timepoints">Removal of scrubbed timepoints<a class="anchor" aria-label="anchor" href="#removal-of-scrubbed-timepoints"></a>
@@ -206,7 +210,12 @@ prior to calculating the aggregated time series.</p>
 extraction will then use the <code>_censor.1D</code> file corresponding
 to each NIfTI. More specifically, any timepoints identified by the
 scrubbing expression will be dropped from the timeseries outputs and
-functional connectivity calculations.</p>
+functional connectivity calculations. A censor value of <code>1</code>
+retains a volume and <code>0</code> excludes it. If postprocessing
+already removed those volumes, extraction recognizes the shorter BOLD
+series and does not remove them twice. In that case, the
+<code>volume</code> column indexes the input BOLD series; original
+retained indices are recorded in the provenance sidecar.</p>
 </div>
 </div>
 <div class="section level2">
@@ -264,11 +273,15 @@ signals.</p>
 <p>The <code>rtoz</code> flag applies Fisher’s
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>z</mi><annotation encoding="application/x-tex">z</annotation></semantics></math>
 (aka <code>atanh</code>) transform to correlations, producing unbounded
-values better suited for group analysis.</p>
+values for subsequent analysis. Transformed matrices use <code>NA</code>
+on the diagonal because <code>atanh(1)</code> is infinite.</p>
 <p>You can also specify the minimum number of voxels that must be
 present for an ROI to be considered valid. The default is 5. If an ROI
 has fewer voxels, then it will be set to NA in the timeseries and
-connectivity output files.</p>
+connectivity output files. You can alternatively require a fraction of
+the complete atlas ROI, such as <code>min_vox_per_roi = 0.8</code> or
+<code>"80%"</code>. Connectivity is skipped when fewer than 20
+timepoints remain; time-series output can still be written.</p>
 <p>ROI labels are determined from the complete atlas before applying the
 BOLD-derived mask, an optional user-provided mask, or the minimum-voxel
 requirement. Consequently, every positive atlas label remains in the
@@ -347,12 +360,15 @@ contains the full atlas-sized square matrix, with every value set to
 signals and functional connectivity from postprocessed fMRI data. By
 selecting appropriate reduction and correlation methods, you can tailor
 ROI analyses to the needs of your study.</p>
-<p><em>Note</em>: You can technically call <code><a href="../reference/extract_rois.html">extract_rois()</a></code>
-directly, but this is recommended only for testing because it runs the
-compute directly within the R session, rather than scheduling jobs on
-the HPC.</p>
+<p>Direct <code><a href="../reference/extract_rois.html">extract_rois()</a></code> calls are useful for local
+analyses or custom workflows and run within the current R session.
+Create a writable output directory first, and ensure the atlas grid
+matches the BOLD image (or explicitly enable the validated resampling
+option described above). For scheduled study processing, use configured
+extraction streams through <code><a href="../reference/run_project.html">run_project()</a></code>.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hallquistlab.github.io/BrainGnomes/">BrainGnomes</a></span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html" class="external-link">dir.create</a></span><span class="op">(</span><span class="st">"data_rois"</span>, recursive <span class="op">=</span> <span class="cn">TRUE</span>, showWarnings <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/extract_rois.html">extract_rois</a></span><span class="op">(</span></span>
 <span>  bold_file <span class="op">=</span> <span class="st">"sub-01_task-rest_desc-clean_bold.nii.gz"</span>,</span>
 <span>  atlas_files <span class="op">=</span> <span class="st">"Schaefer400.nii.gz"</span>,</span>
