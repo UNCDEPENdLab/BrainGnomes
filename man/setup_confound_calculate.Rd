@@ -21,8 +21,9 @@ task-based modeling to account for noise without directly altering the fMRI data
 }
 \details{
 Confounds can be filtered (e.g., with the same temporal filter as applied to fMRI data) or left unfiltered.
-Filtered regressors should typically include continuous-valued signals (e.g., a_comp_cor_\emph{, global signal), while
-spike regressors or discrete values (e.g., motion_outlier}) should not be filtered.
+Filtered regressors should typically include continuous-valued signals
+(e.g., \verb{a_comp_cor_.*}, global signal), while
+spike regressors or discrete values (e.g., \verb{motion_outlier.*}) should not be filtered.
 
 This function only generates the confound regressors file. Actual regression is handled separately.
 }

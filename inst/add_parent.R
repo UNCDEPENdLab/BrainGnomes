@@ -30,7 +30,7 @@ print_help <- function() {
 tmp <- commandArgs(trailingOnly = TRUE)
 if ("--help" %in% tmp) { print_help(); quit(save = "no", status = 0) }
 
-args <- BrainGnomes::parse_cli_args(tmp)
+args <- BrainGnomes:::parse_cli_path_args(tmp)
 
 # convert string versions of NULL to regular NULL
 if (isTRUE(args$job_id == "NULL")) args$job_id <- NULL

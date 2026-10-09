@@ -16,7 +16,8 @@ compare_lists(old, new, path = "", max_diffs = 100)
 \item{max_diffs}{Maximum number of differences to report (default: 20).}
 }
 \value{
-Invisibly returns \code{TRUE} if no differences are found; otherwise \code{FALSE}.
+A list of human-readable differences, invisibly. Empty if the
+inputs are identical.
 }
 \description{
 Compares two list objects and prints a summary of any differences in structure or values.

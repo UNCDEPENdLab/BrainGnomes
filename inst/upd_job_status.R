@@ -37,7 +37,7 @@ print_help <- function() {
 tmp <- commandArgs(trailingOnly = TRUE)
 if ("--help" %in% tmp) { print_help(); quit(save = "no", status = 0) }
 
-args <- BrainGnomes::parse_cli_args(tmp)
+args <- BrainGnomes:::parse_cli_path_args(tmp)
 
 # The general parser collapses argv whitespace, which turns an explicitly empty
 # value into a bare flag. Preserve the shell's empty-database tracking opt-out.

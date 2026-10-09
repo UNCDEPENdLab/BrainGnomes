@@ -26,7 +26,8 @@ extract_rois(
 
 \item{atlas_files}{Character vector of atlas NIfTI files with integer ROI labels.}
 
-\item{out_dir}{Directory where output files should be written.}
+\item{out_dir}{Existing writable directory where output files should be
+written. Create it before calling this function.}
 
 \item{log_file}{If not \code{NULL}, the log file to which details should be written.}
 
@@ -34,7 +35,8 @@ extract_rois(
 connectivity. Supported options include "pearson", "spearman",
 "kendall", and "cor.shrink". Use "none" to skip correlation
 computation. Multiple correlation methods may be supplied, but "none"
-must be used by itself and requires \code{save_ts = TRUE}.}
+must be used by itself and requires \code{save_ts = TRUE}. Connectivity is
+skipped when fewer than 20 timepoints remain after censoring.}
 
 \item{roi_reduce}{Method used to summarize voxel time series within each
 ROI. Options are "mean" (default), "median", "pca", or "huber".}
@@ -93,11 +95,11 @@ methods/bibliography companions. Their paths are returned in \code{provenance}.
 }
 \description{
 Given a postprocessed BOLD NIfTI file and one or more atlas images,
-this function computes the mean timeseries within each ROI and
+this function summarizes the voxel time series within each ROI and
 optionally computes ROI-to-ROI correlation matrices.
 }
 \details{
-Voxels labelled in the atlas but lying outside the brain are
-automatically excluded by intersecting with a brain mask derived from
-the input timeseries.
+Voxels with missing, all-zero, or constant BOLD time series are excluded.
+This signal-validity mask is not an anatomical brain segmentation. Supply
+\code{mask_file} to restrict extraction to a chosen spatial mask.
 }

@@ -10,11 +10,11 @@ filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
 \arguments{
 \item{x}{A numeric vector representing the input time series.}
 
-\item{b}{A numeric vector of numerator (feedforward) filter coefficients.}
+\item{b}{A non-empty, finite numeric vector of numerator (feedforward) filter coefficients.}
 
-\item{a}{A numeric vector of denominator (feedback) filter coefficients. Must have \code{a[0] == 1.0}.}
+\item{a}{A non-empty, finite numeric vector of denominator (feedback) filter coefficients. Must have \code{a[1] == 1.0}.}
 
-\item{padlen}{Number of samples to extend on each edge for padding. If \code{-1} (default), uses \code{3 * max(length(a), length(b))}.}
+\item{padlen}{Number of samples to extend on each edge for padding. Must be non-negative or \code{-1} (default), which uses \code{3 * max(length(a), length(b))}.}
 
 \item{padtype}{Type of padding at the signal boundaries. One of \code{"constant"} (default), \code{"odd"}, \code{"even"}, or \code{"zero"}.}
 

@@ -1346,7 +1346,9 @@ intensity_normalize <- function(in_file, out_file, scale_factor = NULL,
 #' @param include_rows Optional logical vector marking rows to use during fitting.
 #' @param add_intercept Logical; add an intercept column when the design lacks one.
 #' @param preserve_mean Logical; keep the original mean of uncensored timepoints.
-#' @param set_mean Numeric; shift residuals so every column has this mean (ignored when \code{preserve_mean = TRUE}).
+#' @param set_mean Finite numeric value. A non-zero value recenters residuals
+#'   to this mean over the fitted rows. The default, 0, leaves residuals unchanged.
+#'   Ignored when \code{preserve_mean = TRUE}.
 #' @param regress_cols Optional integer vector (1-based) selecting columns of \code{X} to regress out.
 #' @param exclusive Logical; if \code{TRUE}, the fit only uses columns listed in \code{regress_cols}
 #'   (and the intercept, if present).
@@ -1361,6 +1363,10 @@ lmfit_residuals_mat <- function(Y, X, include_rows = NULL, add_intercept = FALSE
   X <- as.matrix(X)
   checkmate::assert_matrix(Y, mode = "numeric", any.missing = FALSE)
   checkmate::assert_matrix(X, mode = "numeric", nrows = nrow(Y), any.missing = FALSE)
+  if (any(!is.finite(Y)) || any(!is.finite(X))) {
+    stop("Y and X must contain only finite values.", call. = FALSE)
+  }
+  checkmate::assert_number(set_mean, finite = TRUE)
 
   n_t <- nrow(Y)
   use_set <- abs(set_mean) > 1e-8
@@ -1509,13 +1515,14 @@ lmfit_residuals_mat <- function(Y, X, include_rows = NULL, add_intercept = FALSE
 
   X_sub <- X_fit[include_idx, , drop = FALSE]
   residuals_mat <- matrix(NA_real_, nrow = n_t, ncol = ncol(Y))
-  const_tol <- 1e-6
 
   for (col_idx in seq_len(ncol(Y))) {
     y <- Y[, col_idx]
     y_sub <- y[include_idx]
 
-    if (max(y_sub) - min(y_sub) < const_tol) {
+    # Preserve the full-series prediction when only uncensored rows are
+    # constant, or when the removed columns leave the intercept untouched.
+    if (all(y == 0)) {
       residuals <- rep(0, n_t)
     } else {
       fit <- stats::lm.fit(x = X_sub, y = y_sub)
@@ -1542,7 +1549,7 @@ lmfit_residuals_mat <- function(Y, X, include_rows = NULL, add_intercept = FALSE
       # normally centered timecourses.
       residuals <- residuals - mean(residuals[include_idx]) + mean(y_sub)
     } else if (use_set) {
-      residuals <- residuals + set_mean
+      residuals <- residuals - mean(residuals[include_idx]) + set_mean
     }
 
     residuals_mat[, col_idx] <- residuals
@@ -1696,7 +1703,8 @@ compute_brain_mask <- function(in_file, lg = NULL, fsl_img = NULL) {
 #'
 #' @param in_file Path to the BIDS-compliant NIfTI file (e.g., an fMRIPrep preprocessed BOLD image).
 #' @param output Optional path to write the resampled image. If NULL, a BIDS-style filename is constructed.
-#' @param template_resolution Integer specifying the TemplateFlow resolution index (e.g., 1 = 1mm).
+#' @param template_resolution TemplateFlow resolution index. The index is
+#'   template-specific and is not necessarily the voxel size in millimeters.
 #' @param suffix TemplateFlow suffix (e.g., "mask", "T1w").
 #' @param desc TemplateFlow descriptor (e.g., "brain").
 #' @param extension File extension for the template image (default is ".nii.gz").

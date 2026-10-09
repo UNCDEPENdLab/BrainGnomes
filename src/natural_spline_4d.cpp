@@ -1,4 +1,5 @@
 #include "BrainGnomes.h"
+#include "nifti_output.h"
 
 // to support RNifti object returns via Rcpp, we need RNiftiAPI.h
 // this should only be included once for the entire package because it includes function implementations
@@ -9,7 +10,7 @@
 void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, int datatype) {
   if (!outfile.empty()) {
     // write interpolated image to file
-    image.toFile(outfile, datatype);
+    write_nifti_preserving_datatype(image, outfile, datatype);
   }
 }
 
@@ -27,7 +28,7 @@ void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, in
 //'   outfile = "", internal = FALSE)
 //' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 //' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-//'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
+//'        Timepoints outside the valid range `[1, T]` cause an error.
 //' @param edge_nn Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 //'        are filled in using nearest-neighbor extrapolation instead of cubic splines.
 //' @param outfile Character string (optional). If provided, the interpolated image will
@@ -42,7 +43,12 @@ void writeToFile(const RNifti::NiftiImage& image, const std::string& outfile, in
 //'         with interpolated values inserted at the specified timepoints.
 //'
 //' @details The interpolation is voxelwise and assumes column-major order. If a voxel time series
-//' has fewer than three valid (non-interpolated) timepoints, or is constant across time, it is skipped.
+//' has fewer than three valid (non-interpolated) timepoints, an error is raised.
+//' Constant retained time series are filled with their retained value at the
+//' requested timepoints. Integer input is converted to double precision for
+//' processing. Saved files preserve the input storage datatype, with slope and
+//' intercept recalculated for the processed values. Integer output is quantized to the written
+//' header's scale; returned values can therefore differ from reread values.
 //' Linear extrapolation is used for timepoints outside the valid range if \code{edge_nn = FALSE}, matching
 //' R's `splinefun` approach with natural splines. If \code{edge_nn = TRUE}, nearest-neighbor extrapolation
 //' is used for interpolation timepoints at the beginning or end of the timeseries, potentially reducing
@@ -72,28 +78,21 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   NiftiImage image(infile); // read nifti 44
   int datatype = image->datatype; // preserve initial datatype in output file
   
-  /* integer data types can have significant problems because they rely on scl_inter (intercept) and
-  * scl_slope (slope) to convert integers to floating point values. As a result, if the integers are near
-  * the storage boundary (e.g., -32768 for INT16) and interpolation produces values out of the range, invalid
-  * values will be returned (unless we rescale the integers, slope, and intercept). Thus, convert to FLOAT32
-  * Note that image.changeDataType should work, but it throws and error if we with to use the slope in the file,
-  * like image.changeDatatype(DT_FLOAT32, true); because it complains "Resetting the slope and intercept for an 
-  * image with them already set is not supported" (NiftiImage_impl.h, line 744). But we cannot rely on unscaled
-  * values because they will be just random integers (not affected by intercept and slope). My workaround is to
-  * essentially do what .changeDataType does here to convert to FLOAT32 */
+  // Decode header-scaled integer values into double precision before editing.
+  // This avoids integer bounds errors and preserves differences that FLOAT32
+  // cannot resolve at large offsets. Output scaling is recalculated at write time.
   if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64 ||
   datatype == DT_UINT8 || datatype == DT_UINT16 || datatype == DT_UINT32 || datatype == DT_UINT64) {
-    //image.changeDatatype(DT_FLOAT32, true); // doesn't work as expected
-    NiftiImageData float_data(image.data(), DT_FLOAT32); // this will get the scaled data as expected
-    image.replaceData(float_data); // force float32 data back into NiftiImage object
-    float_data.disown(); // explicitly free pointer to this temporary object
+    NiftiImageData double_data(image.data(), DT_FLOAT64); // this will get the scaled data as expected
+    // replaceData copies the buffer; retain ownership so the temporary is freed.
+    image.replaceData(double_data); // force double-precision data back into NiftiImage object
   }
   
   NiftiImageData data(image); // get pointer to image data
   
   //long nvox = data.length();
   std::vector<dim_t> dims = image.dim();
-  if (dims.size() < 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
+  if (dims.size() != 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
     stop("Input image must be 4D");
   }
   
@@ -101,7 +100,8 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
   
   // Helper function to index 4D array stored as vector in column-major order
   auto flat_index = [&](int x, int y, int z, int t) {
-    return x + n_x * (y + n_y * (z + n_z * t));
+    return static_cast<size_t>(x) + static_cast<size_t>(n_x) *
+      (y + static_cast<size_t>(n_y) * (z + static_cast<size_t>(n_z) * t));
   };
 
   std::ostringstream msg;
@@ -181,7 +181,10 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
         }
         
         if (is_constant) {
-          // n_const_ts += 1;
+          // Censored values can differ even when all retained values agree.
+          for (double ti : xout) {
+            data[flat_index(xi, yi, zi, static_cast<int>(ti))] = first_val;
+          }
           continue;
         }
         
@@ -200,7 +203,7 @@ Rcpp::RObject natural_spline_4d(std::string infile, const std::vector<int>& t_in
         // Write back any vector that has been interpolated
         for (size_t ti = 0; ti < n_pts; ++ti) {
           int t = static_cast<int>(xout[ti]);
-          data[flat_index(xi, yi, zi, t)] = static_cast<float>(y_interp[ti]); //y_interp[ti]; //
+          data[flat_index(xi, yi, zi, t)] = y_interp[ti]; //y_interp[ti]; //
           //data[flat_index(xi, yi, zi, t)] = (y_interp[ti] - intercept) / slope;
         }
       }

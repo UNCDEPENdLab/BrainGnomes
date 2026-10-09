@@ -1,8 +1,8 @@
 ---
 title: "Building Singularity containers for BrainGnomes"
 author: "Michael Hallquist"
-date: "31 Aug 2026"
-output: 
+date: "09 Oct 2026"
+output:
   rmarkdown::html_vignette:
     toc: true
 vignette: >
@@ -13,73 +13,138 @@ editor_options:
   chunk_output_type: console
 ---
 
-# Running singularity
+# Before downloading images
 
-On most HPC systems, Singularity is not available on login nodes. Thus, to build containers, you must enter an interactive compute session and build there. For example, on SLURM, for an 8-hour session with 32 GB RAM, use:
+Obtain images only for the stages you plan to enable. Use your cluster's
+provided images when suitable; otherwise download a version you have tested
+with your study. Use explicit release tags where available. If an upstream
+project only offers a moving tag, retain the downloaded image and its checksum
+for the study rather than repeatedly replacing it from `latest` or `main`.
 
+BrainGnomes batch scripts invoke `singularity`. Apptainer is suitable when your
+site supplies that compatible command. Load the site's runtime module as
+needed and check `singularity --version` before proceeding.
+
+Some clusters require container commands to run on compute nodes. Follow your
+site's policy; for example, request an interactive Slurm allocation:
+
+```bash
+srun --pty -N 1 -n 1 --mem=16g --time=01:00:00 bash
 ```
-srun -t 8:00:00 --mem=32gb -p interact -N 1 -n 4  --pty /bin/bash
+
+Add your site's account or partition options if required. Downloads need
+internet access, enough disk space, and a destination readable by the compute
+nodes that will run BrainGnomes. If compute nodes cannot access the internet,
+download on a permitted host and copy the images to shared storage.
+
+The examples below use `/path/to/shared/containers` and `REPLACE_WITH_VERSION`
+as placeholders. Replace them before running the commands. `.sif` filenames
+make the selected versions visible; existing compatible `.simg` images can
+also be configured.
+
+```bash
+container_dir="/path/to/shared/containers"
+mkdir -p "$container_dir"
 ```
 
-Now that you're in that session, you can proceed with building containers needed for BrainGnomes
+# HeuDiConv
 
-# Heudiconv
+Needed for DICOM-to-BIDS conversion. Select a released tag from the
+[HeuDiConv installation guide](https://heudiconv.readthedocs.io/en/latest/installation.html).
+You also need a study-specific Python heuristic; the image does not supply
+that study configuration.
 
+```bash
+heudiconv_version="REPLACE_WITH_VERSION"
+singularity pull "$container_dir/heudiconv-${heudiconv_version}.sif" \
+  "docker://nipy/heudiconv:${heudiconv_version}"
 ```
-singularity pull docker://nipy/heudiconv:latest
+
+# fMRIPrep
+
+Needed for preprocessing a BIDS dataset. Choose your tested release and save
+the image path for setup. See the
+[NiPreps Singularity guide](https://www.nipreps.org/apps/singularity/) for
+container preparation, bind mounts, and environment variables.
+
+```bash
+fmriprep_version="REPLACE_WITH_VERSION"
+singularity pull "$container_dir/fmriprep-${fmriprep_version}.sif" \
+  "docker://nipreps/fmriprep:${fmriprep_version}"
 ```
 
-More details here: https://heudiconv.readthedocs.io/en/latest/installation.html
-
-# fmriprep
-
-Fill in a version, such as 25.1.3
-
-```
-singularity build /proj/hng/software/containers/fmriprep-<version>.simg docker://nipreps/fmriprep:<version>
-```
+The image does not replace the FreeSurfer license or TemplateFlow cache.
+Populate the necessary templates before submission when compute nodes lack
+internet access; see
+[restricted-network guidance](https://www.nipreps.org/apps/singularity/#restricted-internet-access).
 
 # MRIQC
 
-```
-singularity build /proj/mnhallqlab/mriqc-latest.simg docker://nipreps/mriqc:latest
+Needed when MRIQC is enabled. Choose a tested release rather than a moving tag:
+
+```bash
+mriqc_version="REPLACE_WITH_VERSION"
+singularity pull "$container_dir/mriqc-${mriqc_version}.sif" \
+  "docker://nipreps/mriqc:${mriqc_version}"
 ```
 
-# fmripost-aroma (ICA-AROMA)
+# fMRIPost-AROMA
 
-```
-singularity build /proj/hng/software/containers/aroma-latest.simg docker://nipreps/fmripost-aroma:main
+Needed when the separate ICA-AROMA stage is enabled. It consumes fMRIPrep
+outputs; denoising during BrainGnomes postprocessing is configured separately.
+See the [fMRIPost-AROMA installation guide](https://fmripost-aroma.readthedocs.io/latest/installation.html).
+
+```bash
+aroma_tag="main"  # upstream installation example; use a tested release tag if available
+singularity pull "$container_dir/fmripost-aroma-${aroma_tag}.sif" \
+  "docker://nipreps/fmripost-aroma:${aroma_tag}"
+md5sum "$container_dir/fmripost-aroma-${aroma_tag}.sif"
 ```
 
-Details: https://github.com/nipreps/fmripost-aroma?tab=readme-ov-file#installation
+The upstream [installation example](https://github.com/nipreps/fmripost-aroma#installation)
+uses the moving `main` tag. Keep the downloaded file fixed for the study and
+retain its checksum; the tag alone does not identify its contents.
 
 # FSL
 
-Used in postprocessing. NeuroDesk has a number of pre-built containers that work well, whereas
-building FSL from a container file (e.g., https://www.repronim.org/neurodocker/user_guide/examples.html)
-was throwing tricky errors on the UNC HPC.
+Needed for postprocessing. One image used in development is the NeuroDesk
+FSL 6.0.7.16 image; this is a specific example, not a requirement to update an
+existing tested installation. Download it to your chosen shared directory:
 
-## Image for FSL 6.0.7.16
-
-```
-curl -X GET https://neurocontainers.neurodesk.org/fsl_6.0.7.16_20250131.simg -O
-```
-
-# AFNI
-
-Not currently used, but if you want it!
-
-```
-singularity build /proj/hng/software/containers/afni-latest.simg  docker://afni/afni_make_build
+```bash
+curl --fail --location \
+  --output "$container_dir/fsl_6.0.7.16_20250131.simg" \
+  https://neurocontainers.neurodesk.org/fsl_6.0.7.16_20250131.simg
 ```
 
+# BIDS validator executable
 
-# BIDS-validator
+BrainGnomes configures a validator **executable**, rather than a container, and
+submits validation separately with `run_bids_validation()`. The current
+[BIDS validator CLI guide](https://bids-validator.readthedocs.io/en/stable/user_guide/command-line.html)
+uses Deno and provides a standalone compilation option. Install or load Deno
+following your site's policy, then compile on a host with network access:
 
-Not quite as easy
-
+```bash
+deno compile -ERWN -o "$container_dir/bids-validator" jsr:@bids/validator
+"$container_dir/bids-validator" --help
 ```
-module load node
-npm install -g deno
-deno compile -ERWN -o bids-validator jsr:@bids/validator
-```
+
+Record the validator version used by your study. Set
+`compute_environment$bids_validator` to the executable's absolute path during
+setup. The validator's `--outfile` controls its report destination; an `.html`
+filename does not itself select HTML output. Consult the chosen validator
+version's help for its supported formats.
+
+# Use the downloaded files in BrainGnomes
+
+Enter the absolute image/executable paths during `setup_project()` or update
+an existing configuration with `edit_project()`. Images and project paths must
+be accessible from compute nodes, not only the submission host.
+`doctor_project(scfg)` provides an optional read-only environment check before
+submission.
+
+For container troubleshooting, reproduce the relevant batch script's bind
+mounts and environment in an interactive allocation. The files under
+`inst/hpc_scripts/` define the runtime invocation; obtaining an image alone
+does not establish that a site's mounts, licenses, and template cache are ready.

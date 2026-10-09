@@ -29,3 +29,7 @@ An R data.frame version of the tracking database
 \description{
 Query job status in tracking SQLite database
 }
+\details{
+Status reads wait up to 10 seconds for a concurrent SQLite writer
+before reporting a database lock error.
+}

@@ -26,7 +26,9 @@ lmfit_residuals_mat(
 
 \item{preserve_mean}{Logical; keep the original mean of uncensored timepoints.}
 
-\item{set_mean}{Numeric; shift residuals so every column has this mean (ignored when \code{preserve_mean = TRUE}).}
+\item{set_mean}{Finite numeric value. A non-zero value recenters residuals
+to this mean over the fitted rows. The default, 0, leaves residuals unchanged.
+Ignored when \code{preserve_mean = TRUE}.}
 
 \item{regress_cols}{Optional integer vector (1-based) selecting columns of \code{X} to regress out.}
 

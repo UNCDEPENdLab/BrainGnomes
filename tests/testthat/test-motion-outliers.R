@@ -1,5 +1,17 @@
 # Tests for calculate_motion_outliers()
 
+test_that("motion QC rejects invalid flags and non-finite thresholds", {
+  root <- tempfile("motion-validation-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE))
+  for (flag in list(NA, "TRUE", 1, c(TRUE, FALSE))) {
+    expect_error(calculate_motion_outliers(input_dir = root, include_filtered = flag),
+      "include_filtered")
+  }
+  expect_error(calculate_motion_outliers(input_dir = root, thresholds = Inf),
+    "thresholds must contain only finite")
+})
+
 # Helper to create a mock confounds file with known motion parameters
 create_mock_confounds <- function(dir, filename, motion_data, fd_values = NULL) {
   filepath <- file.path(dir, filename)

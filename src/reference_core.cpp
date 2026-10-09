@@ -1,6 +1,6 @@
 #define RNIFTI_NIFTILIB_VERSION 2
 #include <Rcpp.h>
-#include <RNifti.h>
+#include "rnifti_quiet.h"
 
 #include <algorithm>
 #include <cmath>

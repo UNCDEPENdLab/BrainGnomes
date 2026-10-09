@@ -1,4 +1,5 @@
 #include "BrainGnomes.h"
+#include "nifti_output.h"
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
@@ -53,6 +54,7 @@ std::vector<double> lfilter_zi_arma(const arma::vec& b, const arma::vec& a) {
   }
   
   arma::uword n = std::max(b_norm.n_elem, a_norm.n_elem);
+  if (n == 1) return {}; // A scalar gain has no filter state.
   if (a_norm.n_elem < n)
     a_norm.resize(n, true);
   if (b_norm.n_elem < n)
@@ -125,7 +127,7 @@ std::vector<double> lfilter(const std::vector<double>& b,
   
   for (size_t i = 0; i < n; ++i) {
     double input = x[i];
-    double acc = b[0] * input + state[0];
+    double acc = b[0] * input + (state.empty() ? 0.0 : state[0]);
     y[i] = acc;
     
     for (size_t j = 1; j < nfilt; ++j) {
@@ -139,19 +141,47 @@ std::vector<double> lfilter(const std::vector<double>& b,
   return y;
 }
 
+// Validate filter coefficients and padding against the signal length. Returns
+// the resolved padding length, including the default requested by -1.
+int validate_filter_arguments(int n, const std::vector<double>& b,
+                              const std::vector<double>& a, int padlen,
+                              const std::string& padtype) {
+  // Validate before indexing coefficients or constructing filter state.
+  if (a.empty() || b.empty()) {
+    throw std::invalid_argument("Filter coefficients 'a' and 'b' must have at least one element.");
+  }
+  for (double coefficient : a) {
+    if (!std::isfinite(coefficient)) throw std::invalid_argument("Filter coefficients must be finite.");
+  }
+  for (double coefficient : b) {
+    if (!std::isfinite(coefficient)) throw std::invalid_argument("Filter coefficients must be finite.");
+  }
+  if (std::abs(a[0] - 1.0) > 1e-10) {
+    throw std::invalid_argument("First coefficient of 'a' must be 1.0.");
+  }
+  if (padlen < -1) throw std::invalid_argument("padlen must be -1 or non-negative.");
+  if (padtype != "constant" && padtype != "odd" && padtype != "even" && padtype != "zero") {
+    throw std::invalid_argument("Unsupported padtype.");
+  }
+  if (n < 3) throw std::invalid_argument("Input signal too short for filtering.");
+
+  // as in scipy, default to 3x the length of the filter coefficients
+  int default_padlen = std::max({static_cast<int>(b.size()), static_cast<int>(a.size()), 1}) * 3;
+  if (padlen < 0) padlen = default_padlen;
+
+  if (padlen > n - 1) throw std::invalid_argument("padlen must be <= length(x) - 1.");
+
+  return padlen;
+}
+
+
 // Pure C++ adaptation of scipy filtfilt -- see below for documentation
 std::vector<double> filtfilt(const std::vector<double>& x, const std::vector<double>& b, const std::vector<double>& a,
                              int padlen = -1, const std::string& padtype = "constant", bool use_zi = true) {
   
   int n = x.size(); // length of time series
-  if (n < 3) throw std::invalid_argument("Input signal too short for filtering.");
-  
-  // as in scipy, default to 3x the length of the filter coefficients
-  int default_padlen = std::max({static_cast<int>(b.size()), static_cast<int>(a.size()), 1}) * 3;
-  if (padlen < 0) padlen = default_padlen;
-  
-  if (padlen > n - 1) throw std::invalid_argument("padlen must be <= length(x) - 1.");
-  
+  padlen = validate_filter_arguments(n, b, a, padlen, padtype);
+
   // Pad signal to reduce edge artifacts
   std::vector<double> x_padded(2 * padlen + n);
   for (int i = 0; i < padlen; ++i) {
@@ -225,9 +255,9 @@ void demean_vec(std::vector<double> &ts) {
 //' @usage filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
 //'   use_zi = TRUE)
 //' @param x A numeric vector representing the input time series.
-//' @param b A numeric vector of numerator (feedforward) filter coefficients.
-//' @param a A numeric vector of denominator (feedback) filter coefficients. Must have `a[0] == 1.0`.
-//' @param padlen Number of samples to extend on each edge for padding. If `-1` (default), uses `3 * max(length(a), length(b))`.
+//' @param b A non-empty, finite numeric vector of numerator (feedforward) filter coefficients.
+//' @param a A non-empty, finite numeric vector of denominator (feedback) filter coefficients. Must have `a[1] == 1.0`.
+//' @param padlen Number of samples to extend on each edge for padding. Must be non-negative or `-1` (default), which uses `3 * max(length(a), length(b))`.
 //' @param padtype Type of padding at the signal boundaries. One of `"constant"` (default), `"odd"`, `"even"`, or `"zero"`.
 //' @param use_zi Logical. If `TRUE` (default), use steady-state initial conditions to minimize transients.
 //'
@@ -274,6 +304,10 @@ NumericVector filtfilt_cpp(NumericVector x, NumericVector b, NumericVector a,
 //'   DC (mean) component (default = true).
 //'
 //' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
+//'   Integer inputs are converted to double precision for processing. Saved files
+//'   preserve the input storage datatype, with slope and intercept recalculated
+//'   for the processed values. Integer output is quantized to the written header's scale; returned
+//'   values can therefore differ from reread values.
 //'
 //' @keywords internal
 // [[Rcpp::export]]
@@ -284,25 +318,27 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<doubl
   NiftiImage image(infile); // read input
   int datatype = image->datatype;
   
-  // convert signed and unsigned integers to float to avoid boundary errors where new value in a voxel
+  // Convert signed and unsigned integers to doubles to avoid boundary errors where a new voxel value
   // exceeds the bounds of the integer data type.
   if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64 ||
       datatype == DT_UINT8 || datatype == DT_UINT16 || datatype == DT_UINT32 || datatype == DT_UINT64) {
-    NiftiImageData float_data(image.data(), DT_FLOAT32);
-    image.replaceData(float_data);
-    float_data.disown();
+    NiftiImageData double_data(image.data(), DT_FLOAT64);
+    // replaceData copies the buffer; retain ownership so the temporary is freed.
+    image.replaceData(double_data);
   }
   
   NiftiImageData data(image);
   std::vector<dim_t> dims = image.dim();
-  if (dims.size() < 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
+  if (dims.size() != 4 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0 || dims[3] <= 0) {
     stop("Input image must be 4D");
   }
   
   int n_x = dims[0], n_y = dims[1], n_z = dims[2], n_t = dims[3];
+  padlen = validate_filter_arguments(n_t, b, a, padlen, padtype);
   
   auto flat_index = [&](int x, int y, int z, int t) {
-    return x + n_x * (y + n_y * (z + n_z * t));
+    return static_cast<size_t>(x) + static_cast<size_t>(n_x) *
+      (y + static_cast<size_t>(n_y) * (z + static_cast<size_t>(n_z) * t));
   };
   
   std::vector<double> y(n_t);
@@ -325,14 +361,14 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<doubl
           }
         }
         
-        if (is_constant) continue;
+        if (is_constant && first_val == 0.0) continue;
         if (demean) demean_vec(y);
         
         // apply frequency filter to this voxel
         y_filt = filtfilt(y, b, a, padlen, padtype, use_zi);
         
         for (int ti = 0; ti < n_t; ++ti) {
-          data[flat_index(xi, yi, zi, ti)] = static_cast<float>(y_filt[ti]);
+          data[flat_index(xi, yi, zi, ti)] = y_filt[ti];
         }
       }
     }
@@ -340,7 +376,7 @@ Rcpp::RObject butterworth_filter_cpp(std::string infile, const std::vector<doubl
   
   // Write output if requested
   if (!outfile.empty()) {
-    image.toFile(outfile, datatype);
+    write_nifti_preserving_datatype(image, outfile, datatype);
   }
   
   return image.toArrayOrPointer(internal, "NIfTI image");

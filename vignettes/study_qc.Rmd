@@ -1,7 +1,7 @@
 ---
 title: "Study QC inventory and dashboard"
 author: "BrainGnomes developers"
-date: "11 Sep 2026"
+date: "09 Oct 2026"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Study QC inventory and dashboard}
@@ -18,7 +18,8 @@ linking outputs to their diagnostics and recorded workflow attempts.
 
 ```{r, eval=FALSE}
 library(BrainGnomes)
-qc <- collect_qc_inventory("/path/to/project")
+scfg <- load_project("/path/to/project")
+qc <- collect_qc_inventory(scfg)
 qc
 
 # Optional: include participants whose data have not arrived yet.
@@ -68,11 +69,11 @@ available without these rendering dependencies.
 ```{r, eval=FALSE}
 install.packages(c("reactable", "plotly", "htmltools", "htmlwidgets", "knitr", "rmarkdown"))
 
-html <- render_qc_dashboard(qc, "/path/to/reports/qc-2026-09-11")
+html <- render_qc_dashboard(qc, "/path/to/reports/qc-snapshot-01")
 browseURL(html)
 
 # Export only the machine-readable snapshot to a separate directory.
-write_qc_inventory(qc, "/path/to/exports/qc-2026-09-11")
+write_qc_inventory(qc, "/path/to/exports/qc-snapshot-01")
 ```
 
 Each export requires a new or empty directory. Render a new snapshot when the

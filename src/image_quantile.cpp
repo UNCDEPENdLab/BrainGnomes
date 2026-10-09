@@ -4,7 +4,7 @@
 #include <vector>
 #include <cmath>
 #include <stdexcept>
-#include <RNifti.h>
+#include "rnifti_quiet.h"
 // #include "RNiftiAPI.h"  // uncomment to use with sourceCpp
 typedef int64_t dim_t;
 
@@ -32,6 +32,8 @@ using namespace Rcpp;
 //' - For 4D images, the mask (if used) is applied identically to all volumes.
 //' - Quantile calculation uses partial sorting for performance (via \code{std::nth_element}).
 //' - Throws an error if no voxels are valid after masking or zero exclusion.
+//' - Retained voxels must be finite; missing or infinite image values cause an
+//'   error. Non-finite values outside the supplied mask are ignored.
 //'
 //' @examples
 //' \dontrun{
@@ -123,7 +125,10 @@ NumericVector image_quantile(std::string in_file,
         if (exclude_zero && include_voxel) {
           include_voxel = (value != 0.0f);
         }
-        if (include_voxel) ++nvals;
+        if (include_voxel) {
+          if (!std::isfinite(value)) stop("Retained image voxels must contain only finite values.");
+          ++nvals;
+        }
       }
     }
 

@@ -63,7 +63,7 @@ test_that("completion and manifest writes are atomic when SQLite rejects the man
 })
 
 test_that("worker CLI exits unsuccessfully when SQLite has no matching tracking row", {
-  db <- tempfile(fileext = ".sqlite")
+  db <- tempfile("worker's tracking db ", fileext = ".sqlite")
   on.exit(unlink(db), add = TRUE)
   create_tracking_db(db)
   script <- system.file("upd_job_status.R", package = "BrainGnomes")

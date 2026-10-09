@@ -613,6 +613,8 @@ resolve_tracked_job_id <- function(sqlite_db, job_id) {
 #' @param sqlite_db Character string of sqlite database
 #' 
 #' @return An R data.frame version of the tracking database
+#' @details Status reads wait up to 10 seconds for a concurrent SQLite writer
+#'   before reporting a database lock error.
 #' @importFrom DBI dbConnect dbDisconnect dbGetQuery
 #' @importFrom checkmate assert_logical test_file_exists
 #' @importFrom RSQLite SQLite
@@ -654,6 +656,7 @@ get_tracked_job_status <- function(job_id = NULL, return_children = FALSE, retur
     stop(format_tracking_db_error(sqlite_db, operation = "get_tracked_job_status connect", err = e), call. = FALSE)
   })
   df <- tryCatch({
+    RSQLite::sqliteSetBusyHandler(con, 10000L)
     dbGetQuery(con, str, params = param)
   }, error = function(e) {
     stop(format_tracking_db_error(sqlite_db, operation = "get_tracked_job_status query", err = e), call. = FALSE)

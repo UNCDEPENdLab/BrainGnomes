@@ -44,6 +44,32 @@ test_that("parse_cli_args respects explicit FALSE and NULL for flags", {
   expect_null(parse_cli_args(c("--cascade=NULL"))$cascade)
 })
 
+test_that("CLI values retain negative numbers and trailing equals signs", {
+  result <- parse_cli_args(c("--offsets=-1 -2.5 0 1", "--token=abc==", "--empty=", "--flag"))
+  expect_equal(result$offsets, c(-1, -2.5, 0, 1))
+  expect_identical(result$token, "abc==")
+  expect_identical(result$empty, "")
+  expect_true(result$flag)
+  expect_equal(parse_cli_args("--cutoff -0.5 --enabled")$cutoff, -0.5)
+  expect_identical(set_nested_values("a/b=key==")$a$b, "key==")
+})
+
+test_that("shell path options preserve spaces and quotes without changing vector options", {
+  paths <- c("/tmp/project  with spaces/config.yaml", "/tmp/user's project/config.yaml")
+  for (path in paths) {
+    for (option in list(c("--input", path), paste0("--input=", path))) {
+      result <- parse_cli_path_args(c(option, "--processing_steps=filter regress", "--flag"))
+      expect_identical(result$input, path)
+      expect_identical(result$processing_steps, c("filter", "regress"))
+      expect_true(result$flag)
+    }
+  }
+  result <- parse_cli_path_args(c("--sqlite_db", "", "--job_id=1", "--status=STARTED"))
+  expect_identical(result$sqlite_db, "")
+  generated <- nested_list_to_args(list(input = "/tmp/a b", processing_steps = c("filter", "regress")))
+  expect_identical(parse_cli_path_args(generated), parse_cli_args(generated))
+})
+
 # nested_list_to_args round-trips with parse_cli_args
 
 test_that("nested_list_to_args creates expected CLI strings", {

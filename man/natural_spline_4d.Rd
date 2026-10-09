@@ -11,7 +11,7 @@ natural_spline_4d(infile, t_interpolate, edge_nn = FALSE,
 \item{infile}{Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).}
 
 \item{t_interpolate}{Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-Timepoints outside the valid range \verb{[1, T]} are ignored with a warning.}
+Timepoints outside the valid range \verb{[1, T]} cause an error.}
 
 \item{edge_nn}{Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 are filled in using nearest-neighbor extrapolation instead of cubic splines.}
@@ -39,7 +39,12 @@ The function reads the NIfTI image from disk, performs interpolation in memory,
 and optionally writes the result back to a new NIfTI file.
 
 The interpolation is voxelwise and assumes column-major order. If a voxel time series
-has fewer than three valid (non-interpolated) timepoints, or is constant across time, it is skipped.
+has fewer than three valid (non-interpolated) timepoints, an error is raised.
+Constant retained time series are filled with their retained value at the
+requested timepoints. Integer input is converted to double precision for
+processing. Saved files preserve the input storage datatype, with slope and
+intercept recalculated for the processed values. Integer output is quantized to the written
+header's scale; returned values can therefore differ from reread values.
 Linear extrapolation is used for timepoints outside the valid range if \code{edge_nn = FALSE}, matching
 R's \code{splinefun} approach with natural splines. If \code{edge_nn = TRUE}, nearest-neighbor extrapolation
 is used for interpolation timepoints at the beginning or end of the timeseries, potentially reducing

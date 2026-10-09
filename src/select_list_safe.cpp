@@ -42,7 +42,7 @@ Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
   bool is_interactive = Rcpp::as<bool>(interactive_func());
   
   if (is_interactive) {
-    Rcpp::Environment utils_env("package:utils");
+    Rcpp::Environment utils_env = Rcpp::Environment::namespace_env("utils");
     Rcpp::Function select_func = utils_env["select.list"];
     return select_func(choices, Rcpp::_["title"] = title, Rcpp::_["multiple"] = multiple, Rcpp::_["graphics"] = false);
   }
@@ -50,7 +50,7 @@ Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
   // Fallback for TTY
   if (!isatty(STDIN_FILENO)) {
     Rcpp::Rcout << "(Not a TTY; cannot read input)\n";
-    return R_NilValue;
+    return Rcpp::wrap("");
   }
   
   std::vector<std::string> selected;
@@ -74,7 +74,7 @@ Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
   
   while (true) {
     indices.clear();
-    std::getline(std::cin, input); // read the line of user input
+    if (!std::getline(std::cin, input)) return Rcpp::wrap("");
     std::istringstream iss(input); // now bind stream to user input
     
     int val;
@@ -93,8 +93,9 @@ Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
     }
     
     // 🔴 Handle case where input was not numeric (e.g., "abc", "3a")
-    if (iss.fail() && indices.empty()) {
+    if (!iss.eof() || indices.empty()) {
       Rcpp::Rcout << "Invalid input. Please enter numbers separated by spaces." << std::endl;
+      invalid = true;
     }
     
     if (!invalid && !indices.empty()) break; // success!
@@ -104,7 +105,7 @@ Rcpp::CharacterVector select_list_safe(Rcpp::CharacterVector choices,
   
   // convert to IntegerVector to allow subsetting of named choices input
   Rcpp::IntegerVector r_indices(indices.begin(), indices.end());
-  if (!multiple) r_indices = r_indices[0]; // only return the first selection
+  if (!multiple) r_indices = Rcpp::IntegerVector::create(indices.front());
   
   return choices[r_indices];
 }

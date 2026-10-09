@@ -44,7 +44,9 @@ postprocessing streams should run. When \code{"postprocess"} is included in
 extraction streams should run. When \code{"extract_rois"} is included in
 \code{steps}, \code{NULL} selects every configured extraction stream.}
 
-\item{debug}{A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).}
+\item{debug}{Logical. Enable verbose worker debugging and suppress imaging
+commands. Debug mode still submits scheduler jobs and writes tracking/log
+records; use \code{dry_run = TRUE} for a submission-free preview.}
 
 \item{force}{A logical value indicating whether to force the execution of all steps, regardless of their current status.}
 

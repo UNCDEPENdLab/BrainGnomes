@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <RNifti.h>
+#include "rnifti_quiet.h"
 // #include "RNiftiAPI.h"
 
 using namespace Rcpp;

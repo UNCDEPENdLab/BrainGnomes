@@ -502,15 +502,15 @@ scheduler_job_status <- function(job_ids, scheduler = "local", user = NULL) {
 }
 
 
-#' This function pauses execution of an R script while a scheduled qsub job is not yet complete.
+#' Wait for scheduler jobs or local processes to finish
 #'
-#' It is intended to give you control over job dependencies within R when the formal PBS
-#' depend approach is insufficient, especially in the case of a script that spawns child jobs that
-#' need to be scheduled or complete before the parent script should continue.
+#' Poll Slurm, TORQUE/PBS, or local process status until every supplied job
+#' reaches a known terminal state. This can coordinate a parent R script with
+#' child jobs when scheduler dependencies alone are insufficient.
 #'
 #' @param job_ids One or more job ids of existing PBS or slurm jobs, or process ids of a local process for
 #'   \code{scheduler="sh"}.
-#' @param repolling_interval How often to recheck the job status, in seconds. Default: 30
+#' @param repolling_interval How often to recheck the job status, in seconds. Default: 60.
 #' @param max_wait How long to wait on the job before giving up, in seconds. Default: 24 hours (86,400 seconds)
 #' @param scheduler What scheduler is used for job execution.
 #'   Options: c("torque", "qsub", "slurm", "sbatch", "sh", "local")
@@ -519,8 +519,9 @@ scheduler_job_status <- function(job_ids, scheduler = "local", user = NULL) {
 #' @param stop_on_timeout Logical. If `TRUE`, the function throws an error if the `max_wait` is exceeded.
 #'   If `FALSE`, it returns `FALSE` instead of stopping. Default is `TRUE`.
 #'
-#' @return Returns (invisibly) `TRUE` if all jobs completed successfully, `FALSE` if any job failed or timeout occurred
-#'   and `stop_on_timeout = FALSE`. Otherwise, stops execution with an error if the timeout is exceeded.
+#' @return Invisibly returns `TRUE` if all jobs completed successfully, or
+#'   `FALSE` if any job failed or was cancelled. A timeout raises an error when
+#'   `stop_on_timeout = TRUE`; otherwise it returns `FALSE`.
 #'
 #' @details Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;
 #'   "slurm" and "sbatch" are the same, and "sh" and "local" are the same.

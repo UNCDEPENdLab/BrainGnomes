@@ -47,7 +47,7 @@ print_help <- function() {
 tmp <- commandArgs(trailingOnly = TRUE)
 if ("--help" %in% tmp) { print_help(); quit(save = "no", status = 0) }
 
-args <- BrainGnomes::parse_cli_args(tmp)
+args <- BrainGnomes:::parse_cli_path_args(tmp)
 
 # build tracking arguments link
 tracking_args <- list(

@@ -11,7 +11,7 @@ natural_spline_interp(x, y, xout)
 
 \item{y}{A numeric vector of y-values at each x (same length as x).}
 
-\item{xout}{A numeric vector of points at which to interpolate.}
+\item{xout}{A finite numeric vector of points at which to interpolate.}
 }
 \value{
 A numeric vector of interpolated y-values at each point in \code{xout}.
