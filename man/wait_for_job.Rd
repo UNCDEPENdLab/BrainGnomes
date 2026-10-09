@@ -2,7 +2,7 @@
 % Please edit documentation in R/hpc_functions.R
 \name{wait_for_job}
 \alias{wait_for_job}
-\title{This function pauses execution of an R script while a scheduled qsub job is not yet complete.}
+\title{Wait for scheduler jobs or local processes to finish}
 \usage{
 wait_for_job(
   job_ids,
@@ -17,7 +17,7 @@ wait_for_job(
 \item{job_ids}{One or more job ids of existing PBS or slurm jobs, or process ids of a local process for
 \code{scheduler="sh"}.}
 
-\item{repolling_interval}{How often to recheck the job status, in seconds. Default: 30}
+\item{repolling_interval}{How often to recheck the job status, in seconds. Default: 60.}
 
 \item{max_wait}{How long to wait on the job before giving up, in seconds. Default: 24 hours (86,400 seconds)}
 
@@ -31,13 +31,14 @@ the function prints out status updates for each tracked job so that the user kno
 If \code{FALSE}, it returns \code{FALSE} instead of stopping. Default is \code{TRUE}.}
 }
 \value{
-Returns (invisibly) \code{TRUE} if all jobs completed successfully, \code{FALSE} if any job failed or timeout occurred
-and \code{stop_on_timeout = FALSE}. Otherwise, stops execution with an error if the timeout is exceeded.
+Invisibly returns \code{TRUE} if all jobs completed successfully, or
+\code{FALSE} if any job failed or was cancelled. A timeout raises an error when
+\code{stop_on_timeout = TRUE}; otherwise it returns \code{FALSE}.
 }
 \description{
-It is intended to give you control over job dependencies within R when the formal PBS
-depend approach is insufficient, especially in the case of a script that spawns child jobs that
-need to be scheduled or complete before the parent script should continue.
+Poll Slurm, TORQUE/PBS, or local process status until every supplied job
+reaches a known terminal state. This can coordinate a parent R script with
+child jobs when scheduler dependencies alone are insufficient.
 }
 \details{
 Note that for the \code{scheduler} argument, "torque" and "qsub" are the same;

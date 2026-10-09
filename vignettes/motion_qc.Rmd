@@ -1,7 +1,7 @@
 ---
 title: "Motion Quality Control and Framewise Displacement Summaries"
 author: "Michael Hallquist"
-date: "31 Aug 2026"
+date: "09 Oct 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -29,7 +29,8 @@ millimetres. `calculate_motion_outliers()` summarizes an fMRIPrep confounds file
 as one row per BOLD run, including maximum FD, mean FD, and the percentage of
 volumes above one or more user-supplied thresholds.
 
-This is an interactive quality-control helper. It reads confounds files and can
+This local quality-control helper works in R sessions or scripts. It reads
+confounds files and can
 write a run-level summary table, but it does **not** submit jobs, change a
 project configuration, create censor files, or alter BOLD data. Later sections
 explain how its summaries can inform a separately configured scrubbing policy.

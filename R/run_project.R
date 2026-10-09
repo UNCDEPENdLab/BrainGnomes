@@ -99,7 +99,9 @@ print_extract_dry_run_plan <- function(scfg, streams) {
 #'   enabled stages. If `NULL`, the user will be prompted for which stages to run.
 #'   BIDS validation is configured with the project but submitted separately
 #'   through [run_bids_validation()]; it is not a `run_project()` stage.
-#' @param debug A logical value indicating whether to run in debug mode (verbose output for debugging, no true processing).
+#' @param debug Logical. Enable verbose worker debugging and suppress imaging
+#'   commands. Debug mode still submits scheduler jobs and writes tracking/log
+#'   records; use `dry_run = TRUE` for a submission-free preview.
 #' @param force A logical value indicating whether to force the execution of all steps, regardless of their current status.
 #' @param dry_run A logical value indicating whether to perform a dry run. Dry
 #'   runs validate settings and report subject/session scope plus resolved
@@ -241,9 +243,11 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
         postprocess_streams <- all_pp_streams # if we have only one stream, run it
       } else {
         postprocess_streams <- select_list_safe(all_pp_streams, multiple = TRUE,
-          title = "Which postprocessing streams should be run? Press ENTER to select all."
+          title = "Which postprocessing streams should be run? Select streams, or 0 to cancel."
         )
-        if (length(postprocess_streams) == 0L) postprocess_streams <- all_pp_streams # if user presses enter, run all
+        if (!length(postprocess_streams) || anyNA(postprocess_streams) || any(!nzchar(postprocess_streams))) {
+          stop("Postprocessing stream selection cancelled; no jobs submitted.", call. = FALSE)
+        }
       }
     }
 
@@ -256,9 +260,11 @@ run_project <- function(scfg = getwd(), steps = NULL, subject_filter = NULL, pos
         extract_streams <- all_ex_streams # if we have only one stream, run it
       } else {
         extract_streams <- select_list_safe(all_ex_streams, multiple = TRUE,
-          title = "Which extraction streams should be run? Press ENTER to select all."
+          title = "Which extraction streams should be run? Select streams, or 0 to cancel."
         )
-        if (length(extract_streams) == 0L) extract_streams <- all_ex_streams # if user presses enter, run all
+        if (!length(extract_streams) || anyNA(extract_streams) || any(!nzchar(extract_streams))) {
+          stop("ROI-extraction stream selection cancelled; no jobs submitted.", call. = FALSE)
+        }
       }
     }
 

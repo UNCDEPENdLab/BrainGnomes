@@ -1,7 +1,7 @@
 ---
 title: "Intensity Normalization in BrainGnomes"
 author: "Michael Hallquist"
-date: "31 Aug 2026"
+date: "09 Oct 2026"
 output:
   rmarkdown::html_vignette:
     toc: true
@@ -610,7 +610,8 @@ $b_{rv}$. Consequently:
 - run-wise normalization is not the same as voxelwise percent signal change.
 
 Multiplying a complete run by a positive scalar multiplies its beta estimates,
-residual standard deviations, COPEs, and VARCOPEs in the corresponding units.
+residual standard deviations, and COPEs by that scalar. Variances, including
+VARCOPEs, are multiplied by its square.
 Within-run $t$ statistics are unchanged apart from numerical precision.
 Correlations are also unchanged, so run-wise intensity normalization is usually
 irrelevant for analyses based only on correlation coefficients.

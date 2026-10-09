@@ -1,4 +1,5 @@
 #include "BrainGnomes.h"
+#include "nifti_output.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -40,24 +41,29 @@
 //'   preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
 //'   exclusive = FALSE)
 //' @param infile Path to a 4D NIfTI image file to denoise (e.g., functional data).
-//' @param X A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
+//' @param X A finite numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 //'          Typically includes motion parameters, physiological noise, etc.
 //' @param include_rows Optional logical vector identifying the timepoints used when estimating the model
-//'          (e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}; when \code{NULL}, all timepoints are used.
+//'          (e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}
+//'          and contain no missing values; when \code{NULL}, all timepoints are used.
 //' @param add_intercept Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.
 //' @param outfile Optional path to write the output residuals image. If empty, no file is written.
 //' @param internal Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.
 //' @param preserve_mean Logical; if \code{TRUE}, recenter each output time
-//'   series to the input mean over the rows used for fitting. Constant time
-//'   series are therefore left unchanged.
-//' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
-//'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
+//'   series to the input mean over the rows used for fitting.
+//' @param set_mean Finite numeric value. A non-zero value recenters residuals
+//'   to this mean over the fitted rows. The default, 0, leaves the regression
+//'   residuals unchanged. Ignored when \code{preserve_mean = TRUE}.
 //' @param regress_cols Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.
 //'        When omitted, all non-constant columns are removed unless \code{exclusive = TRUE}.
 //' @param exclusive Logical; if \code{TRUE}, only the columns listed in \code{regress_cols} (and an intercept, if present)
 //'        are used to estimate the model. This allows for partial regression that preserves other effects.
 //'
 //' @return A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
+//'   Integer inputs are converted to double precision for processing. Saved files
+//'   preserve the input storage datatype, with slope and intercept recalculated
+//'   for the processed values. Integer output is quantized to the written header's scale; returned
+//'   values can therefore differ from reread values.
 //' @export
 //'
 //' @examples
@@ -89,6 +95,8 @@ Rcpp::RObject lmfit_residuals_4d(
     bool exclusive = false) {
   
   bool use_pivoted_qr = false; // toggle used in tests to force the robust solver path
+  if (!X.is_finite()) stop("X must contain only finite values.");
+  if (!std::isfinite(set_mean)) stop("set_mean must be finite.");
   bool use_set = std::abs(set_mean) > 1e-8;
   if (use_set && preserve_mean) {
     Rcpp::warning("Cannot use preserve_mean = TRUE and have a non-zero value for set_mean. The set_mean will be ignored.");
@@ -98,6 +106,11 @@ Rcpp::RObject lmfit_residuals_4d(
   Rcpp::IntegerVector regress_cols_vec;
   if (regress_cols.isNotNull()) regress_cols_vec = regress_cols.get();
   else regress_cols_vec = Rcpp::IntegerVector(0);
+  for (int column : regress_cols_vec) {
+    if (column == NA_INTEGER || column < 1) {
+      stop("regress_cols must contain positive, non-missing column indices.");
+    }
+  }
   if (exclusive && regress_cols_vec.size() == 0) {
     stop("exclusive = TRUE requires regress_cols to specify at least one column.");
   }
@@ -106,22 +119,25 @@ Rcpp::RObject lmfit_residuals_4d(
   Rcpp::LogicalVector _include_rows;
   if (include_rows.isNotNull()) _include_rows = include_rows.get();
   else _include_rows = Rcpp::LogicalVector();
+  if (Rcpp::any(Rcpp::is_na(_include_rows)).is_true()) {
+    stop("include_rows must not contain missing values.");
+  }
   
   RNifti::NiftiImage image(infile); // read nifti
   int datatype = image->datatype;
   
-  // Convert to float if using integer types (due to slope/intercept issues)
+  // Decode scaled integer inputs into doubles before numerical processing.
   if (datatype == DT_INT8 || datatype == DT_INT16 || datatype == DT_INT32 || datatype == DT_INT64 ||
       datatype == DT_UINT8 || datatype == DT_UINT16 || datatype == DT_UINT32 || datatype == DT_UINT64) {
-    RNifti::NiftiImageData float_data(image.data(), DT_FLOAT32);
-    image.replaceData(float_data);
-    float_data.disown();
+    RNifti::NiftiImageData double_data(image.data(), DT_FLOAT64);
+    // replaceData copies the buffer; retain ownership so the temporary is freed.
+    image.replaceData(double_data);
   }
   
   RNifti::NiftiImageData data(image);
   
   std::vector<dim_t> dims = image.dim();
-  if (dims.size() < 4 || dims[3] <= 1) stop("Image must be 4D with more than 1 timepoint.");
+  if (dims.size() != 4 || dims[3] <= 1) stop("Image must be 4D with more than 1 timepoint.");
   
   int n_x = dims[0], n_y = dims[1], n_z = dims[2];
   arma::uword n_t = dims[3]; // use uword for consistency with arma matrix size types
@@ -386,7 +402,8 @@ Rcpp::RObject lmfit_residuals_4d(
   arma::mat Q_proj_t = Q_proj.t();
 
   auto flat_index = [&](int x, int y, int z, int t) {
-    return x + n_x * (y + n_y * (z + n_z * t));
+    return static_cast<size_t>(x) + static_cast<size_t>(n_x) *
+      (y + static_cast<size_t>(n_y) * (z + static_cast<size_t>(n_z) * t));
   };
 
   // preallocate voxel loop ingredients
@@ -412,9 +429,10 @@ Rcpp::RObject lmfit_residuals_4d(
         }
         y_sub = y.elem(idx); // valid points in y
 
-        // Based on basic timing tests, we get a small improvement in speed if we skip constant time series
-        double range = y_sub.max() - y_sub.min();
-        if (std::abs(range) < 1e-6) {
+        // Only an entirely zero series has zero residuals for every design.
+        // Constant fitted rows can still have signal in censored volumes, or
+        // a nonzero residual when the removed regressors exclude an intercept.
+        if (arma::all(y == 0.0)) {
           residuals.zeros();
         } else {
           Qt_y = Q_proj_t * y_sub;
@@ -443,11 +461,11 @@ Rcpp::RObject lmfit_residuals_4d(
           // input mean is only correct when every fitted column was removed.
           residuals += arma::mean(y_sub) - arma::mean(residuals.elem(idx));
         } else if (use_set) {
-          residuals += set_mean; // add intended mean, if requested
+          residuals += set_mean - arma::mean(residuals.elem(idx));
         }
 
         for (arma::uword ti = 0; ti < n_t; ++ti) {
-          data[flat_index(xi, yi, zi, ti)] = static_cast<float>(residuals[ti]);
+          data[flat_index(xi, yi, zi, ti)] = residuals[ti];
         }
       }
     }
@@ -455,7 +473,7 @@ Rcpp::RObject lmfit_residuals_4d(
 
   // Write output if requested
   if (!outfile.empty()) {
-    image.toFile(outfile, datatype);
+    write_nifti_preserving_datatype(image, outfile, datatype);
   }
 
   return image.toArrayOrPointer(internal, "NIfTI image");

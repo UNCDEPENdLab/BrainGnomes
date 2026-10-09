@@ -31,6 +31,8 @@ and/or excludes zero-valued voxels. For 4D images, the function pools over all t
 \item For 4D images, the mask (if used) is applied identically to all volumes.
 \item Quantile calculation uses partial sorting for performance (via \code{std::nth_element}).
 \item Throws an error if no voxels are valid after masking or zero exclusion.
+\item Retained voxels must be finite; missing or infinite image values cause an
+error. Non-finite values outside the supplied mask are ignored.
 }
 }
 \examples{

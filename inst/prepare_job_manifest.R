@@ -31,7 +31,7 @@ if ("--help" %in% command_args) {
   quit(save = "no", status = 0)
 }
 
-args <- BrainGnomes::parse_cli_args(command_args)
+args <- BrainGnomes:::parse_cli_path_args(command_args)
 null_if_missing <- function(value) {
   if (is.null(value) || identical(value, "NULL") || identical(value, "")) NULL else value
 }

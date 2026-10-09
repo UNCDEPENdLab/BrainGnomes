@@ -85,9 +85,9 @@ automask <- function(img, outfile = "", clfrac = 0.5, NN = 2L, erode_steps = 0L,
 #' @usage filtfilt_cpp(x, b, a, padlen = -1L, padtype = "constant",
 #'   use_zi = TRUE)
 #' @param x A numeric vector representing the input time series.
-#' @param b A numeric vector of numerator (feedforward) filter coefficients.
-#' @param a A numeric vector of denominator (feedback) filter coefficients. Must have `a[0] == 1.0`.
-#' @param padlen Number of samples to extend on each edge for padding. If `-1` (default), uses `3 * max(length(a), length(b))`.
+#' @param b A non-empty, finite numeric vector of numerator (feedforward) filter coefficients.
+#' @param a A non-empty, finite numeric vector of denominator (feedback) filter coefficients. Must have `a[1] == 1.0`.
+#' @param padlen Number of samples to extend on each edge for padding. Must be non-negative or `-1` (default), which uses `3 * max(length(a), length(b))`.
 #' @param padtype Type of padding at the signal boundaries. One of `"constant"` (default), `"odd"`, `"even"`, or `"zero"`.
 #' @param use_zi Logical. If `TRUE` (default), use steady-state initial conditions to minimize transients.
 #'
@@ -128,6 +128,10 @@ filtfilt_cpp <- function(x, b, a, padlen = -1L, padtype = "constant", use_zi = T
 #'   DC (mean) component (default = true).
 #'
 #' @return A 4D filtered NIfTI image as a niftiImage or internalImage object.
+#'   Integer inputs are converted to double precision for processing. Saved files
+#'   preserve the input storage datatype, with slope and intercept recalculated
+#'   for the processed values. Integer output is quantized to the written header's scale; returned
+#'   values can therefore differ from reread values.
 #'
 #' @keywords internal
 butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE, padtype = "even", padlen = -1L, use_zi = TRUE, demean = TRUE) {
@@ -160,7 +164,7 @@ butterworth_filter_cpp <- function(infile, b, a, outfile = "", internal = FALSE,
 #' @examples
 #' \dontrun{
 #'   # In Rscript or R console
-#'   input <- readline_safe("Enter your name: ")
+#'   input <- getline("Enter your name: ")
 #'   if (!is.null(input)) cat("Hello,", input, "!\n")
 #' }
 #'
@@ -191,6 +195,8 @@ getline <- function(prompt) {
 #' - For 4D images, the mask (if used) is applied identically to all volumes.
 #' - Quantile calculation uses partial sorting for performance (via \code{std::nth_element}).
 #' - Throws an error if no voxels are valid after masking or zero exclusion.
+#' - Retained voxels must be finite; missing or infinite image values cause an
+#'   error. Non-finite values outside the supplied mask are ignored.
 #'
 #' @examples
 #' \dontrun{
@@ -227,24 +233,29 @@ image_quantile <- function(in_file, brain_mask = NULL, quantiles = as.numeric( c
 #'   preserve_mean = FALSE, set_mean = 0, regress_cols = NULL,
 #'   exclusive = FALSE)
 #' @param infile Path to a 4D NIfTI image file to denoise (e.g., functional data).
-#' @param X A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
+#' @param X A finite numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 #'          Typically includes motion parameters, physiological noise, etc.
 #' @param include_rows Optional logical vector identifying the timepoints used when estimating the model
-#'          (e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}; when \code{NULL}, all timepoints are used.
+#'          (e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}
+#'          and contain no missing values; when \code{NULL}, all timepoints are used.
 #' @param add_intercept Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.
 #' @param outfile Optional path to write the output residuals image. If empty, no file is written.
 #' @param internal Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.
 #' @param preserve_mean Logical; if \code{TRUE}, recenter each output time
-#'   series to the input mean over the rows used for fitting. Constant time
-#'   series are therefore left unchanged.
-#' @param set_mean Optional numeric value; if specified, all residual time series will be shifted to have this mean
-#'        (default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.
+#'   series to the input mean over the rows used for fitting.
+#' @param set_mean Finite numeric value. A non-zero value recenters residuals
+#'   to this mean over the fitted rows. The default, 0, leaves the regression
+#'   residuals unchanged. Ignored when \code{preserve_mean = TRUE}.
 #' @param regress_cols Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.
 #'        When omitted, all non-constant columns are removed unless \code{exclusive = TRUE}.
 #' @param exclusive Logical; if \code{TRUE}, only the columns listed in \code{regress_cols} (and an intercept, if present)
 #'        are used to estimate the model. This allows for partial regression that preserves other effects.
 #'
 #' @return A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
+#'   Integer inputs are converted to double precision for processing. Saved files
+#'   preserve the input storage datatype, with slope and intercept recalculated
+#'   for the processed values. Integer output is quantized to the written header's scale; returned
+#'   values can therefore differ from reread values.
 #' @export
 #'
 #' @examples
@@ -321,7 +332,7 @@ menu_safe <- function(choices, title = NULL) {
 #'   outfile = "", internal = FALSE)
 #' @param infile Character string. Path to the input 4D NIfTI file (e.g., BOLD fMRI data).
 #' @param t_interpolate Integer vector (1-based). Specifies the timepoints (TRs) to interpolate.
-#'        Timepoints outside the valid range `[1, T]` are ignored with a warning.
+#'        Timepoints outside the valid range `[1, T]` cause an error.
 #' @param edge_nn Logical. If \code{TRUE}, extrapolated values at the edges of the time series
 #'        are filled in using nearest-neighbor extrapolation instead of cubic splines.
 #' @param outfile Character string (optional). If provided, the interpolated image will
@@ -336,7 +347,12 @@ menu_safe <- function(choices, title = NULL) {
 #'         with interpolated values inserted at the specified timepoints.
 #'
 #' @details The interpolation is voxelwise and assumes column-major order. If a voxel time series
-#' has fewer than three valid (non-interpolated) timepoints, or is constant across time, it is skipped.
+#' has fewer than three valid (non-interpolated) timepoints, an error is raised.
+#' Constant retained time series are filled with their retained value at the
+#' requested timepoints. Integer input is converted to double precision for
+#' processing. Saved files preserve the input storage datatype, with slope and
+#' intercept recalculated for the processed values. Integer output is quantized to the written
+#' header's scale; returned values can therefore differ from reread values.
 #' Linear extrapolation is used for timepoints outside the valid range if \code{edge_nn = FALSE}, matching
 #' R's `splinefun` approach with natural splines. If \code{edge_nn = TRUE}, nearest-neighbor extrapolation
 #' is used for interpolation timepoints at the beginning or end of the timeseries, potentially reducing
@@ -373,7 +389,7 @@ natural_spline_4d <- function(infile, t_interpolate, edge_nn = FALSE, outfile = 
 #'
 #' @param x A numeric vector of strictly increasing x-values (time or position).
 #' @param y A numeric vector of y-values at each x (same length as x).
-#' @param xout A numeric vector of points at which to interpolate.
+#' @param xout A finite numeric vector of points at which to interpolate.
 #'
 #' @return A numeric vector of interpolated y-values at each point in `xout`.
 #'

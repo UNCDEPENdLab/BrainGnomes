@@ -86,6 +86,7 @@ read_job_submission_attempts <- function(sqlite_db) {
   if (!checkmate::test_file_exists(sqlite_db)) return(data.frame())
   con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, flags = RSQLite::SQLITE_RO, synchronous = NULL)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+  RSQLite::sqliteSetBusyHandler(con, 10000L)
   if (!DBI::dbExistsTable(con, "job_submission_attempts")) return(data.frame())
   DBI::dbGetQuery(con, "SELECT * FROM job_submission_attempts ORDER BY prepared_at, rowid")
 }

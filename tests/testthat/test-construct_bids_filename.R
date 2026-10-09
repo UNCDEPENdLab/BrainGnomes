@@ -147,3 +147,14 @@ test_that("get_fmriprep_outputs resolves cohort-qualified bold and non-spatial d
   expect_path_identical(outputs$melodic_mix, melodic_mix)
   expect_identical(outputs$prefix, "sub-03_task-emo1_dir-AP_run-02")
 })
+test_that("BIDS parsing requires complete entities and preserves resolution labels", {
+  file <- "sub-01_task-rest_res-iso2mm_desc-preproc_bold.nii.gz"
+  parsed <- extract_bids_info(file)
+  expect_identical(parsed$resolution, "iso2mm")
+  expect_identical(construct_bids_filename(parsed), file)
+  parsed <- extract_bids_info("prefixsub-01_task-rest_extra-space-MNI_bold.nii.gz")
+  expect_true(is.na(parsed$subject))
+  expect_true(is.na(parsed$space))
+  expect_error(extract_bids_info(NA_character_), "filenames")
+  expect_error(extract_bids_info(""), "filenames")
+})

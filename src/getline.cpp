@@ -3,6 +3,7 @@
 #include <string>
 
 #ifdef _WIN32
+  #include <io.h>
   // Windows does not support termios or raw mode input
   #define POSIX_TERMINAL_SUPPORT 0
 #else
@@ -22,13 +23,12 @@ class TermiosGuard {
   
   void activate() {
     if (isatty(STDIN_FILENO)) {
-      tcgetattr(STDIN_FILENO, &oldt);
+      if (tcgetattr(STDIN_FILENO, &oldt) != 0) return;
       struct termios newt = oldt;
       // turn off canonical mode and echoing to terminal
       newt.c_lflag &= ~(ICANON | ECHO);
       //newt.c_lflag &= ~(ICANON);
-      tcsetattr(STDIN_FILENO, TCSANOW, &newt);
-      active = true;
+      active = (tcsetattr(STDIN_FILENO, TCSANOW, &newt) == 0);
     }
   }
   
@@ -66,7 +66,7 @@ class TermiosGuard {
 //' @examples
 //' \dontrun{
 //'   # In Rscript or R console
-//'   input <- readline_safe("Enter your name: ")
+//'   input <- getline("Enter your name: ")
 //'   if (!is.null(input)) cat("Hello,", input, "!\n")
 //' }
 //'
@@ -107,9 +107,9 @@ SEXP getline(std::string prompt) {
       
       ch = getchar();
       
-      if (ch == 27 || ch == EOF) {  // ESC or EOF
+      if (ch == 27 || ch == 4 || ch == EOF) {  // ESC, Ctrl+D, or EOF
         Rcpp::Rcout << std::endl;
-        return Rcpp::wrap(""); // return empty string on esc
+        return R_NilValue;
       } else if (ch == '\n' || ch == '\r') {
         break;
       } else if (ch == 127 || ch == 8) {  // Backspace
@@ -124,7 +124,7 @@ SEXP getline(std::string prompt) {
     }
   } catch (...) {
     Rcpp::Rcout << std::endl;
-    return R_NilValue; // only null on some sort of failure
+    throw; // Preserve interrupts and errors; the guard restores the terminal.
   }
   
   Rcpp::Rcout << std::endl; // make sure a newline is output prior to return
@@ -132,9 +132,10 @@ SEXP getline(std::string prompt) {
 
 #else
   // Windows fallback
+  if (!_isatty(_fileno(stdin))) return R_NilValue;
   Rcpp::Rcout << prompt << std::flush;
   std::string input;
-  std::getline(std::cin, input);
+  if (!std::getline(std::cin, input)) return R_NilValue;
   return Rcpp::wrap(input);
 #endif
 }

@@ -7,7 +7,7 @@
 #define RNIFTI_NIFTILIB_VERSION 2
 //#include "Rcpp.h"
 #include <RcppArmadillo.h>
-#include "RNifti.h"
+#include "rnifti_quiet.h"
 
 //#include "RNiftiAPI.h" // cannot be included in overall .h
 using namespace Rcpp;

@@ -30,7 +30,7 @@
 void remove_nifti_volumes(std::string infile, const std::vector<int>& remove_tpts, std::string outfile) {
   RNifti::NiftiImage image(infile, false); // don't read data
   
-  if (image.dim().size() < 4 || image.dim()[3] <= 1) {
+  if (image.dim().size() != 4 || image.dim()[3] <= 1) {
     stop("Input image must be 4D.");
   }
   

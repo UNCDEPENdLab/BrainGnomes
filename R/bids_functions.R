@@ -25,7 +25,8 @@
 #' @importFrom checkmate assert_character
 #' @export
 extract_bids_info <- function(filenames, drop_unused=FALSE) {
-  checkmate::assert_character(filenames)
+  checkmate::assert_character(filenames, any.missing = FALSE, min.chars = 1L)
+  checkmate::assert_flag(drop_unused)
   directories <- dirname(filenames) # include directory in returned data.frame for reconstructing absolute paths
   filenames <- basename(filenames) # work with filenames only to avoid matching on path components
 
@@ -43,7 +44,7 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
     hemisphere = "hemi-([a-zA-Z0-9]+)",
     space = "space-([a-zA-Z0-9]+)",
     cohort = "cohort-([a-zA-Z0-9]+)",
-    resolution = "res-(\\d+)",
+    resolution = "res-([a-zA-Z0-9]+)",
     description = "desc-([a-zA-Z0-9]+)",
     fieldmap = "fmap-([a-zA-Z0-9]+)"
   )
@@ -58,7 +59,10 @@ extract_bids_info <- function(filenames, drop_unused=FALSE) {
   
   # Function to extract an entity from a filename
   extract_entity <- function(filename, pattern) {
-    match <- regmatches(filename, regexpr(pattern, filename))
+    # Entities must occupy a complete filename component. Substrings inside
+    # descriptions (e.g., desc-presub01) must not invent a subject or space.
+    pattern <- paste0("(?:^|_)", pattern, "(?=_|\\.|$)")
+    match <- regmatches(filename, regexpr(pattern, filename, perl = TRUE))
     if (length(match) > 0) {
       return(sub(".*-", "", match))  # Extract value after the last "-"
     } else {

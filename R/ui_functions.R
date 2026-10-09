@@ -24,6 +24,7 @@ read_multiline_input <- function(instruct=NULL, prompt="> ", n_blank=1, collapse
   
   repeat {
     line <- getline(prompt)
+    if (is.null(line)) break
     
     if (nchar(trimws(line)) == 0) {
       empty_count <- empty_count + 1
@@ -98,10 +99,10 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       if (!has_args) break # don't require confirmation on first entry of arguments
     } else if (choice == "2") {
       idx <- as.integer(getline("Enter argument number to edit: "))
-      if (!is.na(idx) && idx >= 1 && idx <= length(args)) {
+      if (length(idx) == 1L && !is.na(idx) && idx >= 1 && idx <= length(args)) {
         current_val <- args[idx]
         new_val <- getline(sprintf("New value for [%s] (press Enter to keep): ", current_val))
-        if (nzchar(new_val)) {
+        if (!is.null(new_val) && nzchar(new_val)) {
           args[idx] <- new_val
         } else {
           cat("Keeping existing value.\n")
@@ -112,7 +113,7 @@ build_cli_args <- function(args=NULL, prompt="> ", instruct = "Enter arguments (
       
     } else if (choice == "3") {
       idx <- as.integer(getline("Enter argument number to delete: "))
-      if (!is.na(idx) && idx >= 1 && idx <= length(args)) {
+      if (length(idx) == 1L && !is.na(idx) && idx >= 1 && idx <= length(args)) {
         args <- args[-idx]
       } else {
         cat("Invalid index.\n")
@@ -298,6 +299,7 @@ cli_numbered_values <- function(title, values, empty = "none") {
 #' @details The function will keep prompting the user until a valid input is provided. 
 #'   It displays instructions and enforces constraints (e.g., value range, length, uniqueness). 
 #'   When `empty_keyword` is supplied and `default` is non-`NULL` with `required = FALSE`, typing the token (case-insensitive) returns a missing value for the given `type` without accepting the default.
+#'   Cancelling terminal input raises an error so the guided workflow stops.
 #' 
 #' @note This function works in an interactive R session or in `Rscript` when
 #'   standard input is attached to a TTY. It intentionally rejects headless
@@ -452,6 +454,7 @@ prompt_input <- function(prompt = "", prompt_eol=">", instruct = NULL, heading =
   while (is.na(res[1L]) || res[1L] == "") {
     #r <- readline(prompt)
     r <- getline(prompt)
+    if (is.null(r)) stop("Input cancelled.", call. = FALSE)
 
     # handle skip-out on empty_keyword
     if (show_empty_hint && !is.null(empty_keyword_lookup)) {
@@ -722,6 +725,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
         selected_template <- select_list_safe(templates_available, multiple = FALSE, title = "Choose a template")
         if (selected_template != "") {
           res_input <- getline(paste0("Enter resolution index for ", selected_template, " (or press ENTER to skip): "))
+          if (is.null(res_input)) break
           space_string <- if (res_input == "") {
             selected_template
           } else {
@@ -741,7 +745,7 @@ choose_fmriprep_spaces <- function(output_spaces = NULL) {
         del_choice <- select_list_safe(current_spaces, multiple = TRUE, title = "Select space(s) to remove:")
         current_spaces <- setdiff(current_spaces, del_choice)
       }
-    } else if (choice == 3) {
+    } else if (choice %in% c(0L, 3L)) {
       break
     }
   }

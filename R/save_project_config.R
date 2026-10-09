@@ -84,7 +84,8 @@ save_project_config <- function(scfg, file = NULL) {
 #' @param path Internal parameter to track the location within the nested structure (used recursively).
 #' @param max_diffs Maximum number of differences to report (default: 20).
 #'
-#' @return Invisibly returns \code{TRUE} if no differences are found; otherwise \code{FALSE}.
+#' @return A list of human-readable differences, invisibly. Empty if the
+#'   inputs are identical.
 #' @keywords internal
 compare_lists <- function(old, new, path = "", max_diffs = 100) {
   differences <- list()
@@ -95,7 +96,10 @@ compare_lists <- function(old, new, path = "", max_diffs = 100) {
     }
 
     # If both are lists, compare their keys recursively
-    if (is.list(old) && is.list(new)) {
+    if (is.list(old) && is.list(new) &&
+        !is.null(names(old)) && !is.null(names(new)) &&
+        all(nzchar(names(old))) && all(nzchar(names(new))) &&
+        !anyDuplicated(names(old)) && !anyDuplicated(names(new))) {
       all_keys <- union(names(old), names(new))
 
       for (k in all_keys) {

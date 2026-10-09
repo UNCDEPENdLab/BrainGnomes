@@ -66,6 +66,7 @@ get_nested_values <- function(lst, key_strings, sep = "/", simplify = TRUE) {
 #' @keywords internal
 set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = TRUE) {
   checkmate::assert_string(sep)
+  if (!nzchar(sep)) stop("sep must not be empty.", call. = FALSE)
   checkmate::assert_flag(type_values)
   checkmate::assert_list(lst, null.ok = TRUE)
   if (is.null(lst)) lst <- list()
@@ -73,20 +74,15 @@ set_nested_values <- function(assignments, sep = "/", lst = NULL, type_values = 
   # handle character vector input
   if (is.character(assignments)) {
     for (a in assignments) {
-      parts <- strsplit(a, "=", fixed = TRUE)[[1]]
-      if (length(parts) < 2L) stop("Invalid assignment format: ", a)
-      key_str <- parts[1]
-      if (length(parts) > 2L) {
-        # if additional equal signs are present, treat everything after the first as the value
-        val_str <- paste(parts[-1], collapse = "=")
-      } else {
-        val_str <- parts[2]
-      }
+      equal_pos <- regexpr("=", a, fixed = TRUE)[1L]
+      if (is.na(equal_pos) || equal_pos < 2L) stop("Invalid assignment format: ", a)
+      key_str <- substr(a, 1L, equal_pos - 1L)
+      val_str <- substring(a, equal_pos + 1L)
 
       keys <- strsplit(key_str, sep, fixed = TRUE)[[1]]
 
-      value <- scan(text = val_str, what = character(), quote = "'\"", quiet = TRUE)
-      if (type_values) value <- if (!is.na(value[1L]) && value[1L] == "NULL") NULL else type.convert(value, as.is = TRUE) # type.convert won't convert NULL
+      value <- if (nzchar(val_str)) scan(text = val_str, what = character(), quote = "'\"", quiet = TRUE) else ""
+      if (type_values && !identical(value, "")) value <- if (!is.na(value[1L]) && value[1L] == "NULL") NULL else type.convert(value, as.is = TRUE) # type.convert won't convert NULL
 
       nested <- value
       for (key in rev(keys)) {
@@ -198,6 +194,55 @@ parse_cli_args <- function(args, sep = "/", type_values = TRUE) {
   set_nested_values(assignments, sep = sep, type_values = type_values)
 }
 
+#' Preserve literal shell path arguments while parsing worker and CLI options
+#'
+#' @param args Argument vector from `commandArgs(trailingOnly = TRUE)`.
+#' @param path_keys Option keys whose values are scalar filesystem paths.
+#' @param type_values Whether to convert other option values to inferred types.
+#' @return Parsed nested options, with path whitespace and quotes preserved.
+#' @details Generated option blocks can still carry explicit quotes for the
+#'   text parser. Literal shell paths are replaced with temporary tokens before
+#'   parsing, then restored without scanning or type conversion.
+#' @noRd
+parse_cli_path_args <- function(args, path_keys = c(
+    "input", "config_yaml", "output_dir", "out_dir", "fsl_img", "sqlite_db",
+    "output_manifest_file", "job_manifest_path", "stdout_log", "stderr_log",
+    "contract_directory", "script", "sub_id", "ses_id"), type_values = TRUE) {
+  checkmate::assert_character(args, any.missing = FALSE)
+  paths <- list()
+  i <- 1L
+  while (i <= length(args)) {
+    option <- sub("^--?", "", args[i])
+    equal <- regexpr("=", option, fixed = TRUE)[1L]
+    key <- if (equal > 0L) substr(option, 1L, equal - 1L) else option
+    if (grepl("^--?", args[i]) && key %in% path_keys) {
+      has_value <- equal > 0L || (i < length(args) && !grepl("^--?", args[i + 1L]))
+      if (has_value) {
+        value <- if (equal > 0L) substring(option, equal + 1L) else args[i + 1L]
+        # Explicit quote delimiters come from nested_list_to_args(), whose
+        # blocks may be split by Bash expansion and reassembled by the parser.
+        if (!grepl("^['\"]", value)) {
+          token <- paste0("BG_PATH_", gsub("-", "", uuid::UUIDgenerate()))
+          paths[[token]] <- value
+          args[i] <- paste0("--", key, "=", token)
+          if (equal < 0L) args <- args[-(i + 1L)]
+        }
+      }
+    }
+    i <- i + 1L
+  }
+  # Restore only exact generated tokens; other values retain the established
+  # vector and type-conversion behavior of parse_cli_args().
+  restore_paths <- function(value) {
+    if (is.list(value)) return(lapply(value, restore_paths))
+    if (is.character(value) && length(value) == 1L && value %in% names(paths)) {
+      return(paths[[value]])
+    }
+    value
+  }
+  restore_paths(parse_cli_args(args, type_values = type_values))
+}
+
 
 # Translate the public command-line options into run_project() arguments.
 # Keeping this adapter in the package makes the installed CLI behavior directly
@@ -280,16 +325,18 @@ args_to_df <- function(arg_vec = NULL) {
 
       if (grepl("=", token_naked, fixed = TRUE)) {
         has_equals <- TRUE
-        parts <- strsplit(token_naked, "=", fixed = TRUE)[[1]]
-        lhs <- parts[1]
-        rhs_vals <- if (length(parts) > 1) paste(parts[-1], collapse = "=") else ""
+        equal_pos <- regexpr("=", token_naked, fixed = TRUE)[1L]
+        lhs <- substr(token_naked, 1L, equal_pos - 1L)
+        rhs_vals <- substring(token_naked, equal_pos + 1L)
       } else {
         has_equals <- FALSE
         lhs <- token_naked
         rhs_vals <- character(0)
       }
 
-      while (j + 1 <= length(tokens) && !grepl("^\\s*-", tokens[j + 1])) {
+      # Negative numbers belong to the current value, rather than opening a
+      # new option (e.g., --offsets=-1 0 1 or --cutoff -0.5).
+      while (j + 1 <= length(tokens) && !grepl("^--?[^0-9.]", tokens[j + 1])) {
         rhs_vals <- c(rhs_vals, tokens[j + 1])
         j <- j + 1
       }

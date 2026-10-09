@@ -31,8 +31,9 @@
     return(.empty_tracked_jobs())
   }
 
-  con <- DBI::dbConnect(RSQLite::SQLite(), db)
+  con <- DBI::dbConnect(RSQLite::SQLite(), db, synchronous = NULL)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+  RSQLite::sqliteSetBusyHandler(con, 10000L)
   query <- "SELECT * FROM job_tracking WHERE sequence_id IS NOT NULL"
   params <- NULL
   if (!is.null(run_id)) {

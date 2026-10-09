@@ -94,6 +94,32 @@ test_that("current-directory CLI runs retain first options, aliases, and explici
     "json")
 })
 
+test_that("CLI plan output paths preserve shell quoting and whitespace", {
+  cfg <- make_json_cli_project()
+  file <- file.path(cfg$metadata$project_directory, "user's  saved plan.yaml")
+  for (option in list(c("--output", file), paste0("--output=", file))) {
+    result <- run_brain_gnomes_cli(c("plan", cfg$metadata$project_directory,
+      "--steps=fmriprep", option, "--overwrite", "--format=json"))
+    expect_identical(result$status, 0L, info = paste(result$stderr, collapse = "\n"))
+    expect_true(file.exists(file))
+    expect_s3_class(read_project_plan(file), "bg_project_plan")
+  }
+})
+
+test_that("CLI identifiers retain leading zeros and invalid flags fail clearly", {
+  cfg <- make_json_cli_project()
+  result <- run_brain_gnomes_cli(c("plan", cfg$metadata$project_directory,
+    "--steps=fmriprep", "--subject-filter=01", "--format=json"))
+  expect_identical(result$status, 0L, info = paste(result$stderr, collapse = "\n"))
+  parsed <- jsonlite::fromJSON(paste(result$stdout, collapse = "\n"))
+  expect_identical(parsed$request$subject_filter, "01")
+  expect_identical(parsed$subjects$sub_id, "01")
+  result <- run_brain_gnomes_cli(c("plan", cfg$metadata$project_directory,
+    "--steps=fmriprep", "--force=maybe", "--format=json"))
+  expect_identical(result$status, 2L)
+  expect_match(paste(result$stderr, collapse = "\n"), "--force must be TRUE or FALSE", fixed = TRUE)
+})
+
 test_that("hidden inspect aliases return the status synopsis", {
   cfg <- make_json_cli_project()
   root <- cfg$metadata$project_directory

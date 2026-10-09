@@ -34,7 +34,7 @@ via Escape or EOF. Ctrl+C will terminate the process as usual.
 \examples{
 \dontrun{
   # In Rscript or R console
-  input <- readline_safe("Enter your name: ")
+  input <- getline("Enter your name: ")
   if (!is.null(input)) cat("Hello,", input, "!\n")
 }
 

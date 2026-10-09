@@ -1,7 +1,7 @@
 ---
 title: "Postprocessing Walkthrough"
 author: "Michael Hallquist"
-date: "04 Oct 2026"
+date: "09 Oct 2026"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Postprocessing Walkthrough}
@@ -81,7 +81,7 @@ entered into this postprocessing stream. Instead of writing a full regular expre
 BIDS entity-value pairs that are converted to a regex at runtime. For
 example:
 
-```r
+```text
 desc:preproc task:ridl suffix:bold
 ```
 
@@ -90,8 +90,8 @@ suffix, producing `".*task-ridl(_[^_]+)*_desc-preproc(_[^_]+)*_bold\\.nii(\\.gz)
 
 To provide a custom regular expression, prefix it with `regex:`:
 
-```r
-regex: .*task-rest.*preproc.*\.nii\.gz$
+```text
+regex: .*_task-rest(_[^_]+)*_desc-preproc_bold\.nii\.gz$
 ```
 
 This pattern matches any file containing `task-rest` and ending in
@@ -101,7 +101,7 @@ task-based data using a different expression.
 ## Output naming with `bids_desc`
 
 Every postprocessing stream is also defined by a [BIDS description field](https://bids-specification.readthedocs.io/en/stable/derivatives/common-data-types.html#preprocessed-or-cleaned-data).
-This field (`bids_desc`) is used to label of every postprocessed for the stream. For example, if the input filename is
+This field (`bids_desc`) labels every final postprocessed image in the stream. For example, if the input filename is
 
 ```
 sub-01_task-rest_run-1_space-MNI152NLin2009cAsym_desc-preproc_bold.nii.gz
@@ -177,8 +177,10 @@ When ICA‑AROMA outputs are available, you can regress out the noise components
 Building on the original papers (Pruim et al., 2015), we recommend 'nonaggressive' removal, which
 only removes the variance in 'noise' components that is not correlated with signal components 
 (i.e., partial effects in multiple regression). As detailed below, if AROMA is applied to the fMRI data,
-the components will also be regressed out of any confounds. Note that as of 8Aug2025, only nonaggressive
-denoising is supported, regardless of how you respond to the prompts.
+the selected noise components are also removed from processed confounds. Both
+nonaggressive and aggressive denoising are supported: `apply_aroma$nonaggressive`
+selects partial regression when `TRUE` and full removal of the noise-component
+effects when `FALSE`. Unprocessed confounds in `noproc_columns` are retained.
 
 ```
 ------------------------------------------------------------------------------------------------------------------------
@@ -209,25 +211,34 @@ people often bandpass filter.
 We support both fslmaths -bptf and a Butterworth temporal filter. The former is more common for task-based fMRI and 
 the latter with resting-state fMRI. If filtering is enabled, you will be asked to choose between these filtering methods.
 
-Per FSL's documentation, -bptf uses a local fit of a straight line (Gaussian-weighted within the line to
-give a smooth response) to remove low frequency artifacts. This is preferable to sharp rolloff FIR-based filtering
-as it does not introduce autocorrelations into the data. These 'ringing artifacts' can induce negative autocorrelations, 
-which interfere with GLM software that correects for autocorrelation (e.g., Tukey tapering in FSL feat).
-Low-pass temporal filtering reduces high frequency noise by Gaussian smoothing, but also reduces the strength of the signal of interest, particularly for single-event experiments.
+FSL's `-bptf` high-pass filter removes a Gaussian-weighted local linear trend;
+its low-pass filter uses Gaussian smoothing over time. Both filtering methods
+can change temporal autocorrelation. Choose the cutoffs and method to suit the
+acquisition and downstream model, and record them consistently across runs.
 
 Butterworth filtering is a common temporal filtering technique used in fMRI postprocessing to attenuate low-frequency drifts and/or high-frequency noise while preserving the passband signal with minimal distortion. Unlike sharp cutoff filters, the Butterworth filter has a maximally flat frequency response in the passband, making it well-suited for applications requiring smooth transitions. In fMRI, it is typically applied as a band-pass or high-pass filter to remove slow scanner drifts and physiological noise outside the frequency range of interest (e.g., 0.01–0.1 Hz for resting-state analyses). To avoid phase distortion, BrainGnomes applies the filter bidirectionally (i.e., using forward and reverse passes). BrainGnomes also uses a second-order Butterworth filter, which has a good balance between frequency precision and smooth
 rolloff (higher orders give more precise frequency control at the edges, but have bigger risks of artifacts).
 
-One of the virtues of FSL's Gaussian line smoothing approach is that it has a very gradual rolloff. That said, the frequency response is broad and not sharply defined, which can lead to partial attenuation of signals near cutoff (e.g., if your upper cutoff is .10 Hz, you might still
-see attenuation at .09 Hz). The Butterworth filter will have more precise control over the frequencies retained in the data but may
-have a slightly higher risk of messing up the autocorrelation structure (due to ringing).
+FSL's Gaussian-weighted filtering has a gradual frequency response. Butterworth
+filtering offers a more defined passband, but neither method makes frequencies
+near the cutoff an exact keep/remove boundary. Inspect the resulting time
+series and use compatible temporal treatment for continuous confounds.
 
-Here is the order of prompts with example responses. Note that if you skip one of the cutoffs (press enter at the prompt), then that side
-of the filter will not be applied. For example, if you only enter a low-pass cutoff
+For example, a band-pass interval of 0.009–0.08 Hz uses 0.009 Hz as the
+**high-pass (lower)** cutoff and 0.08 Hz as the **low-pass (upper)** cutoff.
+The setup asks for the lower cutoff first:
 
-`Apply temporal filtering? > yes`
-`Low-pass cutoff (Hz) (Press enter to skip) > 0.009`
-`High-pass cutoff (Hz)  (Press enter to skip) > 0.08`
+```text
+Apply temporal filtering? > yes
+Lower cutoff / high-pass threshold (Hz) > 0.009
+Upper cutoff / low-pass threshold (Hz) > 0.08
+```
+
+Press Enter at either cutoff prompt to omit that side of the filter. Supplying
+only the lower cutoff gives high-pass filtering; supplying only the upper
+cutoff gives low-pass filtering. The lower cutoff cannot exceed the upper one.
+Both cutoffs must be appropriate for the run's TR.
+
 BrainGnomes presents the filtering implementations as a numbered menu. Select
 `FSL fslmaths -bptf` for Gaussian-weighted filtering or `Butterworth` for the
 bidirectional R-based filter; you do not need to type the internal method name.
@@ -459,8 +470,12 @@ file of nuisance regressors (motion parameters, CompCor components, DVARS,
 global signal, etc.) that may be filtered to match the BOLD data. Columns
 to include are selected with patterns that can contain regular expressions
 or numeric ranges inside angle brackets. For example
-`a_comp_cor_<1-6>` expands to `a_comp_cor_1` through `a_comp_cor_6` and a
-pattern like `^trans_` will match all six motion parameters. This expansion
+`a_comp_cor_<0-5>` expands to `a_comp_cor_00` through `a_comp_cor_05`,
+matching fMRIPrep's zero-based, zero-padded naming. The pattern
+`^(rot|trans)_[xyz]$` selects the six basic motion parameters; `^trans_.*`
+selects translation columns, including any matching derivatives or powers.
+Patterns are matched against whole column names, so include `.*` when a prefix
+should match arbitrary trailing text. This expansion
 is implemented in `expand_confound_columns()`.
 
 Standard motion-confound bundles can also be selected using shortcuts such as
@@ -521,19 +536,19 @@ regression; hand-written legacy configurations that explicitly request
 `framewise_displacement_unfiltered` remain supported.
 
 Confound selection accepts regular expressions and numeric ranges. For
-instance `^trans_` matches all six translational motion parameters and
-`a_comp_cor_<1-6>` expands to the first six CompCor components. Both
+instance `^(rot|trans)_[xyz]$` matches the six basic motion parameters and
+`a_comp_cor_<0-5>` selects the first six named CompCor columns when present. Both
 filtered and unfiltered sets may use these patterns, giving fine-grained
 control over nuisance regressors.
 
 `setup_confound_regression()` optionally performs voxelwise regression of
 these confounds. If scrubbing is enabled, the censor file written during
 `setup_scrubbing()` is passed to the regression step so that model fits are
-computed using only volumes marked as “good.”
+computed using only retained volumes (`1` in the censor file; `0` excludes a volume).
 The residuals are written to new NIfTI files with a chosen prefix.
-Because filtered confounds match the exact temporal treatment of the BOLD
-data, this regression step is safe from mismatch artifacts, similar to the
-strategy described in the xcp-d documentation.
+Processed confounds receive the enabled temporal treatment used for BOLD data.
+Keep binary spike regressors in `noproc_columns` so they retain their indicators
+rather than being filtered as continuous signals.
 
     
 ## Ordering Steps
@@ -542,7 +557,8 @@ Finally, `setup_postproc_steps()` determines the order in which enabled
 steps run. By default intensity normalisation follows masking and smoothing and
 precedes AROMA, optional scrubbing/interpolation, temporal filtering, and
 confound regression. You may override this order by answering “yes”
-to the prompt shown in the code below.
+to the processing-order prompt. The spatial-before-normalization and
+normalization-before-temporal boundaries still apply.
 
 # Running Postprocessing
 
@@ -553,16 +569,17 @@ postprocessing steps for each subject.
 run_project(scfg, steps = "postprocess")
 ```
 
-The processing log for each subject is written to the project’s `logs`
-folder, and the final postprocessed NIfTIs receive the BIDS description
-specified earlier.
+Processing logs are written under the configured `metadata$log_directory`.
+Final postprocessed NIfTIs receive the `bids_desc` selected for their stream.
 
 # Naming and use of intermediate files
 
-During the setup of postprocessing, you will be asked whether to keep intermediate files.
-Generally speaking, you should say 'no' since these files only have a subset of postprocessing
-steps applied to them (e.g., smoothed, but not temporally filtered). That said, if you'd like to
-inspect intermediate stages of processing, you acn 
+By default, `keep_intermediates = FALSE` keeps the final output and its
+associated confounds, censor, and provenance records, while removing temporary
+processing images. Set `keep_intermediates = TRUE` when you need to inspect
+individual steps; this can use substantially more disk space. Intermediate
+images contain only the operations completed at that point, so use the final
+`bids_desc` image for analyses requiring the full configured stream.
 
 # Summary
 

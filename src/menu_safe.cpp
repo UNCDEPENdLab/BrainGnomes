@@ -51,9 +51,9 @@ int menu_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title =
   bool is_interactive = Rcpp::as<bool>(interactive_func());
 
   if (is_interactive) {
-    Rcpp::Environment utils_env("package:utils");
+    Rcpp::Environment utils_env = Rcpp::Environment::namespace_env("utils");
     Rcpp::Function menu_func = utils_env["menu"];
-    return Rcpp::as<int>(menu_func(choices, title));
+    return Rcpp::as<int>(menu_func(choices, Rcpp::_["title"] = title, Rcpp::_["graphics"] = false));
   }
 
   // Non-interactive mode: emulate menu in TTY
@@ -80,10 +80,10 @@ int menu_safe(Rcpp::CharacterVector choices, Rcpp::Nullable<std::string> title =
 
   // Read line and validate
   while (true) {
-    std::getline(std::cin, input);
+    if (!std::getline(std::cin, input)) return 0;
 
     std::istringstream iss(input);
-    if ((iss >> selection) && (selection >= 0) && (selection <= choices.size())) {
+    if ((iss >> selection) && (selection >= 0) && (selection <= choices.size()) && (iss >> std::ws).eof()) {
       break;
     }
 

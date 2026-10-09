@@ -67,6 +67,7 @@ Obtain user input from the console
 The function will keep prompting the user until a valid input is provided.
 It displays instructions and enforces constraints (e.g., value range, length, uniqueness).
 When \code{empty_keyword} is supplied and \code{default} is non-\code{NULL} with \code{required = FALSE}, typing the token (case-insensitive) returns a missing value for the given \code{type} without accepting the default.
+Cancelling terminal input raises an error so the guided workflow stops.
 }
 \note{
 This function works in an interactive R session or in \code{Rscript} when

@@ -106,8 +106,8 @@ calculate_motion_outliers <- function(scfg = NULL,
 
   thresholds <- unique(as.numeric(thresholds))
   checkmate::assert_numeric(thresholds, any.missing = FALSE, lower = 0, min.len = 1L)
+  if (any(!is.finite(thresholds))) stop("thresholds must contain only finite values.", call. = FALSE)
 
-  include_filtered <- isTRUE(include_filtered)
   checkmate::assert_flag(include_filtered)
   rot_units <- match.arg(rot_units)
 

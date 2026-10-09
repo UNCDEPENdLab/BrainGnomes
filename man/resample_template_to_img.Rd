@@ -22,7 +22,8 @@ resample_template_to_img(
 
 \item{output}{Optional path to write the resampled image. If NULL, a BIDS-style filename is constructed.}
 
-\item{template_resolution}{Integer specifying the TemplateFlow resolution index (e.g., 1 = 1mm).}
+\item{template_resolution}{TemplateFlow resolution index. The index is
+template-specific and is not necessarily the voxel size in millimeters.}
 
 \item{suffix}{TemplateFlow suffix (e.g., "mask", "T1w").}
 

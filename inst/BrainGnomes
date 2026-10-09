@@ -27,11 +27,24 @@ is_flag <- function(x) {
 
 normalize_options <- function(args, allowed = character(), formats = c("table", "json")) {
   if (length(args) == 0L) return(list())
-  parsed <- BrainGnomes::parse_cli_args(args)
+  # Subject/session identifiers and stream names are text even when they look
+  # numeric. Infer types only for options whose interface requires them.
+  parsed <- BrainGnomes:::parse_cli_path_args(args, c("template", "output", "outfile"),
+    type_values = FALSE)
   names(parsed) <- gsub("-", "_", names(parsed), fixed = TRUE)
   unknown <- setdiff(names(parsed), allowed)
   if (length(unknown) > 0L) {
     usage_error(paste0("Unknown option(s): --", paste(gsub("_", "-", unknown), collapse = ", --")))
+  }
+  flag_options <- c("overwrite", "reuse_template_paths", "deep", "strict", "force",
+    "allow_invalid", "debug", "dry_run", "watch", "refresh", "runs", "summary",
+    "failed_only", "interactive", "include_blocked", "yes")
+  for (key in intersect(names(parsed), c(flag_options, "interval", "tail"))) {
+    value <- type.convert(parsed[[key]], as.is = TRUE)
+    if (key %in% flag_options && !checkmate::test_flag(value)) {
+      usage_error(paste0("--", gsub("_", "-", key), " must be TRUE or FALSE (or supplied without a value)."))
+    }
+    parsed[[key]] <- value
   }
   if (any(grepl("^--?format(=|$)", args))) {
     format <- tolower(as.character(parsed$format))

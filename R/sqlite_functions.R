@@ -260,6 +260,7 @@ sqlite_table_exists <- function(sqlite_db, table_name) {
   # Connect to database
   con <- DBI::dbConnect(RSQLite::SQLite(), sqlite_db, synchronous = NULL)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+  RSQLite::sqliteSetBusyHandler(con, 10000L)
   
   # Check if table exists
   exists <- DBI::dbExistsTable(con, table_name)

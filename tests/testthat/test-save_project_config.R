@@ -103,6 +103,29 @@ test_that("save_project_config delegates confirmed saves to the atomic writer", 
   expect_path_identical(attr(result, "yaml_file"), yaml_path)
 })
 
+test_that("configuration differences include unnamed and mixed-name lists", {
+  expect_length(compare_lists(list(a = list(1, 2)), list(a = list(1, 3))), 1L)
+  expect_length(compare_lists(list(a = list()), list(a = list(1))), 1L)
+  expect_length(compare_lists(list(a = list(1, 2)), list(a = list(1, 2))), 0L)
+  expect_length(compare_lists(list(a = list(1, named = 2)), list(a = list(3, named = 2))), 1L)
+
+  root <- tempfile("bg-list-save-")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE))
+  config <- structure(list(metadata = list(project_directory = root),
+    values = list(1, 2)), class = "bg_project_cfg")
+  config <- write_project_config(config)
+  config$values[[2]] <- 3
+  prompted <- FALSE
+  local_mocked_bindings(prompt_input = function(...) {
+    prompted <<- TRUE
+    TRUE
+  }, .package = "BrainGnomes")
+  save_project_config(config)
+  expect_true(prompted)
+  expect_equal(as.list(yaml::read_yaml(attr(config, "yaml_file"))$values), list(1, 3))
+})
+
 test_that("validate_char normalizes blank fmriprep output_spaces to NULL", {
   # Normalization now happens via validate_char (called in validate_project and
 

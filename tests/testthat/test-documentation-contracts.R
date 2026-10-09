@@ -122,7 +122,16 @@ test_that("Quickstart renders CLI help from the installed command", {
     )
   }
   expect_true(nzchar(flow_path) && file.exists(flow_path))
-  expect_match(quickstart_text, '"extdata", "braingnomes_flow.png"', fixed = TRUE)
+  article_flow_path <- file.path(
+    dirname(quickstart_path), "braingnomes_flow.png"
+  )
+  if (dir.exists(testthat::test_path("..", "..", "vignettes"))) {
+    expect_true(file.exists(article_flow_path))
+    expect_identical(
+      unname(tools::md5sum(article_flow_path)), unname(tools::md5sum(flow_path))
+    )
+  }
+  expect_match(quickstart_text, 'flow_png <- "braingnomes_flow.png"', fixed = TRUE)
   expect_match(quickstart_text, 'fig.alt="BrainGnomes pipeline flow"', fixed = TRUE)
 
   optional_heading <- regexpr(
@@ -165,7 +174,7 @@ test_that("Quickstart renders CLI help from the installed command", {
   expect_match(quickstart_text, "include_blocked = TRUE", fixed = TRUE)
   expect_match(
     quickstart_text,
-    "BrainGnomes retry /project/my_study --run=<run-id> --yes",
+    'BrainGnomes retry /project/my_study --run="$run_id" --yes',
     fixed = TRUE
   )
   expect_match(
@@ -202,7 +211,7 @@ test_that("applied-user recovery documentation explains safe run-based actions",
     "retry_run <- retry_project_run(scfg, run_id, dry_run = FALSE)",
     "include_blocked = TRUE",
     "# Cancel work that is still active",
-    "BrainGnomes retry /project/my_study --run=<run-id> --yes"
+    'BrainGnomes retry /project/my_study --run="$run_id" --yes'
   )
   for (guidance in expected_guidance) {
     expect_match(diagnosis_text, guidance, fixed = TRUE)

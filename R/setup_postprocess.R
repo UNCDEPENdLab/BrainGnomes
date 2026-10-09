@@ -876,10 +876,10 @@ setup_confound_regression <- function(ppcfg = list(), fields = NULL) {
 
       You can specify two types of confound regressors:
         - Filtered regressors: continuous-valued (e.g., a_comp_cor_.*, DVARS, global signal)
-        - Unfiltered regressors: discrete-valued (e.g., motion_outlier.**) that should not be filtered
+        - Unfiltered regressors: discrete-valued (e.g., motion_outlier.*) that should not be filtered
 
-      The specification can be a regular expression (e.g., a_comp_cor_[0-9+]) or a numeric range using
-      a syntax like a_comp_cor_<1-10> or a subset like a_comp_cor_<1,2,5>. These will then be expanded
+      The specification can be a regular expression (e.g., a_comp_cor_[0-9]+) or a numeric range using
+      a syntax like a_comp_cor_<0-9> or a subset like a_comp_cor_<0,1,4>. These will then be expanded
       to encompass the matching nuisance regressors (e.g., the first 10 aCompCor components).
 
       If scrubbing is enabled, confound regression fits are based only on the good timepoints.
@@ -1200,8 +1200,9 @@ setup_motion_filter <- function(ppcfg = list(), fields = NULL) {
 #' task-based modeling to account for noise without directly altering the fMRI data.
 #'
 #' Confounds can be filtered (e.g., with the same temporal filter as applied to fMRI data) or left unfiltered.
-#' Filtered regressors should typically include continuous-valued signals (e.g., a_comp_cor_*, global signal), while
-#' spike regressors or discrete values (e.g., motion_outlier*) should not be filtered.
+#' Filtered regressors should typically include continuous-valued signals
+#' (e.g., `a_comp_cor_.*`, global signal), while
+#' spike regressors or discrete values (e.g., `motion_outlier.*`) should not be filtered.
 #'
 #' This function only generates the confound regressors file. Actual regression is handled separately.
 #'
@@ -1221,11 +1222,11 @@ setup_confound_calculate <- function(ppcfg = list(), fields = NULL) {
       statistical analyses (e.g., voxelwise GLMs).
 
       You can specify two types of confound regressors:
-        - Filtered regressors: typically continuous-valued signals derived from fMRI (e.g., DVARS, a_comp_cor_*, global signal)
-        - Unfiltered regressors: typically discrete-valued indicators (e.g., motion_outlier*) that should not be filtered
+        - Filtered regressors: typically continuous-valued signals derived from fMRI (e.g., DVARS, a_comp_cor_.*, global signal)
+        - Unfiltered regressors: typically discrete-valued indicators (e.g., motion_outlier.*) that should not be filtered
 
-      The specification can be a regular expression (e.g., a_comp_cor_[0-9+]) or a numeric range using
-      a syntax like a_comp_cor_<1-10> or a subset like a_comp_cor_<1,2,5>. These will then be expanded
+      The specification can be a regular expression (e.g., a_comp_cor_[0-9]+) or a numeric range using
+      a syntax like a_comp_cor_<0-9> or a subset like a_comp_cor_<0,1,4>. These will then be expanded
       to encompass the matching confound regressors (e.g., the first 10 aCompCor components).
 
       Do you want to create a confound file in postprocessing?\n

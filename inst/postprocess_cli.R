@@ -62,7 +62,7 @@ if (nzchar(log_level_env)) {
 # ), collapse = " ")
 
 # parse CLI inputs into a nested list, if relevant
-cli_args <- parse_cli_args(args)
+cli_args <- BrainGnomes:::parse_cli_path_args(args)
 
 if (!is.null(cli_args$config_yaml)) {
   checkmate::assert_file_exists(cli_args$config_yaml)

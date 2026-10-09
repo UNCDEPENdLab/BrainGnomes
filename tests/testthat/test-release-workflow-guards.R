@@ -39,6 +39,27 @@ test_that("explicit run choices survive guided R and CLI stage selection", {
   expect_identical(prompts, rep("Run fmriprep?", 2L))
 })
 
+test_that("cancelling guided stream selection stops before submission", {
+  cfg <- make_guard_project()
+  cfg$fmriprep$enable <- FALSE
+  cfg$mriqc$enable <- FALSE
+  local_mocked_bindings(
+    prompt_input = function(...) TRUE,
+    cluster_job_submit = function(...) stop("Unexpected scheduler submission"),
+    .package = "BrainGnomes"
+  )
+  for (stage in c("postprocess", "extract_rois")) {
+    for (cancelled in list(character(), "")) {
+      selected <- cfg
+      selected[[stage]] <- list(enable = TRUE, alpha = list(), beta = list())
+      local_mocked_bindings(select_list_safe = function(...) cancelled,
+        .package = "BrainGnomes")
+      expect_error(run_project(selected, debug = FALSE, force = FALSE,
+        dry_run = TRUE, log_level = "INFO"), "stream selection cancelled; no jobs submitted")
+    }
+  }
+})
+
 test_that("retry plans preserve subject-stage pairs through YAML and submission", {
   cfg <- make_guard_project()
   for (i in 1:2) insert_tracked_job(cfg$metadata$sqlite_db, paste0("901", i), list(

@@ -12,11 +12,12 @@ lmfit_residuals_4d(infile, X, include_rows = NULL,
 \arguments{
 \item{infile}{Path to a 4D NIfTI image file to denoise (e.g., functional data).}
 
-\item{X}{A numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
+\item{X}{A finite numeric matrix where rows correspond to timepoints and columns to nuisance regressors.
 Typically includes motion parameters, physiological noise, etc.}
 
 \item{include_rows}{Optional logical vector identifying the timepoints used when estimating the model
-(e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}; when \code{NULL}, all timepoints are used.}
+(e.g., uncensored volumes). If supplied it must have length \code{nrow(X)}
+and contain no missing values; when \code{NULL}, all timepoints are used.}
 
 \item{add_intercept}{Logical; if \code{TRUE}, adds an intercept column to the design matrix unless one is already present.}
 
@@ -25,11 +26,11 @@ Typically includes motion parameters, physiological noise, etc.}
 \item{internal}{Logical; if \code{TRUE}, returns an internal RNifti pointer. Otherwise returns an R array.}
 
 \item{preserve_mean}{Logical; if \code{TRUE}, recenter each output time
-series to the input mean over the rows used for fitting. Constant time
-series are therefore left unchanged.}
+series to the input mean over the rows used for fitting.}
 
-\item{set_mean}{Optional numeric value; if specified, all residual time series will be shifted to have this mean
-(default is 0). Cannot be used in combination with \code{preserve_mean = TRUE}.}
+\item{set_mean}{Finite numeric value. A non-zero value recenters residuals
+to this mean over the fitted rows. The default, 0, leaves the regression
+residuals unchanged. Ignored when \code{preserve_mean = TRUE}.}
 
 \item{regress_cols}{Optional integer vector (1-based) indicating which columns of \code{X} should be regressed out.
 When omitted, all non-constant columns are removed unless \code{exclusive = TRUE}.}
@@ -39,6 +40,10 @@ are used to estimate the model. This allows for partial regression that preserve
 }
 \value{
 A residualized 4D NIfTI image, either as an in-memory array or RNifti object (if \code{internal = TRUE}).
+Integer inputs are converted to double precision for processing. Saved files
+preserve the input storage datatype, with slope and intercept recalculated
+for the processed values. Integer output is quantized to the written header's scale; returned
+values can therefore differ from reread values.
 }
 \description{
 This function performs voxelwise confound regression by fitting a linear model to a subset of timepoints

@@ -99,7 +99,7 @@ std::vector<double> natural_spline_interp(const std::vector<double>& x, const st
 //'
 //' @param x A numeric vector of strictly increasing x-values (time or position).
 //' @param y A numeric vector of y-values at each x (same length as x).
-//' @param xout A numeric vector of points at which to interpolate.
+//' @param xout A finite numeric vector of points at which to interpolate.
 //'
 //' @return A numeric vector of interpolated y-values at each point in `xout`.
 //'
@@ -120,6 +120,9 @@ NumericVector natural_spline_interp(NumericVector x, NumericVector y, NumericVec
   // Check for finite values in input
   if (!Rcpp::all(Rcpp::is_finite(x)).is_true() || !Rcpp::all(Rcpp::is_finite(y)).is_true()) {
     stop("x and y must contain only finite values");
+  }
+  if (!Rcpp::all(Rcpp::is_finite(xout)).is_true()) {
+    stop("xout must contain only finite values");
   }
   
   // This is a wrapper function around the std function above (overload)
